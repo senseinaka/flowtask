@@ -17,7 +17,12 @@ import {
   listTributos, createTributo, updateTributo, deleteTributo, upsertTributos,
   listExtraCosts, getExtraCost, createExtraCost, updateExtraCost, deleteExtraCost,
   createDefaultExtraCosts,
-  listInalCerts, createInalCert, updateInalCert, deleteInalCert, getInalCert
+  listProformas, getProforma, createProforma, updateProforma, deleteProforma,
+  listInalCerts, createInalCert, updateInalCert, deleteInalCert, getInalCert,
+  listGestores, getGestor, createGestor, updateGestor, deleteGestor,
+  createGestorContact, updateGestorContact, deleteGestorContact,
+  listDespachantes, createDespachante, updateDespachante, deleteDespachante,
+  createDespachanteContact, updateDespachanteContact, deleteDespachanteContact
 } from '../database/queries/comex'
 import { driveService } from '../services/drive.service'
 import { getAttachmentsDir } from '../database/db'
@@ -27,6 +32,9 @@ import type {
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
+  ComexProforma, CreateComexProformaInput,
+  ComexGestor, CreateComexGestorInput, CreateComexGestorContactInput,
+  ComexDespachante, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
   CreateComexQuoteInput, CreateComexPaymentInput,
@@ -62,14 +70,88 @@ async function setupImportDriveFolders(
     }
   }
 
+  // Subcarpeta "BL - Bill of Lading"
+  const impBL = getImport(importId)
+  if (impBL && !impBL.bl_folder_id) {
+    const blId = await driveService.createSubfolder('BL - Bill of Lading', result.folderId)
+    updateImport(importId, { bl_folder_id: blId })
+  }
+  // Subcarpeta "INAL"
+  const impINAL = getImport(importId)
+  if (impINAL && !impINAL.inal_drive_folder_id) {
+    const inalId = await driveService.createSubfolder('INAL', result.folderId)
+    updateImport(importId, { inal_drive_folder_id: inalId })
+  }
   // Subcarpeta "Despacho"
   const imp = getImport(importId)
   if (imp && !imp.despacho_folder_id) {
     const despachoId = await driveService.createSubfolder('Despacho', result.folderId)
     updateImport(importId, { despacho_folder_id: despachoId })
   }
+  // Subcarpetas de proformas y facturas
+  const imp2 = getImport(importId)
+  if (imp2 && !imp2.proformas_folder_id) {
+    const proformasId = await driveService.createSubfolder('Proformas', result.folderId)
+    updateImport(importId, { proformas_folder_id: proformasId })
+  }
+  const imp3 = getImport(importId)
+  if (imp3 && !imp3.facturas_folder_id) {
+    const facturasId = await driveService.createSubfolder('Facturas comerciales', result.folderId)
+    updateImport(importId, { facturas_folder_id: facturasId })
+  }
 
   return result
+}
+
+// ── Helper: sube o actualiza una proforma en Drive ────────────────────────────
+
+async function _uploadProformaToDrive(
+  importId:    string,
+  proformaId:  string,
+  localPath:   string,
+  fileName:    string,
+  ext:         string
+): Promise<void> {
+  const imp = getImport(importId)
+  if (!imp?.drive_folder_id) throw new Error('Sin carpeta Drive en la importación')
+
+  const pf = getProforma(proformaId)
+  if (!pf) throw new Error('Proforma no encontrada')
+
+  const isFactura = pf.tipo === 'factura'
+
+  // 1. Carpeta padre "Proformas" o "Facturas comerciales"
+  let parentFolderId = isFactura ? imp.facturas_folder_id : imp.proformas_folder_id
+  if (!parentFolderId) {
+    const parentName  = isFactura ? 'Facturas comerciales' : 'Proformas'
+    parentFolderId    = await driveService.createSubfolder(parentName, imp.drive_folder_id)
+    const updateField = isFactura ? { facturas_folder_id: parentFolderId } : { proformas_folder_id: parentFolderId }
+    updateImport(importId, updateField)
+  }
+
+  // 2. Subcarpeta sin fecha: "Proforma N" o "Factura N" (se renombrará después de extraer la fecha)
+  const prefix  = isFactura ? 'Factura' : 'Proforma'
+  const subName = `${prefix} ${pf.numero}`
+  const subId   = pf.drive_folder_id ?? await driveService.createSubfolder(subName, parentFolderId)
+
+  // 3. Subir archivo
+  const mimeType    = getMimeType(ext)
+  const driveFileId = await driveService.uploadFileToFolder(localPath, subId, fileName, mimeType)
+
+  updateProforma(proformaId, { drive_file_id: driveFileId, drive_folder_id: subId, drive_status: 'synced' })
+}
+
+/** Renombra la carpeta Drive de una proforma/factura agregando la fecha una vez conocida */
+async function _renameDriveFolder(proformaId: string): Promise<void> {
+  const pf = getProforma(proformaId)
+  if (!pf?.drive_folder_id || !pf.fecha_proforma) return
+  try {
+    const [y, m, d] = pf.fecha_proforma.split('-')
+    const dateStr   = `${d}-${m}-${y.slice(2)}`
+    const prefix    = pf.tipo === 'factura' ? 'Factura' : 'Proforma'
+    const newName   = `${prefix} ${pf.numero} ${dateStr}`
+    await driveService.renameFile(pf.drive_folder_id, newName)
+  } catch { /* non-critical */ }
 }
 
 export function registerComexIpc(): void {
@@ -381,6 +463,21 @@ export function registerComexIpc(): void {
   // ── INAL Certificates ─────────────────────────────────────────────────────
   ipcMain.handle('comex:inal:certs:list', (_e, importId: string) => listInalCerts(importId))
 
+  /** Diálogo de selección múltiple de archivos para certificados INAL */
+  ipcMain.handle('comex:inal:certs:selectFiles', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return []
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar certificados INAL',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Documentos', extensions: ['pdf','png','jpg','jpeg','xlsx','xls'] },
+        { name: 'Todos', extensions: ['*'] }
+      ]
+    })
+    return result.canceled ? [] : result.filePaths
+  })
+
   ipcMain.handle('comex:inal:certs:delete', (_e, id: string) => {
     const cert = getInalCert(id)
     if (cert?.local_stored_name) {
@@ -450,6 +547,84 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:tributos:update', (_e, id: string, data: Partial<ComexImportTributo>)                      => updateTributo(id, data))
   ipcMain.handle('comex:tributos:delete', (_e, id: string)                                                         => deleteTributo(id))
   ipcMain.handle('comex:tributos:upsert', (_e, importId: string, tributos: Omit<CreateComexImportTributoInput, 'import_id'>[]) => upsertTributos(importId, tributos))
+
+  // ── Proformas ─────────────────────────────────────────────────────────────
+  ipcMain.handle('comex:proformas:list',   (_e, importId: string, tipo?: 'proforma' | 'factura') => listProformas(importId, tipo ?? 'proforma'))
+  ipcMain.handle('comex:proformas:renameDriveFolder', (_e, proformaId: string) => _renameDriveFolder(proformaId))
+  ipcMain.handle('comex:proformas:create', (_e, input: CreateComexProformaInput)        => createProforma(input))
+  ipcMain.handle('comex:proformas:update', (_e, id: string, data: Partial<ComexProforma>) => updateProforma(id, data))
+  ipcMain.handle('comex:proformas:delete', (_e, id: string)                             => deleteProforma(id))
+
+  ipcMain.handle('comex:proformas:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar proforma',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF / Imágenes', extensions: ['pdf','png','jpg','jpeg','webp'] }, { name: 'Todos', extensions: ['*'] }]
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('comex:proformas:upload', async (_e, proformaId: string, filePath: string) => {
+    const pf  = getProforma(proformaId)
+    if (!pf) throw new Error('Proforma no encontrada')
+    const imp = getImport(pf.import_id)
+
+    const ext          = path.extname(filePath)
+    const originalName = path.basename(filePath)
+    const storedName   = `proforma_${randomUUID()}${ext}`
+    const dest         = path.join(getAttachmentsDir(), storedName)
+
+    // Limpiar archivo local anterior
+    if (pf.stored_name) {
+      const old = path.join(getAttachmentsDir(), pf.stored_name)
+      try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
+    }
+
+    fs.copyFileSync(filePath, dest)
+    updateProforma(proformaId, { stored_name: storedName, original_name: originalName, drive_status: 'none' })
+
+    // Drive: subir sincrónicamente para que el status final llegue al renderer
+    if (imp?.drive_folder_id && driveService.isAuthenticated()) {
+      updateProforma(proformaId, { drive_status: 'uploading' })
+      try {
+        await _uploadProformaToDrive(pf.import_id, proformaId, dest, originalName, ext)
+      } catch (err) {
+        updateProforma(proformaId, { drive_status: 'error' })
+        console.error('[Proforma] Drive error:', (err as Error).message)
+      }
+    }
+
+    return getProforma(proformaId)
+  })
+
+  // Reintentar subida a Drive de una proforma que ya tiene archivo local
+  ipcMain.handle('comex:proformas:syncDrive', async (_e, proformaId: string) => {
+    const pf = getProforma(proformaId)
+    if (!pf?.stored_name || !pf.original_name) throw new Error('Proforma sin archivo local')
+    const dest = path.join(getAttachmentsDir(), pf.stored_name)
+    if (!fs.existsSync(dest)) throw new Error('Archivo no encontrado en disco')
+    const imp = getImport(pf.import_id)
+    if (!imp?.drive_folder_id) throw new Error('La importación no tiene carpeta Drive. Creala primero.')
+    if (!driveService.isAuthenticated()) throw new Error('Google Drive no está conectado')
+
+    updateProforma(proformaId, { drive_status: 'uploading' })
+    try {
+      const ext = path.extname(pf.stored_name)
+      await _uploadProformaToDrive(pf.import_id, proformaId, dest, pf.original_name, ext)
+      return getProforma(proformaId)
+    } catch (err) {
+      updateProforma(proformaId, { drive_status: 'error' })
+      throw err
+    }
+  })
+
+  ipcMain.handle('comex:proformas:open', (_e, proformaId: string) => {
+    const pf = getProforma(proformaId)
+    if (!pf?.stored_name) throw new Error('Sin archivo adjunto')
+    shell.openPath(path.join(getAttachmentsDir(), pf.stored_name))
+  })
 
   // ── Extra costs ──────────────────────────────────────────────────────────
   ipcMain.handle('comex:extra-costs:list',   (_e, importId: string)                                => listExtraCosts(importId))
@@ -601,6 +776,325 @@ export function registerComexIpc(): void {
       despacho_drive_status:  'none'
     })
     return getImport(importId)
+  })
+
+  // ── BL - Bill of Lading ───────────────────────────────────────────────────
+  ipcMain.handle('comex:bl:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar BL - Bill of Lading',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF / Imagen', extensions: ['pdf','png','jpg','jpeg'] }, { name: 'Todos', extensions: ['*'] }]
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('comex:bl:upload', async (_e, importId: string, filePath: string) => {
+    const imp = getImport(importId)
+    if (!imp) throw new Error('Importación no encontrada')
+
+    const ext = path.extname(filePath)
+    const originalName = path.basename(filePath)
+    const storedName = `bl_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), storedName)
+
+    if (imp.bl_stored_name) {
+      const old = path.join(getAttachmentsDir(), imp.bl_stored_name)
+      try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
+    }
+
+    fs.copyFileSync(filePath, dest)
+    updateImport(importId, {
+      bl_stored_name:   storedName,
+      bl_original_name: originalName,
+      bl_drive_status:  'none',
+      bl_drive_file_id: null
+    })
+
+    if (imp.drive_folder_id && driveService.isAuthenticated()) {
+      updateImport(importId, { bl_drive_status: 'uploading' })
+      try {
+        let blFolderId = imp.bl_folder_id
+        if (!blFolderId) {
+          blFolderId = await driveService.createSubfolder('BL - Bill of Lading', imp.drive_folder_id)
+          updateImport(importId, { bl_folder_id: blFolderId })
+        }
+        const mimeType = getMimeType(ext)
+        const driveFileId = await driveService.uploadFileToFolder(dest, blFolderId, originalName, mimeType)
+        updateImport(importId, { bl_drive_file_id: driveFileId, bl_drive_status: 'synced' })
+      } catch (err) {
+        updateImport(importId, { bl_drive_status: 'error' })
+        console.error('[BL] Drive upload error:', err)
+      }
+    }
+
+    return getImport(importId)
+  })
+
+  ipcMain.handle('comex:bl:open', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp?.bl_stored_name) throw new Error('Sin archivo de BL')
+    shell.openPath(path.join(getAttachmentsDir(), imp.bl_stored_name))
+  })
+
+  ipcMain.handle('comex:bl:delete', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp) return
+    if (imp.bl_stored_name) {
+      const fp = path.join(getAttachmentsDir(), imp.bl_stored_name)
+      try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
+    }
+    updateImport(importId, {
+      bl_stored_name:   null,
+      bl_original_name: null,
+      bl_drive_file_id: null,
+      bl_drive_status:  'none'
+    })
+    return getImport(importId)
+  })
+
+  // ── INAL — Packing List ──────────────────────────────────────────────────
+  ipcMain.handle('comex:inal:pl:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar Packing List',
+      properties: ['openFile'],
+      filters: [{ name: 'Documentos', extensions: ['pdf','xlsx','xls','csv'] }, { name: 'Todos', extensions: ['*'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('comex:inal:pl:upload', async (_e, importId: string, filePath: string) => {
+    const imp = getImport(importId)
+    if (!imp) throw new Error('Importación no encontrada')
+    const ext = path.extname(filePath), orig = path.basename(filePath)
+    const stored = `inal_pl_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), stored)
+    if (imp.inal_pl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_pl_stored_name)) } catch { /* */ } }
+    fs.copyFileSync(filePath, dest)
+    updateImport(importId, { inal_pl_stored_name: stored, inal_pl_original_name: orig, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
+    if (imp.drive_folder_id && driveService.isAuthenticated()) {
+      updateImport(importId, { inal_pl_drive_status: 'uploading' })
+      try {
+        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
+        updateImport(importId, { inal_pl_drive_file_id: driveId, inal_pl_drive_status: 'synced' })
+      } catch { updateImport(importId, { inal_pl_drive_status: 'error' }) }
+    }
+    return getImport(importId)
+  })
+
+  ipcMain.handle('comex:inal:pl:open', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp?.inal_pl_stored_name) throw new Error('Sin archivo PL')
+    shell.openPath(path.join(getAttachmentsDir(), imp.inal_pl_stored_name))
+  })
+
+  ipcMain.handle('comex:inal:pl:delete', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp) return
+    if (imp.inal_pl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_pl_stored_name)) } catch { /* */ } }
+    updateImport(importId, { inal_pl_stored_name: null, inal_pl_original_name: null, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
+    return getImport(importId)
+  })
+
+  // ── INAL — Xls Resumen ───────────────────────────────────────────────────
+  ipcMain.handle('comex:inal:xls:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar Xls Resumen INAL',
+      properties: ['openFile'],
+      filters: [{ name: 'Excel', extensions: ['xlsx','xls'] }, { name: 'Todos', extensions: ['*'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('comex:inal:xls:upload', async (_e, importId: string, filePath: string) => {
+    const imp = getImport(importId)
+    if (!imp) throw new Error('Importación no encontrada')
+    const ext = path.extname(filePath), orig = path.basename(filePath)
+    const stored = `inal_xls_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), stored)
+    if (imp.inal_xls_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_xls_stored_name)) } catch { /* */ } }
+    fs.copyFileSync(filePath, dest)
+    updateImport(importId, { inal_xls_stored_name: stored, inal_xls_original_name: orig, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
+    if (imp.drive_folder_id && driveService.isAuthenticated()) {
+      updateImport(importId, { inal_xls_drive_status: 'uploading' })
+      try {
+        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
+        updateImport(importId, { inal_xls_drive_file_id: driveId, inal_xls_drive_status: 'synced' })
+      } catch { updateImport(importId, { inal_xls_drive_status: 'error' }) }
+    }
+    return getImport(importId)
+  })
+
+  ipcMain.handle('comex:inal:xls:open', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp?.inal_xls_stored_name) throw new Error('Sin archivo Xls')
+    shell.openPath(path.join(getAttachmentsDir(), imp.inal_xls_stored_name))
+  })
+
+  ipcMain.handle('comex:inal:xls:delete', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp) return
+    if (imp.inal_xls_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_xls_stored_name)) } catch { /* */ } }
+    updateImport(importId, { inal_xls_stored_name: null, inal_xls_original_name: null, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
+    return getImport(importId)
+  })
+
+  // ── INAL — Factura comercial (copia para carpeta INAL) ───────────────────
+  ipcMain.handle('comex:inal:factura:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar Factura Comercial para INAL',
+      properties: ['openFile'],
+      filters: [{ name: 'Documentos', extensions: ['pdf','xlsx','xls'] }, { name: 'Todos', extensions: ['*'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('comex:inal:factura:upload', async (_e, importId: string, filePath: string) => {
+    const imp = getImport(importId)
+    if (!imp) throw new Error('Importación no encontrada')
+    const ext = path.extname(filePath), orig = path.basename(filePath)
+    const stored = `inal_factura_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), stored)
+    if (imp.inal_factura_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_factura_stored_name)) } catch { /* */ } }
+    fs.copyFileSync(filePath, dest)
+    updateImport(importId, { inal_factura_stored_name: stored, inal_factura_original_name: orig, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
+    if (imp.drive_folder_id && driveService.isAuthenticated()) {
+      updateImport(importId, { inal_factura_drive_status: 'uploading' })
+      try {
+        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
+        updateImport(importId, { inal_factura_drive_file_id: driveId, inal_factura_drive_status: 'synced' })
+      } catch { updateImport(importId, { inal_factura_drive_status: 'error' }) }
+    }
+    return getImport(importId)
+  })
+
+  ipcMain.handle('comex:inal:factura:open', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp?.inal_factura_stored_name) throw new Error('Sin archivo')
+    shell.openPath(path.join(getAttachmentsDir(), imp.inal_factura_stored_name))
+  })
+
+  ipcMain.handle('comex:inal:factura:delete', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp) return
+    if (imp.inal_factura_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_factura_stored_name)) } catch { /* */ } }
+    updateImport(importId, { inal_factura_stored_name: null, inal_factura_original_name: null, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
+    return getImport(importId)
+  })
+
+  // ── INAL — BL (copia para carpeta INAL) ─────────────────────────────────
+  ipcMain.handle('comex:inal:blcopy:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar BL para INAL',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF / Imagen', extensions: ['pdf','png','jpg','jpeg'] }, { name: 'Todos', extensions: ['*'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('comex:inal:blcopy:upload', async (_e, importId: string, filePath: string) => {
+    const imp = getImport(importId)
+    if (!imp) throw new Error('Importación no encontrada')
+    const ext = path.extname(filePath), orig = path.basename(filePath)
+    const stored = `inal_bl_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), stored)
+    if (imp.inal_bl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_bl_stored_name)) } catch { /* */ } }
+    fs.copyFileSync(filePath, dest)
+    updateImport(importId, { inal_bl_stored_name: stored, inal_bl_original_name: orig, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
+    if (imp.drive_folder_id && driveService.isAuthenticated()) {
+      updateImport(importId, { inal_bl_drive_status: 'uploading' })
+      try {
+        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
+        updateImport(importId, { inal_bl_drive_file_id: driveId, inal_bl_drive_status: 'synced' })
+      } catch { updateImport(importId, { inal_bl_drive_status: 'error' }) }
+    }
+    return getImport(importId)
+  })
+
+  ipcMain.handle('comex:inal:blcopy:open', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp?.inal_bl_stored_name) throw new Error('Sin archivo')
+    shell.openPath(path.join(getAttachmentsDir(), imp.inal_bl_stored_name))
+  })
+
+  ipcMain.handle('comex:inal:blcopy:delete', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp) return
+    if (imp.inal_bl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_bl_stored_name)) } catch { /* */ } }
+    updateImport(importId, { inal_bl_stored_name: null, inal_bl_original_name: null, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
+    return getImport(importId)
+  })
+
+  // ── Gestores INAL ─────────────────────────────────────────────────────────
+  ipcMain.handle('comex:gestores:list',   ()                                        => listGestores())
+  ipcMain.handle('comex:gestores:get',    (_e, id: string)                          => getGestor(id))
+  ipcMain.handle('comex:gestores:create', (_e, input: CreateComexGestorInput)       => createGestor(input))
+  ipcMain.handle('comex:gestores:update', (_e, id: string, data: Partial<ComexGestor>) => updateGestor(id, data))
+  ipcMain.handle('comex:gestores:delete', (_e, id: string)                          => deleteGestor(id))
+
+  ipcMain.handle('comex:gestores:contacts:create', (_e, input: CreateComexGestorContactInput)       => createGestorContact(input))
+  ipcMain.handle('comex:gestores:contacts:update', (_e, id: string, data: Partial<import('@shared/types').ComexGestorContact>) => updateGestorContact(id, data))
+  ipcMain.handle('comex:gestores:contacts:delete', (_e, id: string)                                 => deleteGestorContact(id))
+
+  // Logo gestores
+  ipcMain.handle('comex:gestores:uploadLogo', (_e, gestorId: string, filePath: string) => {
+    const ext = path.extname(filePath)
+    const storedName = `logo_gest_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), storedName)
+    const existing = getGestor(gestorId)
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    fs.copyFileSync(filePath, dest)
+    updateGestor(gestorId, { logo_stored_name: storedName })
+    return storedName
+  })
+  ipcMain.handle('comex:gestores:deleteLogo', (_e, gestorId: string) => {
+    const existing = getGestor(gestorId)
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    updateGestor(gestorId, { logo_stored_name: null })
+  })
+
+  // ── Despachantes ──────────────────────────────────────────────────────────
+  ipcMain.handle('comex:despachantes:list',   ()                                            => listDespachantes())
+  ipcMain.handle('comex:despachantes:create', (_e, input: CreateComexDespachanteInput)      => createDespachante(input))
+  ipcMain.handle('comex:despachantes:update', (_e, id: string, data: Partial<ComexDespachante>) => updateDespachante(id, data))
+  ipcMain.handle('comex:despachantes:delete', (_e, id: string)                              => deleteDespachante(id))
+
+  ipcMain.handle('comex:despachantes:contacts:create', (_e, input: CreateComexDespachanteContactInput) => createDespachanteContact(input))
+  ipcMain.handle('comex:despachantes:contacts:update', (_e, id: string, data: Partial<import('@shared/types').ComexDespachanteContact>) => updateDespachanteContact(id, data))
+  ipcMain.handle('comex:despachantes:contacts:delete', (_e, id: string)                               => deleteDespachanteContact(id))
+
+  // Logo despachantes
+  ipcMain.handle('comex:despachantes:uploadLogo', (_e, despId: string, filePath: string) => {
+    const ext = path.extname(filePath)
+    const storedName = `logo_desp_${randomUUID()}${ext}`
+    const dest = path.join(getAttachmentsDir(), storedName)
+    const existing = listDespachantes().find(d => d.id === despId)
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    fs.copyFileSync(filePath, dest)
+    updateDespachante(despId, { logo_stored_name: storedName })
+    return storedName
+  })
+  ipcMain.handle('comex:despachantes:deleteLogo', (_e, despId: string) => {
+    const existing = listDespachantes().find(d => d.id === despId)
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    updateDespachante(despId, { logo_stored_name: null })
   })
 }
 

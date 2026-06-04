@@ -6,6 +6,7 @@ import type {
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
+  ComexProforma, CreateComexProformaInput,
   ComexInalCert,
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
@@ -110,8 +111,18 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
     }
   }
   // Campos del JOIN con customs
-  if (row._despacho_number) imp._despacho_number = row._despacho_number as string
-  if (row._canal_despacho)  imp._canal_despacho  = row._canal_despacho  as string
+  if (row._despacho_number)     imp._despacho_number     = row._despacho_number     as string
+  if (row._canal_despacho)      imp._canal_despacho      = row._canal_despacho      as string
+  if (row._peso_bruto_kg != null)  imp._peso_bruto_kg    = row._peso_bruto_kg       as number
+  if (row._volumen_m3    != null)  imp._volumen_m3        = row._volumen_m3          as number
+  if (row._cant_bultos   != null)  imp._cant_bultos       = row._cant_bultos         as number
+  if (row._cant_pallets_customs != null) imp._cant_pallets_customs = row._cant_pallets_customs as number
+  if (row._freight_operator_name)     imp._freight_operator_name = row._freight_operator_name as string
+  if (row._oficializacion_date != null) imp._oficializacion_date = row._oficializacion_date as number
+  if (row._tributos_count != null)    imp._tributos_count = row._tributos_count as number
+  if (row._extras_count   != null)    imp._extras_count   = row._extras_count   as number
+  // Logo del proveedor
+  if (row._supplier_logo)       imp._supplier_logo       = row._supplier_logo       as string
   return imp
 }
 
@@ -126,11 +137,21 @@ const IMPORT_SELECT = `
     s.port_of_origin AS _supplier_port_of_origin,
     s.notes AS _supplier_notes, s.created_at AS _supplier_created_at,
     s.updated_at AS _supplier_updated_at,
+    s.logo_stored_name AS _supplier_logo,
     c.despacho_number AS _despacho_number,
-    c.canal           AS _canal_despacho
+    c.canal           AS _canal_despacho,
+    c.peso_bruto_kg   AS _peso_bruto_kg,
+    c.volumen_m3      AS _volumen_m3,
+    c.cant_bultos     AS _cant_bultos,
+    c.cant_pallets         AS _cant_pallets_customs,
+    c.oficializacion_date  AS _oficializacion_date,
+    fo.name                AS _freight_operator_name,
+    (SELECT COUNT(*) FROM comex_import_tributos   WHERE import_id = i.id) AS _tributos_count,
+    (SELECT COUNT(*) FROM comex_import_extra_costs WHERE import_id = i.id AND importe > 0) AS _extras_count
   FROM comex_imports i
   LEFT JOIN comex_suppliers s ON s.id = i.supplier_id
   LEFT JOIN comex_import_customs c ON c.import_id = i.id
+  LEFT JOIN comex_freight_operators fo ON fo.id = i.freight_operator_id
 `
 
 export function listImports(status?: string): ComexImport[] {
@@ -182,9 +203,19 @@ export function updateImport(id: string, data: Partial<ComexImport>): ComexImpor
     'actual_ship_date','actual_arrival_date','tracking_number',
     'customs_agent','drive_folder_id','notes',
     'inal_required','inal_lc_status','inal_lc_task_scheduled','inal_lc_task_id','inal_lc_cert_folder_id',
-    'tc_eur_usd', 'cost_pct',
+    'tc_eur_ars', 'cost_pct', 'proformas_folder_id', 'facturas_folder_id',
     'despacho_folder_id','despacho_stored_name','despacho_original_name',
-    'despacho_drive_file_id','despacho_drive_status'
+    'despacho_drive_file_id','despacho_drive_status',
+    'aviso_arribo_date','traslado_deposito_date','oficializacion_import_date',
+    'carga_deposito_date','carga_deposito_time',
+    'freight_operator_id','despachante','forwarder_ref_mail','bl_number',
+    'bl_extracted_json',
+    'bl_folder_id','bl_stored_name','bl_original_name','bl_drive_file_id','bl_drive_status',
+    'inal_drive_folder_id',
+    'inal_pl_ok','inal_pl_stored_name','inal_pl_original_name','inal_pl_drive_file_id','inal_pl_drive_status',
+    'inal_xls_ok','inal_xls_stored_name','inal_xls_original_name','inal_xls_drive_file_id','inal_xls_drive_status',
+    'inal_factura_stored_name','inal_factura_original_name','inal_factura_drive_file_id','inal_factura_drive_status',
+    'inal_bl_stored_name','inal_bl_original_name','inal_bl_drive_file_id','inal_bl_drive_status'
   ]
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
@@ -388,7 +419,7 @@ export function upsertCustoms(importId: string, data: Partial<UpsertComexCustoms
       'fob_currency','fob_invoice','fob_declared','dolar_aduana','dolar_naviera',
       'paridad_usd_eur','despacho_number','despachante','oficializacion_date',
       'sepaimpo_vencimiento','bl_number','naviera_ref','carrier','canal','etd',
-      'peso_bruto_kg','volumen_m3','cant_pallets','mulc_date','fecha_pago_banco',
+      'peso_bruto_kg','volumen_m3','cant_pallets','cant_cartons','cant_bultos','mulc_date','fecha_pago_banco',
       'cierre_banco_date','listas_despachante_date','listas_oscar_andrea_date'
     ]
     const sets = ['updated_at = ?']
@@ -407,12 +438,12 @@ export function upsertCustoms(importId: string, data: Partial<UpsertComexCustoms
         dolar_aduana, dolar_naviera, paridad_usd_eur,
         despacho_number, despachante, oficializacion_date, sepaimpo_vencimiento,
         bl_number, naviera_ref, carrier, etd,
-        peso_bruto_kg, volumen_m3, cant_pallets,
+        peso_bruto_kg, volumen_m3, cant_pallets, cant_cartons, cant_bultos,
         mulc_date, fecha_pago_banco, cierre_banco_date,
         listas_despachante_date, listas_oscar_andrea_date,
         created_at, updated_at
       ) VALUES (
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
       )
     `).run(
       id, importId,
@@ -421,7 +452,7 @@ export function upsertCustoms(importId: string, data: Partial<UpsertComexCustoms
       data.despacho_number ?? '', data.despachante ?? '', data.oficializacion_date ?? null,
       data.sepaimpo_vencimiento ?? null, data.bl_number ?? '', data.naviera_ref ?? '',
       data.carrier ?? '', data.etd ?? null, data.peso_bruto_kg ?? null,
-      data.volumen_m3 ?? null, data.cant_pallets ?? null,
+      data.volumen_m3 ?? null, data.cant_pallets ?? null, data.cant_cartons ?? null, data.cant_bultos ?? null,
       data.mulc_date ?? null, data.fecha_pago_banco ?? null, data.cierre_banco_date ?? null,
       data.listas_despachante_date ?? null, data.listas_oscar_andrea_date ?? null,
       now, now
@@ -780,6 +811,62 @@ export function deleteExtraCost(id: string): void {
   getDb().prepare('DELETE FROM comex_import_extra_costs WHERE id = ?').run(id)
 }
 
+// ─── Proformas ────────────────────────────────────────────────────────────────
+
+export function listProformas(importId: string, tipo: 'proforma' | 'factura' = 'proforma'): ComexProforma[] {
+  return getDb()
+    .prepare('SELECT * FROM comex_proformas WHERE import_id = ? AND tipo = ? ORDER BY numero ASC, created_at ASC')
+    .all(importId, tipo) as ComexProforma[]
+}
+
+export function getProforma(id: string): ComexProforma | null {
+  return getDb().prepare('SELECT * FROM comex_proformas WHERE id = ?').get(id) as ComexProforma | null
+}
+
+export function createProforma(input: CreateComexProformaInput): ComexProforma {
+  const db  = getDb()
+  const id  = randomUUID()
+  const now = Date.now()
+  const tipo   = input.tipo ?? 'proforma'
+  // Auto-número por tipo
+  const maxRow = db.prepare('SELECT MAX(numero) as m FROM comex_proformas WHERE import_id = ? AND tipo = ?').get(input.import_id, tipo) as { m: number | null }
+  const numero = (maxRow?.m ?? 0) + 1
+  db.prepare(`
+    INSERT INTO comex_proformas
+      (id, import_id, tipo, numero, fecha_proforma, importe, moneda, nro_proforma, descripcion,
+       incluir_en_total, stored_name, original_name, drive_file_id, drive_folder_id, drive_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, input.import_id, tipo, numero,
+    input.fecha_proforma ?? null, input.importe ?? null,
+    input.moneda ?? 'USD', input.nro_proforma ?? '', input.descripcion ?? '',
+    input.incluir_en_total ?? 1,
+    null, null, null, null, 'none', now
+  )
+  return db.prepare('SELECT * FROM comex_proformas WHERE id = ?').get(id) as ComexProforma
+}
+
+export function updateProforma(id: string, data: Partial<ComexProforma>): void {
+  const db = getDb()
+  const allowed = [
+    'fecha_proforma', 'importe', 'moneda', 'nro_proforma', 'descripcion',
+    'incluir_en_total', 'stored_name', 'original_name',
+    'drive_file_id', 'drive_folder_id', 'drive_status'
+  ]
+  const sets: string[] = []
+  const vals: unknown[] = []
+  for (const key of allowed) {
+    if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
+  }
+  if (!sets.length) return
+  vals.push(id)
+  db.prepare(`UPDATE comex_proformas SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+}
+
+export function deleteProforma(id: string): void {
+  getDb().prepare('DELETE FROM comex_proformas WHERE id = ?').run(id)
+}
+
 // ─── INAL Certificates ────────────────────────────────────────────────────────
 
 export function listInalCerts(importId: string): ComexInalCert[] {
@@ -823,4 +910,122 @@ export function deleteInalCert(id: string): void {
 
 export function getInalCert(id: string): ComexInalCert | null {
   return getDb().prepare('SELECT * FROM comex_inal_certs WHERE id = ?').get(id) as ComexInalCert | null
+}
+
+// ─── Gestores INAL ────────────────────────────────────────────────────────────
+
+import type { ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput, ComexDespachante, CreateComexDespachanteInput } from '@shared/types'
+
+export function listGestores(): ComexGestor[] {
+  const db = getDb()
+  const gestores = db.prepare('SELECT * FROM comex_gestores ORDER BY name ASC').all() as ComexGestor[]
+  for (const g of gestores) {
+    g.contacts = db.prepare('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC, created_at ASC').all(g.id) as ComexGestorContact[]
+  }
+  return gestores
+}
+
+export function getGestor(id: string): ComexGestor | null {
+  const db = getDb()
+  const g = db.prepare('SELECT * FROM comex_gestores WHERE id = ?').get(id) as ComexGestor | null
+  if (g) g.contacts = db.prepare('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC').all(id) as ComexGestorContact[]
+  return g
+}
+
+export function createGestor(input: CreateComexGestorInput): ComexGestor {
+  const db = getDb()
+  const id = randomUUID(), now = Date.now()
+  db.prepare(`INSERT INTO comex_gestores (id,name,estudio,cuit,email,phone,phone_empresa,whatsapp,website,direccion,especialidades,notas,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, input.name, input.estudio??'', input.cuit??'', input.email??'', input.phone??'', (input as Partial<ComexGestor>).phone_empresa??'', input.whatsapp??'', (input as Partial<ComexGestor>).website??'', (input as Partial<ComexGestor>).direccion??'', input.especialidades??'', input.notas??'', now, now)
+  return getGestor(id)!
+}
+
+export function updateGestor(id: string, data: Partial<ComexGestor>): ComexGestor | null {
+  const db = getDb()
+  const allowed = ['name','estudio','cuit','email','phone','phone_empresa','whatsapp','website','direccion','especialidades','notas','logo_stored_name']
+  const sets = ['updated_at = ?'], vals: unknown[] = [Date.now()]
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  vals.push(id)
+  db.prepare(`UPDATE comex_gestores SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  return getGestor(id)
+}
+
+export function deleteGestor(id: string): void {
+  getDb().prepare('DELETE FROM comex_gestores WHERE id = ?').run(id)
+}
+
+export function createGestorContact(input: CreateComexGestorContactInput): ComexGestorContact {
+  const db = getDb(), id = randomUUID(), now = Date.now()
+  db.prepare(`INSERT INTO comex_gestor_contacts (id,gestor_id,name,role,email,phone,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(id, input.gestor_id, input.name??'', input.role??'', input.email??'', input.phone??'', input.sort_order??0, now)
+  return db.prepare('SELECT * FROM comex_gestor_contacts WHERE id = ?').get(id) as ComexGestorContact
+}
+
+export function updateGestorContact(id: string, data: Partial<ComexGestorContact>): void {
+  const db = getDb()
+  const allowed = ['name','role','email','phone','sort_order']
+  const sets: string[] = [], vals: unknown[] = []
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  if (!sets.length) return
+  vals.push(id)
+  db.prepare(`UPDATE comex_gestor_contacts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+}
+
+export function deleteGestorContact(id: string): void {
+  getDb().prepare('DELETE FROM comex_gestor_contacts WHERE id = ?').run(id)
+}
+
+// ─── Despachantes ─────────────────────────────────────────────────────────────
+
+import type { ComexDespachanteContact, CreateComexDespachanteContactInput } from '@shared/types'
+
+export function listDespachantes(): ComexDespachante[] {
+  const db = getDb()
+  const despachantes = db.prepare('SELECT * FROM comex_despachantes ORDER BY name ASC').all() as ComexDespachante[]
+  for (const d of despachantes) {
+    d.contacts = db.prepare('SELECT * FROM comex_despachante_contacts WHERE despachante_id = ? ORDER BY sort_order ASC, created_at ASC').all(d.id) as ComexDespachanteContact[]
+  }
+  return despachantes
+}
+
+export function createDespachante(input: CreateComexDespachanteInput): ComexDespachante {
+  const db = getDb(), id = randomUUID(), now = Date.now()
+  db.prepare(`INSERT INTO comex_despachantes (id,name,matricula,empresa,cuit,email,phone,phone_empresa,whatsapp,website,direccion,notas,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, input.name, input.matricula??'', input.empresa??'', input.cuit??'', input.email??'', input.phone??'', (input as Partial<ComexDespachante>).phone_empresa??'', input.whatsapp??'', (input as Partial<ComexDespachante>).website??'', (input as Partial<ComexDespachante>).direccion??'', input.notas??'', now, now)
+  return db.prepare('SELECT * FROM comex_despachantes WHERE id = ?').get(id) as ComexDespachante
+}
+
+export function updateDespachante(id: string, data: Partial<ComexDespachante>): ComexDespachante | null {
+  const db = getDb()
+  const allowed = ['name','matricula','empresa','cuit','email','phone','phone_empresa','whatsapp','website','direccion','notas','logo_stored_name']
+  const sets = ['updated_at = ?'], vals: unknown[] = [Date.now()]
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  vals.push(id)
+  db.prepare(`UPDATE comex_despachantes SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  return db.prepare('SELECT * FROM comex_despachantes WHERE id = ?').get(id) as ComexDespachante | null
+}
+
+export function deleteDespachante(id: string): void {
+  getDb().prepare('DELETE FROM comex_despachantes WHERE id = ?').run(id)
+}
+
+export function createDespachanteContact(input: CreateComexDespachanteContactInput): ComexDespachanteContact {
+  const db = getDb(), id = randomUUID(), now = Date.now()
+  db.prepare(`INSERT INTO comex_despachante_contacts (id,despachante_id,name,role,email,phone,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(id, input.despachante_id, input.name??'', input.role??'', input.email??'', input.phone??'', input.sort_order??0, now)
+  return db.prepare('SELECT * FROM comex_despachante_contacts WHERE id = ?').get(id) as ComexDespachanteContact
+}
+
+export function updateDespachanteContact(id: string, data: Partial<ComexDespachanteContact>): void {
+  const db = getDb()
+  const allowed = ['name','role','email','phone','sort_order']
+  const sets: string[] = [], vals: unknown[] = []
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  if (!sets.length) return
+  vals.push(id)
+  db.prepare(`UPDATE comex_despachante_contacts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+}
+
+export function deleteDespachanteContact(id: string): void {
+  getDb().prepare('DELETE FROM comex_despachante_contacts WHERE id = ?').run(id)
 }

@@ -1,18 +1,13 @@
 import { ipcMain } from 'electron'
-import { getEurUsdRate } from '../services/bna.service'
+import { getEurArsRateDirect } from '../services/bna.service'
 
 export function registerBNAIpc(): void {
   /**
-   * Consulta BNA para obtener el TC EUR/USD a una fecha dada.
-   * @param dateStr   - Fecha en formato YYYY-MM-DD (fecha de oficialización del despacho)
-   * @param cotizAduana - TC USD/ARS del despacho (cotizacion_dolar)
-   * @returns { eurUsd, eurArs, fechaBNA } o null si no se pudo consultar
+   * Consulta BNA para obtener la cotización EUR/ARS a una fecha dada.
+   * Devuelve el valor directo EUR/ARS (cuántos pesos vale 1 euro).
+   * Fórmula de uso: base_ars = valor_eur × tc_eur_ars
    */
-  ipcMain.handle('bna:getEurUsd', async (
-    _e,
-    dateStr: string,
-    cotizAduana: number
-  ) => {
-    return getEurUsdRate(dateStr, cotizAduana)
+  ipcMain.handle('bna:getEurArs', async (_e, dateStr: string) => {
+    return getEurArsRateDirect(dateStr)
   })
 }

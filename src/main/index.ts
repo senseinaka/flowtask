@@ -2,6 +2,7 @@
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'
 
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { exec } from 'child_process'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { getDb } from './database/db'
@@ -18,12 +19,15 @@ import { registerQuestionsIpc } from './ipc/questions.ipc'
 import { registerComexIpc } from './ipc/comex.ipc'
 import { registerDelegatedExtrasIpc } from './ipc/delegated-extras.ipc'
 import { registerAIIpc } from './ipc/ai.ipc'
-import { registerBNAIpc } from './ipc/bna.ipc'
+import { registerBNAIpc }  from './ipc/bna.ipc'
+import { registerChatIpc } from './ipc/chat.ipc'
 import { registerBackupIpc } from './ipc/backup.ipc'
 import { driveService } from './services/drive.service'
 import { schedulerService } from './services/scheduler.service'
 import { questionsService } from './services/questions.service'
 import { startPolling, stopPolling } from './services/polling.service'
+import { startProactiveScheduler, stopProactiveScheduler, triggerProactiveNow } from './services/proactive.service'
+import type { ProactiveAlert } from './services/proactive.service'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -85,11 +89,12 @@ app.whenReady().then(() => {
   registerDelegatedExtrasIpc()
   registerAIIpc()
   registerBNAIpc()
+  registerChatIpc()
   registerBackupIpc()
 
   // ── Backup automático cada 6 horas ────────────────────────────────────────
   const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000  // 6 horas
-  const backupInterval = setInterval(() => {
+  _backupInterval = setInterval(() => {
     if (driveService.isAuthenticated()) {
       driveService.fullBackup()
         .then(status => {
@@ -107,10 +112,33 @@ app.whenReady().then(() => {
   schedulerService.start(push)
   questionsService.setPushFn(push)
 
+  // Fase 5: alertas proactivas del asistente IA
+  startProactiveScheduler((alerts: ProactiveAlert[]) => {
+    push('chat:proactiveAlerts', alerts)
+  })
+
+  // IPC para ejecutar análisis manual desde el chat o un botón
+  ipcMain.handle('chat:triggerProactive', async () => {
+    let result: ProactiveAlert[] = []
+    await triggerProactiveNow((alerts) => { result = alerts; push('chat:proactiveAlerts', alerts) })
+    return result
+  })
+
   // Polling de mensajes entrantes (reemplaza webhook local — Evolution API está en Railway)
   startPolling()
 
   createWindow()
+
+  // ── Verificar conexión Drive al iniciar (5 seg después para que cargue la UI) ──
+  setTimeout(async () => {
+    if (driveService.isAuthenticated()) {
+      const result = await driveService.testConnection()
+      if (!result.ok) {
+        console.warn('[Drive] Sesión inválida al iniciar:', result.error)
+        mainWindow?.webContents.send('drive:sessionExpired', { error: result.error })
+      }
+    }
+  }, 5000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -121,12 +149,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+let _backupInterval: ReturnType<typeof setInterval> | null = null
 let _quittingAfterBackup = false
 
 app.on('before-quit', (event) => {
   schedulerService.stop()
+  stopProactiveScheduler()
   stopPolling()
-  clearInterval(backupInterval)
+  if (_backupInterval) clearInterval(_backupInterval)
 
   // Hacer backup al cerrar si Drive está configurado (máx 30 seg)
   if (driveService.isAuthenticated() && !_quittingAfterBackup) {
@@ -138,9 +168,28 @@ app.on('before-quit', (event) => {
       app.quit()
     }, 30_000)
 
-    driveService.fullBackup()
-      .then(s => console.log('[Backup] Backup al cerrar completado:', s.driveFolder))
-      .catch(e => console.error('[Backup] Error al cerrar:', e))
+    // 1. Backup DB en Drive
+    const dbBackup = driveService.fullBackup()
+      .then(s => console.log('[Backup] DB backup completado:', s.driveFolder))
+      .catch(e => console.error('[Backup] DB error:', e))
+
+    // 2. Backup código en GitHub (si hay cambios)
+    const codeBackup = new Promise<void>((resolve) => {
+      const date = new Date().toLocaleString('es-AR').replace(/[/:]/g, '-')
+      const cmd  = [
+        'cd /d "C:\\Projects\\flowtask"',
+        'git add .',
+        `git commit -m "auto-backup: ${date}" --allow-empty-message`,
+        'git push'
+      ].join(' && ')
+      exec(cmd, (err) => {
+        if (err) console.error('[Backup] Git error:', err.message)
+        else     console.log('[Backup] Código subido a GitHub')
+        resolve()
+      })
+    })
+
+    Promise.allSettled([dbBackup, codeBackup])
       .finally(() => { clearTimeout(timeout); app.quit() })
   }
 })

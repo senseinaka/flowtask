@@ -9,7 +9,8 @@ import type {
   ComexFreightOperator, CreateComexFreightOperatorInput,
   ComexFreightOperatorContact, CreateComexFreightOperatorContactInput,
   ComexImportTributo, CreateComexImportTributoInput,
-  ComexImportExtraCost, CreateComexImportExtraCostInput
+  ComexImportExtraCost, CreateComexImportExtraCostInput,
+  ComexProforma, CreateComexProformaInput
 } from '@shared/types'
 
 // ── Suppliers ─────────────────────────────────────────────────────────────────
@@ -336,6 +337,67 @@ export function useDeleteComexCost() {
   })
 }
 
+// ── Proformas ─────────────────────────────────────────────────────────────────
+
+export function useComexProformas(importId: string | null) {
+  return useQuery({
+    queryKey: ['comex-proformas', importId, 'proforma'],
+    queryFn:  () => window.api.comex.proformas.list(importId!, 'proforma'),
+    enabled:  !!importId
+  })
+}
+
+export function useComexFacturasComerciales(importId: string | null) {
+  return useQuery({
+    queryKey: ['comex-proformas', importId, 'factura'],
+    queryFn:  () => window.api.comex.proformas.list(importId!, 'factura'),
+    enabled:  !!importId
+  })
+}
+
+export function useCreateComexProforma() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateComexProformaInput) => window.api.comex.proformas.create(input),
+    onSuccess: (_r, { import_id, tipo }) => {
+      qc.invalidateQueries({ queryKey: ['comex-proformas', import_id, tipo ?? 'proforma'] })
+    }
+  })
+}
+
+export function useUpdateComexProforma() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, importId, tipo, data }: { id: string; importId: string; tipo?: 'proforma' | 'factura'; data: Partial<ComexProforma> }) =>
+      window.api.comex.proformas.update(id, data),
+    onSuccess: (_r, { importId, tipo }) => {
+      qc.invalidateQueries({ queryKey: ['comex-proformas', importId, tipo ?? 'proforma'] })
+    }
+  })
+}
+
+export function useDeleteComexProforma() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, importId, tipo }: { id: string; importId: string; tipo?: 'proforma' | 'factura' }) =>
+      window.api.comex.proformas.delete(id),
+    onSuccess: (_r, { importId, tipo }) => {
+      qc.invalidateQueries({ queryKey: ['comex-proformas', importId, tipo ?? 'proforma'] })
+    }
+  })
+}
+
+export function useUploadProforma() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ proformaId, filePath, importId, tipo }: { proformaId: string; filePath: string; importId: string; tipo?: 'proforma' | 'factura' }) =>
+      window.api.comex.proformas.upload(proformaId, filePath),
+    onSuccess: (_r, { importId, tipo }) => {
+      qc.invalidateQueries({ queryKey: ['comex-proformas', importId, tipo ?? 'proforma'] })
+    }
+  })
+}
+
 // ── Extra costs ───────────────────────────────────────────────────────────────
 
 export function useComexExtraCosts(importId: string | null) {
@@ -646,5 +708,151 @@ export function useDeleteInalCert(importId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comex-inal-certs', importId] })
     }
+  })
+}
+
+// ── Gestores ──────────────────────────────────────────────────────────────────
+
+export function useComexGestores() {
+  return useQuery({ queryKey: ['comex-gestores'], queryFn: () => window.api.comex.gestores.list() })
+}
+
+export function useCreateComexGestor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexGestorInput) => window.api.comex.gestores.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useUpdateComexGestor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<import('@shared/types').ComexGestor> }) =>
+      window.api.comex.gestores.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useDeleteComexGestor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.gestores.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useCreateComexGestorContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexGestorContactInput) => window.api.comex.gestores.contacts.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useUpdateComexGestorContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<import('@shared/types').ComexGestorContact> }) =>
+      window.api.comex.gestores.contacts.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useDeleteComexGestorContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.gestores.contacts.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+// ── Despachantes ──────────────────────────────────────────────────────────────
+
+export function useComexDespachantes() {
+  return useQuery({ queryKey: ['comex-despachantes'], queryFn: () => window.api.comex.despachantes.list() })
+}
+
+export function useCreateComexDespachante() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexDespachanteInput) => window.api.comex.despachantes.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useUpdateComexDespachante() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<import('@shared/types').ComexDespachante> }) =>
+      window.api.comex.despachantes.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useDeleteComexDespachante() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.despachantes.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+// ── Logos ─────────────────────────────────────────────────────────────────────
+
+export function useUploadGestorLogo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, filePath }: { id: string; filePath: string }) => window.api.comex.gestores.uploadLogo(id, filePath),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useDeleteGestorLogo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.gestores.deleteLogo(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useUploadDespachantelogo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, filePath }: { id: string; filePath: string }) => window.api.comex.despachantes.uploadLogo(id, filePath),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useDeleteDespachantelogo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.despachantes.deleteLogo(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useCreateComexDespachanteContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexDespachanteContactInput) => window.api.comex.despachantes.contacts.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useUpdateComexDespachanteContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<import('@shared/types').ComexDespachanteContact> }) =>
+      window.api.comex.despachantes.contacts.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useDeleteComexDespachanteContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.despachantes.contacts.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
   })
 }

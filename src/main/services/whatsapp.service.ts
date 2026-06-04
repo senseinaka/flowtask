@@ -65,6 +65,35 @@ class WhatsappService {
     }
   }
 
+  /**
+   * Obtiene todos los grupos de WhatsApp de la instancia conectada.
+   * Usa /chat/findChats y filtra los que terminan en @g.us (grupos).
+   * Mucho más rápido que /group/fetchAllGroups que tarda en Railway.
+   */
+  async fetchGroups(): Promise<Array<{ jid: string; name: string; size: number }>> {
+    try {
+      const res = await axios.post(
+        `${this.apiUrl}/chat/findChats/${INSTANCE_NAME}`,
+        {},
+        { headers: this.headers(), timeout: 15000 }
+      )
+      const data = Array.isArray(res.data) ? res.data : []
+      return data
+        .filter((c: Record<string, unknown>) =>
+          typeof c.remoteJid === 'string' && c.remoteJid.endsWith('@g.us')
+        )
+        .map((c: Record<string, unknown>) => ({
+          jid:  c.remoteJid as string,
+          name: (c.pushName ?? c.name ?? 'Grupo sin nombre') as string,
+          size: 0,
+        }))
+        .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name))
+    } catch (err) {
+      console.error('[WhatsApp] fetchGroups error:', err)
+      return []
+    }
+  }
+
   async sendMessage(phone: string, text: string): Promise<boolean> {
     try {
       const res = await axios.post(

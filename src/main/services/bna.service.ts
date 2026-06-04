@@ -1,72 +1,84 @@
 /**
  * Servicio de cotizaciones BNA (Banco Nación Argentina)
- * Fuente: api.argentinadatos.com — agrega datos oficiales del BNA
+ * Fuente: api.argentinadatos.com
+ *
+ * El endpoint devuelve todas las cotizaciones de todas las monedas.
+ * Se filtra por EUR y se busca el día hábil más cercano anterior a la fecha pedida.
+ *
+ * Caché en memoria: el listado se descarga una sola vez por sesión (TTL 30 min)
+ * para evitar llamadas repetidas cuando el usuario consulta varias importaciones.
  */
 
-interface ArgentinaDatosRate {
-  fecha: string   // "YYYY-MM-DD"
+interface CotizacionRow {
+  moneda: string  // 'USD' | 'EUR' | 'BRL' | ...
+  casa:   string  // 'oficial'
   compra: number
   venta:  number
+  fecha:  string  // "YYYY-MM-DD"
 }
 
-const BASE = 'https://api.argentinadatos.com/v1/cotizaciones'
-const TIMEOUT_MS = 12_000
+const ENDPOINT   = 'https://api.argentinadatos.com/v1/cotizaciones/'
+const TIMEOUT_MS = 15_000
+const CACHE_TTL  = 30 * 60 * 1000  // 30 minutos
 
-async function fetchJSON<T>(url: string): Promise<T | null> {
+let _cache: CotizacionRow[] | null = null
+let _cacheAt = 0
+
+async function fetchAllRates(): Promise<CotizacionRow[]> {
+  // Usar caché si está fresco
+  if (_cache && Date.now() - _cacheAt < CACHE_TTL) return _cache
+
   try {
-    const ctrl = new AbortController()
+    const ctrl  = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
-    const resp = await fetch(url, {
+    const resp  = await fetch(ENDPOINT, {
       signal:  ctrl.signal,
       headers: { Accept: 'application/json' }
     })
     clearTimeout(timer)
-    if (!resp.ok) return null
-    return (await resp.json()) as T
-  } catch {
-    return null
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+
+    const data = (await resp.json()) as CotizacionRow[]
+    _cache   = data
+    _cacheAt = Date.now()
+    return data
+  } catch (err) {
+    // Si falla y hay caché vieja, usarla igual (mejor que nada)
+    if (_cache) return _cache
+    throw err
   }
 }
 
 /**
- * Busca la cotización EUR/ARS del BNA para una fecha dada (o la más cercana anterior).
- * Devuelve { compra, venta } en ARS por EUR, o null si no se pudo obtener.
+ * Devuelve la cotización EUR/ARS (venta BNA) para una fecha dada.
+ * Si la fecha es fin de semana o feriado, usa el día hábil anterior más cercano.
+ * Incluye la fecha real del registro y si coincide con la fecha pedida.
  */
-export async function getEurArsRate(dateStr: string): Promise<{ compra: number; venta: number } | null> {
-  // 1. Intentar con la fecha exacta
-  const exact = await fetchJSON<ArgentinaDatosRate>(`${BASE}/euro/${dateStr}`)
-  if (exact?.venta) return { compra: exact.compra, venta: exact.venta }
+export async function getEurArsRateDirect(
+  dateStr: string
+): Promise<{ eurArs: number; fechaBNA: string; esFechaExacta: boolean } | null> {
+  const all = await fetchAllRates()
 
-  // 2. Fallback: obtener todo el histórico y buscar el registro más cercano anterior
-  const all = await fetchJSON<ArgentinaDatosRate[]>(`${BASE}/euro/`)
-  if (!all?.length) return null
+  // Filtrar EUR y ordenar descendente por fecha
+  const eurRates = all
+    .filter(r => r.moneda === 'EUR' && r.venta > 0)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
 
-  const target = new Date(dateStr).getTime()
-  const valid  = all
-    .filter(r => new Date(r.fecha).getTime() <= target)
-    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+  if (!eurRates.length) return null
 
-  if (!valid.length) return null
-  const hit = valid[0]
-  return { compra: hit.compra, venta: hit.venta, fecha: hit.fecha } as { compra: number; venta: number }
-}
-
-/**
- * Calcula el TC EUR/USD usando la cotización BNA EUR/ARS y el TC USD/ARS del despacho.
- * Formula: EUR/USD = EUR/ARS_BNA / USD/ARS_despacho
- */
-export async function getEurUsdRate(
-  dateStr: string,
-  cotizUsdArs: number
-): Promise<{ eurUsd: number; eurArs: number; fechaBNA: string } | null> {
-  const rate = await getEurArsRate(dateStr)
-  if (!rate || cotizUsdArs <= 0) return null
-
-  const eurUsd = rate.venta / cotizUsdArs
+  // Buscar el registro más reciente cuya fecha sea ≤ la pedida
+  const hit = eurRates.find(r => r.fecha <= dateStr)
+  if (!hit) return null
 
   return {
-    eurUsd,                    // EUR/USD (ej: 1.183)
-    eurArs: rate.venta,        // EUR/ARS BNA venta (ej: 1.670)
-    fechaBNA: dateStr
+    eurArs:        hit.venta,
+    fechaBNA:      hit.fecha,
+    esFechaExacta: hit.fecha === dateStr
   }
+}
+
+/** Invalida el caché (útil en tests o si el usuario lo pide explícitamente) */
+export function invalidateBnaCache(): void {
+  _cache   = null
+  _cacheAt = 0
 }

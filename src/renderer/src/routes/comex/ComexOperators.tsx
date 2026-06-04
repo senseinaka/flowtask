@@ -98,7 +98,7 @@ function OperatorFormModal({
             </div>
             <div className="col-span-2">
               <label className="block text-xs text-slate-400 mb-1">Notas</label>
-              <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={2}
+              <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={5}
                 placeholder="Trabajan bien con carga de China. Precios competitivos en LCL..."
                 className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 resize-none" />
             </div>

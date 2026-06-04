@@ -16,6 +16,8 @@ import ComexImportDetail from './routes/comex/ComexImportDetail'
 import ComexSuppliers from './routes/comex/ComexSuppliers'
 import ComexSupplierDetail from './routes/comex/ComexSupplierDetail'
 import ComexOperators from './routes/comex/ComexOperators'
+import ComexGestores from './routes/comex/ComexGestores'
+import ComexDespachantes from './routes/comex/ComexDespachantes'
 import ComexLogistics from './routes/comex/ComexLogistics'
 import './index.css'
 
@@ -43,8 +45,10 @@ const router = createHashRouter([
       { path: 'comex/imports/:id', element: <ComexImportDetail /> },
       { path: 'comex/suppliers', element: <ComexSuppliers /> },
       { path: 'comex/suppliers/:id', element: <ComexSupplierDetail /> },
-      { path: 'comex/operators', element: <ComexOperators /> },
-      { path: 'comex/logistics', element: <ComexLogistics /> }
+      { path: 'comex/operators',    element: <ComexOperators />    },
+      { path: 'comex/gestores',    element: <ComexGestores />    },
+      { path: 'comex/despachantes',element: <ComexDespachantes /> },
+      { path: 'comex/logistics',   element: <ComexLogistics />   }
     ]
   }
 ])

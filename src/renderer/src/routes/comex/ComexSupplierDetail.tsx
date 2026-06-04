@@ -41,7 +41,7 @@ function EText({
       <div className="space-y-1">
         {label && <span className="block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>}
         <textarea
-          autoFocus rows={3} value={draft}
+          autoFocus rows={6} value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Escape') cancel() }}
           onBlur={commit}

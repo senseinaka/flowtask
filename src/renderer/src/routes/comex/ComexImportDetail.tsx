@@ -55,15 +55,20 @@ import type {
   ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexCustoms
 } from '@shared/types'
 import { cn, formatBytes } from '../../components/ui/utils'
-import { useAnalyzeComexDocument, useAIConfigured, useAnalyzeDespacho } from '../../hooks/useAI'
+import WhatsAppCargaModal from '../../components/whatsapp/WhatsAppCargaModal'
+import { useAnalyzeComexDocument, useAIConfigured, useAnalyzeDespacho, useAnalyzeBL } from '../../hooks/useAI'
 import {
   useUploadDespacho, useDeleteDespacho,
   useComexTributos, useCreateComexTributo, useUpdateComexTributo,
   useDeleteComexTributo, useUpsertComexTributos,
   useComexExtraCosts, useCreateComexExtraCost, useUpdateComexExtraCost,
-  useDeleteComexExtraCost, useUploadExtraCostInvoice
+  useDeleteComexExtraCost, useUploadExtraCostInvoice,
+  useComexProformas, useComexFacturasComerciales,
+  useCreateComexProforma, useUpdateComexProforma,
+  useDeleteComexProforma, useUploadProforma
 } from '../../hooks/useComex'
-import { useAnalyzeExtraCost } from '../../hooks/useAI'
+import { useAnalyzeExtraCost, useAnalyzeProforma } from '../../hooks/useAI'
+import type { ComexProforma, ExtractedProforma } from '@shared/types'
 import type {
   ComexImportTributo, ComexImportExtraCost,
   ExtraCostCategory, EXTRA_COST_CATEGORY_LABELS as ECL
@@ -256,35 +261,27 @@ function EditableSelect<T extends string>({
   options: { value: T; label: string }[]
   onChange: (v: T) => void
 }) {
-  const [editing, setEditing] = useState(false)
-
-  if (editing) {
-    return (
-      <div>
-        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+  return (
+    <div>
+      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{label}</p>
+      <div className="relative">
         <select
-          autoFocus
           value={value}
-          onChange={(e) => { onChange(e.target.value as T); setEditing(false) }}
-          onBlur={() => setEditing(false)}
-          className="w-full bg-slate-700 border border-cyan-600 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none"
+          onChange={(e) => onChange(e.target.value as T)}
+          className="w-full appearance-none bg-transparent hover:bg-slate-700/50 focus:bg-slate-700
+                     border border-transparent hover:border-slate-600 focus:border-cyan-600
+                     rounded-lg px-2.5 py-1 pr-6 text-sm text-slate-200
+                     cursor-pointer focus:outline-none transition-colors"
         >
           {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value} className="bg-slate-800 text-slate-200">
+              {o.label}
+            </option>
           ))}
         </select>
+        <ChevronDown size={11} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
       </div>
-    )
-  }
-
-  return (
-    <button onClick={() => setEditing(true)} className="text-left group w-full">
-      <p className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</p>
-      <p className="text-sm text-slate-200 mt-0.5 group-hover:text-cyan-300 transition-colors">
-        {options.find((o) => o.value === value)?.label ?? value}
-        <Edit2 size={10} className="inline ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity" />
-      </p>
-    </button>
+    </div>
   )
 }
 
@@ -323,86 +320,142 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
 // ── Import Timeline ───────────────────────────────────────────────────────────
 
 const TIMELINE_STEPS: ImportStatus[] = [
-  'planning', 'ordered', 'paid', 'production', 'shipped', 'transit', 'customs', 'delivered'
+  'planning', 'ordered', 'paid', 'production', 'shipped', 'transit',
+  'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered'
 ]
 
-function ImportTimeline({ currentStatus, onChangeStatus }: {
+// Fecha asociada a cada paso del timeline
+function getStepDate(step: ImportStatus, imp: ComexImport): { ts: number | null; isEstimate?: boolean } {
+  switch (step) {
+    case 'planning':     return { ts: imp.created_at }
+    case 'ordered':      return { ts: imp.order_date }
+    case 'paid':         return { ts: imp.payment_date }
+    case 'production':   return { ts: null }
+    case 'shipped':      return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
+    case 'transit':      return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
+    case 'arrived':      return { ts: imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date), isEstimate: !imp.aviso_arribo_date }
+    case 'customs':      return { ts: imp.traslado_deposito_date }
+    case 'oficializado':   return { ts: imp.oficializacion_import_date }
+    case 'carga_deposito': return { ts: imp.carga_deposito_date }
+    case 'delivered':      return { ts: imp.actual_arrival_date }
+    default:             return { ts: null }
+  }
+}
+
+function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
   currentStatus: ImportStatus
   onChangeStatus: (s: ImportStatus) => void
+  imp: ComexImport
 }) {
   const currentIdx = TIMELINE_STEPS.indexOf(currentStatus)
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">
+      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-4">
         Progreso de la operación
       </p>
-      <div className="relative flex items-center">
-        {/* Connecting line */}
-        <div className="absolute left-0 right-0 h-0.5 bg-slate-700 top-4 mx-4" />
-        {/* Progress fill */}
+
+      <div className="relative">
+        {/* Línea base */}
+        <div className="absolute left-0 right-0 h-0.5 bg-slate-700" style={{ top: '14px', margin: '0 5%' }} />
+        {/* Progreso completado */}
         <div
-          className="absolute h-0.5 bg-cyan-600 top-4 left-4 transition-all duration-500"
+          className="absolute h-0.5 bg-gradient-to-r from-slate-600 via-cyan-700 to-cyan-600 transition-all duration-700"
           style={{
-            width: currentIdx === 0
-              ? '0%'
-              : `${(currentIdx / (TIMELINE_STEPS.length - 1)) * (100 - (100 / (TIMELINE_STEPS.length - 1) / 2))}%`
+            top: '14px',
+            left: '5%',
+            width: currentIdx === 0 ? '0%' : `${(currentIdx / (TIMELINE_STEPS.length - 1)) * 90}%`
           }}
         />
 
-        {TIMELINE_STEPS.map((step, idx) => {
-          const done = idx < currentIdx
-          const active = idx === currentIdx
-          const color = IMPORT_STATUS_COLORS[step]
+        {/* Pasos */}
+        <div className="relative flex">
+          {TIMELINE_STEPS.map((step, idx) => {
+            const done    = idx < currentIdx
+            const active  = idx === currentIdx
+            const future  = idx > currentIdx
+            const color   = IMPORT_STATUS_COLORS[step]
+            const { ts, isEstimate } = getStepDate(step, imp)
+            const dateLabel = ts ? dayjs(ts).format('DD/MM/YY') : null
+            const labelLines = IMPORT_STATUS_LABELS[step].split(' ')
 
-          return (
-            <button
-              key={step}
-              onClick={() => onChangeStatus(step)}
-              title={IMPORT_STATUS_LABELS[step]}
-              className="relative z-10 flex flex-col items-center flex-1 gap-1.5 group"
-            >
-              {/* Circle */}
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-200',
-                  active
-                    ? 'border-current shadow-lg shadow-current/30 scale-110'
-                    : done
-                    ? 'border-current opacity-80'
-                    : 'border-slate-600 bg-slate-800 group-hover:border-slate-500'
-                )}
-                style={
-                  done || active
-                    ? { borderColor: color, backgroundColor: done ? color + '30' : color + '20' }
-                    : {}
-                }
+            return (
+              <button
+                key={step}
+                onClick={() => onChangeStatus(step)}
+                title={IMPORT_STATUS_LABELS[step]}
+                className="relative z-10 flex flex-col items-center flex-1 gap-1 group"
               >
-                {done ? (
-                  <Check size={13} style={{ color }} />
-                ) : (
-                  <span
-                    className="text-[10px] font-bold"
-                    style={active ? { color } : { color: '#475569' }}
-                  >
-                    {idx + 1}
-                  </span>
-                )}
-              </div>
+                {/* Círculo */}
+                <div
+                  className={cn(
+                    'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
+                    active  ? 'shadow-md scale-110' :
+                    done    ? 'opacity-90' :
+                    'border-slate-600 bg-slate-800 group-hover:border-slate-500'
+                  )}
+                  style={done || active ? {
+                    borderColor: color,
+                    backgroundColor: done ? color + '33' : color + '22',
+                    boxShadow: active ? `0 0 10px ${color}55` : undefined
+                  } : {}}
+                >
+                  {done ? (
+                    <Check size={12} style={{ color }} />
+                  ) : (
+                    <span className="text-[9px] font-bold" style={active ? { color } : { color: '#475569' }}>
+                      {idx + 1}
+                    </span>
+                  )}
+                </div>
 
-              {/* Label */}
-              <span
-                className={cn(
-                  'text-[9px] text-center leading-tight max-w-[52px] transition-colors',
-                  active ? 'font-semibold' : done ? 'opacity-70' : 'text-slate-600 group-hover:text-slate-400'
-                )}
-                style={active || done ? { color } : {}}
-              >
-                {IMPORT_STATUS_LABELS[step]}
-              </span>
-            </button>
-          )
-        })}
+                {/* Label */}
+                <div className="flex flex-col items-center gap-0">
+                  {labelLines.map((line, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        'text-[8px] leading-tight text-center transition-colors',
+                        active ? 'font-bold' : done ? '' : 'text-slate-600 group-hover:text-slate-400'
+                      )}
+                      style={active || done ? { color } : {}}
+                    >
+                      {line}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Fecha (+ hora para carga_deposito) */}
+                <div className="flex flex-col items-center">
+                  {dateLabel ? (
+                    <span className={cn(
+                      'text-[7px] leading-none font-mono transition-colors',
+                      active  ? 'font-semibold' :
+                      future  ? 'italic' :
+                      ''
+                    )}
+                    style={{
+                      color: active  ? color :
+                             done    ? color + 'bb' :
+                             isEstimate ? '#475569' :
+                             '#475569'
+                    }}>
+                      {isEstimate && future ? '~' : ''}{dateLabel}
+                    </span>
+                  ) : (
+                    <span className="text-[7px] text-slate-700">—</span>
+                  )}
+                  {/* Hora del turno solo para carga_deposito */}
+                  {step === 'carga_deposito' && imp.carga_deposito_time && (
+                    <span className="text-[7px] font-mono mt-0.5" style={{ color: active ? color : color + 'aa' }}>
+                      🕐 {imp.carga_deposito_time}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -850,11 +903,11 @@ function DocumentsSection({
 
 // ── CollapsibleSection ────────────────────────────────────────────────────────
 
-type SectionKey = 'costos'|'datos'|'anmat'|'flete_int'|'despacho'|'tributos'|'deposito'|'despachante'|'flete_local'|'productos'|'presupuestos'
+type SectionKey = 'costos'|'datos'|'anmat'|'flete_int'|'despacho'|'tributos'|'deposito'|'despachante'|'flete_local'|'productos'|'presupuestos'|'proformas'|'facturas'|'bl'
 
 const ALL_SECTION_KEYS: SectionKey[] = [
   'costos','datos','anmat','flete_int','despacho','tributos',
-  'deposito','despachante','flete_local','productos','presupuestos'
+  'deposito','despachante','flete_local','productos','presupuestos','proformas','facturas'
 ]
 
 function CollapsibleSection({
@@ -881,7 +934,7 @@ function CollapsibleSection({
         </div>
         <div className="flex items-center gap-3">
           {!isOpen && summary && (
-            <span className="text-[11px] text-slate-500 text-right max-w-[300px] truncate">{summary}</span>
+            <span className="text-[11px] text-right max-w-[300px] truncate">{summary}</span>
           )}
           <ChevronDown
             size={14}
@@ -903,6 +956,856 @@ function CollapsibleSection({
 const TRIBUTOS_RECUPERABLES = new Set(['415', '422', '424', '900'])
 const esCostoReal = (codigo: string) => !TRIBUTOS_RECUPERABLES.has(codigo.trim())
 
+// ── Proforma Section ─────────────────────────────────────────────────────────
+
+function ProformaSection({ imp }: { imp: ComexImport }) {
+  const qc              = useQueryClient()
+  const { data: proformas = [] } = useComexProformas(imp.id)
+  const createPf        = useCreateComexProforma()
+  const updatePf        = useUpdateComexProforma()
+  const deletePf        = useDeleteComexProforma()
+  const uploadPf        = useUploadProforma()
+  const analyzeAI       = useAnalyzeProforma()
+  const { data: aiConfigured } = useAIConfigured()
+
+  const [analyzingId,   setAnalyzingId]   = useState<string | null>(null)
+  const [aiResult,      setAiResult]      = useState<{ proformaId: string; data: ExtractedProforma } | null>(null)
+  const [applying,      setApplying]      = useState(false)
+  const [applySuccess,  setApplySuccess]  = useState<string | null>(null)
+  const [confirmDel,    setConfirmDel]    = useState<string | null>(null)
+
+  const today = dayjs()
+  // Idea C: proforma antigua si la más reciente tiene >30 días
+  const latest = proformas.length > 0 ? proformas[proformas.length - 1] : null
+  const isStale = latest?.fecha_proforma
+    ? dayjs(latest.fecha_proforma).isBefore(today.subtract(30, 'day'))
+    : false
+
+  const fmt2    = (n: number, mon: string) =>
+    `${mon} ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const fmtDate = (s: string | null) => s ? dayjs(s).format('DD/MM/YY') : '—'
+
+  // Total seleccionadas (idea D: mezcla de monedas)
+  const selected     = proformas.filter(p => p.incluir_en_total === 1 && p.importe != null)
+  const currencies   = [...new Set(selected.map(p => p.moneda))]
+  const mixedCurrency = currencies.length > 1
+  const totalSelected = !mixedCurrency && selected.length > 0
+    ? { importe: selected.reduce((s, p) => s + (p.importe ?? 0), 0), moneda: currencies[0] ?? 'USD' }
+    : null
+
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [isDragOver,  setIsDragOver]  = useState(false)
+  const dragCounter = useRef(0)
+
+  const doCreateAndUpload = async (filePath: string) => {
+    setCreateError(null)
+    try {
+      const pf = await createPf.mutateAsync({
+        import_id: imp.id, numero: 0, fecha_proforma: null, importe: null,
+        moneda: imp.currency || 'USD', nro_proforma: '', descripcion: '',
+        incluir_en_total: 1, stored_name: null, original_name: null,
+        drive_file_id: null, drive_folder_id: null, drive_status: 'none'
+      })
+      uploadPf.mutate({ proformaId: pf.id, filePath, importId: imp.id })
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Error al crear proforma')
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    const fp = window.api.getPathForFile(file)
+    if (fp) doCreateAndUpload(fp)
+  }
+
+  const handleAddProforma = async () => {
+    setCreateError(null)
+    try {
+      const fp = await window.api.comex.proformas.selectFile()
+      if (fp) {
+        await doCreateAndUpload(fp)
+      } else {
+        // Si no eligió archivo, crear igual la proforma vacía
+        await createPf.mutateAsync({
+          import_id: imp.id, numero: 0, fecha_proforma: null, importe: null,
+          moneda: imp.currency || 'USD', nro_proforma: '', descripcion: '',
+          incluir_en_total: 1, stored_name: null, original_name: null,
+          drive_file_id: null, drive_folder_id: null, drive_status: 'none'
+        })
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Error al crear proforma')
+    }
+  }
+
+  const handleUpload = async (pfId: string) => {
+    const fp = await window.api.comex.proformas.selectFile()
+    if (!fp) return
+    uploadPf.mutate({ proformaId: pfId, filePath: fp, importId: imp.id })
+  }
+
+  const handleAnalyze = async (pfId: string) => {
+    setAnalyzingId(pfId)
+    try {
+      const result = await analyzeAI.mutateAsync(pfId)
+      const d = result.structured as ExtractedProforma
+      if (d) setAiResult({ proformaId: pfId, data: d })
+    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    finally { setAnalyzingId(null) }
+  }
+
+  const handleApplyAI = async () => {
+    if (!aiResult) return
+    setApplying(true)
+    try {
+      const d  = aiResult.data
+      const pf = proformas.find(p => p.id === aiResult.proformaId)
+      if (!pf) return
+
+      // Actualizar proforma con datos extraídos
+      const patch: Partial<ComexProforma> = {}
+      if (d.importe_total != null) patch.importe        = d.importe_total
+      if (d.moneda)                patch.moneda         = d.moneda
+      if (d.fecha)                 patch.fecha_proforma  = d.fecha
+      if (d.nro_proforma)          patch.nro_proforma    = d.nro_proforma
+      if (d.descripcion)           patch.descripcion     = d.descripcion
+      await window.api.comex.proformas.update(pf.id, patch)
+
+      // Renombrar carpeta Drive con la fecha extraída (Idea: sin fecha → con fecha)
+      if (d.fecha && pf.drive_folder_id) {
+        window.api.comex.proformas.renameDriveFolder(pf.id).catch(() => {})
+      }
+
+      // Aplicar valor proforma al import si está seleccionada
+      if (pf.incluir_en_total === 1 && d.importe_total != null) {
+        const newSelected = proformas
+          .filter(p => p.incluir_en_total === 1 || p.id === pf.id)
+          .map(p => p.id === pf.id ? { ...p, ...patch } : p)
+        const allSameCurrency = new Set(newSelected.map(p => p.moneda)).size === 1
+        if (allSameCurrency) {
+          const total = newSelected.reduce((s, p) => s + (p.importe ?? 0), 0)
+          await window.api.comex.imports.update(imp.id, {
+            estimated_value: total,
+            currency: d.moneda ?? imp.currency
+          })
+          qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+        }
+      }
+
+      qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'proforma'] })
+      setAiResult(null)
+      const msg = d.importe_total != null
+        ? `✓ Proforma actualizada — ${d.moneda ?? ''} ${d.importe_total?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} aplicado`
+        : '✓ Datos de la proforma aplicados correctamente'
+      setApplySuccess(msg)
+      setTimeout(() => setApplySuccess(null), 4000)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al aplicar')
+    } finally { setApplying(false) }
+  }
+
+  const handleToggle = async (pf: ComexProforma) => {
+    const newVal = pf.incluir_en_total === 1 ? 0 : 1
+    await window.api.comex.proformas.update(pf.id, { incluir_en_total: newVal as 0 | 1 })
+    qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'proforma'] })
+  }
+
+  const handleApplyTotal = async () => {
+    if (!totalSelected) return
+    await window.api.comex.imports.update(imp.id, {
+      estimated_value: totalSelected.importe,
+      currency:        totalSelected.moneda
+    })
+    qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+    const msg = `✓ Valor proforma actualizado — ${totalSelected.moneda} ${totalSelected.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`
+    setApplySuccess(msg)
+    setTimeout(() => setApplySuccess(null), 4000)
+  }
+
+  // Idea B: tendencia
+  const trend = proformas.length >= 2 && proformas[proformas.length-1].importe != null && proformas[proformas.length-2].importe != null
+    ? ((proformas[proformas.length-1].importe! - proformas[proformas.length-2].importe!) / proformas[proformas.length-2].importe! * 100)
+    : null
+
+  return (
+    <div
+      className={cn(
+        'space-y-3 rounded-xl transition-colors',
+        isDragOver && 'outline outline-2 outline-cyan-500/60 bg-cyan-950/10'
+      )}
+      onDragEnter={(e) => { e.preventDefault(); dragCounter.current++; setIsDragOver(true) }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={() => { dragCounter.current--; if (dragCounter.current === 0) setIsDragOver(false) }}
+      onDrop={handleDrop}
+    >
+      {/* Overlay visual cuando se arrastra */}
+      {isDragOver && (
+        <div className="flex items-center justify-center gap-2 py-4 text-sm text-cyan-400 font-medium">
+          <Upload size={16} /> Soltá para agregar como nueva proforma
+        </div>
+      )}
+
+      {/* Banner de éxito al aplicar */}
+      {applySuccess && (
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-900/30 border border-emerald-700/50 rounded-lg text-xs text-emerald-300 font-medium">
+          <Check size={14} className="text-emerald-400 flex-shrink-0" />
+          {applySuccess}
+        </div>
+      )}
+
+      {/* Idea C: Alerta proforma antigua */}
+      {proformas.length > 0 && isStale && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/20 border border-amber-800/40 rounded-lg text-xs text-amber-400">
+          <AlertCircle size={13} className="flex-shrink-0" />
+          La proforma más reciente tiene más de 30 días — verificá si hay una versión actualizada.
+        </div>
+      )}
+
+      {/* Lista de proformas */}
+      <div className="space-y-2">
+        {proformas.map((pf, idx) => {
+          const isLatest  = idx === proformas.length - 1
+          const isChecked = pf.incluir_en_total === 1
+
+          return (
+            <div key={pf.id} className={cn(
+              'border rounded-xl overflow-hidden transition-colors',
+              isChecked ? 'border-cyan-700/50 bg-slate-800' : 'border-slate-700/50 bg-slate-800/50'
+            )}>
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                {/* Checkbox */}
+                <button
+                  onClick={() => handleToggle(pf)}
+                  className={cn(
+                    'w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors',
+                    isChecked ? 'bg-cyan-600 border-cyan-600' : 'border-slate-600 hover:border-slate-400'
+                  )}
+                >
+                  {isChecked && <Check size={10} className="text-white" />}
+                </button>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-200">
+                      Proforma {pf.numero}
+                    </span>
+                    {pf.fecha_proforma && (
+                      <span className="text-[10px] text-slate-500">{fmtDate(pf.fecha_proforma)}</span>
+                    )}
+                    {/* Idea A: badge "Activa" en la última */}
+                    {isLatest && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-cyan-900/50 text-cyan-400 border border-cyan-800/50">
+                        Activa
+                      </span>
+                    )}
+                    {pf.nro_proforma && (
+                      <span className="text-[10px] text-slate-600 font-mono">{pf.nro_proforma}</span>
+                    )}
+                  </div>
+                  {pf.descripcion && (
+                    <p className="text-[10px] text-slate-500 truncate mt-0.5">{pf.descripcion}</p>
+                  )}
+                </div>
+
+                {/* Importe */}
+                <div className="text-right flex-shrink-0">
+                  {pf.importe != null ? (
+                    <p className={cn('text-sm font-bold', isChecked ? 'text-cyan-300' : 'text-slate-400')}>
+                      {fmt2(pf.importe, pf.moneda)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-600 italic">Sin valor</p>
+                  )}
+                  {/* Idea B: tendencia vs anterior */}
+                  {isLatest && trend != null && (
+                    <p className={cn('text-[10px] font-medium', trend > 0 ? 'text-red-400' : 'text-emerald-400')}>
+                      {trend > 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}% vs anterior
+                    </p>
+                  )}
+                </div>
+
+                {/* Acciones */}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {pf.stored_name ? (
+                    <>
+                      <button onClick={() => window.api.comex.proformas.open(pf.id)}
+                        title="Abrir PDF" className="p-1.5 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-700 transition-colors">
+                        <FolderOpen size={13} />
+                      </button>
+                      {pf.drive_file_id && (
+                        <button onClick={() => window.api.shell.open(`https://drive.google.com/file/d/${pf.drive_file_id}/view`)}
+                          title="Ver en Drive" className="p-1.5 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-700 transition-colors">
+                          <ExternalLink size={13} />
+                        </button>
+                      )}
+                      {aiConfigured && (
+                        <button onClick={() => handleAnalyze(pf.id)} disabled={analyzingId === pf.id}
+                          title="Extraer datos con IA" className="p-1.5 rounded text-slate-500 hover:text-violet-400 hover:bg-slate-700 transition-colors disabled:opacity-40">
+                          {analyzingId === pf.id ? <Loader2 size={13} className="animate-spin text-violet-400" /> : <Sparkles size={13} />}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button onClick={() => handleUpload(pf.id)} disabled={uploadPf.isPending}
+                      title="Subir PDF" className="p-1.5 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-700 transition-colors">
+                      {uploadPf.isPending ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    </button>
+                  )}
+                  {confirmDel === pf.id ? (
+                    <>
+                      <button onClick={() => { deletePf.mutate({ id: pf.id, importId: imp.id }); setConfirmDel(null) }}
+                        className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white"><Check size={11} /></button>
+                      <button onClick={() => setConfirmDel(null)}
+                        className="p-1.5 rounded bg-slate-700 text-slate-400"><X size={11} /></button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmDel(pf.id)}
+                      className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-slate-700 transition-colors">
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Drive status */}
+              {pf.stored_name && (
+                <div className="flex items-center gap-2 px-3 pb-2 text-[10px] text-slate-600">
+                  <FileText size={10} />
+                  <span className="truncate">{pf.original_name}</span>
+                  {pf.drive_status === 'synced'    && <span className="text-emerald-500 flex-shrink-0">☁ Drive</span>}
+                  {pf.drive_status === 'uploading' && <span className="flex items-center gap-1 text-blue-400"><Loader2 size={10} className="animate-spin" /> Subiendo...</span>}
+                  {pf.drive_status === 'error'     && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await window.api.comex.proformas.syncDrive(pf.id)
+                          qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id] })
+                        } catch (err) {
+                          alert(`Error Drive: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+                        }
+                      }}
+                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors flex-shrink-0"
+                      title="Click para reintentar la subida a Drive"
+                    >
+                      <AlertCircle size={10} /> Error Drive — Reintentar
+                    </button>
+                  )}
+                  {pf.drive_status === 'none' && imp.drive_folder_id && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await window.api.comex.proformas.syncDrive(pf.id)
+                          qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id] })
+                        } catch (err) {
+                          alert(`Error Drive: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+                        }
+                      }}
+                      className="flex items-center gap-1 text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0"
+                      title="Subir a Drive"
+                    >
+                      <Cloud size={10} /> Subir a Drive
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {proformas.length === 0 && (
+          <p className="text-xs text-slate-500 italic py-2">Sin proformas. Hacé click en "+ Nueva proforma" para subir la primera.</p>
+        )}
+      </div>
+
+      {/* Total + aplicar */}
+      {selected.length > 0 && (
+        <div className="border border-slate-700/50 rounded-xl p-3 space-y-2 bg-slate-900/30">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">
+              {selected.length} proforma{selected.length !== 1 ? 's' : ''} seleccionada{selected.length !== 1 ? 's' : ''}
+            </span>
+            {totalSelected && (
+              <span className="text-sm font-bold text-cyan-300">
+                {fmt2(totalSelected.importe, totalSelected.moneda)}
+              </span>
+            )}
+          </div>
+          {/* Idea D: alerta mezcla de monedas */}
+          {mixedCurrency && (
+            <p className="text-[10px] text-amber-400 flex items-center gap-1">
+              <AlertCircle size={11} />
+              Monedas distintas ({currencies.join(', ')}) — no se puede sumar directamente. Seleccioná solo las de la misma moneda.
+            </p>
+          )}
+          {totalSelected && (
+            <button
+              onClick={handleApplyTotal}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold bg-cyan-700 hover:bg-cyan-600 text-white transition-colors"
+            >
+              <Check size={12} /> Aplicar {fmt2(totalSelected.importe, totalSelected.moneda)} como "Valor proforma"
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Botón agregar + hint drag & drop */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleAddProforma}
+            disabled={createPf.isPending || uploadPf.isPending}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-cyan-400 transition-colors disabled:opacity-40"
+          >
+            {createPf.isPending || uploadPf.isPending
+              ? <><Loader2 size={12} className="animate-spin" /> Procesando...</>
+              : <><Plus size={12} /> Nueva proforma</>
+            }
+          </button>
+          <span className="text-[11px] text-slate-700 italic">
+            o arrastrá el PDF aquí
+          </span>
+        </div>
+        {createError && (
+          <p className="text-[11px] text-red-400 flex items-center gap-1">
+            <AlertCircle size={11} /> {createError}
+          </p>
+        )}
+      </div>
+
+      {/* Panel resultado IA */}
+      {aiResult && (
+        <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-violet-900/20 border-b border-violet-700/30">
+            <div className="flex items-center gap-1.5">
+              <Bot size={12} className="text-violet-400" />
+              <span className="text-[11px] font-semibold text-violet-300">Proforma extraída por IA</span>
+            </div>
+            <button onClick={() => setAiResult(null)} className="text-slate-500 hover:text-slate-300"><X size={12} /></button>
+          </div>
+          <div className="px-3 py-2.5 space-y-2">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+              {aiResult.data.proveedor    && <><span className="text-slate-500">Proveedor</span><span className="text-slate-200 font-medium">{aiResult.data.proveedor}</span></>}
+              {aiResult.data.nro_proforma && <><span className="text-slate-500">N° Proforma</span><span className="text-slate-200">{aiResult.data.nro_proforma}</span></>}
+              {aiResult.data.fecha        && <><span className="text-slate-500">Fecha</span><span className="text-slate-200">{formatFieldValue(aiResult.data.fecha)}</span></>}
+              {aiResult.data.descripcion  && <><span className="text-slate-500">Descripción</span><span className="text-slate-300 truncate">{aiResult.data.descripcion}</span></>}
+            </div>
+            {aiResult.data.importe_total != null && (
+              <div className="border-t border-violet-700/30 pt-2">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-emerald-400 font-semibold">Total proforma</span>
+                  <span className="text-emerald-300 font-bold">
+                    {fmt2(aiResult.data.importe_total, aiResult.data.moneda ?? 'USD')}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-1 border-t border-violet-800/30">
+              <button onClick={() => setAiResult(null)} className="px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white">Descartar</button>
+              <button onClick={handleApplyAI} disabled={applying}
+                className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50">
+                {applying ? <><Loader2 size={11} className="animate-spin" />Aplicando...</> : <><Check size={11} />Aplicar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Facturas Comerciales Section ─────────────────────────────────────────────
+
+function FacturasComercialSection({ imp, proformasData }: { imp: ComexImport; proformasData: ComexProforma[] }) {
+  const qc              = useQueryClient()
+  const { data: facturas = [] } = useComexFacturasComerciales(imp.id)
+  const createPf        = useCreateComexProforma()
+  const updatePf        = useUpdateComexProforma()
+  const deletePf        = useDeleteComexProforma()
+  const uploadPf        = useUploadProforma()
+  const analyzeAI       = useAnalyzeProforma()
+  const { data: aiConfigured } = useAIConfigured()
+
+  const [analyzingId,   setAnalyzingId]   = useState<string | null>(null)
+  const [aiResult,      setAiResult]      = useState<{ proformaId: string; data: ExtractedProforma } | null>(null)
+  const [applying,      setApplying]      = useState(false)
+  const [applySuccess,  setApplySuccess]  = useState<string | null>(null)
+  const [confirmDel,    setConfirmDel]    = useState<string | null>(null)
+  const [isDragOver,    setIsDragOver]    = useState(false)
+  const dragCounter     = useRef(0)
+  const [createError,   setCreateError]   = useState<string | null>(null)
+
+  const today = dayjs()
+  const latest = facturas.length > 0 ? facturas[facturas.length - 1] : null
+  const isStale = latest?.fecha_proforma
+    ? dayjs(latest.fecha_proforma).isBefore(today.subtract(30, 'day')) : false
+
+  const fmt2    = (n: number, mon: string) =>
+    `${mon} ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const fmtDate = (s: string | null) => s ? dayjs(s).format('DD/MM/YY') : '—'
+
+  const selected     = facturas.filter(p => p.incluir_en_total === 1 && p.importe != null)
+  const currencies   = [...new Set(selected.map(p => p.moneda))]
+  const mixedCurrency = currencies.length > 1
+  const totalSelected = !mixedCurrency && selected.length > 0
+    ? { importe: selected.reduce((s, p) => s + (p.importe ?? 0), 0), moneda: currencies[0] ?? imp.currency }
+    : null
+
+  // Idea A: comparativo proforma vs factura
+  const proformaSelected = proformasData.filter(p => p.incluir_en_total === 1 && p.importe != null)
+  const proformaCurrencies = [...new Set(proformaSelected.map(p => p.moneda))]
+  const proformaTotal = !mixedCurrency && proformaSelected.length > 0 && proformaCurrencies.length === 1
+    ? { importe: proformaSelected.reduce((s, p) => s + (p.importe ?? 0), 0), moneda: proformaCurrencies[0] }
+    : null
+  const canCompare = proformaTotal && totalSelected && proformaTotal.moneda === totalSelected.moneda
+  const diffPct    = canCompare ? ((totalSelected!.importe - proformaTotal!.importe) / proformaTotal!.importe) * 100 : null
+
+  const doCreateAndUpload = async (filePath: string) => {
+    setCreateError(null)
+    try {
+      const pf = await createPf.mutateAsync({
+        import_id: imp.id, tipo: 'factura', numero: 0, fecha_proforma: null, importe: null,
+        moneda: imp.currency || 'USD', nro_proforma: '', descripcion: '',
+        incluir_en_total: 1, stored_name: null, original_name: null,
+        drive_file_id: null, drive_folder_id: null, drive_status: 'none'
+      })
+      uploadPf.mutate({ proformaId: pf.id, filePath, importId: imp.id, tipo: 'factura' })
+    } catch (err) { setCreateError(err instanceof Error ? err.message : 'Error') }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); dragCounter.current = 0; setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    const fp = window.api.getPathForFile(file)
+    if (fp) doCreateAndUpload(fp)
+  }
+
+  const handleAddFactura = async () => {
+    setCreateError(null)
+    try {
+      const fp = await window.api.comex.proformas.selectFile()
+      if (fp) { await doCreateAndUpload(fp) }
+      else {
+        await createPf.mutateAsync({
+          import_id: imp.id, tipo: 'factura', numero: 0, fecha_proforma: null, importe: null,
+          moneda: imp.currency || 'USD', nro_proforma: '', descripcion: '',
+          incluir_en_total: 1, stored_name: null, original_name: null,
+          drive_file_id: null, drive_folder_id: null, drive_status: 'none'
+        })
+      }
+    } catch (err) { setCreateError(err instanceof Error ? err.message : 'Error') }
+  }
+
+  const handleAnalyze = async (pfId: string) => {
+    setAnalyzingId(pfId)
+    try {
+      const result = await analyzeAI.mutateAsync(pfId)
+      const d = result.structured as ExtractedProforma
+      if (d) {
+        // Idea B: si hay una sola factura, aplicar automáticamente
+        const pf = facturas.find(p => p.id === pfId)
+        if (facturas.length === 1 && d.importe_total != null && pf?.incluir_en_total === 1) {
+          await window.api.comex.proformas.update(pfId, {
+            importe: d.importe_total, moneda: d.moneda ?? pf.moneda,
+            fecha_proforma: d.fecha ?? null, nro_proforma: d.nro_proforma ?? '',
+            descripcion: d.descripcion ?? ''
+          })
+          if (d.fecha && pf.drive_folder_id) window.api.comex.proformas.renameDriveFolder(pfId).catch(() => {})
+          await window.api.comex.imports.update(imp.id, {
+            actual_value: d.importe_total,
+            currency: d.moneda ?? imp.currency
+          })
+          qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'factura'] })
+          qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+        } else {
+          setAiResult({ proformaId: pfId, data: d })
+        }
+      }
+    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    finally { setAnalyzingId(null) }
+  }
+
+  const handleApplyAI = async () => {
+    if (!aiResult) return
+    setApplying(true)
+    try {
+      const d  = aiResult.data
+      const pf = facturas.find(p => p.id === aiResult.proformaId)
+      if (!pf) return
+
+      const patch: Partial<ComexProforma> = {}
+      if (d.importe_total != null) patch.importe        = d.importe_total
+      if (d.moneda)                patch.moneda         = d.moneda
+      if (d.fecha)                 patch.fecha_proforma  = d.fecha
+      if (d.nro_proforma)          patch.nro_proforma    = d.nro_proforma
+      if (d.descripcion)           patch.descripcion     = d.descripcion
+      await window.api.comex.proformas.update(pf.id, patch)
+
+      if (d.fecha && pf.drive_folder_id)
+        window.api.comex.proformas.renameDriveFolder(pf.id).catch(() => {})
+
+      if (pf.incluir_en_total === 1 && d.importe_total != null) {
+        const newSelected = facturas
+          .filter(p => p.incluir_en_total === 1 || p.id === pf.id)
+          .map(p => p.id === pf.id ? { ...p, ...patch } : p)
+        const allSame = new Set(newSelected.map(p => p.moneda)).size === 1
+        if (allSame) {
+          const total = newSelected.reduce((s, p) => s + (p.importe ?? 0), 0)
+          await window.api.comex.imports.update(imp.id, {
+            actual_value: total,
+            currency: d.moneda ?? imp.currency
+          })
+          qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+        }
+      }
+
+      qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'factura'] })
+      setAiResult(null)
+      // Feedback de éxito
+      const msg = d.importe_total != null
+        ? `✓ Factura actualizada — ${d.moneda ?? ''} ${d.importe_total?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} aplicado`
+        : '✓ Datos de la factura aplicados correctamente'
+      setApplySuccess(msg)
+      setTimeout(() => setApplySuccess(null), 4000)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al aplicar')
+    } finally { setApplying(false) }
+  }
+
+  const handleToggle = async (pf: ComexProforma) => {
+    await window.api.comex.proformas.update(pf.id, { incluir_en_total: pf.incluir_en_total === 1 ? 0 : 1 })
+    qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'factura'] })
+  }
+
+  const handleApplyTotal = async () => {
+    if (!totalSelected) return
+    await window.api.comex.imports.update(imp.id, {
+      actual_value: totalSelected.importe,
+      currency:     totalSelected.moneda
+    })
+    qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+    const msg = `✓ Valor factura actualizado — ${totalSelected.moneda} ${totalSelected.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`
+    setApplySuccess(msg)
+    setTimeout(() => setApplySuccess(null), 4000)
+  }
+
+  return (
+    <div
+      className={cn('space-y-3 rounded-xl transition-colors', isDragOver && 'outline outline-2 outline-teal-500/60 bg-teal-950/10')}
+      onDragEnter={(e) => { e.preventDefault(); dragCounter.current++; setIsDragOver(true) }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={() => { dragCounter.current--; if (dragCounter.current === 0) setIsDragOver(false) }}
+      onDrop={handleDrop}
+    >
+      {isDragOver && (
+        <div className="flex items-center justify-center gap-2 py-4 text-sm text-teal-400 font-medium">
+          <Upload size={16} /> Soltá para agregar como nueva factura
+        </div>
+      )}
+
+      {/* Banner de éxito al aplicar */}
+      {applySuccess && (
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-900/30 border border-emerald-700/50 rounded-lg text-xs text-emerald-300 font-medium">
+          <Check size={14} className="text-emerald-400 flex-shrink-0" />
+          {applySuccess}
+        </div>
+      )}
+
+      {/* Idea C: alerta proforma antigua */}
+      {facturas.length > 0 && isStale && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/20 border border-amber-800/40 rounded-lg text-xs text-amber-400">
+          <AlertCircle size={13} /> La factura más reciente tiene más de 30 días.
+        </div>
+      )}
+
+      {/* Idea A: comparativo proforma vs factura */}
+      {canCompare && diffPct !== null && (
+        <div className={cn(
+          'flex items-center justify-between px-3 py-2 rounded-lg border text-xs',
+          Math.abs(diffPct) <= 5 ? 'bg-emerald-900/20 border-emerald-800/40' :
+          Math.abs(diffPct) <= 10 ? 'bg-amber-900/20 border-amber-800/40' : 'bg-red-900/20 border-red-800/40'
+        )}>
+          <div className="space-y-0.5">
+            <p className="text-slate-400">Proforma: <span className="text-slate-200 font-medium">{fmt2(proformaTotal!.importe, proformaTotal!.moneda)}</span></p>
+            <p className="text-slate-400">Factura:  <span className="text-slate-200 font-medium">{fmt2(totalSelected!.importe, totalSelected!.moneda)}</span></p>
+          </div>
+          <span className={cn('font-bold text-sm',
+            Math.abs(diffPct) <= 5 ? 'text-emerald-400' :
+            Math.abs(diffPct) <= 10 ? 'text-amber-400' : 'text-red-400'
+          )}>
+            {diffPct > 0 ? '▲' : '▼'} {Math.abs(diffPct).toFixed(1)}%
+            <p className="text-[10px] font-normal text-slate-500 text-right">
+              {Math.abs(diffPct) <= 5 ? 'Dentro del rango' : Math.abs(diffPct) <= 10 ? 'Diferencia moderada' : 'Diferencia alta'}
+            </p>
+          </span>
+        </div>
+      )}
+
+      {/* Lista */}
+      <div className="space-y-2">
+        {facturas.map((pf, idx) => {
+          const isLatest  = idx === facturas.length - 1
+          const isChecked = pf.incluir_en_total === 1
+          // Idea C: verificar referencia con proformas
+          const refMatch = pf.nro_proforma
+            ? proformasData.some(pr => pr.nro_proforma === pf.nro_proforma)
+            : null
+
+          return (
+            <div key={pf.id} className={cn('border rounded-xl overflow-hidden transition-colors',
+              isChecked ? 'border-teal-700/50 bg-slate-800' : 'border-slate-700/50 bg-slate-800/50'
+            )}>
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                <button onClick={() => handleToggle(pf)}
+                  className={cn('w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors',
+                    isChecked ? 'bg-teal-600 border-teal-600' : 'border-slate-600 hover:border-slate-400'
+                  )}>
+                  {isChecked && <Check size={10} className="text-white" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-200">Factura {pf.numero}</span>
+                    {pf.fecha_proforma && <span className="text-[10px] text-slate-500">{fmtDate(pf.fecha_proforma)}</span>}
+                    {isLatest && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-900/50 text-teal-400 border border-teal-800/50">Activa</span>}
+                    {pf.nro_proforma && <span className="text-[10px] text-slate-600 font-mono">{pf.nro_proforma}</span>}
+                    {refMatch === true  && <span className="text-[9px] text-emerald-400">✓ Ref. coincide</span>}
+                    {refMatch === false && <span className="text-[9px] text-amber-400">⚠ Ref. sin proforma</span>}
+                  </div>
+                  {pf.descripcion && <p className="text-[10px] text-slate-500 truncate mt-0.5">{pf.descripcion}</p>}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  {pf.importe != null
+                    ? <p className={cn('text-sm font-bold', isChecked ? 'text-teal-300' : 'text-slate-400')}>{fmt2(pf.importe, pf.moneda)}</p>
+                    : <p className="text-xs text-slate-600 italic">Sin valor</p>
+                  }
+                  {isLatest && facturas.length >= 2 && (() => {
+                    const prev = facturas[facturas.length - 2]
+                    if (prev?.importe && pf.importe) {
+                      const t = ((pf.importe - prev.importe) / prev.importe) * 100
+                      return <p className={cn('text-[10px] font-medium', t > 0 ? 'text-red-400' : 'text-emerald-400')}>
+                        {t > 0 ? '▲' : '▼'} {Math.abs(t).toFixed(1)}% vs anterior
+                      </p>
+                    }
+                    return null
+                  })()}
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {pf.stored_name ? (
+                    <>
+                      <button onClick={() => window.api.comex.proformas.open(pf.id)} title="Abrir PDF"
+                        className="p-1.5 rounded text-slate-500 hover:text-teal-400 hover:bg-slate-700 transition-colors"><FolderOpen size={13} /></button>
+                      {pf.drive_file_id && (
+                        <button onClick={() => window.api.shell.open(`https://drive.google.com/file/d/${pf.drive_file_id}/view`)} title="Ver en Drive"
+                          className="p-1.5 rounded text-slate-500 hover:text-teal-400 hover:bg-slate-700 transition-colors"><ExternalLink size={13} /></button>
+                      )}
+                      {aiConfigured && (
+                        <button onClick={() => handleAnalyze(pf.id)} disabled={analyzingId === pf.id} title="Extraer con IA"
+                          className="p-1.5 rounded text-slate-500 hover:text-violet-400 hover:bg-slate-700 transition-colors disabled:opacity-40">
+                          {analyzingId === pf.id ? <Loader2 size={13} className="animate-spin text-violet-400" /> : <Sparkles size={13} />}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button onClick={async () => { const fp = await window.api.comex.proformas.selectFile(); if (fp) uploadPf.mutate({ proformaId: pf.id, filePath: fp, importId: imp.id, tipo: 'factura' }) }}
+                      className="p-1.5 rounded text-slate-500 hover:text-teal-400 hover:bg-slate-700 transition-colors"><Upload size={13} /></button>
+                  )}
+                  {confirmDel === pf.id ? (
+                    <>
+                      <button onClick={() => { deletePf.mutate({ id: pf.id, importId: imp.id, tipo: 'factura' }); setConfirmDel(null) }} className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white"><Check size={11} /></button>
+                      <button onClick={() => setConfirmDel(null)} className="p-1.5 rounded bg-slate-700 text-slate-400"><X size={11} /></button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmDel(pf.id)} className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-slate-700 transition-colors"><Trash2 size={13} /></button>
+                  )}
+                </div>
+              </div>
+              {pf.stored_name && (
+                <div className="flex items-center gap-2 px-3 pb-2 text-[10px] text-slate-600">
+                  <FileText size={10} />
+                  <span className="truncate">{pf.original_name}</span>
+                  {pf.drive_status === 'synced'    && <span className="text-emerald-500 flex-shrink-0">☁ Drive</span>}
+                  {pf.drive_status === 'uploading' && <Loader2 size={10} className="animate-spin text-blue-400" />}
+                  {pf.drive_status === 'error'     && (
+                    <button onClick={async () => { try { await window.api.comex.proformas.syncDrive(pf.id); qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'factura'] }) } catch (err) { alert(`Error Drive: ${err instanceof Error ? err.message : ''}`) } }}
+                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 flex-shrink-0">
+                      <AlertCircle size={10} /> Error Drive — Reintentar
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {facturas.length === 0 && <p className="text-xs text-slate-500 italic py-2">Sin facturas. Hacé click en "+ Nueva factura" o arrastrá el PDF.</p>}
+      </div>
+
+      {/* Total + aplicar */}
+      {selected.length > 0 && (
+        <div className="border border-slate-700/50 rounded-xl p-3 space-y-2 bg-slate-900/30">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">{selected.length} factura{selected.length !== 1 ? 's' : ''} seleccionada{selected.length !== 1 ? 's' : ''}</span>
+            {totalSelected && <span className="text-sm font-bold text-teal-300">{fmt2(totalSelected.importe, totalSelected.moneda)}</span>}
+          </div>
+          {mixedCurrency && <p className="text-[10px] text-amber-400 flex items-center gap-1"><AlertCircle size={11} />Monedas distintas — seleccioná solo las de la misma moneda.</p>}
+          {totalSelected && (
+            <button onClick={handleApplyTotal}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold bg-teal-700 hover:bg-teal-600 text-white transition-colors">
+              <Check size={12} /> Aplicar {fmt2(totalSelected.importe, totalSelected.moneda)} como "Valor factura"
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <div className="flex items-center gap-3">
+          <button onClick={handleAddFactura} disabled={createPf.isPending || uploadPf.isPending}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-400 transition-colors disabled:opacity-40">
+            {createPf.isPending || uploadPf.isPending ? <><Loader2 size={12} className="animate-spin" /> Procesando...</> : <><Plus size={12} /> Nueva factura</>}
+          </button>
+          <span className="text-[11px] text-slate-700 italic">o arrastrá el PDF aquí</span>
+        </div>
+        {createError && <p className="text-[11px] text-red-400 flex items-center gap-1"><AlertCircle size={11} /> {createError}</p>}
+      </div>
+
+      {/* Panel IA */}
+      {aiResult && (
+        <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-violet-900/20 border-b border-violet-700/30">
+            <div className="flex items-center gap-1.5"><Bot size={12} className="text-violet-400" /><span className="text-[11px] font-semibold text-violet-300">Factura extraída por IA</span></div>
+            <button onClick={() => setAiResult(null)} className="text-slate-500 hover:text-slate-300"><X size={12} /></button>
+          </div>
+          <div className="px-3 py-2.5 space-y-2">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+              {aiResult.data.proveedor    && <><span className="text-slate-500">Proveedor</span><span className="text-slate-200 font-medium">{aiResult.data.proveedor}</span></>}
+              {aiResult.data.nro_proforma && <><span className="text-slate-500">N° Factura</span><span className="text-slate-200">{aiResult.data.nro_proforma}</span></>}
+              {aiResult.data.fecha        && <><span className="text-slate-500">Fecha</span><span className="text-slate-200">{formatFieldValue(aiResult.data.fecha)}</span></>}
+              {aiResult.data.descripcion  && <><span className="text-slate-500">Descripción</span><span className="text-slate-300 truncate">{aiResult.data.descripcion}</span></>}
+            </div>
+            {aiResult.data.importe_total != null && (
+              <div className="border-t border-violet-700/30 pt-2 flex justify-between text-[11px]">
+                <span className="text-emerald-400 font-semibold">Total factura</span>
+                <span className="text-emerald-300 font-bold">{fmt2(aiResult.data.importe_total, aiResult.data.moneda ?? imp.currency)}</span>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-1 border-t border-violet-800/30">
+              <button onClick={() => setAiResult(null)} className="px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white">Descartar</button>
+              <button onClick={handleApplyAI} disabled={applying}
+                className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-50">
+                {applying ? <><Loader2 size={11} className="animate-spin" />Aplicando...</> : <><Check size={11} />Aplicar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Cost Dashboard ────────────────────────────────────────────────────────────
 
 function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }) {
@@ -915,20 +1818,23 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
   const currency = imp.currency || 'USD'
   const isEur    = currency === 'EUR'
 
-  // TC EUR/USD: usa el guardado en el import, o vacío para que el usuario consulte
-  const [tcEurUsd,    setTcEurUsd]    = useState<number>(imp.tc_eur_usd ?? 0)
+  // TC EUR/ARS: cotización directa BNA (cuántos ARS vale 1 EUR)
+  const [tcEurArs,    setTcEurArs]    = useState<number>(imp.tc_eur_ars ?? 0)
   const [bnaLoading,  setBnaLoading]  = useState(false)
   const [bnaMsg,      setBnaMsg]      = useState<string | null>(null)
   const [tcEditing,   setTcEditing]   = useState(false)
-  const [tcInput,     setTcInput]     = useState(String(imp.tc_eur_usd ?? ''))
+  const [tcInput,     setTcInput]     = useState(String(imp.tc_eur_ars ?? ''))
+
+  // ⚠ Debe declararse ANTES de cualquier return condicional (reglas de hooks)
+  const lastSavedPct = useRef<number | null>(null)
 
   // Sincronizar si el import cambia externamente
   useEffect(() => {
-    if (imp.tc_eur_usd && imp.tc_eur_usd !== tcEurUsd) {
-      setTcEurUsd(imp.tc_eur_usd)
-      setTcInput(String(imp.tc_eur_usd))
+    if (imp.tc_eur_ars && imp.tc_eur_ars !== tcEurArs) {
+      setTcEurArs(imp.tc_eur_ars)
+      setTcInput(String(imp.tc_eur_ars))
     }
-  }, [imp.tc_eur_usd])
+  }, [imp.tc_eur_ars])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmt  = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const fmtM = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
@@ -937,9 +1843,9 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
   const actualValue = imp.actual_value  // en imp.currency
 
   const baseARS = (() => {
-    if (!actualValue || !cotiz) return null
-    if (!isEur) return actualValue * cotiz                     // USD directo
-    if (tcEurUsd > 0) return actualValue * tcEurUsd * cotiz   // EUR → USD → ARS
+    if (!actualValue) return null
+    if (!isEur) return cotiz > 0 ? actualValue * cotiz : null  // USD × cotiz_aduana
+    if (tcEurArs > 0) return actualValue * tcEurArs            // EUR × tc_eur_ars → ARS directo
     return null
   })()
 
@@ -957,8 +1863,10 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
     .sort((a, b) => (DASHBOARD_ORDER.indexOf(a.categoria) + 99) - (DASHBOARD_ORDER.indexOf(b.categoria) + 99))
 
   const lineas = [
-    ...(fleteIntARS > 0 ? [{ id: '_fi', categoria: 'flete_internacional' as const, concepto: 'Flete internacional', importe: fleteIntARS, moneda: 'ARS' as const, tipo_cambio: null }] : []),
-    ...(fleteLocARS > 0 ? [{ id: '_fl', categoria: 'flete_local' as const,         concepto: 'Flete local',         importe: fleteLocARS, moneda: 'ARS' as const, tipo_cambio: null }] : []),
+    // Flete internacional: siempre visible aunque sea $0
+    { id: '_fi', categoria: 'flete_internacional' as const, concepto: 'Flete internacional', importe: fleteIntARS, moneda: 'ARS' as const, tipo_cambio: null },
+    // Flete local: siempre visible aunque sea $0
+    { id: '_fl', categoria: 'flete_local' as const, concepto: 'Flete local', importe: fleteLocARS, moneda: 'ARS' as const, tipo_cambio: null },
     ...otrosOrden
   ] as ComexImportExtraCost[]
 
@@ -966,10 +1874,8 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
   const pct            = baseARS && baseARS > 0 ? (totalCostosARS / baseARS) * 100 : null
   const barColor       = pct == null ? 'bg-slate-600' : pct < 15 ? 'bg-emerald-500' : pct < 25 ? 'bg-amber-500' : 'bg-red-500'
 
-  if (!actualValue && totalCostosARS === 0) return null
-
   // ── Auto-guardar cost_pct en el import ────────────────────────────────────────
-  const lastSavedPct = useRef<number | null>(null)
+  // (useEffect debe estar ANTES del return null — lastSavedPct ya está declarado arriba)
   useEffect(() => {
     if (pct == null) return
     const rounded = Math.round(pct * 100) / 100
@@ -980,36 +1886,54 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
       .catch(console.error)
   }, [pct, importId])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Consultar BNA ─────────────────────────────────────────────────────────────
+  if (!actualValue && totalCostosARS === 0) return null
+
+  // ── Consultar BNA (devuelve EUR/ARS directamente) ────────────────────────────
   const handleConsultarBNA = async () => {
-    if (!cotiz) { setBnaMsg('Primero cargá el tipo de cambio del despacho.'); return }
     const ofic = customs?.oficializacion_date
-    if (!ofic) { setBnaMsg('Sin fecha de oficialización en el despacho.'); return }
+    if (!ofic) {
+      setBnaMsg('⚠ No hay fecha de oficialización cargada en el despacho. Cargala primero.')
+      return
+    }
 
     setBnaLoading(true); setBnaMsg(null)
     try {
       const dateStr = dayjs(ofic).format('YYYY-MM-DD')
-      const result  = await window.api.bna.getEurUsd(dateStr, cotiz)
-      if (!result) { setBnaMsg('No se pudo obtener el TC del BNA. Ingresalo manualmente.'); return }
+      const result  = await window.api.bna.getEurArs(dateStr)
 
-      const rounded = Math.round(result.eurUsd * 10000) / 10000
-      setTcEurUsd(rounded)
+      if (!result) {
+        setBnaMsg(`⚠ Sin cotización BNA para el ${dayjs(ofic).format('DD/MM/YYYY')} ni los 7 días anteriores. Ingresalo manualmente.`)
+        return
+      }
+
+      const rounded = Math.round(result.eurArs * 100) / 100
+      setTcEurArs(rounded)
       setTcInput(String(rounded))
-      setBnaMsg(`EUR/ARS BNA ${dateStr}: $${fmt(result.eurArs)} → EUR/USD: ${rounded.toFixed(4)}`)
 
-      // Guardar en DB
-      await window.api.comex.imports.update(importId, { tc_eur_usd: rounded })
+      // Armar mensaje según si encontró la fecha exacta o tuvo que retroceder
+      const fechaLabel = dayjs(result.fechaBNA).format('DD/MM/YYYY')
+      if (result.esFechaExacta) {
+        setBnaMsg(`✓ BNA ${fechaLabel}: $${fmt(rounded)} / EUR (venta)`)
+      } else {
+        const pedidaLabel = dayjs(ofic).format('DD/MM/YYYY')
+        setBnaMsg(`✓ BNA ${fechaLabel}: $${fmt(rounded)} / EUR (venta) — la fecha ${pedidaLabel} era feriado/fin de semana, se usó el día hábil anterior`)
+      }
+
+      await window.api.comex.imports.update(importId, { tc_eur_ars: rounded })
       qc.invalidateQueries({ queryKey: ['comex-import', importId] })
-    } catch { setBnaMsg('Error al consultar BNA.') }
-    finally   { setBnaLoading(false) }
+    } catch (err) {
+      setBnaMsg(`⚠ Error al consultar BNA: ${err instanceof Error ? err.message : 'desconocido'}. Ingresalo manualmente.`)
+    } finally {
+      setBnaLoading(false)
+    }
   }
 
   const handleSaveTc = async () => {
     const val = Number(tcInput.replace(',', '.'))
     if (!val || isNaN(val)) return
-    setTcEurUsd(val)
+    setTcEurArs(val)
     setTcEditing(false)
-    await window.api.comex.imports.update(importId, { tc_eur_usd: val })
+    await window.api.comex.imports.update(importId, { tc_eur_ars: val })
     qc.invalidateQueries({ queryKey: ['comex-import', importId] })
   }
 
@@ -1049,13 +1973,13 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-xs text-slate-400 font-medium">Base valor factura</p>
-              {actualValue != null && cotiz > 0 && (
+              {actualValue != null && (
                 <p className="text-[11px] text-slate-600 mt-0.5">
                   {!isEur
-                    ? `${currency} ${fmt(actualValue)} × $${fmt(cotiz)}`
-                    : tcEurUsd > 0
-                      ? `EUR ${fmt(actualValue)} × ${tcEurUsd.toFixed(4)} USD × $${fmt(cotiz)}`
-                      : `EUR ${fmt(actualValue)} — falta TC EUR/USD`
+                    ? cotiz > 0 ? `${currency} ${fmt(actualValue)} × $${fmt(cotiz)}` : `${currency} ${fmt(actualValue)}`
+                    : tcEurArs > 0
+                      ? `EUR ${fmt(actualValue)} × $${fmt(tcEurArs)} ARS/EUR`
+                      : `EUR ${fmt(actualValue)} — falta TC EUR/ARS`
                   }
                 </p>
               )}
@@ -1065,11 +1989,13 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
             </span>
           </div>
 
-          {/* Panel EUR/USD — solo si la factura es en EUR */}
+          {/* Panel EUR/ARS — solo si la factura es en EUR */}
           {isEur && (
             <div className="bg-amber-950/20 border border-amber-800/30 rounded-lg px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[11px] text-amber-400 font-medium">TC EUR/USD (BNA fecha oficialización)</span>
+                <span className="text-[11px] text-amber-400 font-medium">
+                  TC EUR/ARS (BNA — fecha oficialización)
+                </span>
                 <div className="flex items-center gap-1.5">
                   {tcEditing ? (
                     <>
@@ -1078,8 +2004,8 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
                         value={tcInput}
                         onChange={e => setTcInput(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') handleSaveTc(); if (e.key === 'Escape') setTcEditing(false) }}
-                        placeholder="1.1836"
-                        className="w-20 bg-slate-800 border border-amber-600 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                        placeholder="1644.12"
+                        className="w-24 bg-slate-800 border border-amber-600 rounded px-2 py-1 text-xs text-white focus:outline-none"
                       />
                       <button onClick={handleSaveTc} className="p-1 rounded bg-amber-600 hover:bg-amber-500 text-white"><Check size={12} /></button>
                       <button onClick={() => setTcEditing(false)} className="p-1 rounded bg-slate-700 text-slate-400"><X size={12} /></button>
@@ -1087,7 +2013,7 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
                   ) : (
                     <>
                       <span className="text-xs font-mono text-amber-300">
-                        {tcEurUsd > 0 ? tcEurUsd.toFixed(4) : 'Sin definir'}
+                        {tcEurArs > 0 ? `$${fmt(tcEurArs)}` : 'Sin definir'}
                       </span>
                       <button onClick={() => setTcEditing(true)}
                         className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-700 transition-colors">
@@ -1105,12 +2031,10 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
                   </button>
                 </div>
               </div>
-              {bnaMsg && (
-                <p className="text-[10px] text-amber-500">{bnaMsg}</p>
-              )}
-              {tcEurUsd > 0 && actualValue != null && cotiz > 0 && (
+              {bnaMsg && <p className="text-[10px] text-amber-500">{bnaMsg}</p>}
+              {tcEurArs > 0 && actualValue != null && (
                 <p className="text-[10px] text-slate-500">
-                  EUR {fmt(actualValue)} × {tcEurUsd.toFixed(4)} = USD {fmt(actualValue * tcEurUsd)} · × ${fmt(cotiz)} = {fmtM(actualValue * tcEurUsd * cotiz)} ARS
+                  EUR {fmt(actualValue)} × ${fmt(tcEurArs)} = <span className="text-emerald-600 font-medium">{fmtM(actualValue * tcEurArs)} ARS</span>
                 </p>
               )}
             </div>
@@ -1129,13 +2053,26 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
             </div>
           )}
           {lineas.map(c => {
-            const ars = costToARS(c, cotiz)
+            const ars   = costToARS(c, cotiz)
+            const cero  = ars === 0
             return (
-              <div key={c.id} className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">{EXTRA_COST_CATEGORY_LABELS[c.categoria]}</span>
+              <div key={c.id} className={cn('flex items-center justify-between text-xs', cero && 'opacity-50')}>
+                <div className="flex items-center gap-2">
+                  <span className={cero ? 'text-slate-500' : 'text-slate-400'}>
+                    {EXTRA_COST_CATEGORY_LABELS[c.categoria]}
+                  </span>
+                  {cero && (
+                    <span className="text-[10px] text-slate-600 italic">Sin factura</span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
-                  {baseARS && <span className="text-slate-600 w-12 text-right">{((ars / baseARS) * 100).toFixed(1)}%</span>}
-                  <span className="text-slate-300 w-28 text-right">{fmtM(ars)}</span>
+                  {baseARS && !cero && (
+                    <span className="text-slate-600 w-12 text-right">{((ars / baseARS) * 100).toFixed(1)}%</span>
+                  )}
+                  {baseARS && cero && <span className="w-12" />}
+                  <span className={cn('w-28 text-right', cero ? 'text-slate-600' : 'text-slate-300')}>
+                    {cero ? '$0' : fmtM(ars)}
+                  </span>
                 </div>
               </div>
             )
@@ -1237,12 +2174,40 @@ function ExtraCostRow({
     try {
       const d = facturaResult
       const newData: Partial<ComexImportExtraCost> = {}
-      if (d.proveedor)   newData.proveedor   = d.proveedor
-      if (d.nro_factura) newData.nro_factura = d.nro_factura
-      if (d.moneda)      newData.moneda      = d.moneda as 'ARS' | 'USD'
-      // Usar NETO GRAVADO como costo (IVA es recuperable)
-      if (d.importe_neto != null) newData.importe = d.importe_neto
-      if (d.concepto && !newData.concepto) newData.concepto = d.concepto
+
+      if (d.proveedor)               newData.proveedor      = d.proveedor
+      if (d.nro_factura)             newData.nro_factura    = d.nro_factura
+      if (d.fecha)                   newData.fecha_factura  = dayjs(d.fecha).valueOf()
+      if (d.cae)                     newData.cae            = d.cae
+      if (d.moneda)                  newData.moneda         = d.moneda as 'ARS' | 'USD'
+
+      // Importe neto como costo principal (IVA es recuperable)
+      // Para facturas Exentas, importe_neto = importe_total cuando no hay campo separado
+      const importe = d.importe_neto ?? d.importe_total
+      if (importe != null) newData.importe = importe
+
+      // Tipo de cambio — solo para facturas en moneda extranjera
+      if (d.tipo_cambio_consignado != null && d.moneda !== 'ARS') {
+        newData.tipo_cambio = d.tipo_cambio_consignado
+      }
+
+      // Importe en pesos
+      if (d.moneda === 'ARS') {
+        // Ya está en pesos: importe_ars = importe_neto
+        newData.importe_ars = importe ?? undefined
+        newData.moneda      = 'ARS'
+      } else if (d.importe_ars != null) {
+        newData.importe_ars = d.importe_ars
+      } else if (importe != null && d.tipo_cambio_consignado != null) {
+        newData.importe_ars = Math.round(importe * d.tipo_cambio_consignado * 100) / 100
+      }
+
+      // BL / HBL reference
+      if (d.bl_referencia) newData.bl_referencia = d.bl_referencia
+
+      if (d.importe_total != null) newData.importe_total = d.importe_total
+      if (d.iva != null)           newData.importe_iva   = d.iva
+
       if (Object.keys(newData).length > 0) {
         await update.mutateAsync({ id: cost.id, importId, data: newData })
       }
@@ -1302,8 +2267,17 @@ function ExtraCostRow({
                 <p className="text-sm font-semibold text-slate-200">
                   {cost.moneda === 'USD' ? `USD ${fmt(cost.importe)}` : `$${fmt(cost.importe)}`}
                 </p>
-                {cost.moneda === 'USD' && cotiz > 0 && (
-                  <p className="text-[10px] text-slate-500">${fmt(arsAmt)} ARS</p>
+                {cost.moneda === 'USD' && (
+                  <p className="text-[10px] text-amber-600/80">
+                    {cost.tipo_cambio
+                      ? `× $${fmt(cost.tipo_cambio)} = $${Math.round(cost.importe * cost.tipo_cambio).toLocaleString('es-AR')} ARS`
+                      : cotiz > 0 ? `× $${fmt(cotiz)} (cotiz. aduana) = $${fmt(arsAmt)} ARS` : ''
+                    }
+                  </p>
+                )}
+                {/* ARS: ya está en pesos, mostrar solo confirmación */}
+                {cost.moneda === 'ARS' && cost.importe > 0 && (
+                  <p className="text-[10px] text-slate-500">en pesos</p>
                 )}
               </div>
             </div>
@@ -1407,28 +2381,40 @@ function ExtraCostRow({
                 </div>
               )}
               <div className="border-t border-violet-700/30 pt-2 space-y-1.5">
-                {facturaResult.importe_neto != null && (
-                  <div className="space-y-0.5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-emerald-400 font-semibold">Neto gravado (costo real)</span>
-                      <span className="text-emerald-300 font-bold">{fmtM(facturaResult.importe_neto)}</span>
+                {(() => {
+                  // Para facturas exentas: el costo real es importe_total (no hay neto gravado separado)
+                  const costoBase   = (facturaResult.importe_neto ?? 0) > 0
+                    ? facturaResult.importe_neto!
+                    : (facturaResult.importe_total ?? null)
+                  const costoLabel  = (facturaResult.importe_neto ?? 0) > 0 ? 'Neto gravado' : 'Total (exento)'
+                  const arsCalculado = costoBase != null && tc ? Math.round(costoBase * tc) : null
+                  const arsExplicito = facturaResult.importe_ars
+
+                  return costoBase != null ? (
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-emerald-400 font-semibold">{costoLabel} — costo real</span>
+                        <span className="text-emerald-300 font-bold">{fmtM(costoBase)}</span>
+                      </div>
+                      {/* Desglose: moneda × TC = ARS (solo para USD/EUR) */}
+                      {esFx && tc && mon !== 'ARS' && (
+                        <div className="flex justify-end text-[10px] text-amber-600 font-medium">
+                          {mon} {fmt2(costoBase)} × ${fmt2(tc)} = ${(arsExplicito ?? arsCalculado ?? 0).toLocaleString('es-AR')} ARS
+                        </div>
+                      )}
+                      {/* ARS: ya está en pesos, solo confirmar */}
+                      {mon === 'ARS' && (
+                        <div className="flex justify-end text-[10px] text-slate-500">
+                          Factura en pesos — sin conversión de TC
+                        </div>
+                      )}
                     </div>
-                    {esFx && tc && <div className="flex justify-end text-[10px] text-emerald-600">= ${Math.round(facturaResult.importe_neto * tc).toLocaleString('es-AR')} ARS</div>}
-                  </div>
-                )}
+                  ) : null
+                })()}
                 {facturaResult.iva != null && facturaResult.iva > 0 && (
                   <div className="flex justify-between text-[11px]">
                     <span className="text-slate-500">IVA (recuperable)</span>
                     <span className="text-slate-400">{fmtM(facturaResult.iva)}</span>
-                  </div>
-                )}
-                {facturaResult.importe_total != null && (
-                  <div className="space-y-0.5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-slate-500">Total factura</span>
-                      <span className="text-slate-300">{fmtM(facturaResult.importe_total)}</span>
-                    </div>
-                    {esFx && tc && <div className="flex justify-end text-[10px] text-slate-600">= ${Math.round(facturaResult.importe_total * tc).toLocaleString('es-AR')} ARS</div>}
                   </div>
                 )}
               </div>
@@ -1438,7 +2424,7 @@ function ExtraCostRow({
                   className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-colors">
                   {applying
                     ? <><Loader2 size={11} className="animate-spin" /> Aplicando...</>
-                    : <><Check size={11} /> Aplicar {netoLabel}</>
+                    : <><Check size={11} /> Aplicar</>
                   }
                 </button>
               </div>
@@ -1453,11 +2439,13 @@ function ExtraCostRow({
 // ── Fixed Cost Section (Despachante / Flete / Depósito) ──────────────────────
 
 function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; importId: string }) {
+  const qc           = useQueryClient()
   const uploadInv    = useUploadExtraCostInvoice()
   const updateCost   = useUpdateComexExtraCost()
   const deleteCost   = useDeleteComexExtraCost()
   const analyzeInv   = useAnalyzeExtraCost()
   const { data: customs }      = useComexCustoms(importId)
+  const { data: extras  = [] } = useComexExtraCosts(importId)
   const { data: aiConfigured } = useAIConfigured()
 
   // Estado local para reflejo inmediato sin esperar el refetch de la query
@@ -1506,41 +2494,120 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
     if (!aiResult) return
     setApplying(true)
     try {
-      const patch: Partial<ComexImportExtraCost> = {}
-      // Campos básicos
-      if (aiResult.proveedor)             patch.proveedor            = aiResult.proveedor
-      if (aiResult.nro_factura)           patch.nro_factura          = aiResult.nro_factura
-      if (aiResult.moneda)                patch.moneda               = aiResult.moneda as 'ARS' | 'USD'
-      if (aiResult.importe_neto != null)  patch.importe              = aiResult.importe_neto
-      if (aiResult.fecha)                          patch.fecha_factura        = dayjs(aiResult.fecha).valueOf()
-      // Campos adicionales de factura
-      if (aiResult.cae)                            patch.cae                  = aiResult.cae
-      if (aiResult.referencia_despacho)            patch.referencia_despacho  = aiResult.referencia_despacho
-      if (aiResult.iva != null)                    patch.importe_iva          = aiResult.iva
-      if (aiResult.importe_total != null)          patch.importe_total        = aiResult.importe_total
-      if (aiResult.items?.length)                  patch.items_json           = JSON.stringify(aiResult.items)
-      // Campos de flete
-      // Campos de flete y depósito
-      const fxResult = aiResult as import('@shared/types').ExtractedFacturaLocal
-      if (fxResult.tipo_cambio_consignado != null) patch.tipo_cambio    = fxResult.tipo_cambio_consignado
-      if (fxResult.bl_referencia)                  patch.bl_referencia  = fxResult.bl_referencia
-      if (fxResult.importe_ars != null)            patch.importe_ars    = fxResult.importe_ars
-      if (fxResult.percepciones != null)    patch.percepciones    = fxResult.percepciones
-      if (fxResult.percepcion_caba != null) patch.percepcion_caba = fxResult.percepcion_caba
-      if (fxResult.percepcion_bsas != null) patch.percepcion_bsas = fxResult.percepcion_bsas
-      if (fxResult.fecha_ingreso)                  patch.fecha_ingreso  = fxResult.fecha_ingreso
-      if (fxResult.fecha_egreso)                   patch.fecha_egreso   = fxResult.fecha_egreso
-      if (fxResult.nro_contenedor)                 patch.nro_contenedor = fxResult.nro_contenedor
-      if (fxResult.canal_deposito)                 patch.canal_deposito = fxResult.canal_deposito
+      const d      = aiResult
+      const fx     = aiResult as import('@shared/types').ExtractedFacturaLocal
 
-      // Actualizar pantalla inmediatamente
+      // Debug: log para verificar qué está en aiResult
+      console.log('[Despachante apply] aiResult:', JSON.stringify({
+        proveedor: d.proveedor,
+        nro_factura: d.nro_factura,
+        importe_neto: d.importe_neto,
+        importe_total: d.importe_total,
+        moneda: d.moneda,
+        flete_local_items: fx.flete_local_items,
+      }, null, 2))
+
+      const patch: Partial<ComexImportExtraCost> = {}
+
+      // ── Campos de identificación ──────────────────────────────────────────
+      if (d.proveedor)   patch.proveedor   = d.proveedor
+      if (d.nro_factura) patch.nro_factura = d.nro_factura
+      if (d.fecha)       patch.fecha_factura = dayjs(d.fecha).valueOf()
+      if (d.cae)         patch.cae         = d.cae
+      if (d.moneda)      patch.moneda      = d.moneda as 'ARS' | 'USD'
+
+      // ── Flete local items: mover al Flete local antes de calcular el importe ──
+      const fleteLocalItems = fx.flete_local_items?.filter(i => i.importe_neto > 0) ?? []
+      const totalFleteLocal = fleteLocalItems.reduce((s, i) => s + i.importe_neto, 0)
+
+      if (fleteLocalItems.length > 0 && totalFleteLocal > 0) {
+        // Consultar directamente la API para tener datos frescos (no depender del cache)
+        const allExtras = await window.api.comex.extraCosts.list(importId)
+        const fleteLocalCost = allExtras.find((e: import('@shared/types').ComexImportExtraCost) => e.categoria === 'flete_local')
+
+        if (fleteLocalCost) {
+          await window.api.comex.extraCosts.update(fleteLocalCost.id, {
+            importe:    totalFleteLocal,
+            moneda:     'ARS',
+            concepto:   'Flete local',
+            proveedor:  d.proveedor ?? '',
+            nro_factura: d.nro_factura ?? '',
+            fecha_factura: d.fecha ? dayjs(d.fecha).valueOf() : null,
+            items_json: JSON.stringify(fleteLocalItems.map(i => ({ concepto: i.concepto, importe: i.importe_neto }))),
+          })
+          qc.invalidateQueries({ queryKey: ['comex-extra-costs', importId] })
+          qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+        }
+      }
+
+      // ── Importe principal: neto gravado si existe, sino total (facturas Exentas) ──
+      // Restar los ítems de flete del importe del despachante (ya se movieron al flete local)
+      const importeBase = (d.importe_neto != null && d.importe_neto > 0)
+        ? d.importe_neto
+        : (d.importe_total ?? null)
+      const importe = importeBase != null ? Math.max(importeBase - totalFleteLocal, 0) : null
+      if (importe != null) patch.importe = importe
+
+      // ── Tipo de cambio: solo para facturas en moneda extranjera ──────────
+      if (fx.tipo_cambio_consignado != null && d.moneda !== 'ARS') {
+        patch.tipo_cambio = fx.tipo_cambio_consignado
+      }
+
+      // ── Importe en pesos ──────────────────────────────────────────────────
+      if (d.moneda === 'ARS') {
+        patch.importe_ars = importe ?? undefined   // ya está en pesos
+      } else if (fx.importe_ars != null) {
+        patch.importe_ars = fx.importe_ars          // devuelto explícito por la IA
+      } else if (importe != null && fx.tipo_cambio_consignado != null) {
+        patch.importe_ars = Math.round(importe * fx.tipo_cambio_consignado * 100) / 100
+      }
+
+      // ── Otros campos ─────────────────────────────────────────────────────
+      if (d.referencia_despacho)   patch.referencia_despacho = d.referencia_despacho
+      if (d.iva != null)           patch.importe_iva         = d.iva
+      if (d.importe_total != null) patch.importe_total       = d.importe_total
+      if (d.items?.length)         patch.items_json          = JSON.stringify(d.items)
+      if (fx.bl_referencia)        patch.bl_referencia       = fx.bl_referencia
+      if (fx.percepciones != null)    patch.percepciones    = fx.percepciones
+      if (fx.percepcion_caba != null) patch.percepcion_caba = fx.percepcion_caba
+      if (fx.percepcion_bsas != null) patch.percepcion_bsas = fx.percepcion_bsas
+      if (fx.fecha_ingreso)           patch.fecha_ingreso   = fx.fecha_ingreso
+      if (fx.fecha_egreso)            patch.fecha_egreso    = fx.fecha_egreso
+      if (fx.nro_contenedor)          patch.nro_contenedor  = fx.nro_contenedor
+      if (fx.canal_deposito)          patch.canal_deposito  = fx.canal_deposito
+
+      // ── Datos de carga → propagar a customs ──────────────────────────────
+      const customsPatch: Record<string, unknown> = {}
+      if (fx.cant_bultos_deposito   != null) customsPatch.cant_bultos   = fx.cant_bultos_deposito
+      if (fx.peso_bruto_kg_deposito != null) customsPatch.peso_bruto_kg = fx.peso_bruto_kg_deposito
+      if (fx.volumen_m3_deposito    != null) customsPatch.volumen_m3    = fx.volumen_m3_deposito
+      if (Object.keys(customsPatch).length > 0) {
+        window.api.comex.customs.upsert(importId, customsPatch as Parameters<typeof window.api.comex.customs.upsert>[1])
+          .catch(console.error)
+      }
+
+      // Persistir en DB — log para debug
+      console.log('[Despachante apply] patch keys:', Object.keys(patch))
+      console.log('[Despachante apply] patch.importe:', patch.importe)
+      console.log('[Despachante apply] localCost.id:', localCost.id)
+
+      if (Object.keys(patch).length) {
+        try {
+          await window.api.comex.extraCosts.update(localCost.id, patch)
+          console.log('[Despachante apply] ✓ update OK')
+          qc.invalidateQueries({ queryKey: ['comex-extra-costs', importId] })
+          qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+        } catch (err) {
+          console.error('[Despachante apply] ✗ update FAILED:', err)
+          alert(`Error al guardar: ${err instanceof Error ? err.message : String(err)}`)
+          return
+        }
+      }
+
+      // Actualizar pantalla y cerrar modal DESPUÉS de guardar en DB
       setLocalCost(prev => ({ ...prev, ...patch }))
       setAiResult(null)
 
-      // Persistir en DB
-      if (Object.keys(patch).length) {
-        updateCost.mutateAsync({ id: localCost.id, importId, data: patch }).catch(console.error)
-      }
     } finally { setApplying(false) }
   }
 
@@ -1557,11 +2624,24 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
               Factura adjunta
             </span>
           )}
-          {localCost.importe > 0 && (
-            <span className="text-xs font-semibold text-white">
-              ${fmtInt(localCost.importe)}
-            </span>
-          )}
+          {localCost.importe > 0 && (() => {
+            const isUSD = localCost.moneda === 'USD'
+            const fmt2  = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            // Si hay importe_ars calculado, mostrarlo como equivalente
+            const arsAmt = localCost.importe_ars
+              ?? (isUSD && localCost.tipo_cambio ? Math.round(localCost.importe * localCost.tipo_cambio) : null)
+
+            return (
+              <span className="text-xs font-semibold text-white flex items-center gap-1">
+                {isUSD
+                  ? <><span className="text-amber-300">USD {fmt2(localCost.importe)}</span>
+                      {arsAmt && <span className="text-slate-400 font-normal">= ${fmtInt(arsAmt)}</span>}
+                    </>
+                  : `$${fmtInt(localCost.importe)}`
+                }
+              </span>
+            )
+          })()}
           {localCost.proveedor && (
             <span className="text-[11px] text-slate-400 italic">{localCost.proveedor}</span>
           )}
@@ -1655,7 +2735,14 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
             {(localCost.proveedor || localCost.nro_factura || localCost.importe > 0 || localCost.items_json) && (() => {
               const items: Array<{ concepto: string; importe: number }> =
                 localCost.items_json ? JSON.parse(localCost.items_json) : []
-              const fmt2 = (n: number) => Math.round(n).toLocaleString('es-AR')
+              const isUSD  = localCost.moneda === 'USD'
+              const tc     = localCost.tipo_cambio
+              // Para ARS: entero. Para USD: 2 decimales con símbolo de moneda
+              const fmtAmt = (n: number) => isUSD
+                ? `USD ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : `$${Math.round(n).toLocaleString('es-AR')}`
+              const fmtArs = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
+              const fmt2   = fmtAmt   // alias para backward compat
 
               // Verificación de correspondencia con el despacho
               const refNorm = localCost.referencia_despacho?.replace(/[\s\-_]/g, '').toUpperCase() ?? ''
@@ -1690,6 +2777,22 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-500">CAE N°</span>
                         <span className="text-slate-400 text-right">{localCost.cae}</span>
+                      </div>
+                    )}
+                    {/* TC consignado — solo para facturas USD/EUR */}
+                    {isUSD && tc && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">TC consignado</span>
+                        <span className="text-amber-400 font-semibold">
+                          ${tc.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} / USD
+                        </span>
+                      </div>
+                    )}
+                    {/* BL / HBL */}
+                    {localCost.bl_referencia && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">BL / HBL</span>
+                        <span className="text-cyan-400 font-mono">{localCost.bl_referencia}</span>
                       </div>
                     )}
 
@@ -1739,7 +2842,7 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                       {items.map((item, i) => (
                         <div key={i} className="flex justify-between text-[11px]">
                           <span className="text-slate-400 flex-1 truncate pr-2">{item.concepto}</span>
-                          <span className="text-slate-300 flex-shrink-0">${fmt2(item.importe)}</span>
+                          <span className="text-slate-300 flex-shrink-0">{fmt2(item.importe)}</span>
                         </div>
                       ))}
                     </div>
@@ -1749,27 +2852,41 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                   {(localCost.importe > 0 || localCost.importe_iva != null) && (
                     <div className="border-t border-slate-700/40 px-3 py-2 space-y-0.5">
                       {localCost.importe > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-emerald-400 font-semibold">Neto gravado (costo real)</span>
-                          <span className="text-emerald-300 font-bold">${fmt2(localCost.importe)}</span>
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-emerald-400 font-semibold">
+                              {isUSD ? 'Total USD (costo real)' : 'Neto gravado (costo real)'}
+                            </span>
+                            <span className="text-emerald-300 font-bold">{fmtAmt(localCost.importe)}</span>
+                          </div>
+                          {/* Desglose USD × TC = ARS */}
+                          {isUSD && tc && (
+                            <div className="flex justify-end text-[10px] text-amber-500/80">
+                              USD {localCost.importe.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                              {' × '}
+                              ${tc.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                              {' = '}
+                              {fmtArs(localCost.importe_ars ?? localCost.importe * tc)} ARS
+                            </div>
+                          )}
                         </div>
                       )}
                       {localCost.importe_iva != null && localCost.importe_iva > 0 && (
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">IVA (recuperable)</span>
-                          <span className="text-slate-400">${fmt2(localCost.importe_iva)}</span>
+                          <span className="text-slate-400">{fmtAmt(localCost.importe_iva)}</span>
                         </div>
                       )}
                       {localCost.percepcion_caba != null && localCost.percepcion_caba > 0 && (
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Percep. IIBB CABA</span>
-                          <span className="text-slate-400">${fmt2(localCost.percepcion_caba)}</span>
+                          <span className="text-slate-400">{fmtAmt(localCost.percepcion_caba)}</span>
                         </div>
                       )}
                       {localCost.percepcion_bsas != null && localCost.percepcion_bsas > 0 && (
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Percep. IIBB BS AS</span>
-                          <span className="text-slate-400">${fmt2(localCost.percepcion_bsas)}</span>
+                          <span className="text-slate-400">{fmtAmt(localCost.percepcion_bsas)}</span>
                         </div>
                       )}
                       {/* Otras percepciones no identificadas */}
@@ -1777,13 +2894,13 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                        (localCost.percepcion_caba ?? 0) + (localCost.percepcion_bsas ?? 0) < localCost.percepciones - 0.01 && (
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Otras percepciones</span>
-                          <span className="text-slate-400">${fmt2(localCost.percepciones - (localCost.percepcion_caba ?? 0) - (localCost.percepcion_bsas ?? 0))}</span>
+                          <span className="text-slate-400">{fmtAmt(localCost.percepciones - (localCost.percepcion_caba ?? 0) - (localCost.percepcion_bsas ?? 0))}</span>
                         </div>
                       )}
-                      {localCost.importe_total != null && (
+                      {localCost.importe_total != null && !isUSD && (
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Total factura</span>
-                          <span className="text-slate-300">${fmt2(localCost.importe_total)}</span>
+                          <span className="text-slate-300">{fmtAmt(localCost.importe_total)}</span>
                         </div>
                       )}
                     </div>
@@ -1879,9 +2996,13 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                       )}
                       {/* Campos específicos de depósito */}
                       {fx.canal_deposito && <><span className="text-slate-500">Canal</span><span className="text-slate-300">{fx.canal_deposito}</span></>}
-                      {fx.fecha_ingreso  && <><span className="text-slate-500">Ingreso</span><span className="text-slate-300">{formatFieldValue(fx.fecha_ingreso)}</span></>}
-                      {fx.fecha_egreso   && <><span className="text-slate-500">Egreso</span><span className="text-slate-300">{formatFieldValue(fx.fecha_egreso)}</span></>}
+                      {fx.fecha_ingreso  && fx.fecha_ingreso !== 'null'  && <><span className="text-slate-500">Ingreso</span><span className="text-slate-300">{formatFieldValue(fx.fecha_ingreso)}</span></>}
+                      {fx.fecha_egreso   && fx.fecha_egreso  !== 'null'  && <><span className="text-slate-500">Egreso</span><span className="text-slate-300">{formatFieldValue(fx.fecha_egreso)}</span></>}
                       {fx.nro_contenedor && <><span className="text-slate-500">Contenedor</span><span className="text-slate-300 font-mono text-[10px]">{fx.nro_contenedor}</span></>}
+                      {/* Datos de carga extraídos de la línea "AMPARADA POR" */}
+                      {fx.cant_bultos_deposito   != null && <><span className="text-slate-500">Bultos</span><span className="text-emerald-400 font-semibold">{fx.cant_bultos_deposito} cajas</span></>}
+                      {fx.peso_bruto_kg_deposito != null && <><span className="text-slate-500">Peso bruto</span><span className="text-emerald-400 font-semibold">{fx.peso_bruto_kg_deposito.toLocaleString('es-AR')} kg</span></>}
+                      {fx.volumen_m3_deposito    != null && <><span className="text-slate-500">Volumen</span><span className="text-emerald-400 font-semibold">{fx.volumen_m3_deposito} m³</span></>}
                     </div>
                   )
                 })()}
@@ -1962,6 +3083,41 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                   )}
                 </div>
 
+                {/* Notificación de ítems de Flete local detectados */}
+                {(() => {
+                  const fx = aiResult as import('@shared/types').ExtractedFacturaLocal
+                  const fleteItems = fx.flete_local_items?.filter(i => i.importe_neto > 0) ?? []
+                  if (fleteItems.length === 0) return null
+                  const total = fleteItems.reduce((s, i) => s + i.importe_neto, 0)
+                  const fmt = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  return (
+                    <div className="rounded-lg bg-cyan-950/30 border border-cyan-700/40 px-3 py-2.5 space-y-1.5">
+                      <p className="text-[11px] font-semibold text-cyan-300 flex items-center gap-1.5">
+                        <Ship size={11} />
+                        Se detectaron ítems de Flete local — se copiarán automáticamente
+                      </p>
+                      {fleteItems.map((item, i) => (
+                        <div key={i} className="flex justify-between text-[10px]">
+                          <span className="text-slate-400">{item.concepto}</span>
+                          <div className="text-right">
+                            <span className="text-cyan-400">${fmt(item.importe_neto)}</span>
+                            {item.iva_porcentaje != null && item.iva_porcentaje > 0 && (
+                              <span className="text-slate-600 ml-1.5">+ IVA {item.iva_porcentaje}% (recuperable)</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-[11px] border-t border-cyan-800/40 pt-1.5">
+                        <span className="text-cyan-300 font-semibold">Total Flete local neto</span>
+                        <span className="text-cyan-300 font-bold">${fmt(total)}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-600">
+                        IVA no incluido — es crédito fiscal recuperable. Se registra solo el neto.
+                      </p>
+                    </div>
+                  )
+                })()}
+
                 {/* Botones */}
                 <div className="flex justify-end gap-2 pt-1 border-t border-violet-800/30">
                   <button onClick={() => setAiResult(null)}
@@ -1972,7 +3128,7 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
                     className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-colors">
                     {applying
                       ? <><Loader2 size={11} className="animate-spin" /> Aplicando...</>
-                      : <><Check size={11} /> Aplicar {netoLabel}</>
+                      : <><Check size={11} /> Aplicar</>
                     }
                   </button>
                 </div>
@@ -2380,7 +3536,7 @@ function TributosSection({ imp }: { imp: ComexImport }) {
     }
     setLoadingAI(true)
     try {
-      const result = await analyzeDespacho.mutateAsync(imp.id)
+      const result = await analyzeDespacho.mutateAsync({ importId: imp.id, page: 1 })
       const d = result.structured as import('@shared/types').ExtractedDespacho
       if (!d?.tributos?.length) { alert('No se encontraron tributos en el despacho.'); return }
       await upsertTributos.mutateAsync({
@@ -2619,15 +3775,352 @@ function TributosSection({ imp }: { imp: ComexImport }) {
 
 // ── Despacho Section ─────────────────────────────────────────────────────────
 
+// ── BL - Bill of Lading Section ───────────────────────────────────────────────
+
+function BLSection({
+  imp, importId, customs, onUpdate
+}: {
+  imp:      ComexImport
+  importId: string
+  customs:  import('@shared/types').ComexCustoms | null
+  onUpdate: (data: Partial<ComexImport>) => void
+}) {
+  const qc          = useQueryClient()
+  const analyzeBL   = useAnalyzeBL()
+  const { data: aiConfigured } = useAIConfigured()
+
+  const [aiResult,      setAiResult]      = useState<import('@shared/types').ExtractedBL | null>(null)
+  const [analyzing,     setAnalyzing]     = useState(false)
+  const [applying,      setApplying]      = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [isDragOver,    setIsDragOver]    = useState(false)
+  const [alerts,        setAlerts]        = useState<string[]>([])
+  const dragCounter = useRef(0)
+
+  const hasFile = !!imp.bl_stored_name
+  const fmtNum  = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+
+  const handleUpload = async (filePath: string) => {
+    const result = await window.api.comex.bl.upload(importId, filePath)
+    onUpdate(result as Partial<ComexImport>)
+    qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+  }
+
+  const handleSelectFile = async () => {
+    const fp = await window.api.comex.bl.selectFile()
+    if (fp) handleUpload(fp)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); dragCounter.current = 0; setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    const fp = window.api.getPathForFile(file)
+    if (fp) handleUpload(fp)
+  }
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true); setAlerts([])
+    try {
+      const result = await analyzeBL.mutateAsync(importId)
+      const d = result.structured as import('@shared/types').ExtractedBL
+      if (d) setAiResult(d)
+    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    finally { setAnalyzing(false) }
+  }
+
+  // Helper: normaliza valores que la IA puede devolver como string "null"
+  const cleanBLField = <T,>(v: T): T | null =>
+    (v === 'null' || v === null || v === undefined) ? null : v
+
+  const handleApply = async () => {
+    if (!aiResult) return
+    setApplying(true); setAlerts([])
+    try {
+      // Sanitizar campos donde la IA a veces devuelve el string "null"
+      const d: import('@shared/types').ExtractedBL = {
+        ...aiResult,
+        cant_pallets:  typeof aiResult.cant_pallets  === 'string' ? null : aiResult.cant_pallets,
+        cant_cartons:  typeof aiResult.cant_cartons  === 'string' ? null : aiResult.cant_cartons,
+        peso_bruto_kg: typeof aiResult.peso_bruto_kg === 'string' ? null : aiResult.peso_bruto_kg,
+        volumen_m3:    typeof aiResult.volumen_m3    === 'string' ? null : aiResult.volumen_m3,
+        bl_number:     cleanBLField(aiResult.bl_number),
+        nro_contenedor:cleanBLField(aiResult.nro_contenedor),
+        consignor:     cleanBLField(aiResult.consignor),
+        buque:         cleanBLField(aiResult.buque),
+        puerto_embarque:cleanBLField(aiResult.puerto_embarque),
+        puerto_descarga:cleanBLField(aiResult.puerto_descarga),
+        fecha_emision: cleanBLField(aiResult.fecha_emision),
+        descripcion_carga:cleanBLField(aiResult.descripcion_carga),
+      }
+      const newAlerts: string[] = []
+
+      // 1. Guardar JSON completo + bl_number en la importación
+      const importPatch: Partial<ComexImport> = {
+        bl_extracted_json: JSON.stringify(d),
+      }
+      if (d.bl_number && !imp.bl_number) {
+        importPatch.bl_number = d.bl_number
+      } else if (d.bl_number && imp.bl_number && d.bl_number !== imp.bl_number) {
+        newAlerts.push(`⚠ BL del documento (${d.bl_number}) difiere del guardado (${imp.bl_number})`)
+      }
+      await window.api.comex.imports.update(importId, importPatch)
+      qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+      qc.invalidateQueries({ queryKey: ['comex-imports'] })
+
+      // 2. Actualizar datos de carga en customs
+      const customsPatch: Record<string, unknown> = {}
+
+      // Pallets
+      if (d.cant_pallets != null) {
+        if (!customs?.cant_pallets) {
+          customsPatch.cant_pallets = d.cant_pallets
+        } else if (Math.abs(d.cant_pallets - customs.cant_pallets) > 0.1) {
+          newAlerts.push(`⚠ Pallets del BL (${d.cant_pallets}) difiere del despacho (${customs.cant_pallets})`)
+        }
+      }
+      // Cajas / cartones
+      if (d.cant_cartons != null) {
+        customsPatch.cant_cartons = d.cant_cartons
+      }
+      // Peso bruto
+      if (d.peso_bruto_kg != null) {
+        if (!customs?.peso_bruto_kg) {
+          customsPatch.peso_bruto_kg = d.peso_bruto_kg
+        } else {
+          const diff = Math.abs(d.peso_bruto_kg - customs.peso_bruto_kg)
+          const pct  = diff / customs.peso_bruto_kg * 100
+          if (pct > 2) {
+            newAlerts.push(`⚠ Peso BL (${fmtNum(d.peso_bruto_kg)} kg) difiere ${pct.toFixed(1)}% del despacho (${fmtNum(customs.peso_bruto_kg)} kg)`)
+          }
+        }
+      }
+      // Volumen
+      if (d.volumen_m3 != null) {
+        if (!customs?.volumen_m3) {
+          customsPatch.volumen_m3 = d.volumen_m3
+        } else {
+          const diff = Math.abs(d.volumen_m3 - customs.volumen_m3)
+          const pct  = diff / customs.volumen_m3 * 100
+          if (pct > 2) {
+            newAlerts.push(`⚠ Volumen BL (${fmtNum(d.volumen_m3)} m³) difiere ${pct.toFixed(1)}% del despacho (${fmtNum(customs.volumen_m3)} m³)`)
+          }
+        }
+      }
+      // Contenedor
+      if (d.nro_contenedor) {
+        customsPatch.nro_contenedor = d.nro_contenedor
+      }
+
+      if (Object.keys(customsPatch).length) {
+        await window.api.comex.customs.upsert(importId, customsPatch as Parameters<typeof window.api.comex.customs.upsert>[1])
+        qc.invalidateQueries({ queryKey: ['comex-customs', importId] })
+      }
+
+      setAlerts(newAlerts)
+      setAiResult(null)
+    } finally { setApplying(false) }
+  }
+
+  return (
+    <div
+      className={cn('rounded-xl border-2 transition-colors', isDragOver ? 'border-sky-500 bg-sky-950/20' : 'border-sky-800/30 bg-slate-800/30')}
+      onDragEnter={(e) => { e.preventDefault(); dragCounter.current++; setIsDragOver(true) }}
+      onDragLeave={(e) => { e.preventDefault(); if (--dragCounter.current <= 0) setIsDragOver(false) }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-sky-950/30 border-b border-sky-800/30">
+        <div className="flex items-center gap-2 flex-wrap">
+          <FileText size={14} className="text-sky-400" />
+          <h3 className="text-xs font-bold text-sky-300 uppercase tracking-wider">BL - Bill of Lading</h3>
+          {hasFile && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 font-medium">Archivo adjunto</span>
+          )}
+          {imp.bl_number && (
+            <span className="text-xs font-mono text-sky-400">{imp.bl_number}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {imp.bl_drive_status === 'synced'    && <span className="flex items-center gap-1 text-[10px] text-emerald-400"><Cloud size={11} /> En Drive</span>}
+          {imp.bl_drive_status === 'uploading' && <span className="flex items-center gap-1 text-[10px] text-blue-400"><Loader2 size={11} className="animate-spin" /> Subiendo...</span>}
+          {imp.bl_drive_status === 'error'     && <span className="flex items-center gap-1 text-[10px] text-red-400"><AlertCircle size={11} /> Error Drive</span>}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {!hasFile ? (
+          <div
+            className="flex flex-col items-center justify-center py-6 px-4 rounded-xl border-2 border-dashed border-slate-700 cursor-pointer hover:border-sky-600 transition-colors"
+            onClick={handleSelectFile}
+          >
+            <Upload size={22} className="text-slate-600 mb-2" />
+            <p className="text-sm text-slate-400 font-medium">
+              {isDragOver ? 'Soltar aquí...' : 'Arrastrá o hacé click para subir el BL'}
+            </p>
+            <p className="text-xs text-slate-600 mt-0.5">PDF, PNG, JPG</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Fila del archivo */}
+            <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-900/60 rounded-lg border border-slate-700">
+              <FileText size={15} className="text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-200 truncate">{imp.bl_original_name ?? 'BL'}</p>
+              </div>
+              {imp.bl_drive_file_id && (
+                <button onClick={() => window.api.shell.open(`https://drive.google.com/file/d/${imp.bl_drive_file_id}/view`)}
+                  title="Ver en Drive" className="p-1.5 rounded text-slate-500 hover:text-sky-400 hover:bg-slate-700 transition-colors">
+                  <ExternalLink size={13} />
+                </button>
+              )}
+              <button onClick={() => window.api.comex.bl.open(importId)}
+                title="Abrir" className="p-1.5 rounded text-slate-500 hover:text-sky-400 hover:bg-slate-700 transition-colors">
+                <FolderOpen size={13} />
+              </button>
+              <button onClick={handleSelectFile} title="Reemplazar"
+                className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">
+                <Upload size={13} />
+              </button>
+              {confirmDelete ? (
+                <>
+                  <button onClick={async () => { const r = await window.api.comex.bl.delete(importId); onUpdate(r as Partial<ComexImport>); qc.invalidateQueries({ queryKey: ['comex-import', importId] }); setConfirmDelete(false) }}
+                    className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white transition-colors">
+                    <Check size={13} />
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)} className="p-1.5 rounded bg-slate-700 text-slate-400 transition-colors">
+                    <X size={13} />
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setConfirmDelete(true)} title="Eliminar"
+                  className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Datos guardados del BL — siempre visible si existen */}
+            {imp.bl_extracted_json && !aiResult && (() => {
+              let d: import('@shared/types').ExtractedBL | null = null
+              try { d = JSON.parse(imp.bl_extracted_json) } catch { return null }
+              if (!d) return null
+              const fmt2 = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+              const isNum = (v: unknown): v is number => typeof v === 'number'
+              return (
+                <div className="rounded-lg bg-slate-900/50 border border-sky-800/30 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-sky-950/30 border-b border-sky-800/20">
+                    <span className="text-[11px] font-semibold text-sky-400">Datos del BL</span>
+                    <span className="text-[10px] text-slate-600">Aplicado</span>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-2">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                      {d.bl_number        && <><span className="text-slate-500">N° BL</span><span className="text-sky-300 font-semibold font-mono">{d.bl_number}</span></>}
+                      {d.fecha_emision    && d.fecha_emision !== 'null'   && <><span className="text-slate-500">Fecha emisión</span><span className="text-slate-300">{d.fecha_emision}</span></>}
+                      {d.buque            && d.buque !== 'null'           && <><span className="text-slate-500">Buque</span><span className="text-slate-300">{d.buque}</span></>}
+                      {d.consignor        && d.consignor !== 'null'       && <><span className="text-slate-500">Consignante</span><span className="text-slate-300 text-[10px]">{d.consignor}</span></>}
+                      {d.puerto_embarque  && d.puerto_embarque !== 'null' && <><span className="text-slate-500">Puerto carga</span><span className="text-slate-300">{d.puerto_embarque}</span></>}
+                      {d.puerto_descarga  && d.puerto_descarga !== 'null' && <><span className="text-slate-500">Puerto descarga</span><span className="text-slate-300">{d.puerto_descarga}</span></>}
+                      {d.nro_contenedor   && d.nro_contenedor !== 'null'  && <><span className="text-slate-500">Contenedor</span><span className="text-slate-300 font-mono text-[10px]">{d.nro_contenedor}</span></>}
+                      {isNum(d.cant_cartons)  && <><span className="text-slate-500">Cajas</span><span className="text-sky-300 font-semibold">{d.cant_cartons}</span></>}
+                      {isNum(d.cant_pallets)  && <><span className="text-slate-500">Pallets</span><span className="text-sky-300 font-semibold">{d.cant_pallets}</span></>}
+                      {isNum(d.peso_bruto_kg) && <><span className="text-slate-500">Peso bruto</span><span className="text-sky-300 font-semibold">{fmt2(d.peso_bruto_kg)} kg</span></>}
+                      {isNum(d.volumen_m3)    && <><span className="text-slate-500">Volumen</span><span className="text-sky-300 font-semibold">{fmt2(d.volumen_m3)} m³</span></>}
+                    </div>
+                    {d.descripcion_carga && d.descripcion_carga !== 'null' && (
+                      <p className="text-[10px] text-slate-500 italic">{d.descripcion_carga}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Botón analizar con IA */}
+            {aiConfigured && (
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className={cn(
+                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors',
+                  analyzing ? 'bg-violet-800/50 text-violet-300 cursor-wait' : 'bg-violet-700 hover:bg-violet-600 text-white'
+                )}
+              >
+                {analyzing ? <><Loader2 size={15} className="animate-spin" /> Analizando BL...</> : <><Sparkles size={15} /> {imp.bl_extracted_json ? 'Reanalizar BL' : 'Extraer datos con IA'}</>}
+              </button>
+            )}
+
+            {/* Alertas de discrepancia */}
+            {alerts.length > 0 && (
+              <div className="space-y-1">
+                {alerts.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2 px-3 py-2 bg-amber-900/20 border border-amber-700/30 rounded-lg text-xs text-amber-300">
+                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5 text-amber-400" />
+                    <span>{a}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Panel resultado IA */}
+            {aiResult && (() => {
+              const d = aiResult
+              const fmt2 = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+              return (
+                <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-violet-900/20 border-b border-violet-700/30">
+                    <div className="flex items-center gap-2">
+                      <Bot size={12} className="text-violet-400" />
+                      <span className="text-[11px] font-semibold text-violet-300">BL extraído por IA</span>
+                    </div>
+                    <button onClick={() => setAiResult(null)} className="text-slate-500 hover:text-slate-300"><X size={12} /></button>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-2">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                      {d.bl_number        && d.bl_number !== 'null'           && <><span className="text-slate-500">N° BL</span><span className="text-sky-300 font-semibold font-mono">{d.bl_number}</span></>}
+                      {d.fecha_emision    && d.fecha_emision !== 'null'       && <><span className="text-slate-500">Fecha emisión</span><span className="text-slate-200">{d.fecha_emision}</span></>}
+                      {d.buque            && d.buque !== 'null'               && <><span className="text-slate-500">Buque</span><span className="text-slate-200">{d.buque}</span></>}
+                      {d.consignor        && d.consignor !== 'null'           && <><span className="text-slate-500">Consignante</span><span className="text-slate-200 text-[10px]">{d.consignor}</span></>}
+                      {d.puerto_embarque  && d.puerto_embarque !== 'null'     && <><span className="text-slate-500">Puerto carga</span><span className="text-slate-200">{d.puerto_embarque}</span></>}
+                      {d.puerto_descarga  && d.puerto_descarga !== 'null'     && <><span className="text-slate-500">Puerto descarga</span><span className="text-slate-200">{d.puerto_descarga}</span></>}
+                      {d.nro_contenedor   && d.nro_contenedor !== 'null'      && <><span className="text-slate-500">Contenedor</span><span className="text-slate-300 font-mono text-[10px]">{d.nro_contenedor}</span></>}
+                      {typeof d.cant_cartons  === 'number' && <><span className="text-slate-500">Cajas</span><span className="text-emerald-400 font-semibold">{d.cant_cartons} cajas</span></>}
+                      {typeof d.cant_pallets  === 'number' && <><span className="text-slate-500">Pallets</span><span className="text-emerald-400 font-semibold">{d.cant_pallets} pallets</span></>}
+                      {typeof d.peso_bruto_kg === 'number' && <><span className="text-slate-500">Peso bruto</span><span className="text-emerald-400 font-semibold">{fmt2(d.peso_bruto_kg)} kg</span></>}
+                      {typeof d.volumen_m3    === 'number' && <><span className="text-slate-500">Volumen</span><span className="text-emerald-400 font-semibold">{fmt2(d.volumen_m3)} m³</span></>}
+                    </div>
+                    {d.descripcion_carga && (
+                      <p className="text-[10px] text-slate-500 italic">{d.descripcion_carga}</p>
+                    )}
+                    <div className="flex justify-end gap-2 pt-1 border-t border-violet-800/30">
+                      <button onClick={() => setAiResult(null)} className="px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition-colors">Descartar</button>
+                      <button onClick={handleApply} disabled={applying}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-colors">
+                        {applying ? <><Loader2 size={11} className="animate-spin" /> Aplicando...</> : <><Check size={11} /> Aplicar</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function DespachoSection({ imp }: { imp: ComexImport }) {
   const uploadDespacho = useUploadDespacho()
   const deleteDespacho = useDeleteDespacho()
   const analyzeDespacho = useAnalyzeDespacho()
   const { data: aiConfigured } = useAIConfigured()
 
-  const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [isDragOver, setIsDragOver] = useState(false)
+  const [aiResult,       setAiResult]       = useState<AIAnalysisResult | null>(null)
+  const [analyzedPage,   setAnalyzedPage]   = useState<number>(1)
+  const [suggestPage2,   setSuggestPage2]   = useState(false)
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [isDragOver,     setIsDragOver]     = useState(false)
   const dragCounter = useRef(0)
 
   const hasFile = !!imp.despacho_stored_name
@@ -2651,10 +4144,25 @@ function DespachoSection({ imp }: { imp: ComexImport }) {
     if (fp) handleUpload(fp)
   }
 
-  const handleAnalyze = async () => {
+  // Detecta si el resultado tiene muy pocos datos útiles (despacho escaneado
+  // con datos en pág 2, o primera hoja sin sección de liquidación).
+  // Usa los nombres reales de ExtractedDespacho (no los de la DB de customs).
+  const resultHasFewFields = (result: AIAnalysisResult): boolean => {
+    if (result.operation !== 'extract_despacho') return false
+    const d = result.structured as Record<string, unknown> | null | undefined
+    if (!d) return true   // sin datos → definitivamente pocos campos
+    const keyFields = ['numero_despacho', 'fob_total', 'cotizacion_dolar', 'fecha_oficializacion']
+    const nullCount = keyFields.filter(k => d[k] == null).length
+    return nullCount >= 3  // 3 o más campos clave vacíos → sugiere pág 2
+  }
+
+  const handleAnalyze = async (page = 1) => {
+    setSuggestPage2(false)
+    setAnalyzedPage(page)
     try {
-      const result = await analyzeDespacho.mutateAsync(imp.id)
+      const result = await analyzeDespacho.mutateAsync({ importId: imp.id, page })
       setAiResult(result)
+      if (page === 1 && resultHasFewFields(result)) setSuggestPage2(true)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error al analizar')
     }
@@ -2806,24 +4314,55 @@ function DespachoSection({ imp }: { imp: ComexImport }) {
               )}
             </div>
 
-            {/* Botón IA */}
+            {/* Botón IA principal */}
             {aiConfigured && (
-              <button
-                onClick={handleAnalyze}
-                disabled={analyzeDespacho.isPending}
-                className={cn(
-                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors',
-                  analyzeDespacho.isPending
-                    ? 'bg-violet-800/50 text-violet-300 cursor-wait'
-                    : 'bg-violet-700 hover:bg-violet-600 text-white'
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleAnalyze(1)}
+                  disabled={analyzeDespacho.isPending}
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors',
+                    analyzeDespacho.isPending
+                      ? 'bg-violet-800/50 text-violet-300 cursor-wait'
+                      : 'bg-violet-700 hover:bg-violet-600 text-white'
+                  )}
+                >
+                  {analyzeDespacho.isPending ? (
+                    <><Loader2 size={15} className="animate-spin" /> Analizando pág. {analyzedPage}...</>
+                  ) : (
+                    <><Sparkles size={15} /> Extraer datos con IA (pág. 1)</>
+                  )}
+                </button>
+
+                {/* Sugerencia de pág. 2 si la primera hoja tuvo pocos datos */}
+                {suggestPage2 && !analyzeDespacho.isPending && (
+                  <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-700/30 rounded-lg px-3 py-2">
+                    <span className="text-amber-400 text-xs mt-0.5">⚠</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-amber-300 font-medium">Pocos datos en pág. 1</p>
+                      <p className="text-[11px] text-amber-500 mt-0.5">
+                        Este despacho puede tener los datos en la segunda hoja.
+                      </p>
+                      <button
+                        onClick={() => handleAnalyze(2)}
+                        className="mt-1.5 text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline"
+                      >
+                        Reintentar con pág. 2 →
+                      </button>
+                    </div>
+                  </div>
                 )}
-              >
-                {analyzeDespacho.isPending ? (
-                  <><Loader2 size={15} className="animate-spin" /> Analizando con Claude...</>
-                ) : (
-                  <><Sparkles size={15} /> Extraer datos con IA</>
+
+                {/* Acceso directo a pág. 2 (siempre disponible) */}
+                {!analyzeDespacho.isPending && !suggestPage2 && (
+                  <button
+                    onClick={() => handleAnalyze(2)}
+                    className="w-full text-center text-[11px] text-slate-500 hover:text-slate-300 transition-colors py-1"
+                  >
+                    Analizar pág. 2 en su lugar
+                  </button>
                 )}
-              </button>
+              </div>
             )}
           </div>
         )}
@@ -2899,7 +4438,14 @@ function AIExtractionModal({
       const customs: Record<string, unknown> = {}
       if (d.numero_despacho)          customs.despacho_number    = d.numero_despacho
       if (d.despachante)              customs.despachante         = d.despachante
-      if (d.fecha_oficializacion)     customs.oficializacion_date = dayjs(d.fecha_oficializacion).valueOf()
+      if (d.fecha_oficializacion) {
+        customs.oficializacion_date = dayjs(d.fecha_oficializacion).valueOf()
+        // Copiar al import para la auto-sugerencia de "Oficializado"
+        await window.api.comex.imports.update(importId, {
+          oficializacion_import_date: dayjs(d.fecha_oficializacion).valueOf()
+        })
+        qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+      }
       if (d.bl_numero)                customs.bl_number           = d.bl_numero
       // Agente de Transporte Aduanero → carrier (campo "Carrier / Naviera", read-only)
       if (d.agente_transporte)        customs.carrier             = d.agente_transporte
@@ -2912,6 +4458,7 @@ function AIExtractionModal({
       if (d.fob_divisa)               customs.fob_currency        = d.fob_divisa === 'DOL' ? 'USD' : d.fob_divisa
       if (d.cotizacion_dolar != null) customs.dolar_aduana        = d.cotizacion_dolar
       if (d.peso_bruto_kg  != null)   customs.peso_bruto_kg       = d.peso_bruto_kg
+      if (d.total_bultos   != null)   customs.cant_bultos         = d.total_bultos
       await window.api.comex.customs.upsert(importId, customs)
       qc.invalidateQueries({ queryKey: ['comex-customs', importId] })
 
@@ -3866,17 +5413,21 @@ function PaymentsSection({ importId }: { importId: string }) {
 export default function ComexImportDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: imp, isLoading } = useComexImport(id ?? null)
-  const { data: suppliers = [] } = useComexSuppliers()
-  const { data: customs }        = useComexCustoms(id ?? null)
-  const { data: items = [] }     = useComexItems(id ?? null)
+  const { data: imp, isLoading }    = useComexImport(id ?? null)
+  const { data: suppliers    = [] } = useComexSuppliers()
+  const { data: customs }           = useComexCustoms(id ?? null)
+  const { data: items        = [] } = useComexItems(id ?? null)
+  const { data: operators    = [] } = useComexFreightOperators()
   const qc = useQueryClient()
   const update = useUpdateComexImport()
   const deleteImport = useDeleteComexImport()
 
   // Datos para resúmenes de secciones colapsadas
-  const { data: tributos = [] } = useComexTributos(id ?? null)
-  const { data: extras   = [] } = useComexExtraCosts(id ?? null)
+  const { data: tributos   = [] } = useComexTributos(id ?? null)
+  const { data: extras     = [] } = useComexExtraCosts(id ?? null)
+  const { data: proformasD = [] } = useComexProformas(id ?? null)
+  const { data: facturasD  = [] } = useComexFacturasComerciales(id ?? null)
+  const { data: quotesData = [] } = useComexQuotesByImport(id ?? null)
 
   // Estado de secciones — por defecto abiertas las más importantes
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
@@ -3884,13 +5435,16 @@ export default function ComexImportDetail() {
     datos:       true,
     anmat:       false,
     flete_int:   false,
-    despacho:    true,
+    despacho:    false,
     tributos:    false,
     deposito:    false,
     despachante: false,
     flete_local: false,
     productos:   false,
     presupuestos: false,
+    proformas:   false,
+    facturas:    false,
+    bl:          false,
   })
 
   const toggle   = (key: SectionKey) => setSections(s => ({ ...s, [key]: !s[key] }))
@@ -3943,6 +5497,40 @@ export default function ComexImportDetail() {
     }
   }
 
+  // ── Estado modal WhatsApp (SIEMPRE antes de cualquier return) ───────────────
+  const [showWaCargaModal, setShowWaCargaModal] = useState(false)
+
+  // ── Auto-transición por fechas (SIEMPRE antes de cualquier return) ──────────
+  useEffect(() => {
+    if (!imp) return   // imp puede ser null mientras carga
+    const now    = Date.now()
+    const status = imp.status as ImportStatus
+    // transit → arrived cuando llega el aviso de arribo
+    if (status === 'transit' && imp.aviso_arribo_date && imp.aviso_arribo_date <= now) {
+      update.mutate({ id: imp.id, data: { status: 'arrived' } })
+      return
+    }
+    // arrived → customs (Traslado a depósito) cuando llega la fecha de traslado
+    if (status === 'arrived' && imp.traslado_deposito_date && imp.traslado_deposito_date <= now) {
+      update.mutate({ id: imp.id, data: { status: 'customs' } })
+      return
+    }
+    // oficializado → carga_deposito: cuando llega el turno de carga (fecha + hora exacta)
+    if (status === 'oficializado' && imp.carga_deposito_date) {
+      let turnoTs = imp.carga_deposito_date
+      if (imp.carga_deposito_time) {
+        const [hh, mm] = imp.carga_deposito_time.split(':').map(Number)
+        const d = new Date(imp.carga_deposito_date)
+        d.setHours(hh, mm, 0, 0)
+        turnoTs = d.getTime()
+      }
+      if (turnoTs <= now) {
+        update.mutate({ id: imp.id, data: { status: 'carga_deposito' } })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imp?.id, imp?.status, imp?.aviso_arribo_date, imp?.traslado_deposito_date, imp?.carga_deposito_date, imp?.carga_deposito_time])
+
   if (isLoading) {
     return <div className="flex-1 flex items-center justify-center text-slate-500">Cargando...</div>
   }
@@ -3961,6 +5549,30 @@ export default function ComexImportDetail() {
   const upd = (data: Partial<ComexImport>) => update.mutate({ id: imp.id, data })
 
   const statusColor = IMPORT_STATUS_COLORS[imp.status as ImportStatus]
+
+  // ── Helper summaries uniformes ────────────────────────────────────────────
+  const sm = {
+    ok:    (text: string) => (
+      <span className="flex items-center gap-1.5">
+        <span className="text-emerald-400 font-bold">✓</span>
+        <span className="text-slate-300">{text}</span>
+      </span>
+    ),
+    warn:  (text: string) => (
+      <span className="flex items-center gap-1.5">
+        <span className="text-amber-400">⚠</span>
+        <span className="text-slate-400">{text}</span>
+      </span>
+    ),
+    alert: (text: string) => (
+      <span className="flex items-center gap-1.5">
+        <span className="text-red-400 animate-pulse">●</span>
+        <span className="text-red-400">{text}</span>
+      </span>
+    ),
+    none:  (text: string) => <span className="text-slate-600">{text}</span>,
+    info:  (text: string) => <span className="text-slate-400">{text}</span>,
+  }
 
   const handleDelete = async () => {
     await deleteImport.mutateAsync(imp.id)
@@ -4102,6 +5714,7 @@ export default function ComexImportDetail() {
       <ImportTimeline
         currentStatus={imp.status as ImportStatus}
         onChangeStatus={(s) => upd({ status: s })}
+        imp={imp}
       />
 
       {/* ── Meta panel ── */}
@@ -4109,6 +5722,59 @@ export default function ComexImportDetail() {
         <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
           Datos generales — click en cualquier campo para editar
         </p>
+
+        {/* ── Row 0: Operaciones — Forwarder / Despachante / BL / Despacho ── */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pb-3 border-b border-slate-700/50">
+          {/* Ref. Mail Forwarder */}
+          <EditableText
+            label="Ref. Mail forwarder"
+            value={imp.forwarder_ref_mail ?? ''}
+            onSave={(v) => upd({ forwarder_ref_mail: v })}
+            placeholder="—"
+          />
+
+          {/* Forwarder — dropdown de operadores */}
+          <EditableSelect
+            label="Forwarder"
+            value={imp.freight_operator_id ?? ''}
+            options={[
+              { value: '', label: '— Sin forwarder —' },
+              ...operators.map((o) => ({ value: o.id, label: o.name }))
+            ]}
+            onChange={(v) => upd({ freight_operator_id: v || null })}
+          />
+
+          {/* Despachante — opciones fijas */}
+          <EditableSelect
+            label="Despachante"
+            value={imp.despachante ?? ''}
+            options={[
+              { value: '',               label: '— Sin asignar —' },
+              { value: 'Dario Valero',   label: 'Dario Valero' },
+              { value: 'Iván Balarino',  label: 'Iván Balarino' },
+            ]}
+            onChange={(v) => upd({ despachante: v })}
+          />
+
+          {/* BL N° */}
+          <EditableText
+            label="BL N°"
+            value={imp.bl_number ?? ''}
+            onSave={(v) => upd({ bl_number: v })}
+            placeholder="—"
+          />
+
+          {/* Despacho — read-only del customs, editable como texto */}
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Despacho</p>
+            <p className={cn(
+              'text-sm mt-0.5 font-mono',
+              imp._despacho_number ? 'text-slate-200' : 'text-slate-600 italic'
+            )}>
+              {imp._despacho_number || '—'}
+            </p>
+          </div>
+        </div>
 
         {/* Row 1: Estado / Incoterm / Proveedor / Moneda */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -4211,6 +5877,112 @@ export default function ComexImportDetail() {
           <EditableDate label="ETD — Fecha salida estimada" value={imp.ship_date}    onSave={(v) => upd({ ship_date: v })} />
         </div>
 
+        {/* ── Datos de carga — se muestra solo cuando hay al menos un dato ── */}
+        {(() => {
+          const depositoFiscal = extras.find(e => e.categoria === 'deposito_fiscal' && e.proveedor?.trim())
+          const peso    = customs?.peso_bruto_kg
+          const volumen = customs?.volumen_m3
+          const bultos  = customs?.cant_bultos   // del despacho OM-1993
+          const cajas   = customs?.cant_cartons  // del BL (CTNS/CARTONS)
+          const pallets = customs?.cant_pallets  // del BL / despacho
+
+          const hayDatos = !!(depositoFiscal || peso != null || volumen != null || bultos != null || cajas != null || pallets != null)
+          if (!hayDatos) return null
+
+          const fmtNum = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+
+          // Columna de "caja" a mostrar: prioridad al BL (cajas), fallback al despacho (bultos)
+          const cajasDisplay = cajas ?? bultos
+
+          return (
+            <div className="rounded-lg border border-slate-700/40 bg-slate-800/40 px-4 py-3 space-y-2.5">
+              {/* Header */}
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center gap-2">
+                <span className="text-slate-500">📦</span>
+                Datos de carga
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3">
+
+                {/* Depósito fiscal */}
+                <div className="md:col-span-1">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Depósito fiscal</p>
+                  {depositoFiscal ? (
+                    <div className="mt-0.5">
+                      <p className="text-sm font-semibold text-cyan-300">{depositoFiscal.proveedor}</p>
+                      {(() => {
+                        const isValidDate = (d: string | null | undefined) =>
+                          !!d && d !== 'null' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+                        const ingreso = isValidDate(depositoFiscal.fecha_ingreso) ? depositoFiscal.fecha_ingreso! : null
+                        const egreso  = isValidDate(depositoFiscal.fecha_egreso)  ? depositoFiscal.fecha_egreso!  : null
+                        if (!ingreso && !egreso) return null
+                        const fmt = (d: string) => d.split('-').reverse().join('/')
+                        return (
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            {ingreso && <>Ingreso: {fmt(ingreso)}</>}
+                            {ingreso && egreso && ' · '}
+                            {egreso  && <>Egreso: {fmt(egreso)}</>}
+                          </p>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-600 italic mt-0.5">—</p>
+                  )}
+                </div>
+
+                {/* Peso bruto */}
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Peso bruto</p>
+                  <p className={`text-sm mt-0.5 ${peso != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
+                    {peso != null ? <><span className="font-semibold">{fmtNum(peso)}</span> <span className="text-slate-500 text-xs">kg</span></> : '—'}
+                  </p>
+                </div>
+
+                {/* Volumen */}
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Volumen</p>
+                  <p className={`text-sm mt-0.5 ${volumen != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
+                    {volumen != null ? <><span className="font-semibold">{fmtNum(volumen)}</span> <span className="text-slate-500 text-xs">m³</span></> : '—'}
+                  </p>
+                </div>
+
+                {/* Cajas — separado de pallets */}
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Cajas</p>
+                  <p className={`text-sm mt-0.5 ${cajasDisplay != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
+                    {cajasDisplay != null ? (
+                      <>
+                        <span className="font-semibold">{cajasDisplay}</span>
+                        <span className="text-slate-500 text-xs ml-1">cajas</span>
+                      </>
+                    ) : '—'}
+                  </p>
+                  {cajas != null && bultos != null && cajas !== bultos && (
+                    <p className="text-[9px] text-amber-500 mt-0.5">
+                      Desp.: {bultos}
+                    </p>
+                  )}
+                </div>
+
+                {/* Pallets — separado de cajas */}
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Pallets</p>
+                  <p className={`text-sm mt-0.5 ${pallets != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
+                    {pallets != null ? (
+                      <>
+                        <span className="font-semibold">{pallets}</span>
+                        <span className="text-slate-500 text-xs ml-1">pallets</span>
+                      </>
+                    ) : '—'}
+                  </p>
+                </div>
+
+              </div>
+            </div>
+          )
+        })()}
+
         {/* ETA — Fecha llegada estimada */}
         {(() => {
           const etas: { label: string; key: keyof ComexImport }[] = [
@@ -4242,6 +6014,115 @@ export default function ComexImportDetail() {
           )
         })()}
 
+        {/* ── Fechas operativas de llegada ── */}
+        <div className="rounded-lg border border-cyan-800/30 bg-cyan-950/10 p-3 space-y-3">
+          <p className="text-[10px] text-cyan-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+            <span>⚓</span> Fechas operativas de llegada
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                Fecha aviso arribo
+              </label>
+              <p className="text-[10px] text-slate-600 mb-1.5">Dispara automáticamente el estado → Arribado</p>
+              <EditableDate
+                label=""
+                value={imp.aviso_arribo_date}
+                onSave={(v) => upd({ aviso_arribo_date: v })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                Fecha traslado a depósito fiscal
+              </label>
+              <p className="text-[10px] text-slate-600 mb-1.5">Dispara automáticamente → Traslado a depósito</p>
+              <EditableDate
+                label=""
+                value={imp.traslado_deposito_date}
+                onSave={(v) => upd({ traslado_deposito_date: v })}
+              />
+            </div>
+          </div>
+
+          {/* Chip sugerencia Oficializado */}
+          {imp.oficializacion_import_date && imp.status === 'customs' && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2 bg-pink-950/20 border border-pink-800/30 rounded-lg mt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-pink-400">✓</span>
+                <span className="text-xs text-pink-300">
+                  Despacho oficializado el {dayjs(imp.oficializacion_import_date).format('DD/MM/YYYY')}
+                </span>
+              </div>
+              <button onClick={() => upd({ status: 'oficializado' })}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-pink-700 hover:bg-pink-600 text-white transition-colors flex-shrink-0">
+                Marcar como Oficializado
+              </button>
+            </div>
+          )}
+
+          {/* Turno de carga en depósito fiscal */}
+          <div className="border-t border-cyan-800/20 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-[10px] text-teal-400 uppercase tracking-wider font-semibold">
+                🏭 Turno de carga en depósito fiscal
+              </label>
+              {imp.carga_deposito_date && (
+                <button
+                  onClick={() => setShowWaCargaModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-700/50 transition-colors"
+                >
+                  📲 Avisar al equipo por WhatsApp
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-600">
+              Cuando llegue esta fecha y hora → avanza automáticamente a "Carga en depósito"
+            </p>
+            {showWaCargaModal && (
+              <WhatsAppCargaModal imp={imp} customs={customs ?? null} onClose={() => setShowWaCargaModal(false)} />
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1">Fecha del turno</label>
+                <EditableDate label="" value={imp.carga_deposito_date} onSave={(v) => upd({ carga_deposito_date: v })} />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1">Hora del turno</label>
+                <input
+                  type="time"
+                  value={imp.carga_deposito_time ?? ''}
+                  onChange={e => upd({ carga_deposito_time: e.target.value || null })}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-teal-500 font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Botón confirmación de recepción cuando el status es carga_deposito */}
+            {imp.status === 'carga_deposito' && (
+              <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-teal-950/30 border border-teal-700/40 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-teal-400 text-base">🏭</span>
+                  <div>
+                    <p className="text-xs text-teal-300 font-semibold">Turno de carga pasado</p>
+                    {imp.carga_deposito_date && (
+                      <p className="text-[10px] text-teal-600">
+                        {dayjs(imp.carga_deposito_date).format('DD/MM/YYYY')}
+                        {imp.carga_deposito_time ? ` a las ${imp.carga_deposito_time}` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => upd({ status: 'delivered', actual_arrival_date: Date.now() })}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold bg-teal-600 hover:bg-teal-500 text-white transition-colors flex-shrink-0"
+                >
+                  ✓ Confirmar recepción en depósito
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Notas — al final de Datos generales */}
         <div className="pt-3 border-t border-slate-700/50">
           <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-2">Notas</p>
@@ -4255,7 +6136,14 @@ export default function ComexImportDetail() {
 
       {/* 1. Resumen de costos */}
       {(() => {
-        const costSummary = imp.cost_pct != null ? `${imp.cost_pct.toFixed(1)}% sobre valor factura` : undefined
+        const pct = imp.cost_pct
+        const costSummary = pct == null
+          ? sm.none('Sin datos de costo')
+          : pct < 25
+            ? sm.ok(`${pct.toFixed(1)}% sobre valor factura`)
+            : pct < 35
+              ? sm.warn(`${pct.toFixed(1)}% sobre valor factura`)
+              : sm.alert(`${pct.toFixed(1)}% — costo alto`)
         return (
           <CollapsibleSection label="Resumen de costos" icon={DollarSign} accentColor="border-l-amber-600"
             isOpen={sections.costos} onToggle={() => toggle('costos')} summary={costSummary}>
@@ -4264,13 +6152,104 @@ export default function ComexImportDetail() {
         )
       })()}
 
-      {/* 2. Certificaciones ANMAT */}
+      {/* 2. Proformas */}
       {(() => {
-        const inalSummary = imp.inal_required === 1
-          ? `Requiere INAL · ${imp.inal_lc_status === 'finalizado' ? 'Finalizado' : imp.inal_lc_status === 'en_tramite' ? 'En trámite' : 'Pendiente'}`
-          : 'Sin INAL requerido'
+        const fmtVal = (n: number, mon: string) =>
+          `${mon} ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+        const selected   = proformasD.filter(p => p.incluir_en_total === 1 && p.importe != null)
+        const currencies = [...new Set(selected.map(p => p.moneda))]
+        const latest     = proformasD.length > 0 ? proformasD[proformasD.length - 1] : null
+        const latestDate = latest?.fecha_proforma
+          ? dayjs(latest.fecha_proforma).format('DD/MM/YY')
+          : null
+
+        const proformaSummary = proformasD.length === 0
+          ? sm.none('Sin proformas')
+          : selected.length === 0
+            ? sm.warn(`${proformasD.length} proforma${proformasD.length !== 1 ? 's' : ''} · Sin valor`)
+            : sm.ok([
+                `${proformasD.length} proforma${proformasD.length !== 1 ? 's' : ''}`,
+                currencies.length === 1
+                  ? `· ${fmtVal(selected.reduce((s, p) => s + (p.importe ?? 0), 0), currencies[0])}`
+                  : `· ${selected.length} seleccionadas`,
+                latestDate ? `· última: ${latestDate}` : ''
+              ].filter(Boolean).join(' '))
+
         return (
-          <CollapsibleSection label="Certificaciones ANMAT" icon={ShieldCheck} accentColor="border-l-emerald-600"
+          <CollapsibleSection
+            label="Proformas"
+            icon={FileText}
+            accentColor="border-l-teal-600"
+            isOpen={sections.proformas}
+            onToggle={() => toggle('proformas')}
+            summary={proformaSummary}
+          >
+            <div className="p-4"><ProformaSection imp={imp} /></div>
+          </CollapsibleSection>
+        )
+      })()}
+
+      {/* 3. Facturas comerciales */}
+      {(() => {
+        const fmtV = (n: number, mon: string) => `${mon} ${n.toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
+        const selFact    = facturasD.filter(p => p.incluir_en_total === 1 && p.importe != null)
+        const currFact   = [...new Set(selFact.map(p => p.moneda))]
+        const hasValFact = selFact.length > 0
+        const latestFact = facturasD.length > 0 ? facturasD[facturasD.length - 1] : null
+        const latestDate = latestFact?.fecha_proforma ? dayjs(latestFact.fecha_proforma).format('DD/MM/YY') : null
+
+        const badge = facturasD.length === 0 && proformasD.length > 0
+          ? sm.warn('Sin factura — proforma cargada')
+          : facturasD.length === 0
+            ? sm.none('Sin facturas')
+            : !hasValFact
+              ? sm.warn(`${facturasD.length} factura${facturasD.length !== 1 ? 's' : ''} · Sin valor`)
+              : sm.ok([
+                  `${facturasD.length} factura${facturasD.length !== 1 ? 's' : ''}`,
+                  currFact.length === 1 ? `· ${fmtV(selFact.reduce((s,p) => s + (p.importe ?? 0), 0), currFact[0])}` : `· ${selFact.length} seleccionada${selFact.length !== 1 ? 's' : ''}`,
+                  latestDate ? `· última: ${latestDate}` : ''
+                ].filter(Boolean).join(' '))
+
+        return (
+          <CollapsibleSection label="Facturas comerciales" icon={FileText} accentColor="border-l-teal-600"
+            isOpen={sections.facturas} onToggle={() => toggle('facturas')}
+            summary={<span className="flex items-center gap-2">{badge}</span>}>
+            <div className="p-4">
+              <FacturasComercialSection imp={imp} proformasData={proformasD} />
+            </div>
+          </CollapsibleSection>
+        )
+      })()}
+
+      {/* 4. BL - Bill of Lading */}
+      {(() => {
+        const blSummary = imp.bl_stored_name
+          ? imp.bl_number
+            ? sm.ok(`BL ${imp.bl_number}`)
+            : sm.ok('Archivo cargado')
+          : sm.none('Sin BL')
+        return (
+          <CollapsibleSection label="BL - Bill of Lading" icon={FileText} accentColor="border-l-sky-600"
+            isOpen={sections.bl} onToggle={() => toggle('bl')} summary={blSummary}>
+            <div className="p-4"><BLSection imp={imp} importId={imp.id} customs={customs ?? null} onUpdate={(data) => upd(data)} /></div>
+          </CollapsibleSection>
+        )
+      })()}
+
+      {/* 5. Certificaciones ANMAT */}
+      {(() => {
+        const inalSummary = imp.inal_required !== 1
+          ? sm.none('Sin INAL requerido')
+          : imp.inal_lc_status === 'finalizado'
+            ? sm.ok('INAL · Finalizado')
+            : imp.inal_lc_status === 'en_tramite'
+              ? sm.warn('INAL · En trámite')
+              : imp.inal_lc_status === 'mail_enviado'
+                ? sm.info('INAL · Mail enviado al gestor')
+                : sm.warn('INAL · Pendiente')
+        return (
+          <CollapsibleSection label="Certificaciones ANMAT · INAL" icon={ShieldCheck} accentColor="border-l-emerald-600"
             isOpen={sections.anmat} onToggle={() => toggle('anmat')} summary={inalSummary}>
             <div className="p-4"><InalSection imp={imp} onUpdate={(data) => upd(data)} /></div>
           </CollapsibleSection>
@@ -4281,9 +6260,12 @@ export default function ComexImportDetail() {
       {(() => {
         const fleteIntExtras = extras.filter(c => c.categoria === 'flete_internacional')
         const fleteIntTotal  = fleteIntExtras.reduce((s, c) => s + costToARS(c, customs?.dolar_aduana ?? 0), 0)
+        const hasPDF         = fleteIntExtras.some(c => c.stored_name)
         const fleteIntSummary = fleteIntTotal > 0
-          ? `${fleteIntExtras.length} factura${fleteIntExtras.length !== 1 ? 's' : ''} · $${Math.round(fleteIntTotal).toLocaleString('es-AR')} ARS`
-          : 'Sin facturas'
+          ? sm.ok(`${fleteIntExtras.length} factura${fleteIntExtras.length !== 1 ? 's' : ''} · $${Math.round(fleteIntTotal).toLocaleString('es-AR')} ARS`)
+          : hasPDF
+            ? sm.warn(`${fleteIntExtras.length} factura${fleteIntExtras.length !== 1 ? 's' : ''} sin analizar`)
+            : sm.none('Sin facturas')
         return (
           <CollapsibleSection label="Flete internacional" icon={Ship} accentColor="border-l-blue-600"
             isOpen={sections.flete_int} onToggle={() => toggle('flete_int')} summary={fleteIntSummary}>
@@ -4294,15 +6276,22 @@ export default function ComexImportDetail() {
 
       {/* 4. Despacho de Aduana (PDF + campos aduaneros) — sección unificada */}
       {(() => {
-        const despSummary = [
+        const hasPDF       = !!imp.despacho_stored_name
+        const hasData      = !!customs?.despacho_number
+        const dataParts    = [
           customs?.despacho_number,
           customs?.oficializacion_date ? dayjs(customs.oficializacion_date).format('DD/MM/YYYY') : null,
-          imp.despacho_stored_name ? '📄 PDF' : null,
-          imp.drive_folder_id && imp.despacho_drive_status === 'synced' ? '☁ Drive' : null,
+          hasPDF ? '📄 PDF' : null,
+          imp.despacho_drive_status === 'synced' ? '☁ Drive' : null,
         ].filter(Boolean).join(' · ')
+        const despSummary  = !hasPDF && !hasData
+          ? sm.none('Sin despacho adjunto')
+          : hasPDF && !hasData
+            ? sm.warn(dataParts || 'PDF sin analizar')
+            : sm.ok(dataParts)
         return (
           <CollapsibleSection label="Despacho de Aduana" icon={Landmark} accentColor="border-l-cyan-600"
-            isOpen={sections.despacho} onToggle={() => toggle('despacho')} summary={despSummary || 'Sin despacho adjunto'}>
+            isOpen={sections.despacho} onToggle={() => toggle('despacho')} summary={despSummary}>
             {/* PDF del despacho */}
             <DespachoSection imp={imp} />
             {/* Separador */}
@@ -4319,10 +6308,12 @@ export default function ComexImportDetail() {
 
       {/* 5. Tributos, impuestos y derechos */}
       {(() => {
-        const derechosUSD = tributos.filter(t => esCostoReal(t.codigo)).reduce((s, t) => s + t.importe_usd, 0)
+        const derechosUSD     = tributos.filter(t => esCostoReal(t.codigo)).reduce((s, t) => s + t.importe_usd, 0)
         const tributosSummary = tributos.length > 0
-          ? `${tributos.length} conceptos · USD ${derechosUSD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
-          : 'Sin datos'
+          ? sm.ok(`${tributos.length} conceptos · USD ${derechosUSD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`)
+          : imp.despacho_stored_name
+            ? sm.warn('Sin tributos — analizá el despacho')
+            : sm.none('Sin datos')
         return (
           <CollapsibleSection label="Tributos, impuestos y derechos" icon={DollarSign} accentColor="border-l-amber-600"
             isOpen={sections.tributos} onToggle={() => toggle('tributos')} summary={tributosSummary}>
@@ -4333,10 +6324,12 @@ export default function ComexImportDetail() {
 
       {/* 6. Depósito fiscal */}
       {(() => {
-        const depositoCost = extras.find(c => c.categoria === 'deposito_fiscal')
+        const depositoCost    = extras.find(c => c.categoria === 'deposito_fiscal')
         const depositoSummary = depositoCost?.importe > 0
-          ? `${depositoCost.proveedor || 'Sin proveedor'} · $${Math.round(depositoCost.importe).toLocaleString('es-AR')}`
-          : 'Sin factura'
+          ? sm.ok(`${depositoCost.proveedor || 'Sin proveedor'} · $${Math.round(depositoCost.importe).toLocaleString('es-AR')}`)
+          : depositoCost?.stored_name
+            ? sm.warn('PDF sin analizar')
+            : sm.none('Sin factura')
         return (
           <CollapsibleSection label="Depósito fiscal" icon={Package} accentColor="border-l-violet-600"
             isOpen={sections.deposito} onToggle={() => toggle('deposito')} summary={depositoSummary}>
@@ -4351,10 +6344,12 @@ export default function ComexImportDetail() {
 
       {/* 7. Despachante */}
       {(() => {
-        const despachanteCost = extras.find(c => c.categoria === 'despachante')
+        const despachanteCost    = extras.find(c => c.categoria === 'despachante')
         const despachanteSummary = despachanteCost?.importe > 0
-          ? `${despachanteCost.proveedor || 'Sin proveedor'} · $${Math.round(despachanteCost.importe).toLocaleString('es-AR')}`
-          : 'Sin factura'
+          ? sm.ok(`${despachanteCost.proveedor || 'Sin proveedor'} · $${Math.round(despachanteCost.importe).toLocaleString('es-AR')}`)
+          : despachanteCost?.stored_name
+            ? sm.warn('PDF sin analizar')
+            : sm.none('Sin factura')
         return (
           <CollapsibleSection label="Despachante" icon={FileText} accentColor="border-l-violet-600"
             isOpen={sections.despachante} onToggle={() => toggle('despachante')} summary={despachanteSummary}>
@@ -4369,11 +6364,14 @@ export default function ComexImportDetail() {
 
       {/* 8. Flete local */}
       {(() => {
-        const fleteLocExtras = extras.filter(c => c.categoria === 'flete_local')
-        const fleteLocTotal  = fleteLocExtras.reduce((s, c) => s + costToARS(c, customs?.dolar_aduana ?? 0), 0)
+        const fleteLocExtras  = extras.filter(c => c.categoria === 'flete_local')
+        const fleteLocTotal   = fleteLocExtras.reduce((s, c) => s + costToARS(c, customs?.dolar_aduana ?? 0), 0)
+        const fleteLocHasPDF  = fleteLocExtras.some(c => c.stored_name)
         const fleteLocSummary = fleteLocTotal > 0
-          ? `${fleteLocExtras.length} factura${fleteLocExtras.length !== 1 ? 's' : ''} · $${Math.round(fleteLocTotal).toLocaleString('es-AR')} ARS`
-          : 'Sin facturas'
+          ? sm.ok(`${fleteLocExtras.length} factura${fleteLocExtras.length !== 1 ? 's' : ''} · $${Math.round(fleteLocTotal).toLocaleString('es-AR')} ARS`)
+          : fleteLocHasPDF
+            ? sm.warn(`${fleteLocExtras.length} factura${fleteLocExtras.length !== 1 ? 's' : ''} sin analizar`)
+            : sm.none('Sin facturas')
         return (
           <CollapsibleSection label="Flete local" icon={Ship} accentColor="border-l-blue-600"
             isOpen={sections.flete_local} onToggle={() => toggle('flete_local')} summary={fleteLocSummary}>
@@ -4384,9 +6382,10 @@ export default function ComexImportDetail() {
 
       {/* 9. Productos */}
       {(() => {
+        const prodTotal   = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
         const prodSummary = items.length > 0
-          ? `${items.length} ítem${items.length !== 1 ? 's' : ''} · ${imp.currency} ${items.reduce((s,i) => s + i.quantity * i.unit_price, 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
-          : 'Sin ítems'
+          ? sm.ok(`${items.length} ítem${items.length !== 1 ? 's' : ''} · ${imp.currency} ${prodTotal.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`)
+          : sm.none('Sin ítems')
         return (
           <CollapsibleSection label="Productos" icon={Package} accentColor="border-l-slate-500"
             isOpen={sections.productos} onToggle={() => toggle('productos')} summary={prodSummary}>
@@ -4396,12 +6395,28 @@ export default function ComexImportDetail() {
       })()}
 
       {/* 10. Presupuestos logísticos */}
-      <CollapsibleSection label="Presupuestos logísticos" icon={Ship} accentColor="border-l-slate-500"
-        isOpen={sections.presupuestos} onToggle={() => toggle('presupuestos')}>
-        <div className="p-4">
-          <QuotesSection importId={imp.id} imp={imp} customs={customs} items={items} />
-        </div>
-      </CollapsibleSection>
+      {(() => {
+        const selected  = quotesData.find(q => q.status === 'selected')
+        const requested = quotesData.filter(q => q.status === 'requested').length
+        const quoted    = quotesData.filter(q => q.status === 'quoted').length
+        const presupSummary = quotesData.length === 0
+          ? sm.none('Sin cotizaciones')
+          : selected
+            ? sm.ok(`${quotesData.length} cotizacion${quotesData.length !== 1 ? 'es' : ''} · ${selected.operator_name} seleccionado`)
+            : requested > 0
+              ? sm.info(`${requested} solicitud${requested !== 1 ? 'es' : ''} enviada${requested !== 1 ? 's' : ''} · esperando respuesta`)
+              : quoted > 0
+                ? sm.warn(`${quoted} cotización${quoted !== 1 ? 'es' : ''} recibida${quoted !== 1 ? 's' : ''} · sin seleccionar`)
+                : sm.info(`${quotesData.length} cotizacion${quotesData.length !== 1 ? 'es' : ''}`)
+        return (
+          <CollapsibleSection label="Presupuestos logísticos" icon={Ship} accentColor="border-l-slate-500"
+            isOpen={sections.presupuestos} onToggle={() => toggle('presupuestos')} summary={presupSummary}>
+            <div className="p-4">
+              <QuotesSection importId={imp.id} imp={imp} customs={customs} items={items} />
+            </div>
+          </CollapsibleSection>
+        )
+      })()}
 
     </div>
   )
@@ -4409,16 +6424,18 @@ export default function ComexImportDetail() {
 
 // ── INAL / ANMAT Section ──────────────────────────────────────────────────────
 
-const INAL_LC_FLOW: InalLCStatus[] = ['pendiente', 'en_tramite', 'finalizado']
+const INAL_LC_FLOW: InalLCStatus[] = ['pendiente', 'mail_enviado', 'en_tramite', 'finalizado']
 const INAL_LC_LABELS: Record<InalLCStatus, string> = {
-  pendiente:   'Pendiente',
-  en_tramite:  'En trámite',
-  finalizado:  'Finalizado'
+  pendiente:    'Pendiente',
+  mail_enviado: 'Mail enviado a gestor',
+  en_tramite:   'En trámite',
+  finalizado:   'Finalizado'
 }
 const INAL_LC_COLORS: Record<InalLCStatus, string> = {
-  pendiente:  '#64748b',   // slate
-  en_tramite: '#f59e0b',   // amber
-  finalizado: '#22c55e'    // green
+  pendiente:    '#64748b',   // slate
+  mail_enviado: '#60a5fa',   // blue — mail enviado
+  en_tramite:   '#f59e0b',   // amber
+  finalizado:   '#22c55e'    // green
 }
 
 function InalSection({
@@ -4436,7 +6453,12 @@ function InalSection({
   const [isDragOver, setIsDragOver] = useState(false)
   const dragCounter = useRef(0)
 
+  // Upload states PL / Xls
+  const [uploadingPL,  setUploadingPL]  = useState(false)
+  const [uploadingXls, setUploadingXls] = useState(false)
+
   const { data: certs = [] } = useComexInalCerts(inalOn ? imp.id : null)
+  const { data: facturas = [] } = useComexFacturasComerciales(inalOn ? imp.id : null)
   const uploadCert = useUploadInalCert(imp.id)
   const deleteCert = useDeleteInalCert(imp.id)
 
@@ -4519,15 +6541,20 @@ function InalSection({
     e.preventDefault()
     dragCounter.current = 0
     setIsDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (!file) return
-    const fp = window.api.getPathForFile(file)
-    if (fp) handleUpload(fp)
+    // Soportar múltiples archivos arrastrados
+    const files = Array.from(e.dataTransfer.files)
+    for (const file of files) {
+      const fp = window.api.getPathForFile(file)
+      if (fp) handleUpload(fp)
+    }
   }
 
   const handleSelectFile = async () => {
-    const fp = await window.api.comex.documents.selectFile()
-    if (fp) handleUpload(fp)
+    // Selección múltiple de archivos
+    const filePaths = await window.api.comex.inal.certs.selectFiles()
+    for (const fp of filePaths) {
+      handleUpload(fp)
+    }
   }
 
   const advanceLCStatus = () => {
@@ -4544,9 +6571,9 @@ function InalSection({
         <div className="flex items-center gap-2">
           <div>
             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-              Certificaciones ANMAT
+              Certificaciones ANMAT · INAL
             </p>
-            <p className="text-[10px] text-slate-600">Envases líquidos y alimentos</p>
+            <p className="text-[10px] text-slate-600">Libre Circulación para importaciones con INAL</p>
           </div>
         </div>
         {/* Lleva INAL toggle */}
@@ -4583,6 +6610,152 @@ function InalSection({
       {inalOn && (
         <div className="space-y-4 pt-1 border-t border-slate-700">
 
+          {/* ── Documentos para el gestor ── */}
+          {(() => {
+            type DocKey = 'factura' | 'bl' | 'pl' | 'xls' | 'certs'
+
+            const items: Array<{ key: DocKey; label: string; ok: boolean; desc: string; driveStatus: string | null }> = [
+              { key: 'factura', label: 'Factura comercial',   ok: !!imp.inal_factura_stored_name, desc: imp.inal_factura_original_name ?? 'Subir para carpeta INAL',         driveStatus: imp.inal_factura_drive_status },
+              { key: 'bl',      label: 'BL - Bill of Lading', ok: !!imp.inal_bl_stored_name,      desc: imp.inal_bl_original_name      ?? 'Subir para carpeta INAL',         driveStatus: imp.inal_bl_drive_status },
+              { key: 'pl',      label: 'Packing List',         ok: !!imp.inal_pl_stored_name,      desc: imp.inal_pl_original_name      ?? 'Subir el packing list',          driveStatus: imp.inal_pl_drive_status },
+              { key: 'xls',     label: 'Xls resumen INAL',    ok: !!imp.inal_xls_stored_name,     desc: imp.inal_xls_original_name     ?? 'Excel con pesos por producto',    driveStatus: imp.inal_xls_drive_status },
+              { key: 'certs',   label: 'Certificados INAL',   ok: certs.length > 0,               desc: certs.length > 0 ? `${certs.length} certificado${certs.length !== 1 ? 's' : ''} cargado${certs.length !== 1 ? 's' : ''}` : 'Subir uno o más certificados', driveStatus: null },
+            ]
+            const readyCount = items.filter(i => i.ok).length
+            const pct = Math.round((readyCount / items.length) * 100)
+
+            const getApi = (key: DocKey) => {
+              if (key === 'factura') return window.api.comex.inal.factura
+              if (key === 'bl')      return window.api.comex.inal.blcopy
+              if (key === 'pl')      return window.api.comex.inal.pl
+              if (key === 'xls')     return window.api.comex.inal.xls
+              return null
+            }
+
+            const handleUploadDoc = async (key: DocKey) => {
+              const api = getApi(key)
+              if (!api) return
+              const fp = await api.selectFile()
+              if (!fp) return
+              if (key === 'pl')  setUploadingPL(true)
+              if (key === 'xls') setUploadingXls(true)
+              try {
+                const updated = await api.upload(imp.id, fp)
+                onUpdate(updated as Partial<ComexImport>)
+                qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+              } finally {
+                if (key === 'pl')  setUploadingPL(false)
+                if (key === 'xls') setUploadingXls(false)
+              }
+            }
+
+            const handleDeleteDoc = async (key: DocKey) => {
+              const api = getApi(key)
+              if (!api) return
+              const updated = await api.delete(imp.id)
+              onUpdate(updated as Partial<ComexImport>)
+              qc.invalidateQueries({ queryKey: ['comex-import', imp.id] })
+            }
+
+            const isUploadingDoc = (key: DocKey) => key === 'pl' ? uploadingPL : key === 'xls' ? uploadingXls : false
+
+            return (
+              <div className="rounded-xl border border-emerald-800/30 bg-emerald-950/10 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-emerald-800/20 bg-emerald-950/20">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList size={13} className="text-emerald-400" />
+                    <span className="text-[11px] font-semibold text-emerald-300">Documentos para el gestor de Libre Circulación</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-20 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className={cn('text-[10px] font-semibold', readyCount === items.length ? 'text-emerald-400' : 'text-slate-500')}>
+                      {readyCount}/{items.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-800/60">
+                  {items.map((item) => {
+                    const isCerts = item.key === 'certs'
+                    return (
+                      <div key={item.key} className="flex items-start gap-3 px-3 py-2">
+                        <div className={cn('w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
+                          item.ok ? 'bg-emerald-900/60 border border-emerald-600/60' : 'bg-slate-800 border border-slate-600')}>
+                          {item.ok ? <Check size={11} className="text-emerald-400" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-xs font-medium', item.ok ? 'text-slate-200' : 'text-slate-400')}>{item.label}</p>
+                          <p className="text-[10px] text-slate-600 truncate">{item.desc}</p>
+
+                          {/* Certs: lista de archivos subidos */}
+                          {isCerts && certs.length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {certs.map((cert) => (
+                                <div key={cert.id} className="flex items-center gap-1.5">
+                                  <FileText size={9} className="text-slate-600 flex-shrink-0" />
+                                  <span className="text-[9px] text-slate-500 truncate max-w-[180px]">{cert.original_name}</span>
+                                  {cert.drive_status === 'synced'    && <Cloud size={9} className="text-emerald-500 flex-shrink-0" />}
+                                  {cert.drive_status === 'uploading' && <Loader2 size={9} className="text-blue-400 animate-spin flex-shrink-0" />}
+                                  <button onClick={() => deleteCert.mutate(cert.id)}
+                                    className="text-slate-700 hover:text-red-400 transition-colors flex-shrink-0">
+                                    <X size={9} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Acciones: upload para todos los ítems */}
+                        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                          {!isCerts && item.driveStatus === 'synced'    && <Cloud size={11} className="text-emerald-400" />}
+                          {!isCerts && item.driveStatus === 'uploading' && <Loader2 size={11} className="text-blue-400 animate-spin" />}
+                          {!isCerts && item.driveStatus === 'error'     && <AlertCircle size={11} className="text-red-400" />}
+
+                          {isCerts ? (
+                            /* Certs: botón agregar (permite múltiples) */
+                            <button
+                              onClick={handleSelectFile}
+                              disabled={uploadCert.isPending}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-50 transition-colors"
+                            >
+                              {uploadCert.isPending ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
+                              {certs.length > 0 ? 'Agregar' : 'Subir'}
+                            </button>
+                          ) : item.ok ? (
+                            <>
+                              <button onClick={() => getApi(item.key)?.open(imp.id)}
+                                className="p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-700 transition-colors" title="Abrir">
+                                <FolderOpen size={11} />
+                              </button>
+                              <button onClick={() => handleUploadDoc(item.key)}
+                                className="p-1 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors" title="Reemplazar">
+                                <Upload size={11} />
+                              </button>
+                              <button onClick={() => handleDeleteDoc(item.key)}
+                                className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-colors" title="Eliminar">
+                                <Trash2 size={11} />
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleUploadDoc(item.key)} disabled={isUploadingDoc(item.key)}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-50 transition-colors">
+                              {isUploadingDoc(item.key) ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                              Subir
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* ── Emisión Libre Circulación ── */}
           <div className="space-y-3">
             <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">
@@ -4612,6 +6785,8 @@ function InalSection({
                         <CheckCircle2 size={11} />
                       ) : s === 'en_tramite' && (current || done) ? (
                         <Clock size={11} />
+                      ) : s === 'mail_enviado' && (current || done) ? (
+                        <Mail size={11} />
                       ) : null}
                       {INAL_LC_LABELS[s]}
                     </button>

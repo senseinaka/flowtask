@@ -66,10 +66,24 @@ export function useAnalyzeExtraCost() {
   })
 }
 
+export function useAnalyzeProforma() {
+  return useMutation({
+    mutationFn: (proformaId: string): Promise<AIAnalysisResult> =>
+      window.api.ai.analyzeProforma(proformaId)
+  })
+}
+
 export function useAnalyzeDespacho() {
   return useMutation({
+    mutationFn: ({ importId, page = 1 }: { importId: string; page?: number }): Promise<AIAnalysisResult> =>
+      window.api.ai.analyzeDespacho(importId, page)
+  })
+}
+
+export function useAnalyzeBL() {
+  return useMutation({
     mutationFn: (importId: string): Promise<AIAnalysisResult> =>
-      window.api.ai.analyzeDespacho(importId)
+      window.api.ai.analyzeBL(importId)
   })
 }
 

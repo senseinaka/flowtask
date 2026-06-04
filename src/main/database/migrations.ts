@@ -751,6 +751,289 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
     up: (db) => {
       db.exec(`ALTER TABLE comex_imports ADD COLUMN cost_pct REAL`)
     }
+  },
+  {
+    version: 33,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN proformas_folder_id TEXT;
+
+        CREATE TABLE IF NOT EXISTS comex_proformas (
+          id               TEXT PRIMARY KEY,
+          import_id        TEXT NOT NULL REFERENCES comex_imports(id) ON DELETE CASCADE,
+          numero           INTEGER NOT NULL DEFAULT 1,
+          fecha_proforma   TEXT,
+          importe          REAL,
+          moneda           TEXT NOT NULL DEFAULT 'USD',
+          nro_proforma     TEXT NOT NULL DEFAULT '',
+          descripcion      TEXT NOT NULL DEFAULT '',
+          incluir_en_total INTEGER NOT NULL DEFAULT 1,
+          stored_name      TEXT,
+          original_name    TEXT,
+          drive_file_id    TEXT,
+          drive_folder_id  TEXT,
+          drive_status     TEXT NOT NULL DEFAULT 'none',
+          created_at       INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_proformas_import ON comex_proformas(import_id);
+      `)
+    }
+  },
+  {
+    version: 34,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE comex_proformas ADD COLUMN tipo TEXT NOT NULL DEFAULT 'proforma';
+        ALTER TABLE comex_imports   ADD COLUMN facturas_folder_id TEXT;
+      `)
+    }
+  },
+  {
+    version: 35,
+    up: (db) => {
+      // Renombrar tc_eur_usd → tc_eur_ars (la tasa correcta es EUR/ARS directa del BNA)
+      db.exec(`ALTER TABLE comex_imports RENAME COLUMN tc_eur_usd TO tc_eur_ars`)
+    }
+  },
+  {
+    version: 36,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ai_chat_messages (
+          id          TEXT PRIMARY KEY,
+          session_id  TEXT NOT NULL DEFAULT 'default',
+          role        TEXT NOT NULL,
+          content     TEXT NOT NULL,
+          created_at  INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_session ON ai_chat_messages(session_id, created_at);
+      `)
+    }
+  },
+  {
+    version: 37,
+    up: (db) => {
+      // Cantidad de bultos/cajas del despacho (extraído por IA, equivalente a Total Bultos del OM-1993)
+      db.exec(`ALTER TABLE comex_import_customs ADD COLUMN cant_bultos INTEGER`)
+    }
+  },
+  {
+    version: 38,
+    up: (db) => {
+      // Campos operativos visibles en Datos Generales (forwarder, despachante, BL, ref. mail)
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN freight_operator_id TEXT REFERENCES comex_freight_operators(id) ON DELETE SET NULL;
+        ALTER TABLE comex_imports ADD COLUMN despachante          TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_imports ADD COLUMN forwarder_ref_mail   TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_imports ADD COLUMN bl_number            TEXT NOT NULL DEFAULT '';
+      `)
+    }
+  },
+  {
+    version: 39,
+    up: (db) => {
+      // Sección BL - Bill of Lading (archivo adjunto + Drive)
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN bl_folder_id       TEXT;
+        ALTER TABLE comex_imports ADD COLUMN bl_stored_name     TEXT;
+        ALTER TABLE comex_imports ADD COLUMN bl_original_name   TEXT;
+        ALTER TABLE comex_imports ADD COLUMN bl_drive_file_id   TEXT;
+        ALTER TABLE comex_imports ADD COLUMN bl_drive_status    TEXT NOT NULL DEFAULT 'none';
+      `)
+    }
+  },
+  {
+    version: 40,
+    up: (db) => {
+      // Editor de prompts: overrides por operación
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ai_prompt_overrides (
+          operation     TEXT PRIMARY KEY,
+          system_prompt TEXT NOT NULL,
+          notes         TEXT NOT NULL DEFAULT '',
+          updated_at    INTEGER NOT NULL
+        )
+      `)
+    }
+  },
+  {
+    version: 41,
+    up: (db) => {
+      // Cantidad de cajas/cartones (separado de pallets)
+      db.exec(`ALTER TABLE comex_import_customs ADD COLUMN cant_cartons INTEGER`)
+    }
+  },
+  {
+    version: 42,
+    up: (db) => {
+      // JSON con todos los datos extraídos del BL (para mostrarlos en la sección)
+      db.exec(`ALTER TABLE comex_imports ADD COLUMN bl_extracted_json TEXT`)
+    }
+  },
+  {
+    version: 43,
+    up: (db) => {
+      // Carpeta INAL en Drive + documentos PL y Xls resumen INAL
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN inal_drive_folder_id  TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_pl_ok            INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE comex_imports ADD COLUMN inal_pl_stored_name   TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_pl_original_name TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_pl_drive_file_id TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_pl_drive_status  TEXT NOT NULL DEFAULT 'none';
+        ALTER TABLE comex_imports ADD COLUMN inal_xls_ok           INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE comex_imports ADD COLUMN inal_xls_stored_name  TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_xls_original_name TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_xls_drive_file_id TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_xls_drive_status TEXT NOT NULL DEFAULT 'none';
+      `)
+    }
+  },
+  {
+    version: 44,
+    up: (db) => {
+      // Copias propias de Factura y BL para la carpeta INAL
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN inal_factura_stored_name   TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_factura_original_name TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_factura_drive_file_id TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_factura_drive_status  TEXT NOT NULL DEFAULT 'none';
+        ALTER TABLE comex_imports ADD COLUMN inal_bl_stored_name        TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_bl_original_name      TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_bl_drive_file_id      TEXT;
+        ALTER TABLE comex_imports ADD COLUMN inal_bl_drive_status       TEXT NOT NULL DEFAULT 'none';
+      `)
+    }
+  },
+  {
+    version: 45,
+    up: (db) => {
+      // Gestores INAL y Despachantes como entidades propias
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS comex_gestores (
+          id           TEXT PRIMARY KEY,
+          name         TEXT NOT NULL,
+          estudio      TEXT NOT NULL DEFAULT '',
+          cuit         TEXT NOT NULL DEFAULT '',
+          email        TEXT NOT NULL DEFAULT '',
+          phone        TEXT NOT NULL DEFAULT '',
+          whatsapp     TEXT NOT NULL DEFAULT '',
+          especialidades TEXT NOT NULL DEFAULT '',
+          notas        TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS comex_gestor_contacts (
+          id         TEXT PRIMARY KEY,
+          gestor_id  TEXT NOT NULL REFERENCES comex_gestores(id) ON DELETE CASCADE,
+          name       TEXT NOT NULL DEFAULT '',
+          role       TEXT NOT NULL DEFAULT '',
+          email      TEXT NOT NULL DEFAULT '',
+          phone      TEXT NOT NULL DEFAULT '',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS comex_despachantes (
+          id         TEXT PRIMARY KEY,
+          name       TEXT NOT NULL,
+          matricula  TEXT NOT NULL DEFAULT '',
+          empresa    TEXT NOT NULL DEFAULT '',
+          cuit       TEXT NOT NULL DEFAULT '',
+          email      TEXT NOT NULL DEFAULT '',
+          phone      TEXT NOT NULL DEFAULT '',
+          whatsapp   TEXT NOT NULL DEFAULT '',
+          notas      TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        ALTER TABLE comex_imports ADD COLUMN gestor_id TEXT REFERENCES comex_gestores(id) ON DELETE SET NULL;
+      `)
+    }
+  },
+  {
+    version: 46,
+    up: (db) => {
+      // Nuevos estados: Arribado, Traslado a depósito fiscal, Oficializado
+      // + fechas que disparan transiciones automáticas
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN aviso_arribo_date       INTEGER;
+        ALTER TABLE comex_imports ADD COLUMN traslado_deposito_date  INTEGER;
+        ALTER TABLE comex_imports ADD COLUMN oficializacion_import_date INTEGER;
+      `)
+    }
+  },
+  {
+    version: 47,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE comex_gestores ADD COLUMN website        TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_gestores ADD COLUMN direccion      TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_gestores ADD COLUMN phone_empresa  TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_gestores ADD COLUMN logo_stored_name TEXT;
+
+        ALTER TABLE comex_despachantes ADD COLUMN website          TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_despachantes ADD COLUMN direccion        TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_despachantes ADD COLUMN phone_empresa    TEXT NOT NULL DEFAULT '';
+        ALTER TABLE comex_despachantes ADD COLUMN logo_stored_name TEXT;
+
+        CREATE TABLE IF NOT EXISTS comex_despachante_contacts (
+          id               TEXT PRIMARY KEY,
+          despachante_id   TEXT NOT NULL REFERENCES comex_despachantes(id) ON DELETE CASCADE,
+          name             TEXT NOT NULL DEFAULT '',
+          role             TEXT NOT NULL DEFAULT '',
+          email            TEXT NOT NULL DEFAULT '',
+          phone            TEXT NOT NULL DEFAULT '',
+          sort_order       INTEGER NOT NULL DEFAULT 0,
+          created_at       INTEGER NOT NULL
+        );
+      `)
+    }
+  },
+  {
+    version: 48,
+    up: (db) => {
+      // Turno de carga en depósito fiscal (paso previo a Entregado)
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN carga_deposito_date INTEGER;
+        ALTER TABLE comex_imports ADD COLUMN carga_deposito_time TEXT;
+      `)
+    }
+  },
+  {
+    version: 49,
+    up: (db) => {
+      // Grupos de WhatsApp favoritos + templates de mensajes
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS whatsapp_groups (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          jid         TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS whatsapp_templates (
+          id          TEXT PRIMARY KEY,
+          key         TEXT NOT NULL UNIQUE,
+          name        TEXT NOT NULL,
+          body        TEXT NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        INSERT OR IGNORE INTO whatsapp_templates (id, key, name, body, updated_at)
+        VALUES (
+          'tpl_carga_deposito',
+          'carga_deposito',
+          'Aviso de turno de carga',
+          '¡Hola chicos!\n\nLes comunico que está disponible la carga de {marca}\n\nTurno de carga: {dia_turno_texto} a las {hora_turno} hs\nEstimamos que el camión llegará a nuestro depósito poco después del turno.\n\nImportación: {titulo}\nPeso bruto: {peso}\nVolumen: {volumen}\nPallets: {pallets}\n{cajas_linea}\n{link_pl}Cualquier cosa me cuentan, por favor',
+          ${Date.now()}
+        );
+      `)
+    }
   }
 ]
 

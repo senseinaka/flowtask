@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import {
   Cloud, MessageCircle, RefreshCw, Check, AlertCircle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
-  Database, Download
+  Database, Download, Sparkles
 } from 'lucide-react'
+import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus } from '@shared/types'
 import {
@@ -31,6 +32,33 @@ export default function Settings() {
   const [showSecret, setShowSecret] = useState(false)
   const [credentialsSaved, setCredentialsSaved] = useState(false)
   const [oauthError, setOauthError] = useState<string | null>(null)
+
+  // Estado real de la conexión Drive (verificado con la API)
+  const [driveVerified,     setDriveVerified]     = useState<boolean | null>(null)  // null = no verificado
+  const [driveVerifyError,  setDriveVerifyError]   = useState<string | null>(null)
+  const [driveVerifying,    setDriveVerifying]     = useState(false)
+  const [driveDisconnecting, setDriveDisconnecting] = useState(false)
+
+  const verifyDrive = async () => {
+    setDriveVerifying(true)
+    setDriveVerifyError(null)
+    try {
+      const result = await window.api.sync.testDriveConnection()
+      setDriveVerified(result.ok)
+      if (!result.ok) setDriveVerifyError(result.error ?? 'Error desconocido')
+      refetchStatus()
+    } finally { setDriveVerifying(false) }
+  }
+
+  const reconnectDrive = async () => {
+    setDriveDisconnecting(true)
+    try {
+      await window.api.sync.disconnectDrive()
+      setDriveVerified(null)
+      setDriveVerifyError(null)
+      refetchStatus()
+    } finally { setDriveDisconnecting(false) }
+  }
 
   // WhatsApp
   const [qrImage, setQrImage] = useState<string | null>(null)
@@ -113,6 +141,22 @@ export default function Settings() {
     queryKey: ['sync-status'],
     queryFn: () => window.api.sync.getStatus()
   })
+
+  // Verificar conexión Drive al cargar Settings (después de tener syncStatus)
+  useEffect(() => {
+    if (syncStatus?.isAuthenticated) verifyDrive()
+  }, [syncStatus?.isAuthenticated])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Escuchar evento de sesión vencida desde el main process
+  useEffect(() => {
+    window.api.on('drive:sessionExpired', (data) => {
+      const d = data as { error: string }
+      setDriveVerified(false)
+      setDriveVerifyError(d.error)
+      refetchStatus()
+    })
+    return () => window.api.off('drive:sessionExpired')
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -203,11 +247,23 @@ export default function Settings() {
         <div className="flex items-center gap-2">
           <Cloud size={18} className="text-indigo-400" />
           <h2 className="font-semibold">Google Drive</h2>
-          {syncStatus?.isAuthenticated && (
-            <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400">
-              <Check size={12} /> Conectado
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {syncStatus?.isAuthenticated && driveVerified === true && (
+              <span className="flex items-center gap-1 text-xs text-emerald-400">
+                <Check size={12} /> Conectado
+              </span>
+            )}
+            {syncStatus?.isAuthenticated && driveVerified === false && (
+              <span className="flex items-center gap-1 text-xs text-red-400">
+                <AlertCircle size={12} /> Sesión vencida
+              </span>
+            )}
+            {syncStatus?.isAuthenticated && driveVerified === null && driveVerifying && (
+              <span className="flex items-center gap-1 text-xs text-slate-500">
+                <Loader2 size={12} className="animate-spin" /> Verificando...
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Credentials form */}
@@ -297,6 +353,21 @@ export default function Settings() {
               </div>
             ) : (
               <div className="space-y-3">
+                {/* Alerta sesión vencida */}
+                {driveVerified === false && (
+                  <div className="flex items-start gap-2 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2.5">
+                    <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-red-300">Sesión de Drive vencida</p>
+                      <p className="text-xs text-red-400 mt-0.5">
+                        {driveVerifyError === 'invalid_grant'
+                          ? 'El token de acceso venció. Reconectá para seguir usando Drive.'
+                          : driveVerifyError}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {syncStatus?.lastSync && (
                   <p className="text-sm text-slate-400">
                     Último backup: {new Date(syncStatus.lastSync).toLocaleString('es-AR')}
@@ -305,16 +376,43 @@ export default function Settings() {
                 {syncMutation.data && !syncMutation.data.success && (
                   <p className="text-xs text-red-400">{syncMutation.data.error}</p>
                 )}
-                <button
-                  onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 text-sm font-medium rounded-lg transition-colors"
-                >
-                  {syncMutation.isPending
-                    ? <Loader2 size={14} className="animate-spin" />
-                    : <RefreshCw size={14} />}
-                  Sincronizar ahora
-                </button>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Reconectar — aparece cuando la sesión venció */}
+                  {(driveVerified === false || driveVerified === null) && (
+                    <button
+                      onClick={async () => { await reconnectDrive(); oauthMutation.mutate() }}
+                      disabled={driveDisconnecting || oauthMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      {driveDisconnecting || oauthMutation.isPending
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Cloud size={14} />}
+                      Reconectar Drive
+                    </button>
+                  )}
+
+                  {/* Verificar conexión */}
+                  <button
+                    onClick={verifyDrive}
+                    disabled={driveVerifying}
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 text-sm rounded-lg transition-colors"
+                  >
+                    {driveVerifying ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    {driveVerifying ? 'Verificando...' : 'Verificar conexión'}
+                  </button>
+
+                  {driveVerified === true && (
+                    <button
+                      onClick={() => syncMutation.mutate()}
+                      disabled={syncMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 text-sm font-medium rounded-lg transition-colors"
+                    >
+                      {syncMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Sincronizar ahora
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -590,6 +688,24 @@ export default function Settings() {
               <span className="text-slate-400">Opus 4.5</span> — Máxima capacidad. Para documentos muy complejos o ambiguos.
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* Prompts de IA */}
+      <section className="bg-slate-800 rounded-xl border border-violet-800/30 p-5 space-y-4" style={{ minHeight: '520px' }}>
+        <div className="flex items-center gap-2">
+          <Sparkles size={18} className="text-violet-400" />
+          <h2 className="font-semibold">Prompts de IA</h2>
+          <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-violet-900/40 border border-violet-700/40 text-violet-400">
+            Editor de prompts
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          Personalizá el system prompt que Claude recibe en cada tipo de análisis.
+          Los cambios aplican inmediatamente. En modo dev podés escribirlos al código fuente permanentemente.
+        </p>
+        <div className="flex-1">
+          <PromptEditor />
         </div>
       </section>
 

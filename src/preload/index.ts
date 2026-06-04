@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
-  AIOperation, ClaudeModelId, AIAnalysisResult,
+  AIOperation, ClaudeModelId, AIAnalysisResult, AIChatMessage,
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
+  ComexProforma, CreateComexProformaInput,
   BackupStatus,
   Task, Project, Attachment, Reminder, Contact, CreateContactInput,
   DelegatedTask, CreateDelegatedTaskInput,
@@ -21,7 +22,9 @@ import type {
   CreateComexQuoteInput, CreateComexPaymentInput,
   UpsertComexCustomsInput, CreateComexCostInput,
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
-  CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput
+  CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
+  ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
+  ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput
 } from '@shared/types'
 
 const api = {
@@ -92,6 +95,10 @@ const api = {
       ipcRenderer.invoke('sync:saveGoogleCredentials', clientId, clientSecret),
     getGoogleCredentials: (): Promise<{ clientId: string; clientSecret: string }> =>
       ipcRenderer.invoke('sync:getGoogleCredentials'),
+    testDriveConnection: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('sync:testDriveConnection'),
+    disconnectDrive: (): Promise<void> =>
+      ipcRenderer.invoke('sync:disconnectDrive'),
     getWhatsappQR: (): Promise<string | null> =>
       ipcRenderer.invoke('sync:getWhatsappQR'),
     connectWhatsapp: (): Promise<{ qr?: string; connected?: boolean }> =>
@@ -260,6 +267,44 @@ const api = {
       update: (id: string, data: Partial<ComexFreightOperatorContact>):     Promise<void>                          => ipcRenderer.invoke('comex:operator-contacts:update', id, data),
       delete: (id: string):                                                  Promise<void>                          => ipcRenderer.invoke('comex:operator-contacts:delete', id)
     },
+    gestores: {
+      list:       ():                                               Promise<ComexGestor[]>        => ipcRenderer.invoke('comex:gestores:list'),
+      get:        (id: string):                                     Promise<ComexGestor | null>   => ipcRenderer.invoke('comex:gestores:get', id),
+      create:     (input: CreateComexGestorInput):                  Promise<ComexGestor>          => ipcRenderer.invoke('comex:gestores:create', input),
+      update:     (id: string, data: Partial<ComexGestor>):        Promise<ComexGestor | null>   => ipcRenderer.invoke('comex:gestores:update', id, data),
+      delete:     (id: string):                                     Promise<void>                 => ipcRenderer.invoke('comex:gestores:delete', id),
+      uploadLogo: (id: string, filePath: string):                   Promise<string>               => ipcRenderer.invoke('comex:gestores:uploadLogo', id, filePath),
+      deleteLogo: (id: string):                                     Promise<void>                 => ipcRenderer.invoke('comex:gestores:deleteLogo', id),
+      contacts: {
+        create: (input: CreateComexGestorContactInput):             Promise<ComexGestorContact>   => ipcRenderer.invoke('comex:gestores:contacts:create', input),
+        update: (id: string, data: Partial<ComexGestorContact>):   Promise<void>                 => ipcRenderer.invoke('comex:gestores:contacts:update', id, data),
+        delete: (id: string):                                       Promise<void>                 => ipcRenderer.invoke('comex:gestores:contacts:delete', id),
+      }
+    },
+    despachantes: {
+      list:       ():                                               Promise<ComexDespachante[]>         => ipcRenderer.invoke('comex:despachantes:list'),
+      create:     (input: CreateComexDespachanteInput):             Promise<ComexDespachante>           => ipcRenderer.invoke('comex:despachantes:create', input),
+      update:     (id: string, data: Partial<ComexDespachante>):   Promise<ComexDespachante | null>    => ipcRenderer.invoke('comex:despachantes:update', id, data),
+      delete:     (id: string):                                     Promise<void>                       => ipcRenderer.invoke('comex:despachantes:delete', id),
+      uploadLogo: (id: string, filePath: string):                   Promise<string>                     => ipcRenderer.invoke('comex:despachantes:uploadLogo', id, filePath),
+      deleteLogo: (id: string):                                     Promise<void>                       => ipcRenderer.invoke('comex:despachantes:deleteLogo', id),
+      contacts: {
+        create: (input: CreateComexDespachanteContactInput):                      Promise<ComexDespachanteContact> => ipcRenderer.invoke('comex:despachantes:contacts:create', input),
+        update: (id: string, data: Partial<ComexDespachanteContact>):             Promise<void>                    => ipcRenderer.invoke('comex:despachantes:contacts:update', id, data),
+        delete: (id: string):                                                     Promise<void>                    => ipcRenderer.invoke('comex:despachantes:contacts:delete', id),
+      }
+    },
+    proformas: {
+      list:       (importId: string, tipo?: 'proforma' | 'factura'):     Promise<ComexProforma[]>   => ipcRenderer.invoke('comex:proformas:list', importId, tipo),
+      renameDriveFolder: (proformaId: string):                           Promise<void>              => ipcRenderer.invoke('comex:proformas:renameDriveFolder', proformaId),
+      create:     (input: CreateComexProformaInput):                     Promise<ComexProforma>     => ipcRenderer.invoke('comex:proformas:create', input),
+      update:     (id: string, data: Partial<ComexProforma>):            Promise<void>              => ipcRenderer.invoke('comex:proformas:update', id, data),
+      delete:     (id: string):                                          Promise<void>              => ipcRenderer.invoke('comex:proformas:delete', id),
+      selectFile: ():                                                    Promise<string | null>     => ipcRenderer.invoke('comex:proformas:selectFile'),
+      upload:     (proformaId: string, filePath: string):               Promise<ComexProforma>     => ipcRenderer.invoke('comex:proformas:upload', proformaId, filePath),
+      open:       (proformaId: string):                                  Promise<void>              => ipcRenderer.invoke('comex:proformas:open', proformaId),
+      syncDrive:  (proformaId: string):                                  Promise<ComexProforma>     => ipcRenderer.invoke('comex:proformas:syncDrive', proformaId)
+    },
     extraCosts: {
       list:          (importId: string):                                           Promise<ComexImportExtraCost[]> => ipcRenderer.invoke('comex:extra-costs:list', importId),
       create:        (input: CreateComexImportExtraCostInput):                     Promise<ComexImportExtraCost>   => ipcRenderer.invoke('comex:extra-costs:create', input),
@@ -282,12 +327,43 @@ const api = {
       open:       (importId: string):               Promise<void>           => ipcRenderer.invoke('comex:despacho:open', importId),
       delete:     (importId: string):               Promise<ComexImport>    => ipcRenderer.invoke('comex:despacho:delete', importId)
     },
+    bl: {
+      selectFile: ():                               Promise<string | null>  => ipcRenderer.invoke('comex:bl:selectFile'),
+      upload:     (importId: string, filePath: string): Promise<ComexImport>  => ipcRenderer.invoke('comex:bl:upload', importId, filePath),
+      open:       (importId: string):               Promise<void>           => ipcRenderer.invoke('comex:bl:open', importId),
+      delete:     (importId: string):               Promise<ComexImport>    => ipcRenderer.invoke('comex:bl:delete', importId)
+    },
     inal: {
       certs: {
-        list:   (importId: string):                                                                                                                              Promise<ComexInalCert[]>                             => ipcRenderer.invoke('comex:inal:certs:list', importId),
-        delete: (id: string):                                                                                                                                    Promise<void>                                        => ipcRenderer.invoke('comex:inal:certs:delete', id),
-        upload: (filePath: string, importId: string, importTitle: string, importFolderId: string | null, certFolderId: string | null): Promise<{ cert: ComexInalCert; import: ComexImport }> =>
-          ipcRenderer.invoke('comex:inal:certs:upload', filePath, importId, importTitle, importFolderId, certFolderId)
+        list:        (importId: string):                                                                                                                              Promise<ComexInalCert[]>                             => ipcRenderer.invoke('comex:inal:certs:list', importId),
+        delete:      (id: string):                                                                                                                                    Promise<void>                                        => ipcRenderer.invoke('comex:inal:certs:delete', id),
+        upload:      (filePath: string, importId: string, importTitle: string, importFolderId: string | null, certFolderId: string | null): Promise<{ cert: ComexInalCert; import: ComexImport }> =>
+          ipcRenderer.invoke('comex:inal:certs:upload', filePath, importId, importTitle, importFolderId, certFolderId),
+        selectFiles: (): Promise<string[]> => ipcRenderer.invoke('comex:inal:certs:selectFiles'),
+      },
+      pl: {
+        selectFile: ():                                Promise<string | null> => ipcRenderer.invoke('comex:inal:pl:selectFile'),
+        upload:     (importId: string, filePath: string): Promise<ComexImport> => ipcRenderer.invoke('comex:inal:pl:upload', importId, filePath),
+        open:       (importId: string):               Promise<void>          => ipcRenderer.invoke('comex:inal:pl:open', importId),
+        delete:     (importId: string):               Promise<ComexImport>   => ipcRenderer.invoke('comex:inal:pl:delete', importId),
+      },
+      xls: {
+        selectFile: ():                                Promise<string | null> => ipcRenderer.invoke('comex:inal:xls:selectFile'),
+        upload:     (importId: string, filePath: string): Promise<ComexImport> => ipcRenderer.invoke('comex:inal:xls:upload', importId, filePath),
+        open:       (importId: string):               Promise<void>          => ipcRenderer.invoke('comex:inal:xls:open', importId),
+        delete:     (importId: string):               Promise<ComexImport>   => ipcRenderer.invoke('comex:inal:xls:delete', importId),
+      },
+      factura: {
+        selectFile: ():                                Promise<string | null> => ipcRenderer.invoke('comex:inal:factura:selectFile'),
+        upload:     (importId: string, filePath: string): Promise<ComexImport> => ipcRenderer.invoke('comex:inal:factura:upload', importId, filePath),
+        open:       (importId: string):               Promise<void>          => ipcRenderer.invoke('comex:inal:factura:open', importId),
+        delete:     (importId: string):               Promise<ComexImport>   => ipcRenderer.invoke('comex:inal:factura:delete', importId),
+      },
+      blcopy: {
+        selectFile: ():                                Promise<string | null> => ipcRenderer.invoke('comex:inal:blcopy:selectFile'),
+        upload:     (importId: string, filePath: string): Promise<ComexImport> => ipcRenderer.invoke('comex:inal:blcopy:upload', importId, filePath),
+        open:       (importId: string):               Promise<void>          => ipcRenderer.invoke('comex:inal:blcopy:open', importId),
+        delete:     (importId: string):               Promise<ComexImport>   => ipcRenderer.invoke('comex:inal:blcopy:delete', importId),
       }
     }
   },
@@ -306,6 +382,19 @@ const api = {
     selectFile: ():                                Promise<string | null>=> ipcRenderer.invoke('delegated-attachments:selectFile')
   },
 
+  chat: {
+    send:    (message: string, sessionId?: string): Promise<{ success: boolean; text?: string; error?: string }> =>
+      ipcRenderer.invoke('chat:send', message, sessionId),
+    history: (sessionId?: string): Promise<AIChatMessage[]> =>
+      ipcRenderer.invoke('chat:history', sessionId),
+    stats:   (sessionId?: string): Promise<{ total: number; hasCompacted: boolean; oldestAt: number | null }> =>
+      ipcRenderer.invoke('chat:stats', sessionId),
+    clear:   (sessionId?: string): Promise<void> =>
+      ipcRenderer.invoke('chat:clear', sessionId),
+    triggerProactive: (): Promise<unknown[]> =>
+      ipcRenderer.invoke('chat:triggerProactive')
+  },
+
   backup: {
     runNow:   (): Promise<BackupStatus>        => ipcRenderer.invoke('backup:runNow'),
     getStatus:(): Promise<BackupStatus | null> => ipcRenderer.invoke('backup:getStatus'),
@@ -313,11 +402,8 @@ const api = {
   },
 
   bna: {
-    getEurUsd: (
-      dateStr:     string,
-      cotizAduana: number
-    ): Promise<{ eurUsd: number; eurArs: number; fechaBNA: string } | null> =>
-      ipcRenderer.invoke('bna:getEurUsd', dateStr, cotizAduana)
+    getEurArs: (dateStr: string): Promise<{ eurArs: number; fechaBNA: string; esFechaExacta: boolean } | null> =>
+      ipcRenderer.invoke('bna:getEurArs', dateStr)
   },
 
   shell: {
@@ -329,8 +415,26 @@ const api = {
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 
   whatsapp: {
-    send: (phone: string, message: string): Promise<boolean> =>
-      ipcRenderer.invoke('whatsapp:send', phone, message)
+    send:         (phone: string, message: string): Promise<boolean> =>
+      ipcRenderer.invoke('whatsapp:send', phone, message),
+    sendToGroup:  (jid: string, message: string): Promise<boolean> =>
+      ipcRenderer.invoke('whatsapp:sendToGroup', jid, message),
+    fetchGroups:  (): Promise<Array<{ jid: string; name: string; size: number }>> =>
+      ipcRenderer.invoke('whatsapp:fetchGroups'),
+    groups: {
+      list:   ():                                                      Promise<Array<{ id: string; name: string; jid: string; description: string }>> =>
+        ipcRenderer.invoke('whatsapp:groups:list'),
+      save:   (jid: string, name: string, description?: string):      Promise<{ id: string; name: string; jid: string }> =>
+        ipcRenderer.invoke('whatsapp:groups:save', jid, name, description ?? ''),
+      delete: (id: string):                                            Promise<void> =>
+        ipcRenderer.invoke('whatsapp:groups:delete', id),
+    },
+    template: {
+      get:  (key: string):                  Promise<{ key: string; name: string; body: string } | null> =>
+        ipcRenderer.invoke('whatsapp:template:get', key),
+      save: (key: string, body: string):   Promise<void> =>
+        ipcRenderer.invoke('whatsapp:template:save', key, body),
+    }
   },
 
   ai: {
@@ -340,14 +444,34 @@ const api = {
     saveModels:      (models: Record<AIOperation, ClaudeModelId>):                                   Promise<void>           => ipcRenderer.invoke('ai:saveModels', models),
     analyzeDocument:      (params: { filePath: string; operation: AIOperation; extraContext?: string }):    Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeDocument', params),
     analyzeComexDocument: (params: { docId: string; operationOverride?: AIOperation }): Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeComexDocument', params),
-    analyzeDespacho:      (importId: string):                                           Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeDespacho', importId),
+    analyzeDespacho:      (importId: string, page?: number):                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeDespacho', importId, page ?? 1),
+    analyzeBL:            (importId: string):                                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeBL', importId),
+    analyzeProforma:      (proformaId: string):                                         Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeProforma', proformaId),
     analyzeExtraCost:     (costId: string):                                             Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeExtraCost', costId),
     dashboardChat:   (params: { contextData: unknown; messages: Array<{ role: 'user' | 'assistant'; content: string }> }): Promise<{ content: string; tokens_used: number }> =>
-      ipcRenderer.invoke('ai:dashboardChat', params)
+      ipcRenderer.invoke('ai:dashboardChat', params),
+    prompts: {
+      list:           (): Promise<Array<{ operation: string; label: string; description: string; hasOverride: boolean; notes: string; updated_at: number | null }>> =>
+        ipcRenderer.invoke('ai:prompts:list'),
+      get:            (operation: string): Promise<{ operation: string; effectivePrompt: string; defaultPrompt: string; override: { system_prompt: string; notes: string; updated_at: number } | null }> =>
+        ipcRenderer.invoke('ai:prompts:get', operation),
+      save:           (operation: string, systemPrompt: string, notes: string): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke('ai:prompts:save', operation, systemPrompt, notes),
+      reset:          (operation: string): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke('ai:prompts:reset', operation),
+      test:           (operation: string, systemPromptOverride: string, filePath: string): Promise<{ ok: boolean; result?: unknown; error?: string }> =>
+        ipcRenderer.invoke('ai:prompts:test', operation, systemPromptOverride, filePath),
+      selectTestFile: (): Promise<string | null> =>
+        ipcRenderer.invoke('ai:prompts:selectTestFile'),
+      writeToCode:    (operation: string, newPrompt: string): Promise<{ ok: boolean; message?: string; filePath?: string; error?: string }> =>
+        ipcRenderer.invoke('ai:prompts:writeToCode', operation, newPrompt),
+      isDevMode:      (): Promise<boolean> =>
+        ipcRenderer.invoke('ai:prompts:isDevMode'),
+    }
   },
 
   on: (
-    channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete',
+    channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts',
     callback: (data: unknown) => void
   ) => {
     ipcRenderer.on(channel, (_event, data) => callback(data))

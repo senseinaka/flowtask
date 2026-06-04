@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Outlet } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { MessageCircleQuestion, X } from 'lucide-react'
+import { MessageCircleQuestion, X, Bot } from 'lucide-react'
 import Sidebar from './components/layout/Sidebar'
 import TopBar from './components/layout/TopBar'
 import TaskFormModal from './components/tasks/TaskFormModal'
 import TaskDetail from './components/tasks/TaskDetail'
 import DelegatedTaskDetail from './components/tasks/DelegatedTaskDetail'
+import ChatPanel from './components/chat/ChatPanel'
 import { useUIStore } from './store/ui.store'
 
 interface Toast {
@@ -42,7 +43,9 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [expandedDelegatedTaskId, closeExpandedDelegatedTask])
   const queryClient = useQueryClient()
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const [toasts,      setToasts]      = useState<Toast[]>([])
+  const [chatOpen,    setChatOpen]    = useState(false)
+  const [alertCount,  setAlertCount]  = useState(0)
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
@@ -65,6 +68,15 @@ export default function App() {
     })
     return () => window.api.off('question:answered')
   }, [queryClient, dismissToast])
+
+  // Badge de alertas proactivas en el botón flotante
+  useEffect(() => {
+    window.api.on('chat:proactiveAlerts', (data) => {
+      const alerts = data as { id: string }[]
+      if (alerts.length > 0) setAlertCount(prev => prev + alerts.length)
+    })
+    return () => window.api.off('chat:proactiveAlerts')
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-900 text-slate-100">
@@ -119,9 +131,24 @@ export default function App() {
         </div>
       )}
 
+      {/* ── Chat AI: botón flotante + panel ─────────────────────────────── */}
+      <ChatPanel isOpen={chatOpen} onClose={() => setChatOpen(false)} />
+      <button
+        onClick={() => { setChatOpen(v => !v); setAlertCount(0) }}
+        className="fixed bottom-5 right-5 z-50 w-12 h-12 rounded-full bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-900/50 flex items-center justify-center transition-all hover:scale-110 active:scale-95 relative"
+        title="Asistente IA"
+      >
+        <Bot size={20} className="text-white" />
+        {alertCount > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-orange-500 text-[10px] font-bold text-white flex items-center justify-center shadow-md">
+            {alertCount > 9 ? '9+' : alertCount}
+          </span>
+        )}
+      </button>
+
       {/* Toast notifications for incoming WhatsApp answers */}
       {toasts.length > 0 && (
-        <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm">
+        <div className="fixed bottom-5 left-5 z-50 flex flex-col gap-2 max-w-sm">
           {toasts.map((toast) => (
             <div
               key={toast.id}

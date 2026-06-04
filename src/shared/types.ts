@@ -326,7 +326,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 
 export type ImportStatus =
   | 'planning' | 'ordered' | 'paid' | 'production'
-  | 'shipped'  | 'transit' | 'customs' | 'delivered'
+  | 'shipped'  | 'transit' | 'arrived' | 'customs' | 'oficializado' | 'carga_deposito' | 'delivered'
 
 export type DocumentType =
   | 'invoice' | 'packing_list' | 'bill_of_lading' | 'certificate_of_origin'
@@ -341,25 +341,31 @@ export type FreightCompanyType = 'agente' | 'naviera' | 'courier' | 'aereo' | 'o
 export type CargoType          = 'LCL' | 'FCL' | 'aereo' | 'courier'
 
 export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
-  planning:  'Planificación',
-  ordered:   'Pedido enviado',
-  paid:      'Pago realizado',
-  production:'En producción',
-  shipped:   'Embarcado',
-  transit:   'En tránsito',
-  customs:   'En aduana',
-  delivered: 'Entregado'
+  planning:     'Planificación',
+  ordered:      'Pedido enviado',
+  paid:         'Pago realizado',
+  production:   'En producción',
+  shipped:      'Embarcado',
+  transit:      'En tránsito',
+  arrived:      'Arribado',
+  customs:      'Traslado a depósito fiscal',
+  oficializado:    'Oficializado',
+  carga_deposito:  'Carga en depósito',
+  delivered:       'Entregado'
 }
 
 export const IMPORT_STATUS_COLORS: Record<ImportStatus, string> = {
-  planning:  '#94a3b8',
-  ordered:   '#60a5fa',
-  paid:      '#34d399',
-  production:'#f59e0b',
-  shipped:   '#6366f1',
-  transit:   '#8b5cf6',
-  customs:   '#f97316',
-  delivered: '#10b981'
+  planning:     '#94a3b8',  // slate
+  ordered:      '#60a5fa',  // blue
+  paid:         '#34d399',  // emerald
+  production:   '#f59e0b',  // amber
+  shipped:      '#6366f1',  // indigo
+  transit:      '#8b5cf6',  // violet
+  arrived:      '#06b6d4',  // cyan
+  customs:      '#f97316',  // orange — Traslado a depósito
+  oficializado:   '#ec4899',  // pink
+  carga_deposito: '#2dd4bf',  // teal — última milla
+  delivered:      '#10b981'   // green
 }
 
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -448,6 +454,79 @@ export interface ComexFreightOperatorContact {
 
 export type CreateComexFreightOperatorContactInput = Omit<ComexFreightOperatorContact, 'id' | 'created_at'>
 
+// ── Gestores INAL ─────────────────────────────────────────────────────────────
+
+export interface ComexGestor {
+  id:             string
+  name:           string   // nombre completo
+  estudio:        string   // razón social del estudio/empresa
+  cuit:           string
+  email:          string
+  phone:          string   // teléfono personal / WhatsApp
+  phone_empresa:  string   // teléfono de la empresa
+  whatsapp:       string
+  website:        string
+  direccion:      string
+  especialidades: string   // "INAL, ANMAT, Cosméticos" (comma-separated)
+  notas:          string
+  logo_stored_name: string | null
+  created_at:     number
+  updated_at:     number
+  // relacional
+  contacts?:      ComexGestorContact[]
+}
+
+export interface ComexGestorContact {
+  id:         string
+  gestor_id:  string
+  name:       string
+  role:       string
+  email:      string
+  phone:      string
+  sort_order: number
+  created_at: number
+}
+
+export type CreateComexGestorInput         = Omit<ComexGestor, 'id' | 'created_at' | 'updated_at' | 'contacts' | 'logo_stored_name'>
+export type CreateComexGestorContactInput  = Omit<ComexGestorContact, 'id' | 'created_at'>
+
+// ── Despachantes ──────────────────────────────────────────────────────────────
+
+export interface ComexDespachanteContact {
+  id:             string
+  despachante_id: string
+  name:           string
+  role:           string
+  email:          string
+  phone:          string
+  sort_order:     number
+  created_at:     number
+}
+
+export type CreateComexDespachanteContactInput = Omit<ComexDespachanteContact, 'id' | 'created_at'>
+
+export interface ComexDespachante {
+  id:               string
+  name:             string
+  matricula:        string   // matrícula profesional
+  empresa:          string   // empresa/estudio donde trabaja
+  cuit:             string
+  email:            string
+  phone:            string   // teléfono personal / WhatsApp
+  phone_empresa:    string   // teléfono de la empresa
+  whatsapp:         string
+  website:          string
+  direccion:        string
+  notas:            string
+  logo_stored_name: string | null
+  created_at:       number
+  updated_at:       number
+  // relacional
+  contacts?:        ComexDespachanteContact[]
+}
+
+export type CreateComexDespachanteInput = Omit<ComexDespachante, 'id' | 'created_at' | 'updated_at' | 'logo_stored_name' | 'contacts'>
+
 // ── Costos extras de importación ─────────────────────────────────────────────
 
 export const EXTRA_COST_CATEGORIES = [
@@ -525,6 +604,13 @@ export interface ExtractedFacturaLocal {
     concepto: string
     importe:  number
   }> | null
+  // Ítems de transporte terrestre separados (Flete interno, Peaje, etc.)
+  // Se copian al "Flete local" y NO se incluyen en el costo del despachante
+  flete_local_items?: Array<{
+    concepto:       string
+    importe_neto:   number
+    iva_porcentaje?: number | null
+  }> | null
   // Campos de flete
   bl_referencia:          string | null   // BL/AWB de "Referencia Comercial"
   tipo_cambio_consignado: number | null   // TC de la línea de pie de la factura
@@ -537,6 +623,10 @@ export interface ExtractedFacturaLocal {
   fecha_egreso:           string | null   // YYYY-MM-DD — fecha de egreso del depósito
   nro_contenedor:         string | null   // Número de contenedor (ej: MSDU8859271)
   canal_deposito:         string | null   // Canal (ej: "R - Rojo")
+  // Datos de carga — extraídos de la línea "AMPARADA POR X CON Y BULTOS Z Kg. W M3."
+  cant_bultos_deposito:   number | null   // Cantidad de bultos/cajas
+  peso_bruto_kg_deposito: number | null   // Peso bruto en kg
+  volumen_m3_deposito:    number | null   // Volumen en m³
 }
 
 // ── Tributos del despacho ─────────────────────────────────────────────────────
@@ -556,6 +646,48 @@ export type CreateComexImportTributoInput = Omit<ComexImportTributo, 'id' | 'cre
 
 export const INCOTERMS = ['EXW','FCA','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'] as const
 export type Incoterm = typeof INCOTERMS[number]
+
+// ── Proformas ─────────────────────────────────────────────────────────────────
+
+export interface ComexProforma {
+  id:               string
+  import_id:        string
+  tipo:             'proforma' | 'factura'  // distingue proformas de facturas comerciales
+  numero:           number
+  fecha_proforma:   string | null   // YYYY-MM-DD
+  importe:          number | null
+  moneda:           string          // USD, EUR, CNY, etc.
+  nro_proforma:     string
+  descripcion:      string
+  incluir_en_total: 0 | 1           // checkbox
+  stored_name:      string | null
+  original_name:    string | null
+  drive_file_id:    string | null
+  drive_folder_id:  string | null
+  drive_status:     DriveDocStatus
+  created_at:       number
+}
+
+export type CreateComexProformaInput = Omit<ComexProforma, 'id' | 'created_at'>
+
+export interface ExtractedProforma {
+  importe_total: number | null
+  moneda:        string | null
+  fecha:         string | null   // YYYY-MM-DD
+  nro_proforma:  string | null
+  proveedor:     string | null
+  descripcion:   string | null
+}
+
+// ── Chat IA ───────────────────────────────────────────────────────────────────
+
+export interface AIChatMessage {
+  id:         string
+  session_id: string
+  role:       'user' | 'assistant'
+  content:    string
+  created_at: number
+}
 
 // ── Backup ────────────────────────────────────────────────────────────────────
 
@@ -579,10 +711,12 @@ export type ClaudeModelId = typeof CLAUDE_MODELS[number]['id']
 // Tipos de operación — cada uno puede usar un modelo distinto
 export const AI_OPERATIONS = [
   'extract_despacho',
+  'extract_bl',
   'extract_factura',
   'extract_factura_local',
   'extract_factura_flete',
   'extract_factura_deposito',
+  'extract_proforma',
   'extract_general',
   'dashboard_chat',
 ] as const
@@ -590,20 +724,24 @@ export type AIOperation = typeof AI_OPERATIONS[number]
 
 export const AI_OPERATION_LABELS: Record<AIOperation, string> = {
   extract_despacho:        'Extraer despacho de aduana',
+  extract_bl:              'Extraer BL / Bill of Lading',
   extract_factura:         'Extraer factura comercial (exterior)',
   extract_factura_local:   'Extraer factura local argentina',
   extract_factura_flete:   'Extraer factura de flete / agente de carga',
   extract_factura_deposito:'Extraer factura de depósito fiscal',
+  extract_proforma:        'Extraer proforma / cotización',
   extract_general:         'Analizar documento (general)',
   dashboard_chat:          'Chat del dashboard',
 }
 
 export const AI_OPERATION_DEFAULT_MODELS: Record<AIOperation, ClaudeModelId> = {
   extract_despacho:        'claude-sonnet-4-5',
+  extract_bl:              'claude-sonnet-4-5',
   extract_factura:         'claude-haiku-4-5',
   extract_factura_local:   'claude-haiku-4-5',
   extract_factura_flete:   'claude-haiku-4-5',
   extract_factura_deposito:'claude-haiku-4-5',
+  extract_proforma:        'claude-haiku-4-5',
   extract_general:         'claude-haiku-4-5',
   dashboard_chat:          'claude-sonnet-4-5',
 }
@@ -648,6 +786,22 @@ export interface ExtractedDespacho {
   // Tributos — sección más importante para cálculo de costos
   tributos:              DespachoTributo[]
   total_tributos_usd:    number | null   // suma de todos los tributos en USD
+}
+
+// Resultado de extracción de BL / Bill of Lading
+export interface ExtractedBL {
+  bl_number:        string | null   // Número de BL (ej: "60-2604-0248")
+  fecha_emision:    string | null   // Fecha de emisión YYYY-MM-DD
+  buque:            string | null   // Ocean vessel / nombre del barco
+  puerto_embarque:  string | null   // Port of loading
+  puerto_descarga:  string | null   // Port of discharge
+  consignor:        string | null   // Exportador/consignante
+  cant_pallets:     number | null   // Número de pallets
+  cant_cartons:     number | null   // Número de cajas / cartones (CTNS, CARTONS)
+  peso_bruto_kg:    number | null   // Gross weight en kg
+  volumen_m3:       number | null   // Measurement en CBM = m³
+  nro_contenedor:   string | null   // Container number (4L+7D, ej: "BMOU5177325")
+  descripcion_carga:string | null   // Description of goods
 }
 
 // Resultado de extracción de factura
@@ -800,13 +954,67 @@ export interface ComexImport {
   inal_lc_task_scheduled: 0 | 1  // ¿Se programó la tarea de tramitación?
   inal_lc_task_id: string | null // ID de la tarea creada en el sistema
   inal_lc_cert_folder_id: string | null  // ID carpeta Drive "Certificados INAL"
-  // ── Tipo de cambio EUR/USD (para conversión de valor factura) ────────────────
-  tc_eur_usd:             number | null  // EUR/USD cotización BNA a fecha de oficialización
+  // ── Carpeta INAL en Drive + documentos complementarios ────────────────────
+  inal_drive_folder_id:   string | null
+  inal_pl_ok:             0 | 1   // ¿Packing List lista para enviar?
+  inal_pl_stored_name:    string | null
+  inal_pl_original_name:  string | null
+  inal_pl_drive_file_id:  string | null
+  inal_pl_drive_status:   DriveDocStatus
+  inal_xls_ok:            0 | 1   // ¿Xls resumen INAL listo?
+  inal_xls_stored_name:   string | null
+  inal_xls_original_name: string | null
+  inal_xls_drive_file_id: string | null
+  inal_xls_drive_status:  DriveDocStatus
+  // Copia de Factura comercial específica para carpeta INAL
+  inal_factura_stored_name:   string | null
+  inal_factura_original_name: string | null
+  inal_factura_drive_file_id: string | null
+  inal_factura_drive_status:  DriveDocStatus
+  // Copia de BL específica para carpeta INAL
+  inal_bl_stored_name:    string | null
+  inal_bl_original_name:  string | null
+  inal_bl_drive_file_id:  string | null
+  inal_bl_drive_status:   DriveDocStatus
+  // ── Proformas + Facturas ─────────────────────────────────────────────────────
+  proformas_folder_id:    string | null  // subcarpeta "Proformas" en Drive
+  facturas_folder_id:     string | null  // subcarpeta "Facturas comerciales" en Drive
+  // ── Tipo de cambio EUR/ARS (para conversión de valor factura) ────────────────
+  tc_eur_ars:             number | null  // EUR/ARS cotización BNA a fecha de oficialización
   // ── KPI calculado ──────────────────────────────────────────────────────────
   cost_pct:               number | null  // % costo importación sobre valor factura (auto-guardado)
-  // ── Campos del JOIN con customs (solo en queries de lista) ─────────────────
-  _despacho_number?:      string | null
-  _canal_despacho?:       string | null
+  // ── Campos operativos (forwarder, despachante, BL) ──────────────────────────
+  freight_operator_id:    string | null   // FK a comex_freight_operators
+  gestor_id:              string | null   // FK a comex_gestores
+  // ── Fechas de llegada y proceso final ────────────────────────────────────
+  aviso_arribo_date:          number | null   // → auto-avanza a 'arrived'
+  traslado_deposito_date:     number | null   // → auto-avanza a 'customs'
+  oficializacion_import_date: number | null   // → sugiere 'oficializado'
+  carga_deposito_date:        number | null   // → auto-avanza a 'carga_deposito'
+  carga_deposito_time:        string | null   // "HH:MM" hora del turno
+  despachante:            string          // "Dario Valero" | "Iván Balarino" | ""
+  forwarder_ref_mail:     string          // ref. de mail al forwarder
+  bl_number:              string          // BL / AWB (puede auto-llenarse del despacho)
+  // ── Campos del JOIN (solo en queries de lista) ─────────────────────────────
+  _despacho_number?:        string | null
+  _canal_despacho?:         string | null
+  _supplier_logo?:          string | null   // logo_stored_name del proveedor
+  // Datos de carga del JOIN con customs (para la tarjeta de importación)
+  _peso_bruto_kg?:            number | null
+  _volumen_m3?:               number | null
+  _cant_bultos?:              number | null
+  _cant_pallets_customs?:     number | null
+  _freight_operator_name?:    string | null
+  _oficializacion_date?:      number | null   // fecha oficialización del despacho (del JOIN)
+  _tributos_count?:           number
+  _extras_count?:             number
+  // ── BL - Bill of Lading ──────────────────────────────────────────────────────
+  bl_extracted_json:      string | null  // JSON con todos los datos extraídos por IA
+  bl_folder_id:           string | null  // subcarpeta "BL - Bill of Lading" en Drive
+  bl_stored_name:         string | null  // nombre del archivo local
+  bl_original_name:       string | null  // nombre original del PDF
+  bl_drive_file_id:       string | null  // ID del archivo en Drive
+  bl_drive_status:        DriveDocStatus // none | uploading | synced | error
   // ── Despacho de aduana ───────────────────────────────────────────────────────
   despacho_folder_id:     string | null  // subcarpeta "Despacho" en Drive
   despacho_stored_name:   string | null  // nombre del archivo local
@@ -817,7 +1025,7 @@ export interface ComexImport {
   updated_at: number
 }
 
-export type InalLCStatus = 'pendiente' | 'en_tramite' | 'finalizado'
+export type InalLCStatus = 'pendiente' | 'mail_enviado' | 'en_tramite' | 'finalizado'
 
 export interface ComexInalCert {
   id: string
@@ -1002,6 +1210,8 @@ export interface ComexCustoms {
   peso_bruto_kg: number | null
   volumen_m3: number | null
   cant_pallets: number | null
+  cant_cartons: number | null   // Cantidad de cajas/cartones (del BL)
+  cant_bultos: number | null    // Total Bultos del formulario OM-1993
   // Bancario
   mulc_date: number | null
   fecha_pago_banco: number | null

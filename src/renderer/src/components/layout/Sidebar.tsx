@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
-  ChevronDown, LayoutDashboard
+  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { useUIStore } from '../../store/ui.store'
@@ -27,7 +27,9 @@ const comexSubItems = [
   { to: '/comex',            icon: LayoutDashboard, label: 'Dashboard',    exact: true },
   { to: '/comex/imports',    icon: Package,          label: 'Importaciones' },
   { to: '/comex/suppliers',  icon: Building2,        label: 'Proveedores'   },
-  { to: '/comex/operators',  icon: Truck,            label: 'Operadores'    },
+  { to: '/comex/operators',    icon: Truck,          label: 'Operadores'    },
+  { to: '/comex/gestores',    icon: ShieldCheck,    label: 'Gestores INAL' },
+  { to: '/comex/despachantes',icon: Briefcase,      label: 'Despachantes'  },
   { to: '/comex/logistics',  icon: Ship,             label: 'Logística'     }
 ]
 
@@ -104,7 +106,7 @@ export default function Sidebar() {
 
   const [tasksOpen, setTasksOpen] = useState(isOnTasks)
   const [teamOpen,  setTeamOpen]  = useState(isOnTeam)
-  const [comexOpen, setComexOpen] = useState(isOnComex)
+  const [comexOpen, setComexOpen] = useState(true)
 
   const { data: syncStatus } = useQuery<SyncStatus>({
     queryKey: ['sync-status'],

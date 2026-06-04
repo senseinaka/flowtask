@@ -48,6 +48,34 @@ class DriveService {
     return this.hasCredentials() && !!store.get('tokens')
   }
 
+  /**
+   * Verifica si los tokens son realmente válidos haciendo una llamada mínima a la API.
+   * Si detecta invalid_grant, limpia los tokens automáticamente.
+   */
+  async testConnection(): Promise<{ ok: boolean; error?: string }> {
+    if (!this.isAuthenticated()) return { ok: false, error: 'Sin tokens almacenados' }
+    try {
+      const oauth2Client = this.getOAuth2Client()
+      oauth2Client.setCredentials(store.get('tokens') as object)
+      const drive = google.drive({ version: 'v3', auth: oauth2Client })
+      await drive.about.get({ fields: 'user' })
+      return { ok: true }
+    } catch (err) {
+      const gErr = err as { response?: { data?: { error?: string } } }
+      const code  = gErr.response?.data?.error ?? (err as Error).message ?? 'Error desconocido'
+      if (code === 'invalid_grant') {
+        store.delete('tokens')  // Limpiar tokens vencidos automáticamente
+        console.warn('[Drive] Tokens vencidos (invalid_grant) — limpiados')
+      }
+      return { ok: false, error: code }
+    }
+  }
+
+  /** Desconecta Drive borrando los tokens almacenados */
+  disconnect(): void {
+    store.delete('tokens')
+  }
+
   async startOAuth(): Promise<void> {
     if (!this.hasCredentials()) {
       throw new Error('Configurá el Client ID y Client Secret de Google antes de conectar.')
@@ -342,6 +370,19 @@ class DriveService {
     } finally {
       // Eliminar archivo temporal
       try { if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath) } catch {}
+    }
+  }
+
+  /** Renombra un archivo/carpeta en Drive (best-effort). */
+  async renameFile(fileId: string, newName: string): Promise<void> {
+    if (!this.isAuthenticated()) return
+    try {
+      const oauth2Client = this.getOAuth2Client()
+      oauth2Client.setCredentials(store.get('tokens') as object)
+      const drive = google.drive({ version: 'v3', auth: oauth2Client })
+      await drive.files.update({ fileId, requestBody: { name: newName } })
+    } catch (err) {
+      console.error('[Drive] Error al renombrar carpeta:', (err as Error).message)
     }
   }
 
