@@ -210,6 +210,7 @@ export function updateImport(id: string, data: Partial<ComexImport>): ComexImpor
     'carga_deposito_date','carga_deposito_time',
     'freight_operator_id','despachante','forwarder_ref_mail','bl_number',
     'bl_extracted_json',
+    'pl_folder_id','pl_stored_name','pl_original_name','pl_drive_file_id','pl_drive_status','pl_extracted_json',
     'bl_folder_id','bl_stored_name','bl_original_name','bl_drive_file_id','bl_drive_status',
     'inal_drive_folder_id',
     'inal_pl_ok','inal_pl_stored_name','inal_pl_original_name','inal_pl_drive_file_id','inal_pl_drive_status',

@@ -327,6 +327,12 @@ const api = {
       open:       (importId: string):               Promise<void>           => ipcRenderer.invoke('comex:despacho:open', importId),
       delete:     (importId: string):               Promise<ComexImport>    => ipcRenderer.invoke('comex:despacho:delete', importId)
     },
+    pl: {
+      selectFile: ():                                   Promise<string | null>  => ipcRenderer.invoke('comex:pl:selectFile'),
+      upload:     (importId: string, filePath: string): Promise<ComexImport>    => ipcRenderer.invoke('comex:pl:upload', importId, filePath),
+      open:       (importId: string):                   Promise<void>           => ipcRenderer.invoke('comex:pl:open', importId),
+      delete:     (importId: string):                   Promise<ComexImport>    => ipcRenderer.invoke('comex:pl:delete', importId)
+    },
     bl: {
       selectFile: ():                               Promise<string | null>  => ipcRenderer.invoke('comex:bl:selectFile'),
       upload:     (importId: string, filePath: string): Promise<ComexImport>  => ipcRenderer.invoke('comex:bl:upload', importId, filePath),
@@ -446,6 +452,7 @@ const api = {
     analyzeComexDocument: (params: { docId: string; operationOverride?: AIOperation }): Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeComexDocument', params),
     analyzeDespacho:      (importId: string, page?: number):                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeDespacho', importId, page ?? 1),
     analyzeBL:            (importId: string):                                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeBL', importId),
+    analyzePL:            (importId: string):                                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzePL', importId),
     analyzeProforma:      (proformaId: string):                                         Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeProforma', proformaId),
     analyzeExtraCost:     (costId: string):                                             Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeExtraCost', costId),
     dashboardChat:   (params: { contextData: unknown; messages: Array<{ role: 'user' | 'assistant'; content: string }> }): Promise<{ content: string; tokens_used: number }> =>

@@ -191,6 +191,41 @@ async function fileToContentBlocks(
 
 // ── Schemas Tool Use ──────────────────────────────────────────────────────────
 
+const TOOL_PL: Anthropic.Tool = {
+  name: 'extraer_pl',
+  description: 'Extrae los datos de carga de un Packing List (PL): peso, volumen, cantidad de cajas/cartones y pallets.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      peso_bruto_kg: {
+        type: 'number',
+        description: 'Peso bruto total en kg. Puede venir como "1.960,000 KGS" (formato argentino) o "1,960.000 KGS" (formato inglés). Siempre convertir al número con punto decimal. null si no encontrado.'
+      },
+      volumen_m3: {
+        type: 'number',
+        description: 'Volumen total en m³ o CBM. Puede venir como "16,176 CBM" o "16.176 CBM". null si no encontrado.'
+      },
+      cant_pallets: {
+        type: 'number',
+        description: 'Cantidad total de pallets. Buscar en columnas "Pallets", "PLT", "PLTS" o totales al pie. null si no hay pallets.'
+      },
+      cant_cartons: {
+        type: 'number',
+        description: 'Cantidad total de cajas/cartones. Buscar en columnas "Cartons", "CTNS", "Boxes", "Cajas" o totales al pie. null si no hay cartons.'
+      },
+      nro_contenedor: {
+        type: 'string',
+        description: 'Número de contenedor si figura (4 letras + 7 dígitos). Limpiar espacios/guiones. null si no encontrado.'
+      },
+      descripcion_carga: {
+        type: 'string',
+        description: 'Descripción corta de la mercadería. null si no encontrada.'
+      }
+    },
+    required: ['peso_bruto_kg']
+  }
+}
+
 const TOOL_BL: Anthropic.Tool = {
   name: 'extraer_bl',
   description: 'Extrae los datos clave de un Bill of Lading (BL/FBL/HBL/MBL) multimodal o marítimo.',
@@ -821,6 +856,41 @@ REGLA 5 — null para cualquier campo no claramente visible.`
       : 'Extraé todos los datos de este Bill of Lading: número de BL, buque, puertos, peso, volumen, pallets y contenedor.'
     tools    = [TOOL_BL]
     toolName = 'extraer_bl'
+
+  } else if (operation === 'extract_pl') {
+    systemPrompt = `Sos un experto en comercio exterior y logística internacional.
+Analizá este documento que es un Packing List (PL). Puede ser un PDF o un archivo Excel.
+Si es Excel, recibirás el contenido como "celda: valor", por ejemplo: "A1: Descripción, B1: KG".
+
+════════════════════════════════════════════════════════════════
+REGLA 1 — FORMATO NUMÉRICO (detectar automáticamente)
+════════════════════════════════════════════════════════════════
+El PL puede venir en formato europeo/argentino (punto=miles, coma=decimal) o inglés (coma=miles, punto=decimal).
+Detectar el formato y convertir SIEMPRE al formato internacional (punto=decimal).
+  Ejemplos: "1.960,000 KGS" → 1960.0 / "1,960.000 KGS" → 1960.0 / "16,176 CBM" → 16.176
+
+════════════════════════════════════════════════════════════════
+REGLA 2 — TOTALES (siempre usar TOTALES, no parciales)
+════════════════════════════════════════════════════════════════
+El PL suele tener una fila TOTAL o GRAND TOTAL al pie con los valores consolidados.
+  - SIEMPRE usar los totales, no sumar filas individuales.
+  - Si no hay fila total, sumar las columnas.
+  - Peso: buscar "Total Gross Weight", "Total Weight", "PESO BRUTO", "KGS BRUTO", "GW".
+  - Volumen: buscar "Total CBM", "Total Volume", "VOLUMEN", "CBM", "M3", "CBM Total".
+  - Pallets: buscar "Total Pallets", "PLT", "PLTS" — solo si el PL usa pallets.
+  - Cajas: buscar "Total Cartons", "CTNS", "Total Boxes", "QTY CARTONS".
+
+════════════════════════════════════════════════════════════════
+REGLA 3 — CAMPOS null
+════════════════════════════════════════════════════════════════
+Si un campo no está claramente en el documento, devolver null. NO inventar ni inferir.
+Si el PL no tiene pallets (solo cajas), cant_pallets = null.`
+
+    userPrompt = extraContext
+      ? `Analizá este Packing List y extraé los totales de carga. Contexto: ${extraContext}`
+      : 'Extraé los totales de carga de este Packing List: peso bruto, volumen, pallets y cajas.'
+    tools    = [TOOL_PL]
+    toolName = 'extraer_pl'
 
   } else if (operation === 'extract_despacho') {
     systemPrompt = `Sos un experto en comercio exterior argentino con dominio profundo del sistema

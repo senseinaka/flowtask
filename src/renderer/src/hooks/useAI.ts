@@ -87,6 +87,13 @@ export function useAnalyzeBL() {
   })
 }
 
+export function useAnalyzePL() {
+  return useMutation({
+    mutationFn: (importId: string): Promise<AIAnalysisResult> =>
+      window.api.ai.analyzePL(importId)
+  })
+}
+
 // ── Chat del dashboard ────────────────────────────────────────────────────────
 
 export function useDashboardChat() {

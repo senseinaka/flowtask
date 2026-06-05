@@ -89,6 +89,7 @@ function DocChecklist({ imp }: { imp: ComexImport }) {
   const docs: Array<{ label: string; state: DocState }> = [
     { label: 'Proforma', state: imp.estimated_value != null ? 'ok' : 'missing' },
     { label: 'Factura',  state: imp.actual_value    != null ? 'ok' : 'missing' },
+    { label: 'PL',       state: imp.pl_stored_name ? 'ok' : 'missing' },
     { label: 'BL',       state: (imp.bl_stored_name || imp.bl_number) ? 'ok' : 'missing' },
     { label: 'Despacho', state: imp._despacho_number ? 'ok' : imp.despacho_stored_name ? 'ok' : 'missing' },
     { label: 'Costos',   state: imp.cost_pct != null ? 'ok' : 'missing' },
@@ -381,7 +382,9 @@ function ImportCard({ imp }: { imp: ComexImport }) {
               </div>
             )}
             {imp._despacho_number && (
-              <p className="text-[10px] text-slate-600 font-mono truncate">Desp.: {imp._despacho_number}</p>
+              <p className="text-[10px] text-slate-400 font-mono truncate">
+                <span className="text-slate-600">Desp.: </span>{imp._despacho_number}
+              </p>
             )}
             {(imp._peso_bruto_kg != null || imp._volumen_m3 != null) && (
               <div className="flex items-center gap-1.5 text-[10px] text-slate-500">

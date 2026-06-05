@@ -711,6 +711,7 @@ export type ClaudeModelId = typeof CLAUDE_MODELS[number]['id']
 // Tipos de operación — cada uno puede usar un modelo distinto
 export const AI_OPERATIONS = [
   'extract_despacho',
+  'extract_pl',
   'extract_bl',
   'extract_factura',
   'extract_factura_local',
@@ -724,6 +725,7 @@ export type AIOperation = typeof AI_OPERATIONS[number]
 
 export const AI_OPERATION_LABELS: Record<AIOperation, string> = {
   extract_despacho:        'Extraer despacho de aduana',
+  extract_pl:              'Extraer Packing List',
   extract_bl:              'Extraer BL / Bill of Lading',
   extract_factura:         'Extraer factura comercial (exterior)',
   extract_factura_local:   'Extraer factura local argentina',
@@ -736,6 +738,7 @@ export const AI_OPERATION_LABELS: Record<AIOperation, string> = {
 
 export const AI_OPERATION_DEFAULT_MODELS: Record<AIOperation, ClaudeModelId> = {
   extract_despacho:        'claude-sonnet-4-5',
+  extract_pl:              'claude-haiku-4-5',
   extract_bl:              'claude-sonnet-4-5',
   extract_factura:         'claude-haiku-4-5',
   extract_factura_local:   'claude-haiku-4-5',
@@ -786,6 +789,16 @@ export interface ExtractedDespacho {
   // Tributos — sección más importante para cálculo de costos
   tributos:              DespachoTributo[]
   total_tributos_usd:    number | null   // suma de todos los tributos en USD
+}
+
+// Resultado de extracción de Packing List
+export interface ExtractedPL {
+  peso_bruto_kg:    number | null   // Gross weight en kg
+  volumen_m3:       number | null   // Volumen en CBM = m³
+  cant_pallets:     number | null   // Número de pallets
+  cant_cartons:     number | null   // Número de cajas / cartones
+  nro_contenedor:   string | null   // Container number (si figura)
+  descripcion_carga:string | null   // Descripción corta de la mercadería
 }
 
 // Resultado de extracción de BL / Bill of Lading
@@ -1008,6 +1021,13 @@ export interface ComexImport {
   _oficializacion_date?:      number | null   // fecha oficialización del despacho (del JOIN)
   _tributos_count?:           number
   _extras_count?:             number
+  // ── PL - Packing List ────────────────────────────────────────────────────────
+  pl_folder_id:           string | null
+  pl_stored_name:         string | null
+  pl_original_name:       string | null
+  pl_drive_file_id:       string | null
+  pl_drive_status:        DriveDocStatus
+  pl_extracted_json:      string | null
   // ── BL - Bill of Lading ──────────────────────────────────────────────────────
   bl_extracted_json:      string | null  // JSON con todos los datos extraídos por IA
   bl_folder_id:           string | null  // subcarpeta "BL - Bill of Lading" en Drive

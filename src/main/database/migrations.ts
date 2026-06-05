@@ -1003,6 +1003,19 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
     }
   },
   {
+    version: 50,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN pl_folder_id       TEXT;
+        ALTER TABLE comex_imports ADD COLUMN pl_stored_name     TEXT;
+        ALTER TABLE comex_imports ADD COLUMN pl_original_name   TEXT;
+        ALTER TABLE comex_imports ADD COLUMN pl_drive_file_id   TEXT;
+        ALTER TABLE comex_imports ADD COLUMN pl_drive_status    TEXT NOT NULL DEFAULT 'none';
+        ALTER TABLE comex_imports ADD COLUMN pl_extracted_json  TEXT;
+      `)
+    }
+  },
+  {
     version: 49,
     up: (db) => {
       // Grupos de WhatsApp favoritos + templates de mensajes

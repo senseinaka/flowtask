@@ -84,6 +84,15 @@ export function registerAIIpc(): void {
     return analyzeDocument({ filePath, operation: 'extract_bl' })
   })
 
+  // ── Análisis del PL adjunto a una importación ────────────────────────────
+  ipcMain.handle('ai:analyzePL', async (_e, importId: string) => {
+    const record = getImport(importId)
+    if (!record) throw new Error('Importación no encontrada')
+    if (!record.pl_stored_name) throw new Error('No hay Packing List adjunto a esta importación. Subí el archivo primero.')
+    const filePath = path.join(getAttachmentsDir(), record.pl_stored_name)
+    return analyzeDocument({ filePath, operation: 'extract_pl' })
+  })
+
   // ── Análisis de proforma ──────────────────────────────────────────────────
   ipcMain.handle('ai:analyzeProforma', async (_e, proformaId: string) => {
     const pf = getProforma(proformaId)

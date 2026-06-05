@@ -56,7 +56,7 @@ import type {
 } from '@shared/types'
 import { cn, formatBytes } from '../../components/ui/utils'
 import WhatsAppCargaModal from '../../components/whatsapp/WhatsAppCargaModal'
-import { useAnalyzeComexDocument, useAIConfigured, useAnalyzeDespacho, useAnalyzeBL } from '../../hooks/useAI'
+import { useAnalyzeComexDocument, useAIConfigured, useAnalyzeDespacho, useAnalyzeBL, useAnalyzePL } from '../../hooks/useAI'
 import {
   useUploadDespacho, useDeleteDespacho,
   useComexTributos, useCreateComexTributo, useUpdateComexTributo,
@@ -903,11 +903,11 @@ function DocumentsSection({
 
 // ── CollapsibleSection ────────────────────────────────────────────────────────
 
-type SectionKey = 'costos'|'datos'|'anmat'|'flete_int'|'despacho'|'tributos'|'deposito'|'despachante'|'flete_local'|'productos'|'presupuestos'|'proformas'|'facturas'|'bl'
+type SectionKey = 'costos'|'datos'|'anmat'|'flete_int'|'despacho'|'tributos'|'deposito'|'despachante'|'flete_local'|'productos'|'presupuestos'|'proformas'|'facturas'|'pl'|'bl'
 
 const ALL_SECTION_KEYS: SectionKey[] = [
   'costos','datos','anmat','flete_int','despacho','tributos',
-  'deposito','despachante','flete_local','productos','presupuestos','proformas','facturas'
+  'deposito','despachante','flete_local','productos','presupuestos','proformas','facturas','pl'
 ]
 
 function CollapsibleSection({
@@ -3775,6 +3775,311 @@ function TributosSection({ imp }: { imp: ComexImport }) {
 
 // ── Despacho Section ─────────────────────────────────────────────────────────
 
+// ── PL - Packing List Section ─────────────────────────────────────────────────
+
+function PLSection({
+  imp, importId, customs, onUpdate
+}: {
+  imp:      ComexImport
+  importId: string
+  customs:  import('@shared/types').ComexCustoms | null
+  onUpdate: (data: Partial<ComexImport>) => void
+}) {
+  const qc          = useQueryClient()
+  const analyzePL   = useAnalyzePL()
+  const { data: aiConfigured } = useAIConfigured()
+
+  const [aiResult,      setAiResult]      = useState<import('@shared/types').ExtractedPL | null>(null)
+  const [analyzing,     setAnalyzing]     = useState(false)
+  const [applying,      setApplying]      = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [isDragOver,    setIsDragOver]    = useState(false)
+  const [alerts,        setAlerts]        = useState<string[]>([])
+  const dragCounter = useRef(0)
+
+  const hasFile = !!imp.pl_stored_name
+  const fmtNum  = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+  const isXLS   = (name: string | null) => name ? /\.(xls|xlsx)$/i.test(name) : false
+
+  const handleUpload = async (filePath: string) => {
+    const result = await window.api.comex.pl.upload(importId, filePath)
+    onUpdate(result as Partial<ComexImport>)
+    qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+  }
+
+  const handleSelectFile = async () => {
+    const fp = await window.api.comex.pl.selectFile()
+    if (fp) handleUpload(fp)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); dragCounter.current = 0; setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    const fp = window.api.getPathForFile(file)
+    if (fp) handleUpload(fp)
+  }
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true); setAlerts([])
+    try {
+      const result = await analyzePL.mutateAsync(importId)
+      const d = result.structured as import('@shared/types').ExtractedPL
+      if (d) setAiResult(d)
+    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    finally { setAnalyzing(false) }
+  }
+
+  const handleApply = async () => {
+    if (!aiResult) return
+    setApplying(true); setAlerts([])
+    try {
+      const d = aiResult
+      const newAlerts: string[] = []
+
+      // Guardar JSON en la importación
+      await window.api.comex.imports.update(importId, { pl_extracted_json: JSON.stringify(d) })
+      qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+      qc.invalidateQueries({ queryKey: ['comex-imports'] })
+
+      const customsPatch: Record<string, unknown> = {}
+
+      // Pallets
+      if (d.cant_pallets != null && typeof d.cant_pallets === 'number') {
+        if (!customs?.cant_pallets) {
+          customsPatch.cant_pallets = d.cant_pallets
+        } else if (Math.abs(d.cant_pallets - customs.cant_pallets) > 0.1) {
+          newAlerts.push(`⚠ Pallets del PL (${d.cant_pallets}) difiere del registrado (${customs.cant_pallets})`)
+        }
+      }
+      // Cajas
+      if (d.cant_cartons != null && typeof d.cant_cartons === 'number') {
+        if (!customs?.cant_cartons) {
+          customsPatch.cant_cartons = d.cant_cartons
+        } else if (Math.abs(d.cant_cartons - customs.cant_cartons) > 0.1) {
+          newAlerts.push(`⚠ Cajas del PL (${d.cant_cartons}) difiere del registrado (${customs.cant_cartons})`)
+        }
+      }
+      // Peso bruto
+      if (d.peso_bruto_kg != null && typeof d.peso_bruto_kg === 'number') {
+        if (!customs?.peso_bruto_kg) {
+          customsPatch.peso_bruto_kg = d.peso_bruto_kg
+        } else {
+          const diff = Math.abs(d.peso_bruto_kg - customs.peso_bruto_kg)
+          const pct  = diff / customs.peso_bruto_kg * 100
+          if (pct > 2) {
+            newAlerts.push(`⚠ Peso PL (${fmtNum(d.peso_bruto_kg)} kg) difiere ${pct.toFixed(1)}% del registrado (${fmtNum(customs.peso_bruto_kg)} kg)`)
+          }
+        }
+      }
+      // Volumen
+      if (d.volumen_m3 != null && typeof d.volumen_m3 === 'number') {
+        if (!customs?.volumen_m3) {
+          customsPatch.volumen_m3 = d.volumen_m3
+        } else {
+          const diff = Math.abs(d.volumen_m3 - customs.volumen_m3)
+          const pct  = diff / customs.volumen_m3 * 100
+          if (pct > 2) {
+            newAlerts.push(`⚠ Volumen PL (${fmtNum(d.volumen_m3)} m³) difiere ${pct.toFixed(1)}% del registrado (${fmtNum(customs.volumen_m3)} m³)`)
+          }
+        }
+      }
+      // Contenedor
+      if (d.nro_contenedor && d.nro_contenedor !== 'null') {
+        customsPatch.nro_contenedor = d.nro_contenedor
+      }
+
+      if (Object.keys(customsPatch).length) {
+        await window.api.comex.customs.upsert(importId, customsPatch as Parameters<typeof window.api.comex.customs.upsert>[1])
+        qc.invalidateQueries({ queryKey: ['comex-customs', importId] })
+      }
+
+      setAlerts(newAlerts)
+      setAiResult(null)
+    } finally { setApplying(false) }
+  }
+
+  return (
+    <div
+      className={cn('rounded-xl border-2 transition-colors', isDragOver ? 'border-emerald-500 bg-emerald-950/20' : 'border-emerald-800/30 bg-slate-800/30')}
+      onDragEnter={(e) => { e.preventDefault(); dragCounter.current++; setIsDragOver(true) }}
+      onDragLeave={(e) => { e.preventDefault(); if (--dragCounter.current <= 0) setIsDragOver(false) }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-emerald-950/30 border-b border-emerald-800/30">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Package size={14} className="text-emerald-400" />
+          <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-wider">PL - Packing List</h3>
+          {hasFile && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 font-medium">Archivo adjunto</span>
+          )}
+          {hasFile && isXLS(imp.pl_original_name) && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-900/50 text-emerald-400 font-medium">XLS</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {imp.pl_drive_status === 'synced'    && <span className="flex items-center gap-1 text-[10px] text-emerald-400"><Cloud size={11} /> En Drive</span>}
+          {imp.pl_drive_status === 'uploading' && <span className="flex items-center gap-1 text-[10px] text-blue-400"><Loader2 size={11} className="animate-spin" /> Subiendo...</span>}
+          {imp.pl_drive_status === 'error'     && <span className="flex items-center gap-1 text-[10px] text-red-400"><AlertCircle size={11} /> Error Drive</span>}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {!hasFile ? (
+          <div
+            className="flex flex-col items-center justify-center py-6 px-4 rounded-xl border-2 border-dashed border-slate-700 cursor-pointer hover:border-emerald-600 transition-colors"
+            onClick={handleSelectFile}
+          >
+            <Upload size={22} className="text-slate-600 mb-2" />
+            <p className="text-sm text-slate-400 font-medium">
+              {isDragOver ? 'Soltar aquí...' : 'Arrastrá o hacé click para subir el Packing List'}
+            </p>
+            <p className="text-xs text-slate-600 mt-0.5">PDF, XLS, XLSX</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Fila del archivo */}
+            <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-900/60 rounded-lg border border-slate-700">
+              <Package size={15} className="text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-200 truncate">{imp.pl_original_name ?? 'Packing List'}</p>
+              </div>
+              {imp.pl_drive_file_id && (
+                <button onClick={() => window.api.shell.open(`https://drive.google.com/file/d/${imp.pl_drive_file_id}/view`)}
+                  title="Ver en Drive" className="p-1.5 rounded text-slate-500 hover:text-emerald-400 hover:bg-slate-700 transition-colors">
+                  <ExternalLink size={13} />
+                </button>
+              )}
+              <button onClick={() => window.api.comex.pl.open(importId)}
+                title="Abrir" className="p-1.5 rounded text-slate-500 hover:text-emerald-400 hover:bg-slate-700 transition-colors">
+                <FolderOpen size={13} />
+              </button>
+              <button onClick={handleSelectFile} title="Reemplazar"
+                className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">
+                <Upload size={13} />
+              </button>
+              {confirmDelete ? (
+                <>
+                  <button onClick={async () => {
+                    const r = await window.api.comex.pl.delete(importId)
+                    onUpdate(r as Partial<ComexImport>)
+                    qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+                    setConfirmDelete(false)
+                  }} className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white transition-colors">
+                    <Check size={13} />
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)} className="p-1.5 rounded bg-slate-700 text-slate-400 transition-colors">
+                    <X size={13} />
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setConfirmDelete(true)} title="Eliminar"
+                  className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Datos guardados del PL — siempre visible si existen */}
+            {imp.pl_extracted_json && !aiResult && (() => {
+              let d: import('@shared/types').ExtractedPL | null = null
+              try { d = JSON.parse(imp.pl_extracted_json) } catch { return null }
+              if (!d) return null
+              const isNum = (v: unknown): v is number => typeof v === 'number'
+              return (
+                <div className="rounded-lg bg-slate-900/50 border border-emerald-800/30 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-emerald-950/30 border-b border-emerald-800/20">
+                    <span className="text-[11px] font-semibold text-emerald-400">Datos del Packing List</span>
+                    <span className="text-[10px] text-slate-600">Aplicado</span>
+                  </div>
+                  <div className="px-3 py-2.5">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                      {isNum(d.cant_cartons)  && <><span className="text-slate-500">Cajas</span><span className="text-emerald-300 font-semibold">{d.cant_cartons}</span></>}
+                      {isNum(d.cant_pallets)  && <><span className="text-slate-500">Pallets</span><span className="text-emerald-300 font-semibold">{d.cant_pallets}</span></>}
+                      {isNum(d.peso_bruto_kg) && <><span className="text-slate-500">Peso bruto</span><span className="text-emerald-300 font-semibold">{fmtNum(d.peso_bruto_kg)} kg</span></>}
+                      {isNum(d.volumen_m3)    && <><span className="text-slate-500">Volumen</span><span className="text-emerald-300 font-semibold">{fmtNum(d.volumen_m3)} m³</span></>}
+                      {d.nro_contenedor && d.nro_contenedor !== 'null' && <><span className="text-slate-500">Contenedor</span><span className="text-slate-300 font-mono text-[10px]">{d.nro_contenedor}</span></>}
+                    </div>
+                    {d.descripcion_carga && d.descripcion_carga !== 'null' && (
+                      <p className="text-[10px] text-slate-500 italic mt-1">{d.descripcion_carga}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Botón analizar con IA */}
+            {aiConfigured && (
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className={cn(
+                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors',
+                  analyzing ? 'bg-violet-800/50 text-violet-300 cursor-wait' : 'bg-violet-700 hover:bg-violet-600 text-white'
+                )}
+              >
+                {analyzing
+                  ? <><Loader2 size={15} className="animate-spin" /> Analizando PL...</>
+                  : <><Sparkles size={15} /> {imp.pl_extracted_json ? 'Reanalizar PL' : 'Extraer datos con IA'}</>
+                }
+              </button>
+            )}
+
+            {/* Alertas de discrepancia */}
+            {alerts.length > 0 && (
+              <div className="space-y-1">
+                {alerts.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2 px-3 py-2 bg-amber-900/20 border border-amber-700/30 rounded-lg text-xs text-amber-300">
+                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5 text-amber-400" />
+                    <span>{a}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Panel resultado IA */}
+            {aiResult && (() => {
+              const d = aiResult
+              return (
+                <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-violet-900/20 border-b border-violet-700/30">
+                    <div className="flex items-center gap-2">
+                      <Bot size={12} className="text-violet-400" />
+                      <span className="text-[11px] font-semibold text-violet-300">Datos extraídos por IA</span>
+                    </div>
+                    <button onClick={() => setAiResult(null)} className="text-slate-500 hover:text-slate-300"><X size={12} /></button>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-2">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                      {typeof d.cant_cartons  === 'number' && <><span className="text-slate-500">Cajas</span><span className="text-emerald-400 font-semibold">{d.cant_cartons} cajas</span></>}
+                      {typeof d.cant_pallets  === 'number' && <><span className="text-slate-500">Pallets</span><span className="text-emerald-400 font-semibold">{d.cant_pallets} pallets</span></>}
+                      {typeof d.peso_bruto_kg === 'number' && <><span className="text-slate-500">Peso bruto</span><span className="text-emerald-400 font-semibold">{fmtNum(d.peso_bruto_kg)} kg</span></>}
+                      {typeof d.volumen_m3    === 'number' && <><span className="text-slate-500">Volumen</span><span className="text-emerald-400 font-semibold">{fmtNum(d.volumen_m3)} m³</span></>}
+                      {d.nro_contenedor && d.nro_contenedor !== 'null' && <><span className="text-slate-500">Contenedor</span><span className="text-slate-300 font-mono text-[10px]">{d.nro_contenedor}</span></>}
+                    </div>
+                    {d.descripcion_carga && d.descripcion_carga !== 'null' && (
+                      <p className="text-[10px] text-slate-500 italic">{d.descripcion_carga}</p>
+                    )}
+                    <div className="flex justify-end gap-2 pt-1 border-t border-violet-800/30">
+                      <button onClick={() => setAiResult(null)} className="px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition-colors">Descartar</button>
+                      <button onClick={handleApply} disabled={applying}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-colors">
+                        {applying ? <><Loader2 size={11} className="animate-spin" /> Aplicando...</> : <><Check size={11} /> Aplicar</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── BL - Bill of Lading Section ───────────────────────────────────────────────
 
 function BLSection({
@@ -5444,6 +5749,7 @@ export default function ComexImportDetail() {
     presupuestos: false,
     proformas:   false,
     facturas:    false,
+    pl:          false,
     bl:          false,
   })
 
@@ -6222,7 +6528,31 @@ export default function ComexImportDetail() {
         )
       })()}
 
-      {/* 4. BL - Bill of Lading */}
+      {/* 4. PL - Packing List */}
+      {(() => {
+        let plSummary: React.ReactNode
+        if (!imp.pl_stored_name) {
+          plSummary = sm.none('Sin Packing List')
+        } else if (imp.pl_extracted_json) {
+          let d: import('@shared/types').ExtractedPL | null = null
+          try { d = JSON.parse(imp.pl_extracted_json) } catch { /* noop */ }
+          const parts: string[] = []
+          if (d?.cant_pallets) parts.push(`${d.cant_pallets} pallets`)
+          if (d?.cant_cartons) parts.push(`${d.cant_cartons} cajas`)
+          if (d?.peso_bruto_kg) parts.push(`${d.peso_bruto_kg.toLocaleString('es-AR', { maximumFractionDigits: 0 })} kg`)
+          plSummary = sm.ok(parts.length ? parts.join(' · ') : 'Datos aplicados')
+        } else {
+          plSummary = sm.ok('Archivo cargado')
+        }
+        return (
+          <CollapsibleSection label="PL - Packing List" icon={Package} accentColor="border-l-emerald-600"
+            isOpen={sections.pl} onToggle={() => toggle('pl')} summary={plSummary}>
+            <div className="p-4"><PLSection imp={imp} importId={imp.id} customs={customs ?? null} onUpdate={(data) => upd(data)} /></div>
+          </CollapsibleSection>
+        )
+      })()}
+
+      {/* 5. BL - Bill of Lading */}
       {(() => {
         const blSummary = imp.bl_stored_name
           ? imp.bl_number

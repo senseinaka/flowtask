@@ -99,6 +99,12 @@ async function setupImportDriveFolders(
     const facturasId = await driveService.createSubfolder('Facturas comerciales', result.folderId)
     updateImport(importId, { facturas_folder_id: facturasId })
   }
+  // Subcarpeta "PL - Packing List"
+  const imp4 = getImport(importId)
+  if (imp4 && !imp4.pl_folder_id) {
+    const plId = await driveService.createSubfolder('PL - Packing List', result.folderId)
+    updateImport(importId, { pl_folder_id: plId })
+  }
 
   return result
 }
@@ -774,6 +780,86 @@ export function registerComexIpc(): void {
       despacho_original_name: null,
       despacho_drive_file_id: null,
       despacho_drive_status:  'none'
+    })
+    return getImport(importId)
+  })
+
+  // ── PL - Packing List ─────────────────────────────────────────────────────
+  ipcMain.handle('comex:pl:selectFile', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar PL - Packing List',
+      properties: ['openFile'],
+      filters: [
+        { name: 'PDF / Excel', extensions: ['pdf','xls','xlsx'] },
+        { name: 'Todos', extensions: ['*'] }
+      ]
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('comex:pl:upload', async (_e, importId: string, filePath: string) => {
+    const imp = getImport(importId)
+    if (!imp) throw new Error('Importación no encontrada')
+
+    const ext          = path.extname(filePath)
+    const originalName = path.basename(filePath)
+    const storedName   = `pl_${randomUUID()}${ext}`
+    const dest         = path.join(getAttachmentsDir(), storedName)
+
+    if (imp.pl_stored_name) {
+      const old = path.join(getAttachmentsDir(), imp.pl_stored_name)
+      try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
+    }
+
+    fs.copyFileSync(filePath, dest)
+    updateImport(importId, {
+      pl_stored_name:   storedName,
+      pl_original_name: originalName,
+      pl_drive_status:  'none',
+      pl_drive_file_id: null
+    })
+
+    if (imp.drive_folder_id && driveService.isAuthenticated()) {
+      updateImport(importId, { pl_drive_status: 'uploading' })
+      try {
+        let plFolderId = imp.pl_folder_id
+        if (!plFolderId) {
+          plFolderId = await driveService.createSubfolder('PL - Packing List', imp.drive_folder_id)
+          updateImport(importId, { pl_folder_id: plFolderId })
+        }
+        const mimeType   = getMimeType(ext)
+        const driveFileId = await driveService.uploadFileToFolder(dest, plFolderId, originalName, mimeType)
+        updateImport(importId, { pl_drive_file_id: driveFileId, pl_drive_status: 'synced' })
+      } catch (err) {
+        updateImport(importId, { pl_drive_status: 'error' })
+        console.error('[PL] Drive upload error:', err)
+      }
+    }
+
+    return getImport(importId)
+  })
+
+  ipcMain.handle('comex:pl:open', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp?.pl_stored_name) throw new Error('Sin archivo de Packing List')
+    shell.openPath(path.join(getAttachmentsDir(), imp.pl_stored_name))
+  })
+
+  ipcMain.handle('comex:pl:delete', (_e, importId: string) => {
+    const imp = getImport(importId)
+    if (!imp) return
+    if (imp.pl_stored_name) {
+      const fp = path.join(getAttachmentsDir(), imp.pl_stored_name)
+      try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
+    }
+    updateImport(importId, {
+      pl_stored_name:   null,
+      pl_original_name: null,
+      pl_drive_file_id: null,
+      pl_drive_status:  'none',
+      pl_extracted_json: null
     })
     return getImport(importId)
   })
