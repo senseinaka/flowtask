@@ -21,6 +21,7 @@ import {
   useComexPayments,
   useComexSuppliers,
   useComexCustoms,
+  useUpsertComexCustoms,
   useComexFreightOperators,
   useComexQuotesByImport,
   useCreateComexQuote,
@@ -52,7 +53,8 @@ import type {
   ImportStatus, DocumentType, DocumentStatus, DriveDocStatus,
   QuoteStatus, PaymentMethod, ComexImport, ComexDocument, ComexInalCert,
   InalLCStatus,
-  ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexCustoms
+  ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexCustoms,
+  UpsertComexCustomsInput
 } from '@shared/types'
 import { cn, formatBytes } from '../../components/ui/utils'
 import WhatsAppCargaModal from '../../components/whatsapp/WhatsAppCargaModal'
@@ -148,12 +150,13 @@ function EditableText({
 
 /** Click-to-edit number field */
 function EditableNumber({
-  label, value, onSave, prefix = '', placeholder = '—'
+  label, value, onSave, prefix = '', suffix = '', placeholder = '—'
 }: {
   label: string
   value: number | null | undefined
   onSave: (v: number | null) => void
   prefix?: string
+  suffix?: string
   placeholder?: string
 }) {
   const [editing, setEditing] = useState(false)
@@ -185,7 +188,7 @@ function EditableNumber({
     <button onClick={start} className="text-left group w-full">
       <p className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</p>
       <p className={cn('text-sm mt-0.5 group-hover:text-cyan-300 transition-colors', value != null ? 'text-slate-200' : 'text-slate-600 italic')}>
-        {value != null ? `${prefix}${value.toLocaleString('es-AR')}` : placeholder}
+        {value != null ? `${prefix}${value.toLocaleString('es-AR')}${suffix}` : placeholder}
         <Edit2 size={10} className="inline ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity" />
       </p>
     </button>
@@ -319,27 +322,192 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
 
 // ── Import Timeline ───────────────────────────────────────────────────────────
 
+// Los pasos que aparecen como nodos en la línea principal
 const TIMELINE_STEPS: ImportStatus[] = [
   'planning', 'ordered', 'paid', 'production', 'shipped', 'transit',
   'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered'
 ]
 
-// Fecha asociada a cada paso del timeline
+// Sub-estados del nodo "Proveedor" (production) — viven dentro del nodo 4
+const PROVEEDOR_SUB_STEPS: ImportStatus[] = ['production', 'carga_armada', 'esperando_embarcar']
+
+// Mapea cualquier status (incluyendo sub-estados) al paso principal de la línea
+function toMainStep(status: ImportStatus): ImportStatus {
+  if (status === 'carga_armada' || status === 'esperando_embarcar') return 'production'
+  return status
+}
+
+// Índice en TIMELINE_STEPS considerando sub-estados
+function getMainStepIdx(status: ImportStatus): number {
+  return TIMELINE_STEPS.indexOf(toMainStep(status))
+}
+
+// Fecha asociada a cada paso (incluyendo sub-estados del proveedor)
 function getStepDate(step: ImportStatus, imp: ComexImport): { ts: number | null; isEstimate?: boolean } {
   switch (step) {
-    case 'planning':     return { ts: imp.created_at }
-    case 'ordered':      return { ts: imp.order_date }
-    case 'paid':         return { ts: imp.payment_date }
-    case 'production':   return { ts: null }
-    case 'shipped':      return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
-    case 'transit':      return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
-    case 'arrived':      return { ts: imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date), isEstimate: !imp.aviso_arribo_date }
-    case 'customs':      return { ts: imp.traslado_deposito_date }
-    case 'oficializado':   return { ts: imp.oficializacion_import_date }
-    case 'carga_deposito': return { ts: imp.carga_deposito_date }
-    case 'delivered':      return { ts: imp.actual_arrival_date }
-    default:             return { ts: null }
+    case 'planning':            return { ts: imp.created_at }
+    case 'ordered':             return { ts: imp.order_date }
+    case 'paid':                return { ts: imp.payment_date }
+    case 'production':          return { ts: null }
+    case 'carga_armada':        return { ts: imp.carga_armada_date }
+    case 'esperando_embarcar':  return { ts: imp.esperando_embarcar_date }
+    case 'shipped':             return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
+    case 'transit':             return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
+    case 'arrived':             return { ts: imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date), isEstimate: !imp.aviso_arribo_date }
+    case 'customs':             return { ts: imp.traslado_deposito_date }
+    case 'oficializado':        return { ts: imp.oficializacion_import_date }
+    case 'carga_deposito':      return { ts: imp.carga_deposito_date }
+    case 'delivered':           return { ts: imp.actual_arrival_date }
+    default:                    return { ts: null }
   }
+}
+
+// ── Nodo especial para la etapa "Proveedor" (sub-pasos inline) ────────────────
+function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActive }: {
+  currentStatus: ImportStatus
+  onChangeStatus: (s: ImportStatus) => void
+  imp: ComexImport
+  mainDone: boolean
+  mainActive: boolean
+}) {
+  const [hovered, setHovered] = useState(false)
+  const showPanel = mainActive || mainDone || hovered
+
+  // Sub-estado activo dentro del proveedor
+  const activeSubIdx = PROVEEDOR_SUB_STEPS.indexOf(currentStatus)
+  // Si el status actual no es un sub-estado del proveedor pero el nodo está done, el último sub-estado es el completado
+  const effectiveSubIdx = activeSubIdx >= 0 ? activeSubIdx : (mainDone ? PROVEEDOR_SUB_STEPS.length - 1 : -1)
+
+  const mainColor = '#f59e0b' // amber — color del grupo proveedor
+
+  const subLabels: Record<string, string> = {
+    production:         'En producción',
+    carga_armada:       'Carga armada',
+    esperando_embarcar: 'Esp. embarque',
+  }
+
+  return (
+    <div
+      className="relative z-10 flex flex-col items-center flex-1 gap-1 group"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Círculo principal */}
+      <button
+        onClick={() => onChangeStatus('production')}
+        title="En producción (depósito proveedor)"
+        className="flex flex-col items-center gap-1 w-full"
+      >
+        <div
+          className={cn(
+            'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
+            mainActive ? 'shadow-md scale-110' :
+            mainDone   ? 'opacity-90' :
+            'border-slate-600 bg-slate-800 group-hover:border-slate-500'
+          )}
+          style={mainDone || mainActive ? {
+            borderColor: mainColor,
+            backgroundColor: mainDone ? mainColor + '33' : mainColor + '22',
+            boxShadow: mainActive ? `0 0 10px ${mainColor}55` : undefined
+          } : {}}
+        >
+          {mainDone && !mainActive ? (
+            <Check size={12} style={{ color: mainColor }} />
+          ) : (
+            <span
+              className="text-[9px] font-bold"
+              style={mainActive ? { color: mainColor } : { color: '#475569' }}
+            >
+              4
+            </span>
+          )}
+        </div>
+
+        {/* Label principal */}
+        <div className="flex flex-col items-center gap-0">
+          {['En', 'depósito'].map((line, i) => (
+            <span
+              key={i}
+              className={cn(
+                'text-[8px] leading-tight text-center transition-colors',
+                mainActive ? 'font-bold' : mainDone ? '' : 'text-slate-600 group-hover:text-slate-400'
+              )}
+              style={mainActive || mainDone ? { color: mainColor } : {}}
+            >
+              {line}
+            </span>
+          ))}
+        </div>
+      </button>
+
+      {/* Panel de sub-pasos — visible cuando activo, done o hover */}
+      <div
+        className={cn(
+          'absolute top-full mt-1.5 left-1/2 -translate-x-1/2 z-20',
+          'bg-slate-900 border border-amber-900/50 rounded-lg shadow-xl shadow-black/40',
+          'transition-all duration-200 origin-top',
+          showPanel ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+        )}
+        style={{ width: '156px' }}
+      >
+        <div className="px-2.5 py-2 space-y-1.5">
+          {PROVEEDOR_SUB_STEPS.map((sub, subIdx) => {
+            const subDone   = effectiveSubIdx > subIdx || (mainDone && effectiveSubIdx < 0)
+            const subActive = currentStatus === sub
+            const subFuture = effectiveSubIdx < subIdx && !mainDone
+            const subColor  = IMPORT_STATUS_COLORS[sub]
+            const { ts } = getStepDate(sub, imp)
+            const dateStr = ts ? dayjs(ts).format('DD/MM/YY') : null
+
+            return (
+              <button
+                key={sub}
+                onClick={(e) => { e.stopPropagation(); onChangeStatus(sub) }}
+                className="w-full flex items-center gap-2 group/sub rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
+              >
+                {/* Mini círculo */}
+                <div
+                  className={cn(
+                    'w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center transition-all',
+                    subDone   ? 'border-0' :
+                    subActive ? 'border-2 scale-110' :
+                    'border border-slate-600'
+                  )}
+                  style={subDone || subActive ? {
+                    borderColor: subColor,
+                    backgroundColor: subDone ? subColor + '44' : subColor + '22',
+                    boxShadow: subActive ? `0 0 6px ${subColor}66` : undefined
+                  } : {}}
+                >
+                  {subDone && !subActive && <Check size={7} style={{ color: subColor }} />}
+                </div>
+
+                {/* Texto + fecha */}
+                <div className="flex flex-col items-start min-w-0">
+                  <span
+                    className={cn(
+                      'text-[9px] leading-tight truncate transition-colors',
+                      subActive ? 'font-bold' : subFuture ? 'text-slate-600' : ''
+                    )}
+                    style={subDone || subActive ? { color: subColor } : {}}
+                  >
+                    {subLabels[sub]}
+                  </span>
+                  {dateStr ? (
+                    <span className="text-[8px] font-mono leading-none" style={{ color: subColor + 'aa' }}>
+                      {dateStr}
+                    </span>
+                  ) : (
+                    <span className="text-[8px] text-slate-700 leading-none">—</span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
@@ -347,10 +515,10 @@ function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
   onChangeStatus: (s: ImportStatus) => void
   imp: ComexImport
 }) {
-  const currentIdx = TIMELINE_STEPS.indexOf(currentStatus)
+  const currentMainIdx = getMainStepIdx(currentStatus)
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 pb-6">
       <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-4">
         Progreso de la operación
       </p>
@@ -364,16 +532,32 @@ function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
           style={{
             top: '14px',
             left: '5%',
-            width: currentIdx === 0 ? '0%' : `${(currentIdx / (TIMELINE_STEPS.length - 1)) * 90}%`
+            width: currentMainIdx === 0 ? '0%' : `${(currentMainIdx / (TIMELINE_STEPS.length - 1)) * 90}%`
           }}
         />
 
         {/* Pasos */}
         <div className="relative flex">
           {TIMELINE_STEPS.map((step, idx) => {
-            const done    = idx < currentIdx
-            const active  = idx === currentIdx
-            const future  = idx > currentIdx
+            // El nodo "production" se renderiza como nodo compuesto de proveedor
+            if (step === 'production') {
+              const mainDone   = currentMainIdx > idx
+              const mainActive = currentMainIdx === idx
+              return (
+                <ProveedorNode
+                  key={step}
+                  currentStatus={currentStatus}
+                  onChangeStatus={onChangeStatus}
+                  imp={imp}
+                  mainDone={mainDone}
+                  mainActive={mainActive}
+                />
+              )
+            }
+
+            const done    = idx < currentMainIdx
+            const active  = idx === currentMainIdx
+            const future  = idx > currentMainIdx
             const color   = IMPORT_STATUS_COLORS[step]
             const { ts, isEstimate } = getStepDate(step, imp)
             const dateLabel = ts ? dayjs(ts).format('DD/MM/YY') : null
@@ -5726,6 +5910,7 @@ export default function ComexImportDetail() {
   const qc = useQueryClient()
   const update = useUpdateComexImport()
   const deleteImport = useDeleteComexImport()
+  const upsertCustoms = useUpsertComexCustoms()
 
   // Datos para resúmenes de secciones colapsadas
   const { data: tributos   = [] } = useComexTributos(id ?? null)
@@ -6183,22 +6368,35 @@ export default function ComexImportDetail() {
           <EditableDate label="ETD — Fecha salida estimada" value={imp.ship_date}    onSave={(v) => upd({ ship_date: v })} />
         </div>
 
-        {/* ── Datos de carga — se muestra solo cuando hay al menos un dato ── */}
+        {/* Row 4b: Fechas del depósito del proveedor */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <EditableDate
+              label="Carga armada en depósito"
+              value={imp.carga_armada_date}
+              onSave={(v) => upd({ carga_armada_date: v, ...(v ? { status: 'carga_armada' as ImportStatus } : {}) })}
+            />
+            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza a "Carga armada"</p>
+          </div>
+          <div>
+            <EditableDate
+              label="En terminal / Esperando embarque"
+              value={imp.esperando_embarcar_date}
+              onSave={(v) => upd({ esperando_embarcar_date: v, ...(v ? { status: 'esperando_embarcar' as ImportStatus } : {}) })}
+            />
+            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza a "Esp. embarque"</p>
+          </div>
+        </div>
+
+        {/* ── Datos de carga — siempre visible, editable manualmente ── */}
         {(() => {
           const depositoFiscal = extras.find(e => e.categoria === 'deposito_fiscal' && e.proveedor?.trim())
-          const peso    = customs?.peso_bruto_kg
-          const volumen = customs?.volumen_m3
-          const bultos  = customs?.cant_bultos   // del despacho OM-1993
-          const cajas   = customs?.cant_cartons  // del BL (CTNS/CARTONS)
-          const pallets = customs?.cant_pallets  // del BL / despacho
+          const bultos  = customs?.cant_bultos   // del despacho OM-1993 (solo lectura)
 
-          const hayDatos = !!(depositoFiscal || peso != null || volumen != null || bultos != null || cajas != null || pallets != null)
-          if (!hayDatos) return null
-
-          const fmtNum = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
-
-          // Columna de "caja" a mostrar: prioridad al BL (cajas), fallback al despacho (bultos)
-          const cajasDisplay = cajas ?? bultos
+          const saveCustoms = (data: Partial<UpsertComexCustomsInput>) => {
+            if (!id) return
+            upsertCustoms.mutate({ importId: id, data })
+          }
 
           return (
             <div className="rounded-lg border border-slate-700/40 bg-slate-800/40 px-4 py-3 space-y-2.5">
@@ -6210,7 +6408,7 @@ export default function ComexImportDetail() {
 
               <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3">
 
-                {/* Depósito fiscal */}
+                {/* Depósito fiscal — solo lectura */}
                 <div className="md:col-span-1">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider">Depósito fiscal</p>
                   {depositoFiscal ? (
@@ -6237,51 +6435,49 @@ export default function ComexImportDetail() {
                   )}
                 </div>
 
-                {/* Peso bruto */}
+                {/* Peso bruto — editable */}
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Peso bruto</p>
-                  <p className={`text-sm mt-0.5 ${peso != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
-                    {peso != null ? <><span className="font-semibold">{fmtNum(peso)}</span> <span className="text-slate-500 text-xs">kg</span></> : '—'}
-                  </p>
+                  <EditableNumber
+                    label="Peso bruto"
+                    value={customs?.peso_bruto_kg ?? null}
+                    suffix=" kg"
+                    onSave={(v) => saveCustoms({ peso_bruto_kg: v })}
+                  />
                 </div>
 
-                {/* Volumen */}
+                {/* Volumen — editable */}
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Volumen</p>
-                  <p className={`text-sm mt-0.5 ${volumen != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
-                    {volumen != null ? <><span className="font-semibold">{fmtNum(volumen)}</span> <span className="text-slate-500 text-xs">m³</span></> : '—'}
-                  </p>
+                  <EditableNumber
+                    label="Volumen"
+                    value={customs?.volumen_m3 ?? null}
+                    suffix=" m³"
+                    onSave={(v) => saveCustoms({ volumen_m3: v })}
+                  />
                 </div>
 
-                {/* Cajas — separado de pallets */}
+                {/* Cajas — editable */}
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Cajas</p>
-                  <p className={`text-sm mt-0.5 ${cajasDisplay != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
-                    {cajasDisplay != null ? (
-                      <>
-                        <span className="font-semibold">{cajasDisplay}</span>
-                        <span className="text-slate-500 text-xs ml-1">cajas</span>
-                      </>
-                    ) : '—'}
-                  </p>
-                  {cajas != null && bultos != null && cajas !== bultos && (
+                  <EditableNumber
+                    label="Cajas"
+                    value={customs?.cant_cartons ?? null}
+                    suffix=" cajas"
+                    onSave={(v) => saveCustoms({ cant_cartons: v })}
+                  />
+                  {customs?.cant_cartons != null && bultos != null && customs.cant_cartons !== bultos && (
                     <p className="text-[9px] text-amber-500 mt-0.5">
                       Desp.: {bultos}
                     </p>
                   )}
                 </div>
 
-                {/* Pallets — separado de cajas */}
+                {/* Pallets — editable */}
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Pallets</p>
-                  <p className={`text-sm mt-0.5 ${pallets != null ? 'text-slate-200' : 'text-slate-600 italic'}`}>
-                    {pallets != null ? (
-                      <>
-                        <span className="font-semibold">{pallets}</span>
-                        <span className="text-slate-500 text-xs ml-1">pallets</span>
-                      </>
-                    ) : '—'}
-                  </p>
+                  <EditableNumber
+                    label="Pallets"
+                    value={customs?.cant_pallets ?? null}
+                    suffix=" pallets"
+                    onSave={(v) => saveCustoms({ cant_pallets: v })}
+                  />
                 </div>
 
               </div>

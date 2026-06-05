@@ -81,7 +81,7 @@ function LogisticsStats() {
 
   const stats = {
     ordered: imports.filter((i) => i.status === 'ordered').length,
-    inProd: imports.filter((i) => i.status === 'production').length,
+    inProd: imports.filter((i) => ['production', 'carga_armada', 'esperando_embarcar'].includes(i.status)).length,
     inTransit: imports.filter((i) => ['shipped', 'transit'].includes(i.status)).length,
     customs: imports.filter((i) => i.status === 'customs').length,
   }

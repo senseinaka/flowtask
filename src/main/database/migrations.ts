@@ -1047,6 +1047,15 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         );
       `)
     }
+  },
+  {
+    version: 51,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE comex_imports ADD COLUMN carga_armada_date        INTEGER;
+        ALTER TABLE comex_imports ADD COLUMN esperando_embarcar_date  INTEGER;
+      `)
+    }
   }
 ]
 

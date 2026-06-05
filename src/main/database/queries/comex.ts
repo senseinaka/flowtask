@@ -206,6 +206,7 @@ export function updateImport(id: string, data: Partial<ComexImport>): ComexImpor
     'tc_eur_ars', 'cost_pct', 'proformas_folder_id', 'facturas_folder_id',
     'despacho_folder_id','despacho_stored_name','despacho_original_name',
     'despacho_drive_file_id','despacho_drive_status',
+    'carga_armada_date','esperando_embarcar_date',
     'aviso_arribo_date','traslado_deposito_date','oficializacion_import_date',
     'carga_deposito_date','carga_deposito_time',
     'freight_operator_id','despachante','forwarder_ref_mail','bl_number',
