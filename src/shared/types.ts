@@ -1262,3 +1262,125 @@ export interface ComexCostItem {
 
 export type UpsertComexCustomsInput = Omit<ComexCustoms, 'id' | 'created_at' | 'updated_at'>
 export type CreateComexCostInput    = Omit<ComexCostItem, 'id' | 'created_at'>
+
+// ─── Vencimientos ─────────────────────────────────────────────────────────────
+
+export type ExpiryFrequency =
+  | 'once'          // sin renovación
+  | 'monthly'       // mensual
+  | 'quarterly'     // trimestral
+  | 'biannual'      // semestral
+  | 'annual'        // anual
+  | 'biennial'      // bienal (2 años)
+  | 'triennial'     // trienal (3 años)
+  | 'quinquennial'  // quinquenal (5 años)
+  | 'custom'        // personalizado en días
+
+export type ExpiryUrgency = 'overdue' | 'urgent' | 'soon' | 'upcoming' | 'ok' | 'renewed'
+
+export interface ExpiryCategory {
+  id:         string
+  name:       string
+  icon:       string    // emoji
+  color:      string    // hex
+  is_default: number    // 0 | 1
+  created_at: number
+  updated_at: number
+}
+
+export interface ExpiryItem {
+  id:                   string
+  category_id:          string
+  category?:            ExpiryCategory
+  title:                string
+  description:          string
+  holder:               string          // titular del documento
+  expiry_date:          number          // timestamp ms
+  frequency:            ExpiryFrequency
+  frequency_custom_days: number | null  // solo para 'custom'
+  is_renewed:           number          // 0 | 1
+  renewed_date:         number | null
+  next_expiry_date:     number | null   // calculado al renovar
+  notes:                string
+  created_at:           number
+  updated_at:           number
+}
+
+export interface ExpiryAlert {
+  id:               string
+  item_id:          string
+  days_before:      number
+  channel:          'whatsapp' | 'inapp' | 'both'
+  whatsapp_number:  string
+  last_sent_at:     number | null
+  created_at:       number
+}
+
+export interface CreateExpiryItemInput {
+  category_id:           string
+  title:                 string
+  description?:          string
+  holder?:               string
+  expiry_date:           number
+  frequency:             ExpiryFrequency
+  frequency_custom_days?: number | null
+  notes?:                string
+}
+
+export interface CreateExpiryAlertInput {
+  days_before:      number
+  channel:          'whatsapp' | 'inapp' | 'both'
+  whatsapp_number?: string
+}
+
+export const EXPIRY_FREQUENCY_LABELS: Record<ExpiryFrequency, string> = {
+  once:         'Sin renovación',
+  monthly:      'Mensual',
+  quarterly:    'Trimestral',
+  biannual:     'Semestral',
+  annual:       'Anual',
+  biennial:     'Bienal (2 años)',
+  triennial:    'Trienal (3 años)',
+  quinquennial: 'Quinquenal (5 años)',
+  custom:       'Personalizado',
+}
+
+export const EXPIRY_FREQUENCY_DAYS: Record<ExpiryFrequency, number | null> = {
+  once:         null,
+  monthly:      30,
+  quarterly:    91,
+  biannual:     182,
+  annual:       365,
+  biennial:     730,
+  triennial:    1095,
+  quinquennial: 1825,
+  custom:       null,
+}
+
+export const EXPIRY_URGENCY_COLORS: Record<ExpiryUrgency, string> = {
+  overdue: '#ef4444',  // red
+  urgent:  '#f97316',  // orange
+  soon:    '#f59e0b',  // amber
+  upcoming:'#3b82f6',  // blue
+  ok:      '#10b981',  // emerald
+  renewed: '#64748b',  // slate
+}
+
+export const EXPIRY_URGENCY_LABELS: Record<ExpiryUrgency, string> = {
+  overdue: 'Vencido',
+  urgent:  'Urgente',
+  soon:    'Próximo',
+  upcoming:'En radar',
+  ok:      'Ok',
+  renewed: 'Renovado',
+}
+
+export const DEFAULT_EXPIRY_CATEGORIES: Omit<ExpiryCategory, 'id' | 'created_at' | 'updated_at'>[] = [
+  { name: 'Documentos personales',  icon: '🪪', color: '#3b82f6', is_default: 1 },
+  { name: 'Documentos societarios', icon: '🏢', color: '#8b5cf6', is_default: 1 },
+  { name: 'Dominios web',           icon: '🌐', color: '#06b6d4', is_default: 1 },
+  { name: 'Seguros',                icon: '🛡️', color: '#10b981', is_default: 1 },
+  { name: 'Contratos',              icon: '📋', color: '#f59e0b', is_default: 1 },
+  { name: 'Legales / Registros',    icon: '⚖️', color: '#f97316', is_default: 1 },
+  { name: 'Membresías',             icon: '🎫', color: '#ec4899', is_default: 1 },
+]

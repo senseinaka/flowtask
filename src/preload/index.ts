@@ -24,7 +24,8 @@ import type {
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
   ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
-  ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput
+  ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
+  ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput
 } from '@shared/types'
 
 const api = {
@@ -474,6 +475,28 @@ const api = {
         ipcRenderer.invoke('ai:prompts:writeToCode', operation, newPrompt),
       isDevMode:      (): Promise<boolean> =>
         ipcRenderer.invoke('ai:prompts:isDevMode'),
+    }
+  },
+
+  expiry: {
+    categories: {
+      list:   (): Promise<ExpiryCategory[]>                                        => ipcRenderer.invoke('expiry:categories:list'),
+      create: (data: { name: string; icon: string; color: string }): Promise<ExpiryCategory> => ipcRenderer.invoke('expiry:categories:create', data),
+      update: (id: string, data: { name?: string; icon?: string; color?: string }): Promise<ExpiryCategory> => ipcRenderer.invoke('expiry:categories:update', id, data),
+      delete: (id: string): Promise<void>                                          => ipcRenderer.invoke('expiry:categories:delete', id),
+    },
+    items: {
+      list:    (): Promise<ExpiryItem[]>                                              => ipcRenderer.invoke('expiry:items:list'),
+      get:     (id: string): Promise<ExpiryItem | null>                             => ipcRenderer.invoke('expiry:items:get', id),
+      create:  (data: CreateExpiryItemInput): Promise<ExpiryItem>                   => ipcRenderer.invoke('expiry:items:create', data),
+      update:  (id: string, data: Partial<CreateExpiryItemInput>): Promise<ExpiryItem> => ipcRenderer.invoke('expiry:items:update', id, data),
+      renew:   (id: string, renewedDate: number): Promise<ExpiryItem>               => ipcRenderer.invoke('expiry:items:renew', id, renewedDate),
+      unrenew: (id: string): Promise<ExpiryItem>                                    => ipcRenderer.invoke('expiry:items:unrenew', id),
+      delete:  (id: string): Promise<void>                                           => ipcRenderer.invoke('expiry:items:delete', id),
+    },
+    alerts: {
+      listByItem:  (itemId: string): Promise<ExpiryAlert[]>                                      => ipcRenderer.invoke('expiry:alerts:listByItem', itemId),
+      setForItem:  (itemId: string, alerts: CreateExpiryAlertInput[]): Promise<ExpiryAlert[]>    => ipcRenderer.invoke('expiry:alerts:setForItem', itemId, alerts),
     }
   },
 

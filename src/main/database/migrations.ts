@@ -1056,6 +1056,69 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         ALTER TABLE comex_imports ADD COLUMN esperando_embarcar_date  INTEGER;
       `)
     }
+  },
+  {
+    version: 52,
+    up: (db) => {
+      const now = Date.now()
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS expiry_categories (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '📄',
+          color       TEXT NOT NULL DEFAULT '#6366f1',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS expiry_items (
+          id                    TEXT PRIMARY KEY,
+          category_id           TEXT NOT NULL REFERENCES expiry_categories(id) ON DELETE CASCADE,
+          title                 TEXT NOT NULL,
+          description           TEXT NOT NULL DEFAULT '',
+          holder                TEXT NOT NULL DEFAULT '',
+          expiry_date           INTEGER NOT NULL,
+          frequency             TEXT NOT NULL DEFAULT 'annual',
+          frequency_custom_days INTEGER,
+          is_renewed            INTEGER NOT NULL DEFAULT 0,
+          renewed_date          INTEGER,
+          next_expiry_date      INTEGER,
+          notes                 TEXT NOT NULL DEFAULT '',
+          created_at            INTEGER NOT NULL,
+          updated_at            INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS expiry_alerts (
+          id               TEXT PRIMARY KEY,
+          item_id          TEXT NOT NULL REFERENCES expiry_items(id) ON DELETE CASCADE,
+          days_before      INTEGER NOT NULL,
+          channel          TEXT NOT NULL DEFAULT 'both',
+          whatsapp_number  TEXT NOT NULL DEFAULT '',
+          last_sent_at     INTEGER,
+          created_at       INTEGER NOT NULL
+        );
+      `)
+
+      // Seed categorías por defecto
+      const categories = [
+        { name: 'Documentos personales',  icon: '🪪', color: '#3b82f6' },
+        { name: 'Documentos societarios', icon: '🏢', color: '#8b5cf6' },
+        { name: 'Dominios web',           icon: '🌐', color: '#06b6d4' },
+        { name: 'Seguros',                icon: '🛡️', color: '#10b981' },
+        { name: 'Contratos',              icon: '📋', color: '#f59e0b' },
+        { name: 'Legales / Registros',    icon: '⚖️', color: '#f97316' },
+        { name: 'Membresías',             icon: '🎫', color: '#ec4899' },
+      ]
+      const insert = db.prepare(`
+        INSERT INTO expiry_categories (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `)
+      const { v4: uuidv4 } = require('uuid')
+      for (const cat of categories) {
+        insert.run(uuidv4(), cat.name, cat.icon, cat.color, now, now)
+      }
+    }
   }
 ]
 

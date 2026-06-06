@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
-  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard
+  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { useUIStore } from '../../store/ui.store'
@@ -208,6 +208,22 @@ export default function Sidebar() {
               subActive: 'bg-cyan-700/40 text-cyan-200'
             }}
           />
+        </div>
+
+        {/* ── Vencimientos ──────────────────────────────────────────────── */}
+        <div className="pt-1">
+          <NavLink
+            to="/expiry"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                isActive ? 'bg-amber-900/40 text-amber-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+              )
+            }
+          >
+            <Clock size={16} />
+            Vencimientos
+          </NavLink>
         </div>
 
         {/* ── Configuración ─────────────────────────────────────────────── */}

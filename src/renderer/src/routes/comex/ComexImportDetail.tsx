@@ -370,12 +370,29 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
   mainDone: boolean
   mainActive: boolean
 }) {
-  const [hovered, setHovered] = useState(false)
-  const showPanel = mainActive || mainDone || hovered
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Cerrar al hacer click fuera del nodo
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Cerrar con Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open])
 
   // Sub-estado activo dentro del proveedor
   const activeSubIdx = PROVEEDOR_SUB_STEPS.indexOf(currentStatus)
-  // Si el status actual no es un sub-estado del proveedor pero el nodo está done, el último sub-estado es el completado
   const effectiveSubIdx = activeSubIdx >= 0 ? activeSubIdx : (mainDone ? PROVEEDOR_SUB_STEPS.length - 1 : -1)
 
   const mainColor = '#f59e0b' // amber — color del grupo proveedor
@@ -386,29 +403,37 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
     esperando_embarcar: 'Esp. embarque',
   }
 
+  // Label dinámico según el sub-estado activo del proveedor
+  const mainLabelLines: Record<string, string[]> = {
+    production:         ['En', 'producción'],
+    carga_armada:       ['Carga', 'armada'],
+    esperando_embarcar: ['Esp.', 'embarque'],
+  }
+  const labelLines = mainLabelLines[currentStatus] ?? ['En', 'depósito']
+
   return (
     <div
-      className="relative z-10 flex flex-col items-center flex-1 gap-1 group"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      ref={containerRef}
+      className="relative z-10 flex flex-col items-center flex-1 gap-1"
     >
-      {/* Círculo principal */}
+      {/* Botón principal — toggle del panel */}
       <button
-        onClick={() => onChangeStatus('production')}
-        title="En producción (depósito proveedor)"
-        className="flex flex-col items-center gap-1 w-full"
+        onClick={() => setOpen(o => !o)}
+        title="Ver sub-estados del proveedor"
+        className="flex flex-col items-center gap-1 w-full group"
       >
         <div
           className={cn(
             'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
             mainActive ? 'shadow-md scale-110' :
             mainDone   ? 'opacity-90' :
+            open       ? 'border-amber-500/70 bg-amber-500/10' :
             'border-slate-600 bg-slate-800 group-hover:border-slate-500'
           )}
           style={mainDone || mainActive ? {
             borderColor: mainColor,
             backgroundColor: mainDone ? mainColor + '33' : mainColor + '22',
-            boxShadow: mainActive ? `0 0 10px ${mainColor}55` : undefined
+            boxShadow: mainActive || open ? `0 0 10px ${mainColor}55` : undefined
           } : {}}
         >
           {mainDone && !mainActive ? (
@@ -423,9 +448,9 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
           )}
         </div>
 
-        {/* Label principal */}
+        {/* Label dinámico según sub-estado */}
         <div className="flex flex-col items-center gap-0">
-          {['En', 'depósito'].map((line, i) => (
+          {labelLines.map((line, i) => (
             <span
               key={i}
               className={cn(
@@ -438,19 +463,49 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
             </span>
           ))}
         </div>
+
+        {/* Fecha del sub-estado activo */}
+        {(() => {
+          const subStatus = PROVEEDOR_SUB_STEPS.includes(currentStatus) ? currentStatus : null
+          const { ts } = subStatus ? getStepDate(subStatus, imp) : { ts: null }
+          return ts ? (
+            <span className="text-[7px] font-mono leading-none" style={{ color: mainColor + 'bb' }}>
+              {dayjs(ts).format('DD/MM/YY')}
+            </span>
+          ) : (
+            <span className="text-[7px] text-slate-700">—</span>
+          )
+        })()}
+
+        {/* Indicador de expandible — pequeño chevron debajo del label */}
+        <ChevronDown
+          size={8}
+          className="transition-transform duration-200"
+          style={{
+            color: mainDone || mainActive ? mainColor + '99' : '#475569',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)'
+          }}
+        />
       </button>
 
-      {/* Panel de sub-pasos — visible cuando activo, done o hover */}
+      {/* Panel de sub-pasos — solo visible cuando open */}
       <div
         className={cn(
-          'absolute top-full mt-1.5 left-1/2 -translate-x-1/2 z-20',
-          'bg-slate-900 border border-amber-900/50 rounded-lg shadow-xl shadow-black/40',
-          'transition-all duration-200 origin-top',
-          showPanel ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+          'absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-20',
+          'bg-slate-900 border border-amber-900/50 rounded-lg shadow-xl shadow-black/50',
+          'transition-all duration-150 origin-top',
+          open ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
         )}
-        style={{ width: '156px' }}
+        style={{ width: '160px' }}
       >
-        <div className="px-2.5 py-2 space-y-1.5">
+        {/* Flecha apuntando hacia arriba */}
+        <div
+          className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-1.5 overflow-hidden"
+        >
+          <div className="w-3 h-3 bg-slate-900 border-l border-t border-amber-900/50 rotate-45 translate-y-1/2 mx-auto" />
+        </div>
+
+        <div className="px-2.5 py-2 space-y-1">
           {PROVEEDOR_SUB_STEPS.map((sub, subIdx) => {
             const subDone   = effectiveSubIdx > subIdx || (mainDone && effectiveSubIdx < 0)
             const subActive = currentStatus === sub
@@ -462,14 +517,18 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
             return (
               <button
                 key={sub}
-                onClick={(e) => { e.stopPropagation(); onChangeStatus(sub) }}
-                className="w-full flex items-center gap-2 group/sub rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onChangeStatus(sub)
+                  setOpen(false)
+                }}
+                className="w-full flex items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
               >
                 {/* Mini círculo */}
                 <div
                   className={cn(
-                    'w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center transition-all',
-                    subDone   ? 'border-0' :
+                    'w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
+                    subDone   ? '' :
                     subActive ? 'border-2 scale-110' :
                     'border border-slate-600'
                   )}
