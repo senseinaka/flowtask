@@ -1388,3 +1388,60 @@ Si no tenés suficiente información para responder, decilo claramente.`
     tokens_used: resp.usage.input_tokens + resp.usage.output_tokens
   }
 }
+
+// ── Parse de texto libre para importación masiva de vencimientos ──────────────
+
+export interface ParsedExpiryRow {
+  title:       string
+  expiry_date: string   // YYYY-MM-DD
+  holder:      string
+  description: string
+  frequency:   string   // 'annual' | 'once' | etc.
+  category_hint: string // nombre libre de categoría sugerida
+}
+
+export async function parseExpiryText(
+  rawText: string
+): Promise<ParsedExpiryRow[]> {
+  const client = getClient()
+  const config = getAIConfig()
+  // Usamos el modelo más económico disponible para esta tarea
+  const model = (config.models['dashboard_chat'] ?? 'claude-haiku-4-5') as string
+
+  const systemPrompt = `Sos un asistente que extrae información estructurada de textos sobre vencimientos de documentos.
+El usuario va a pegarte texto en cualquier formato (tabla, lista, texto libre, HTML, TSV, etc.).
+Debés extraer TODOS los ítems de vencimiento que encuentres y devolverlos como un array JSON.
+
+Cada ítem debe tener:
+- title: nombre del ítem (ej: "simms.com.ar", "DNI Juan Pérez", "Tarjeta Visa")
+- expiry_date: fecha de vencimiento en formato YYYY-MM-DD
+- holder: titular o responsable si se menciona (string vacío si no hay)
+- description: información extra relevante (string vacío si no hay)
+- frequency: frecuencia estimada de renovación ("annual", "biennial", "once", "monthly", "custom"). Para dominios .ar/.com.ar usá "annual".
+- category_hint: categoría sugerida en español (ej: "Dominios", "Documentos de identidad", "Tarjetas", "Seguros", etc.)
+
+Devolvé SOLO el JSON array, sin texto adicional ni markdown. Ejemplo:
+[{"title":"simms.com.ar","expiry_date":"2026-07-18","holder":"","description":"","frequency":"annual","category_hint":"Dominios"}]`
+
+  const resp = await client.messages.create({
+    model,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: rawText }]
+  })
+
+  const raw = resp.content
+    .filter(b => b.type === 'text')
+    .map(b => (b as Anthropic.TextBlock).text)
+    .join('')
+    .trim()
+
+  // Limpiar posibles bloques markdown ```json ... ```
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
+  try {
+    return JSON.parse(cleaned) as ParsedExpiryRow[]
+  } catch {
+    throw new Error(`La IA devolvió un formato inesperado. Respuesta: ${raw.slice(0, 200)}`)
+  }
+}

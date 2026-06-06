@@ -5,7 +5,8 @@ import {
   Plus, Clock, CheckCircle2, AlertTriangle, Calendar,
   LayoutList, GitBranch, Settings2, Trash2, Edit3,
   ChevronRight, RotateCcw, X, Bell, BellOff, Save,
-  RefreshCw, Shield, Tag
+  RefreshCw, Shield, Tag, Upload, Sparkles, Loader2,
+  Check, AlertCircle, ChevronDown as ChevronDownIcon
 } from 'lucide-react'
 import {
   useExpiryItems, useExpiryCategories,
@@ -1045,6 +1046,266 @@ function StatsBar({ items }: { items: ExpiryItem[] }) {
   )
 }
 
+// ── Importación masiva con IA ─────────────────────────────────────────────────
+
+interface ParsedRow {
+  title:         string
+  expiry_date:   string
+  holder:        string
+  description:   string
+  frequency:     string
+  category_hint: string
+  selected:      boolean
+  // resuelto al confirmar
+  category_id?:  string
+}
+
+function ImportBulkModal({
+  categories,
+  onClose,
+  onImported
+}: {
+  categories:  ExpiryCategory[]
+  onClose:     () => void
+  onImported:  (count: number) => void
+}) {
+  const createItem = useCreateExpiryItem()
+
+  const [step,    setStep]    = useState<'paste' | 'preview' | 'done'>('paste')
+  const [text,    setText]    = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+  const [rows,    setRows]    = useState<ParsedRow[]>([])
+  const [saving,  setSaving]  = useState(false)
+
+  // Mapeo automático de category_hint → category_id
+  const resolveCategoryId = (hint: string): string => {
+    const h = hint.toLowerCase()
+    const match = categories.find(c =>
+      c.name.toLowerCase().includes(h) || h.includes(c.name.toLowerCase())
+    )
+    return match?.id ?? categories[0]?.id ?? ''
+  }
+
+  const handleParse = async () => {
+    if (!text.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const parsed = await window.api.ai.parseExpiryItems(text)
+      setRows(parsed.map(r => ({
+        ...r,
+        selected:    true,
+        category_id: resolveCategoryId(r.category_hint)
+      })))
+      setStep('preview')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleImport = async () => {
+    const toImport = rows.filter(r => r.selected)
+    if (!toImport.length) return
+    setSaving(true)
+    let ok = 0
+    for (const r of toImport) {
+      try {
+        await createItem.mutateAsync({
+          category_id:           r.category_id ?? categories[0]?.id ?? '',
+          title:                 r.title,
+          holder:                r.holder,
+          description:           r.description,
+          expiry_date:           dayjs(r.expiry_date).valueOf(),
+          frequency:             (r.frequency as ExpiryFrequency) ?? 'annual',
+          frequency_custom_days: null,
+          notes:                 '',
+        })
+        ok++
+      } catch { /* skip individual failures */ }
+    }
+    setSaving(false)
+    onImported(ok)
+    onClose()
+  }
+
+  const toggleRow  = (i: number) => setRows(rs => rs.map((r,idx) => idx===i ? {...r, selected: !r.selected} : r))
+  const toggleAll  = () => { const allSel = rows.every(r => r.selected); setRows(rs => rs.map(r => ({...r, selected: !allSel}))) }
+  const updRow = (i: number, k: keyof ParsedRow, v: string) => setRows(rs => rs.map((r,idx) => idx===i ? {...r, [k]: v} : r))
+
+  const inputCls = 'bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 w-full'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        style={{ width: 'min(900px, 96vw)', maxHeight: '90vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/50 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-600/30 flex items-center justify-center">
+              <Sparkles size={18} className="text-violet-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-white">Importación masiva con IA</h2>
+              <p className="text-[10px] text-slate-500">
+                {step === 'paste'   && 'Pegá texto en cualquier formato — tabla, lista, HTML, lo que sea'}
+                {step === 'preview' && `${rows.length} ítems detectados — revisá y ajustá antes de importar`}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X size={18} /></button>
+        </div>
+
+        {/* ── STEP 1: Pegar texto ── */}
+        {step === 'paste' && (
+          <div className="flex flex-col flex-1 overflow-hidden p-6 gap-4">
+            <textarea
+              autoFocus
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder={`Pegá aquí cualquier texto con vencimientos. Ejemplos:\n\n• Tabla de dominios con columnas Dominio / Alta / Vencimiento\n• Lista de tarjetas con fechas\n• Texto libre: "El DNI de Juan vence el 15/03/2027"\n• HTML copiado de una web\n\nLa IA va a extraer automáticamente todos los ítems.`}
+              className="flex-1 bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none font-mono"
+              style={{ minHeight: 300 }}
+            />
+            {error && (
+              <div className="flex items-center gap-2 bg-red-950/40 border border-red-800/40 rounded-lg px-3 py-2">
+                <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+                <p className="text-xs text-red-300">{error}</p>
+              </div>
+            )}
+            <div className="flex justify-end gap-3">
+              <button onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200 px-4 py-2">Cancelar</button>
+              <button
+                onClick={handleParse}
+                disabled={loading || !text.trim()}
+                className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors shadow-lg shadow-violet-900/30"
+              >
+                {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                {loading ? 'Analizando con IA...' : 'Analizar con IA'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 2: Preview ── */}
+        {step === 'preview' && (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Tabla */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="pb-2 pr-2 text-left">
+                      <input
+                        type="checkbox"
+                        checked={rows.every(r => r.selected)}
+                        onChange={toggleAll}
+                        className="accent-indigo-500"
+                      />
+                    </th>
+                    <th className="pb-2 pr-3 text-left text-slate-400 font-medium">Título</th>
+                    <th className="pb-2 pr-3 text-left text-slate-400 font-medium">Vencimiento</th>
+                    <th className="pb-2 pr-3 text-left text-slate-400 font-medium">Titular</th>
+                    <th className="pb-2 pr-3 text-left text-slate-400 font-medium">Categoría</th>
+                    <th className="pb-2 text-left text-slate-400 font-medium">Frecuencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {rows.map((row, i) => (
+                    <tr key={i} className={row.selected ? '' : 'opacity-40'}>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={row.selected}
+                          onChange={() => toggleRow(i)}
+                          className="accent-indigo-500"
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          value={row.title}
+                          onChange={e => updRow(i, 'title', e.target.value)}
+                          className={inputCls}
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          type="date"
+                          value={row.expiry_date}
+                          onChange={e => updRow(i, 'expiry_date', e.target.value)}
+                          className={inputCls + ' w-36'}
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          value={row.holder}
+                          onChange={e => updRow(i, 'holder', e.target.value)}
+                          placeholder="—"
+                          className={inputCls}
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <select
+                          value={row.category_id ?? ''}
+                          onChange={e => updRow(i, 'category_id', e.target.value)}
+                          className={inputCls}
+                        >
+                          {categories.map(c => (
+                            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-2">
+                        <select
+                          value={row.frequency}
+                          onChange={e => updRow(i, 'frequency', e.target.value)}
+                          className={inputCls + ' w-28'}
+                        >
+                          {FREQ_OPTIONS.map(f => (
+                            <option key={f} value={f}>{EXPIRY_FREQUENCY_LABELS[f]}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-800/30 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { setStep('paste'); setRows([]) }}
+                  className="text-sm text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
+                >
+                  ← Volver
+                </button>
+                <span className="text-xs text-slate-500">
+                  {rows.filter(r => r.selected).length} de {rows.length} seleccionados
+                </span>
+              </div>
+              <button
+                onClick={handleImport}
+                disabled={saving || rows.filter(r => r.selected).length === 0}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors shadow-lg shadow-indigo-900/30"
+              >
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                {saving ? 'Importando...' : `Importar ${rows.filter(r => r.selected).length} vencimientos`}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 type ViewMode = 'list' | 'timeline'
@@ -1059,6 +1320,7 @@ export default function ExpiryDashboard() {
   const [renewItem,    setRenewItem]    = useState<ExpiryItem | null>(null)
   const [deletingId,   setDeletingId]   = useState<string | null>(null)
   const [showCatMgr,   setShowCatMgr]   = useState(false)
+  const [showImport,   setShowImport]   = useState(false)
 
   const deleteItem = useDeleteExpiryItem()
 
@@ -1122,6 +1384,14 @@ export default function ExpiryDashboard() {
               </button>
             </div>
 
+            {/* Importar con IA */}
+            <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 text-xs text-violet-300 hover:text-violet-200 border border-violet-800/60 hover:border-violet-600 bg-violet-900/20 rounded-lg px-3 py-2 transition-colors"
+            >
+              <Sparkles size={13} /> Importar con IA
+            </button>
+
             {/* Categorías */}
             <button
               onClick={() => setShowCatMgr(true)}
@@ -1180,6 +1450,17 @@ export default function ExpiryDashboard() {
       )}
       {showCatMgr && (
         <CategoryManager onClose={() => setShowCatMgr(false)} />
+      )}
+      {showImport && (
+        <ImportBulkModal
+          categories={categories}
+          onClose={() => setShowImport(false)}
+          onImported={(count) => {
+            setShowImport(false)
+            // pequeño toast visual via alert (se puede mejorar con un toast)
+            console.log(`[Expiry] Importados ${count} vencimientos`)
+          }}
+        />
       )}
     </div>
   )

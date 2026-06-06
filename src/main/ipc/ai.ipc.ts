@@ -5,7 +5,7 @@ import {
   getAIConfig, saveAIConfig, isAIConfigured,
   analyzeDocument, dashboardChat, validateDespachoResult,
   getPromptOverride, savePromptOverride, deletePromptOverride, listPromptOverrides,
-  getEffectiveSystemPrompt,
+  getEffectiveSystemPrompt, parseExpiryText,
 } from '../services/ai.service'
 import { DEFAULT_SYSTEM_PROMPTS, PROMPT_LABELS, PROMPT_DESCRIPTIONS } from '../services/ai.prompts'
 import { getDocument, getImport, getExtraCost, getProforma } from '../database/queries/comex'
@@ -269,4 +269,9 @@ export function registerAIIpc(): void {
 
   /** Devuelve si el writeToCode está disponible (dev mode) */
   ipcMain.handle('ai:prompts:isDevMode', () => !!PROMPTS_SOURCE_FILE && fs.existsSync(PROMPTS_SOURCE_FILE))
+
+  // ── Parseo de texto libre → vencimientos ───────────────────────────────────
+  ipcMain.handle('ai:parseExpiryItems', (_e, rawText: string) =>
+    parseExpiryText(rawText)
+  )
 }

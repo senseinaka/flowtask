@@ -475,7 +475,11 @@ const api = {
         ipcRenderer.invoke('ai:prompts:writeToCode', operation, newPrompt),
       isDevMode:      (): Promise<boolean> =>
         ipcRenderer.invoke('ai:prompts:isDevMode'),
-    }
+    },
+    parseExpiryItems: (rawText: string): Promise<Array<{
+      title: string; expiry_date: string; holder: string;
+      description: string; frequency: string; category_hint: string
+    }>> => ipcRenderer.invoke('ai:parseExpiryItems', rawText),
   },
 
   expiry: {
