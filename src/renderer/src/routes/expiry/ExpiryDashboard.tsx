@@ -1305,14 +1305,12 @@ function ExpiryList({
   onUnrenew: (item: ExpiryItem) => void
 }) {
   const [filterCat,     setFilterCat]     = useState<string>('all')
-  const [filterUrgency, setFilterUrgency] = useState<string>('all')
   const [showRenewed,   setShowRenewed]   = useState(false)
 
   const filtered = useMemo(() => {
     let list = [...items]
     if (!showRenewed) list = list.filter(i => !i.is_renewed)
     if (filterCat !== 'all') list = list.filter(i => i.category_id === filterCat)
-    if (filterUrgency !== 'all') list = list.filter(i => getExpiryUrgency(i) === filterUrgency)
     return list.sort((a, b) => {
       const ua = URGENCY_ORDER.indexOf(getExpiryUrgency(a))
       const ub = URGENCY_ORDER.indexOf(getExpiryUrgency(b))
@@ -1333,17 +1331,6 @@ function ExpiryList({
           <option value="all">Todas las categorías</option>
           {categories.map(c => (
             <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-          ))}
-        </select>
-
-        <select
-          value={filterUrgency}
-          onChange={e => setFilterUrgency(e.target.value)}
-          className="bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
-        >
-          <option value="all">Todas las urgencias</option>
-          {URGENCY_ORDER.filter(u => u !== 'renewed').map(u => (
-            <option key={u} value={u}>{URGENCY_URGENCY_ICONS[u]} {EXPIRY_URGENCY_LABELS[u]}</option>
           ))}
         </select>
 
@@ -1390,7 +1377,13 @@ function ExpiryList({
 
 // ── Stats Bar ─────────────────────────────────────────────────────────────────
 
-function StatsBar({ items }: { items: ExpiryItem[] }) {
+function StatsBar({
+  items, activeFilter, onToggle
+}: {
+  items: ExpiryItem[]
+  activeFilter: ExpiryUrgency | null
+  onToggle: (urgency: ExpiryUrgency) => void
+}) {
   const active = items.filter(i => !i.is_renewed)
   const counts = useMemo(() => {
     const c: Partial<Record<ExpiryUrgency, number>> = {}
@@ -1410,26 +1403,54 @@ function StatsBar({ items }: { items: ExpiryItem[] }) {
   ]
 
   return (
-    <div className="grid grid-cols-5 gap-3">
-      {stats.map(s => {
-        const count = counts[s.key] ?? 0
-        const color = EXPIRY_URGENCY_COLORS[s.key]
-        return (
-          <div
-            key={s.key}
-            className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 text-center"
-            style={{ borderColor: count > 0 ? color + '40' : undefined }}
-          >
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">{s.icon} {s.label}</p>
-            <p
-              className="text-2xl font-bold"
-              style={{ color: count > 0 ? color : '#475569' }}
+    <div className="space-y-2">
+      <div className="grid grid-cols-5 gap-3">
+        {stats.map(s => {
+          const count = counts[s.key] ?? 0
+          const color = EXPIRY_URGENCY_COLORS[s.key]
+          const isActive = activeFilter === s.key
+          return (
+            <button
+              key={s.key}
+              onClick={() => onToggle(s.key)}
+              title={isActive ? 'Click para quitar el filtro' : `Mostrar solo "${s.label}"`}
+              className={cn(
+                'rounded-xl p-3 text-center border transition-all cursor-pointer',
+                isActive ? 'bg-slate-800 scale-[1.02] shadow-lg' : 'bg-slate-800/60 hover:bg-slate-800 hover:border-slate-600/80'
+              )}
+              style={{
+                borderColor: isActive ? color : (count > 0 ? color + '40' : '#334155'),
+                boxShadow:   isActive ? `0 0 0 1px ${color}, 0 4px 16px -2px ${color}40` : undefined,
+              }}
             >
-              {count}
-            </p>
-          </div>
-        )
-      })}
+              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">{s.icon} {s.label}</p>
+              <p
+                className="text-2xl font-bold"
+                style={{ color: count > 0 ? color : '#475569' }}
+              >
+                {count}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+
+      {activeFilter && (
+        <div className="flex items-center gap-2 text-[11px] text-slate-400 px-1">
+          <span>
+            Mostrando solo:{' '}
+            <span className="font-semibold" style={{ color: EXPIRY_URGENCY_COLORS[activeFilter] }}>
+              {EXPIRY_URGENCY_LABELS[activeFilter]}
+            </span>
+          </span>
+          <button
+            onClick={() => onToggle(activeFilter)}
+            className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            <X size={11} /> Quitar filtro
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1709,6 +1730,17 @@ export default function ExpiryDashboard() {
   const [deletingId,   setDeletingId]   = useState<string | null>(null)
   const [showCatMgr,   setShowCatMgr]   = useState(false)
   const [showImport,   setShowImport]   = useState(false)
+  const [statsFilter,  setStatsFilter]  = useState<ExpiryUrgency | null>(null)
+
+  // Las tarjetas de la barra de stats funcionan como botones de filtro rápido:
+  // al hacer click se muestran solo los ítems de esa urgencia (click de nuevo = quitar)
+  const toggleStatsFilter = (urgency: ExpiryUrgency) =>
+    setStatsFilter(f => f === urgency ? null : urgency)
+
+  const displayItems = useMemo(() => {
+    if (!statsFilter) return items
+    return items.filter(i => getExpiryUrgency(i) === statsFilter)
+  }, [items, statsFilter])
 
   const deleteItem = useDeleteExpiryItem()
 
@@ -1801,13 +1833,13 @@ export default function ExpiryDashboard() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-        {/* Stats */}
-        <StatsBar items={items} />
+        {/* Stats — funcionan como botones de filtro rápido por urgencia */}
+        <StatsBar items={items} activeFilter={statsFilter} onToggle={toggleStatsFilter} />
 
         {/* Vista activa */}
         {view === 'timeline' ? (
           <ExpiryTimeline
-            items={items}
+            items={displayItems}
             onEdit={item => setFormItem(item)}
             onRenew={item => setRenewItem(item)}
             onDelete={handleDelete}
@@ -1815,7 +1847,7 @@ export default function ExpiryDashboard() {
           />
         ) : (
           <ExpiryList
-            items={items}
+            items={displayItems}
             categories={categories}
             onEdit={item => setFormItem(item)}
             onRenew={item => setRenewItem(item)}
