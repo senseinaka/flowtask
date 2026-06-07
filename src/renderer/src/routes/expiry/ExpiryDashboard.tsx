@@ -1317,7 +1317,7 @@ function ExpiryList({
       if (ua !== ub) return ua - ub
       return a.expiry_date - b.expiry_date
     })
-  }, [items, filterCat, filterUrgency, showRenewed])
+  }, [items, filterCat, showRenewed])
 
   return (
     <div className="space-y-4">
