@@ -25,6 +25,7 @@ import {
   getDiffColor, formatCurrency, formatFinanceDate, getMonthLabel, getMonthName, MONTH_OPTIONS,
   getEffectiveAmount, formatSignedPercent,
   getMovementUrgency, getDueLabel, groupMovementsByUrgency, getFinanceAlerts,
+  getDisplayStatus, getNextStatusOnClick,
   FINANCE_URGENCY_ORDER, FINANCE_URGENCY_LABELS, FINANCE_URGENCY_COLORS, FINANCE_HISTORY_MONTHS,
   useFinanceImportSelectFile, useConfirmFinanceImport,
   useExportFinanceMovements, useExportFinanceMovementsSelection, useExportFinanceSummaryPdf,
@@ -83,7 +84,10 @@ function applyMovementFilters(movements: FinanceMovement[], f: MovementFilters):
   return movements.filter(m => {
     if (f.categoryId    !== 'all' && m.concept?.category_id    !== f.categoryId)    return false
     if (f.accountId     !== 'all' && m.concept?.account_id     !== f.accountId)     return false
-    if (f.status        !== 'all' && m.status                  !== f.status)        return false
+    // Comparamos contra el estado MOSTRADO (no el persistido): "vencido" se deriva
+    // de due_date en caliente y casi nunca queda guardado como tal en la base — si
+    // filtráramos por m.status el filtro "Vencido" no encontraría casi nada.
+    if (f.status        !== 'all' && getDisplayStatus(m)        !== f.status)        return false
     if (f.paymentMethod !== 'all' && m.payment_method          !== f.paymentMethod) return false
     if (f.expenseType   !== 'all' && m.concept?.expense_type   !== f.expenseType)   return false
     if (f.recurrence    !== 'all' && m.concept?.recurrence     !== f.recurrence)    return false
@@ -240,33 +244,49 @@ function EditableAmount({ value, onSave }: { value: number | null; onSave: (v: n
   )
 }
 
-function EditableStatus({ value, onSave }: { value: FinanceMovementStatus; onSave: (v: FinanceMovementStatus) => void }) {
-  const [editing, setEditing] = useState(false)
-  if (!editing) {
-    const color = FINANCE_STATUS_COLORS[value]
+/**
+ * Badge de estado de un movimiento — click-to-cycle:
+ *  - Click izquierdo: avanza al siguiente estado del ciclo (ver getNextStatusOnClick:
+ *    recurrentes ciclan Pendiente ⇄ Pagado; no recurrentes ciclan Sin estado →
+ *    Pendiente → Pagado → ...; si está vencido, un click lo manda directo a Pagado).
+ *  - Click derecho: abre un selector directo, por si se quiere saltar a un estado
+ *    puntual sin recorrer el ciclo (atajo para usuarios avanzados).
+ * El color/label que se ve es el "estado mostrado" (getDisplayStatus): superpone
+ * "Vencido" sobre el estado real cuando corresponde, sin tocar lo guardado en la base.
+ */
+function EditableStatus({ movement, onSave }: { movement: FinanceMovement; onSave: (v: FinanceMovementStatus) => void }) {
+  const [picking, setPicking] = useState(false)
+  const display = getDisplayStatus(movement)
+  const color   = FINANCE_STATUS_COLORS[display]
+
+  if (picking) {
     return (
-      <button
-        onClick={() => setEditing(true)}
-        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-transform hover:scale-105"
-        style={{ color, borderColor: color + '60', backgroundColor: color + '15' }}
+      <select
+        autoFocus
+        value={movement.status}
+        onChange={e => { onSave(e.target.value as FinanceMovementStatus); setPicking(false) }}
+        onBlur={() => setPicking(false)}
+        className="bg-slate-700 border border-emerald-500/60 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
       >
-        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-        {FINANCE_STATUS_LABELS[value]}
-      </button>
+        {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
+          <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
+        ))}
+      </select>
     )
   }
+
+  const next = getNextStatusOnClick(movement)
   return (
-    <select
-      autoFocus
-      value={value}
-      onChange={e => { onSave(e.target.value as FinanceMovementStatus); setEditing(false) }}
-      onBlur={() => setEditing(false)}
-      className="bg-slate-700 border border-emerald-500/60 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
+    <button
+      onClick={() => onSave(next)}
+      onContextMenu={e => { e.preventDefault(); setPicking(true) }}
+      title={`Click para pasar a "${FINANCE_STATUS_LABELS[next]}" · click derecho para elegir un estado puntual`}
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-transform hover:scale-105"
+      style={{ color, borderColor: color + '60', backgroundColor: color + '15' }}
     >
-      {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
-        <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
-      ))}
-    </select>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+      {FINANCE_STATUS_LABELS[display]}
+    </button>
   )
 }
 
@@ -475,7 +495,7 @@ function MovementsTable({
         case 'category':     return dir * (a.concept?.category?.name ?? '').localeCompare(b.concept?.category?.name ?? '')
         case 'estimated':    return dir * (a.amount_estimated - b.amount_estimated)
         case 'actual':       return dir * (getEffectiveAmount(a) - getEffectiveAmount(b))
-        case 'status':       return dir * a.status.localeCompare(b.status)
+        case 'status':       return dir * getDisplayStatus(a).localeCompare(getDisplayStatus(b))
         case 'payment_date': return dir * ((a.payment_date ?? 0) - (b.payment_date ?? 0))
         case 'due_date':     return dir * ((a.due_date ?? 0) - (b.due_date ?? 0))
         default: return 0
@@ -569,7 +589,7 @@ function MovementsTable({
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="flex items-center gap-1">
-                    <EditableStatus value={m.status} onSave={v => onQuickUpdate(m.id, { status: v })} />
+                    <EditableStatus movement={m} onSave={v => onQuickUpdate(m.id, { status: v, payment_date: v === 'paid' ? (m.payment_date ?? Date.now()) : m.payment_date })} />
                     {m.status !== 'paid' && (
                       <button
                         onClick={() => onQuickUpdate(m.id, { status: 'paid', payment_date: m.payment_date ?? Date.now() })}
@@ -1001,10 +1021,14 @@ function MovementForm({ movement, concepts, period, onClose }: {
     concept_id:       firstConceptId,
     amount_estimated: String(movement?.amount_estimated ?? firstConcept?.default_amount ?? 0),
     amount_actual:    movement?.amount_actual !== null && movement?.amount_actual !== undefined ? String(movement.amount_actual) : '',
-    status:           movement?.status ?? 'pending' as FinanceMovementStatus,
+    // Estado inicial al dar de alta a mano: igual criterio que la generación automática
+    // (recurrente → "pendiente", puntual/variable → "sin estado, puede no ocurrir").
+    status:           movement?.status ?? (firstConcept?.recurrence === 'one_time' ? 'no_status' : 'pending') as FinanceMovementStatus,
     payment_method:   movement?.payment_method ?? firstConcept?.payment_method ?? 'transfer' as FinancePaymentMethod,
     payment_date:     movement?.payment_date ? dayjs(movement.payment_date).format('YYYY-MM-DD') : '',
-    due_date:         movement?.due_date ? dayjs(movement.due_date).format('YYYY-MM-DD') : dayjs(new Date(period.year, period.month - 1, 10)).format('YYYY-MM-DD'),
+    // Por defecto un movimiento nuevo NO tiene fecha de vencimiento — se carga
+    // a mano solo si corresponde (pedido explícito: "no debe tener vencimiento").
+    due_date:         movement?.due_date ? dayjs(movement.due_date).format('YYYY-MM-DD') : '',
     notes:            movement?.notes ?? '',
   })
 
@@ -1019,6 +1043,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
       concept_id: id,
       amount_estimated: !isEdit ? String(c?.default_amount ?? f.amount_estimated) : f.amount_estimated,
       payment_method:   !isEdit ? (c?.payment_method ?? f.payment_method) : f.payment_method,
+      status:           !isEdit ? ((c?.recurrence === 'one_time' ? 'no_status' : 'pending') as FinanceMovementStatus) : f.status,
     }))
   }
 

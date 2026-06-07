@@ -7,6 +7,9 @@ import type {
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus
 } from '@shared/types'
+import {
+  FINANCE_STATUS_CYCLE_RECURRING, FINANCE_STATUS_CYCLE_NON_RECURRING
+} from '@shared/types'
 import dayjs from 'dayjs'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -97,6 +100,44 @@ export function getMovementUrgency(m: FinanceMovement): FinanceMovementUrgency |
 
 export function getUrgencyColor(urgency: FinanceMovementUrgency): string {
   return FINANCE_URGENCY_COLORS[urgency]
+}
+
+// ── Estado "mostrado" y ciclo de estados al click ────────────────────────────
+//
+// El estado "vencido" NO se persiste nunca (igual que la urgencia, arriba):
+// se deriva siempre de due_date vs. la fecha actual, comparándolo en caliente.
+// Así evitamos que quede una copia desincronizada en la base si el usuario
+// cambia la fecha de vencimiento o si pasan los días sin abrir la app.
+
+/**
+ * Estado que se muestra en pantalla, superponiendo "Vencido" sobre el estado
+ * persistido cuando corresponde (no pagado + tiene vencimiento + ya pasó).
+ * En cualquier otro caso, se respeta el estado real guardado en la base.
+ */
+export function getDisplayStatus(m: FinanceMovement): FinanceMovementStatus {
+  if (m.status === 'paid' || m.due_date === null) return m.status
+  return getDaysUntilDue(m.due_date) < 0 ? 'overdue' : m.status
+}
+
+/**
+ * Próximo estado al hacer click sobre el badge de estado de un movimiento.
+ *
+ * - Si se está mostrando como "Vencido" → salta directo a "Pagado" (atajo;
+ *   no forma parte de ningún ciclo, se resuelve con un solo click).
+ * - Si el concepto es recurrente (mensual/quincenal/anual) → cicla
+ *   Pendiente ⇄ Pagado (se sabe que el pago va a ocurrir).
+ * - Si es puntual/variable → cicla Sin estado → Pendiente → Pagado → ...
+ *   (puede no llegar a ocurrir, por eso arranca en "sin estado").
+ */
+export function getNextStatusOnClick(m: FinanceMovement): FinanceMovementStatus {
+  if (getDisplayStatus(m) === 'overdue') return 'paid'
+
+  const isRecurring = m.concept ? m.concept.recurrence !== 'one_time' : true
+  const cycle = isRecurring ? FINANCE_STATUS_CYCLE_RECURRING : FINANCE_STATUS_CYCLE_NON_RECURRING
+  const idx = cycle.indexOf(m.status)
+  // Si el estado actual no pertenece a este ciclo (datos viejos, importados, o
+  // un cambio de recurrencia posterior a la generación), arrancamos de cero.
+  return idx === -1 ? cycle[0] : cycle[(idx + 1) % cycle.length]
 }
 
 /** Texto corto "Venció hace 3 días" / "Vence hoy" / "Vence en 5 días", para las cards. */

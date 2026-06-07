@@ -48,8 +48,9 @@ function normalizeText(s: string): string {
 
 function parseStatus(raw: unknown): FinanceMovementStatus {
   const v = normalizeText(String(raw ?? ''))
-  if (v.startsWith('pag'))  return 'paid'
-  if (v.startsWith('venc')) return 'overdue'
+  if (v.startsWith('pag'))       return 'paid'
+  if (v.startsWith('venc'))      return 'overdue'
+  if (v.startsWith('sin estado') || v.startsWith('sin_estado')) return 'no_status'
   return 'pending'
 }
 
@@ -266,9 +267,10 @@ export function writeFinanceSummaryPdf(filePath: string, data: FinancePdfSummary
       didParseCell: (hookData) => {
         if (hookData.section === 'body' && hookData.column.index === 2) {
           const status = movements[hookData.row.index]?.status
-          if (status === 'paid')    hookData.cell.styles.textColor = [16, 185, 129]
-          if (status === 'overdue') hookData.cell.styles.textColor = [239, 68, 68]
-          if (status === 'pending') hookData.cell.styles.textColor = [245, 158, 11]
+          if (status === 'paid')      hookData.cell.styles.textColor = [16, 185, 129]
+          if (status === 'overdue')   hookData.cell.styles.textColor = [239, 68, 68]
+          if (status === 'pending')   hookData.cell.styles.textColor = [245, 158, 11]
+          if (status === 'no_status') hookData.cell.styles.textColor = [100, 116, 139]
         }
       }
     })

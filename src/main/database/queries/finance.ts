@@ -375,9 +375,8 @@ function generateMovements(month: number, year: number, estimateSource: 'default
   const insert = db.prepare(`
     INSERT INTO finance_movements
       (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, NULL, 'pending', ?, NULL, ?, '', ?, ?)
+    VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, '', ?, ?)
   `)
-  const dueDate = new Date(year, month - 1, 10).getTime()
 
   for (const concept of concepts) {
     if (existing.has(concept.id)) continue
@@ -389,9 +388,34 @@ function generateMovements(month: number, year: number, estimateSource: 'default
       if (prev) amountEstimated = prev.amount_actual ?? prev.amount_estimated
     }
 
-    insert.run(randomUUID(), concept.id, month, year, amountEstimated, concept.payment_method, dueDate, now, now)
+    // Estado inicial según si el concepto es recurrente o no:
+    //  - recurrente (mensual/quincenal/anual) → "pendiente": sabemos que va a pasar
+    //  - puntual / variable sin patrón fijo   → "sin estado": puede no llegar a ocurrir
+    // La fecha de vencimiento arranca vacía siempre — se carga manualmente si aplica
+    // (ver request: "por default, un movimiento nuevo no debe tener vencimiento").
+    const initialStatus = initialStatusForConcept(concept)
+
+    insert.run(randomUUID(), concept.id, month, year, amountEstimated, initialStatus, concept.payment_method, now, now)
   }
   return listFinanceMovements(month, year)
+}
+
+/**
+ * Estado inicial de un movimiento recién generado, según la recurrencia de su
+ * concepto. Los recurrentes (se sabe que van a pasar) arrancan en "pending";
+ * los puntuales/variables (pueden no llegar a ocurrir) arrancan en "no_status"
+ * para no acumular pendientes que en realidad son "todavía no sabemos".
+ */
+function initialStatusForConcept(concept: FinanceConcept): FinanceMovementStatus {
+  switch (concept.recurrence) {
+    case 'monthly':
+    case 'biweekly':
+    case 'annual':
+      return 'pending'
+    case 'one_time':
+    default:
+      return 'no_status'
+  }
 }
 
 /**

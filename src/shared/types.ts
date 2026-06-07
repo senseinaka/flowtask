@@ -1427,7 +1427,7 @@ export const DEFAULT_EXPIRY_CATEGORIES: Omit<ExpiryCategory, 'id' | 'created_at'
 // Finanzas Personales
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type FinanceMovementStatus = 'pending' | 'paid' | 'overdue'
+export type FinanceMovementStatus = 'no_status' | 'pending' | 'paid' | 'overdue'
 export type FinancePaymentMethod  =
   | 'cash'         // efectivo
   | 'transfer'     // transferencia
@@ -1652,16 +1652,32 @@ export interface FinanceSecurityStatus {
 }
 
 export const FINANCE_STATUS_LABELS: Record<FinanceMovementStatus, string> = {
-  pending: 'Pendiente',
-  paid:    'Pagado',
-  overdue: 'Vencido',
+  no_status: 'Sin estado',
+  pending:   'Pendiente',
+  paid:      'Pagado',
+  overdue:   'Vencido',
 }
 
 export const FINANCE_STATUS_COLORS: Record<FinanceMovementStatus, string> = {
-  pending: '#f59e0b',  // amber
-  paid:    '#10b981',  // emerald
-  overdue: '#ef4444',  // red
+  no_status: '#64748b',  // slate (neutro)
+  pending:   '#f59e0b',  // amber
+  paid:      '#10b981',  // emerald
+  overdue:   '#ef4444',  // red
 }
+
+/**
+ * Orden del ciclo al hacer click sobre el estado de un movimiento.
+ * - Movimientos NO recurrentes (one_time / variables sin patrón fijo): arrancan
+ *   en "Sin estado" porque pueden no llegar a ocurrir — el ciclo completo
+ *   refleja eso: Sin estado → Pendiente → Pagado → Sin estado...
+ * - Movimientos recurrentes: arrancan en "Pendiente" (se sabe que van a pasar)
+ *   y ciclan solo entre Pendiente ⇄ Pagado.
+ * "Vencido" NO forma parte de ningún ciclo: es un estado derivado de la fecha
+ * de vencimiento (ver getDisplayStatus en useFinance.ts) y un click sobre él
+ * salta directo a "Pagado".
+ */
+export const FINANCE_STATUS_CYCLE_NON_RECURRING: FinanceMovementStatus[] = ['no_status', 'pending', 'paid']
+export const FINANCE_STATUS_CYCLE_RECURRING: FinanceMovementStatus[] = ['pending', 'paid']
 
 export const FINANCE_PAYMENT_METHOD_LABELS: Record<FinancePaymentMethod, string> = {
   cash:        'Efectivo',
