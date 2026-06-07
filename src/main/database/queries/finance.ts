@@ -233,7 +233,31 @@ export function listFinanceMovements(month: number, year: number): FinanceMoveme
     WHERE m.month = ? AND m.year = ?
     ORDER BY cat.name ASC, c.name ASC
   `).all(month, year) as MovementRow[]
-  return rows.map(hydrateMovement)
+  const movements = rows.map(hydrateMovement)
+  attachPreviousMonthAmounts(db, movements, month, year)
+  return movements
+}
+
+/**
+ * Completa `previous_month_amount` de cada movimiento con lo realmente pagado
+ * (amount_actual) por el mismo concepto en el mes calendario inmediatamente
+ * anterior — solo cuando hubo un pago registrado (si no, queda en null y la
+ * tabla muestra "—"). Es lo que alimenta la columna "Mes anterior" — pensada
+ * para comparar de un vistazo "cuánto pagué la última vez" vs. lo de este mes.
+ */
+function attachPreviousMonthAmounts(
+  db: ReturnType<typeof getDb>, movements: FinanceMovement[], month: number, year: number
+): void {
+  if (!movements.length) return
+  const prevDate = new Date(year, month - 2, 1)
+  const rows = db.prepare(`
+    SELECT concept_id, amount_actual FROM finance_movements
+    WHERE month = ? AND year = ? AND amount_actual IS NOT NULL
+  `).all(prevDate.getMonth() + 1, prevDate.getFullYear()) as { concept_id: string; amount_actual: number }[]
+  const byConceptId = new Map(rows.map(r => [r.concept_id, r.amount_actual]))
+  for (const m of movements) {
+    m.previous_month_amount = byConceptId.get(m.concept_id) ?? null
+  }
 }
 
 /**

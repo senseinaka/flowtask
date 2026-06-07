@@ -1491,6 +1491,16 @@ export interface FinanceMovement {
   notes:            string
   created_at:       number
   updated_at:       number
+  /**
+   * Lo que se pagó realmente (amount_actual) por este mismo concepto en el mes
+   * calendario inmediatamente anterior — null si no hubo movimiento o no se
+   * registró un pago. Se computa al vuelo en `listFinanceMovements` (no se
+   * persiste). Reemplaza a la columna "Estimado" en la tabla principal: permite
+   * comparar de un vistazo lo pagado el mes pasado contra lo de este mes.
+   * Puede venir `undefined` en endpoints que no lo calculan (ej. movimientos
+   * "próximos" que abarcan varios períodos).
+   */
+  previous_month_amount?: number | null
 }
 
 export interface CreateFinanceAccountInput {

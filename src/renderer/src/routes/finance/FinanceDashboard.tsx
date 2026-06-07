@@ -21,6 +21,7 @@ import {
   useCreateFinanceMovement, useUpdateFinanceMovement, useQuickUpdateFinanceMovement, useDeleteFinanceMovement,
   useGenerateMovementsForMonth, useGenerateMovementsFromPreviousMonth,
   useCreateFinanceConcept, useUpdateFinanceConcept, useDeleteFinanceConcept,
+  useCreateFinanceCategory, useUpdateFinanceCategory, useDeleteFinanceCategory,
   useFinanceCategoryBreakdown, useFinanceHistory, useFinanceTopConcepts, useFinanceTopIncreases,
   getDiffColor, formatCurrency, formatFinanceDate, getMonthLabel, getMonthName, MONTH_OPTIONS,
   getEffectiveAmount, formatSignedPercent,
@@ -35,7 +36,7 @@ import {
 import type {
   FinanceMovement, FinanceConcept, FinanceMonthSummary, FinanceCategory, FinanceAccount,
   FinanceMovementStatus, FinancePaymentMethod, FinanceExpenseType, FinanceRecurrence,
-  CreateFinanceMovementInput, CreateFinanceConceptInput,
+  CreateFinanceMovementInput, CreateFinanceConceptInput, CreateFinanceCategoryInput,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewItem, FinanceImportConfirmItem, FinanceImportIssue, FinanceImportResult
 } from '@shared/types'
@@ -50,10 +51,23 @@ dayjs.locale('es')
 const inputCls = 'w-full bg-slate-700/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-colors'
 const labelCls = 'block text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1'
 
-type SortKey = 'concept' | 'category' | 'estimated' | 'actual' | 'status' | 'payment_date' | 'due_date'
+type SortKey = 'concept' | 'category' | 'previous' | 'actual' | 'status' | 'payment_date' | 'due_date'
 type SortDir = 'asc' | 'desc'
 
-type DashboardTab = 'month' | 'upcoming' | 'charts' | 'categories' | 'history'
+// Nota: el tab de gráfico "por categoría" se llama 'breakdown' (no 'categories')
+// para no chocar con el nuevo modal de gestión "Categorías" (CategoriesManager,
+// análogo a ConceptsManager) — son cosas distintas: uno es un desglose de gasto,
+// el otro es un CRUD de categorías.
+//
+// La vieja pestaña única "Mes actual" (mezclaba resumen + planilla) se separó en
+// dos, cada una con un propósito claro:
+//   - 'overview'  → "Dashboard": avisos, alertas y tarjetas de totales — vista de
+//                   un vistazo, "¿cómo viene el mes?". Es la pestaña de entrada.
+//   - 'movements' → "Movimientos": filtros, acciones en lote y la planilla editable
+//                   — vista de trabajo, "necesito cargar/revisar algo puntual".
+// (El valor interno es 'overview' y no 'dashboard' para no mezclarse con el nombre
+// del componente `FinanceDashboard` — la etiqueta visible sí dice "Dashboard".)
+type DashboardTab = 'overview' | 'movements' | 'upcoming' | 'charts' | 'breakdown' | 'history'
 
 // ── Filtros completos de movimientos ──────────────────────────────────────────
 
@@ -350,6 +364,46 @@ function EditableNotes({ value, onSave }: { value: string; onSave: (v: string) =
   )
 }
 
+/**
+ * Título editable de una fila (nombre de concepto, categoría, etc.) — click para
+ * editar, Enter/blur para guardar, Escape para cancelar. Mismo patrón click-to-edit
+ * que EditableNotes/EditableAmount, con la tipografía del título de la fila.
+ * Usado en ConceptsManager y CategoriesManager.
+ */
+function EditableInlineTitle({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(value)
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setDraft(value); setEditing(true) }}
+        className="group/name flex items-center gap-1.5 text-left hover:bg-slate-700/40 rounded px-1.5 py-0.5 -mx-1.5 transition-colors min-w-0 max-w-full"
+        title="Click para editar el nombre"
+      >
+        <span className="text-sm font-medium text-slate-200 truncate">{value}</span>
+        <Edit3 size={11} className="text-slate-600 opacity-0 group-hover/name:opacity-100 flex-shrink-0 transition-opacity" />
+      </button>
+    )
+  }
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (trimmed && trimmed !== value) onSave(trimmed)
+    setEditing(false)
+  }
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+      className="w-full max-w-[240px] bg-slate-700 border border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
+    />
+  )
+}
+
 // ── Encabezado de columna ordenable ───────────────────────────────────────────
 
 function SortableHeader({ label, sortKey, currentKey, currentDir, onSort, className }: {
@@ -493,7 +547,7 @@ function MovementsTable({
       switch (sortKey) {
         case 'concept':      return dir * (a.concept?.name ?? '').localeCompare(b.concept?.name ?? '')
         case 'category':     return dir * (a.concept?.category?.name ?? '').localeCompare(b.concept?.category?.name ?? '')
-        case 'estimated':    return dir * (a.amount_estimated - b.amount_estimated)
+        case 'previous':     return dir * ((a.previous_month_amount ?? -1) - (b.previous_month_amount ?? -1))
         case 'actual':       return dir * (getEffectiveAmount(a) - getEffectiveAmount(b))
         case 'status':       return dir * getDisplayStatus(a).localeCompare(getDisplayStatus(b))
         case 'payment_date': return dir * ((a.payment_date ?? 0) - (b.payment_date ?? 0))
@@ -534,7 +588,7 @@ function MovementsTable({
             <SortableHeader label="Concepto"   sortKey="concept"  currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
             <SortableHeader label="Categoría"  sortKey="category" currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
             <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Tipo</th>
-            <SortableHeader label="Estimado"   sortKey="estimated" currentKey={sortKey} currentDir={sortDir} onSort={onSort} className="text-right" />
+            <SortableHeader label="Mes anterior" sortKey="previous" currentKey={sortKey} currentDir={sortDir} onSort={onSort} className="text-right" />
             <SortableHeader label="Real"       sortKey="actual"    currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
             <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Var.</th>
             <SortableHeader label="Estado"       sortKey="status"       currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
@@ -576,7 +630,15 @@ function MovementsTable({
                     {m.concept ? FINANCE_EXPENSE_TYPE_LABELS[m.concept.expense_type] : '—'}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right text-slate-400 whitespace-nowrap">{formatCurrency(m.amount_estimated)}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  {m.previous_month_amount != null ? (
+                    <span className="text-slate-400" title="Lo que se pagó por este concepto el mes anterior">
+                      {formatCurrency(m.previous_month_amount)}
+                    </span>
+                  ) : (
+                    <span className="text-slate-600 text-xs" title="No hubo un pago registrado de este concepto el mes anterior">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
                 </td>
@@ -631,7 +693,7 @@ function MovementsTable({
           <tr>
             <td colSpan={4} className="px-3 py-2.5 text-right text-xs font-semibold text-slate-400">Total del mes</td>
             <td className="px-3 py-2.5 text-right font-semibold text-slate-300 whitespace-nowrap">
-              {formatCurrency(sorted.reduce((acc, m) => acc + m.amount_estimated, 0))}
+              {formatCurrency(sorted.reduce((acc, m) => acc + (m.previous_month_amount ?? 0), 0))}
             </td>
             <td className="px-3 py-2.5 font-semibold text-emerald-400 whitespace-nowrap">
               {formatCurrency(sorted.reduce((acc, m) => acc + getEffectiveAmount(m), 0))}
@@ -996,6 +1058,116 @@ function UpcomingPaymentsView({
       {FINANCE_URGENCY_ORDER.map(key => (
         <UrgencyBucketSection key={key} urgency={key} movements={groups[key]} onQuickUpdate={onQuickUpdate} onEdit={onEdit} />
       ))}
+    </div>
+  )
+}
+
+/**
+ * Separa los movimientos del mes en los dos focos del panel de alertas —
+ * "Vencidos" y "Recurrentes sin pagar" (ver doc de `MonthAlertsPanel` para el
+ * criterio de cada uno). Función pura, sin hooks, para poder reusar exactamente
+ * el mismo criterio tanto dentro del panel como en el badge de la pestaña
+ * "Dashboard" (conteo) sin duplicar — y sin que se desincronicen con el tiempo.
+ */
+function getMonthAlertMovements(movements: FinanceMovement[]): {
+  overdue: FinanceMovement[]
+  recurringUnpaid: FinanceMovement[]
+} {
+  const overdue = movements.filter(m => getDisplayStatus(m) === 'overdue')
+  const recurringUnpaid = movements.filter(m =>
+    m.concept != null && m.concept.recurrence !== 'one_time' &&
+    getDisplayStatus(m) !== 'paid' && getDisplayStatus(m) !== 'overdue'
+  )
+  return { overdue, recurringUnpaid }
+}
+
+/**
+ * Dashboard de alertas del mes (Fase 7).
+ *
+ * `SmartAlerts` ya da el resumen narrativo ("3 pagos vencidos, suman $X") en
+ * forma de banners informativos. Esto va un paso más allá: eleva los movimientos
+ * concretos que conviene resolver ANTES de cerrar el mes a una superficie propia,
+ * prominente y accionable — con el mismo botón de "Marcar pagado" de un click que
+ * ya usa "Próximos pagos" (UpcomingMovementCard), para no obligar a buscarlos en
+ * la tabla principal ni cambiar de pestaña.
+ *
+ * Dos focos, pedidos explícitamente:
+ * - "Vencidos": getDisplayStatus(m) === 'overdue' (vencimiento ya pasado y
+ *   todavía sin pagar — el cálculo es el mismo overlay que pinta el badge rojo
+ *   en la tabla, no se persiste un estado nuevo).
+ * - "Recurrentes sin pagar": conceptos con recurrencia (no 'one_time') cuyo
+ *   movimiento de este mes todavía no está pagado — son pagos que con certeza
+ *   van a salir sí o sí, así que vale la pena tenerlos a la vista hasta resolverlos
+ *   (a diferencia de los "puntuales/sin estado", que pueden no llegar a ocurrir).
+ *
+ * No se muestra nada si no hay nada pendiente — el usuario "está al día" y no
+ * hace falta ocupar espacio con una sección vacía.
+ */
+function MonthAlertsPanel({
+  movements, period, onQuickUpdate, onEdit
+}: {
+  movements: FinanceMovement[]
+  period: { month: number; year: number }
+  onQuickUpdate: (id: string, data: { status?: FinanceMovementStatus; payment_date?: number | null; due_date?: number | null }) => void
+  onEdit: (m: FinanceMovement) => void
+}) {
+  const { overdue, recurringUnpaid } = useMemo(() => getMonthAlertMovements(movements), [movements])
+
+  if (overdue.length === 0 && recurringUnpaid.length === 0) return null
+
+  const overdueTotal   = overdue.reduce((acc, m) => acc + getEffectiveAmount(m), 0)
+  const recurringTotal = recurringUnpaid.reduce((acc, m) => acc + getEffectiveAmount(m), 0)
+  const totalCount     = overdue.length + recurringUnpaid.length
+
+  return (
+    <div className="rounded-2xl border border-amber-700/30 bg-gradient-to-br from-amber-950/10 via-slate-900 to-slate-900 overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-800/60">
+        <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-600/30 flex items-center justify-center flex-shrink-0">
+          <AlertOctagon size={15} className="text-amber-400" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-white">
+            Alertas de {getMonthLabel(period.month, period.year)} — {totalCount} {totalCount === 1 ? 'pendiente' : 'pendientes'}
+          </h3>
+          <p className="text-[11px] text-slate-500">Conviene resolver esto antes de cerrar el mes — un click en <CheckCircle2 size={10} className="inline -mt-0.5" /> lo marca como pagado.</p>
+        </div>
+      </div>
+
+      <div className="px-5 py-4 space-y-4">
+        {overdue.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-red-500" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-red-400">Vencidos</h4>
+              <span className="text-[11px] text-slate-500">
+                · {overdue.length} {overdue.length === 1 ? 'movimiento' : 'movimientos'} · {formatCurrency(overdueTotal)}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {overdue.map(m => (
+                <UpcomingMovementCard key={m.id} movement={m} onQuickUpdate={onQuickUpdate} onEdit={onEdit} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recurringUnpaid.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-400" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">Recurrentes sin pagar</h4>
+              <span className="text-[11px] text-slate-500">
+                · {recurringUnpaid.length} {recurringUnpaid.length === 1 ? 'movimiento' : 'movimientos'} · {formatCurrency(recurringTotal)}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {recurringUnpaid.map(m => (
+                <UpcomingMovementCard key={m.id} movement={m} onQuickUpdate={onQuickUpdate} onEdit={onEdit} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1978,9 +2150,10 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
               <div className="flex items-center gap-3 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.category?.color ?? '#6366f1' }} />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-200 truncate">{c.name}</p>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {c.category?.icon} {c.category?.name} · {formatCurrency(c.default_amount)} · {FINANCE_EXPENSE_TYPE_LABELS[c.expense_type]} · {FINANCE_RECURRENCE_LABELS[c.recurrence]}
+                  <EditableInlineTitle value={c.name} onSave={name => update.mutate({ id: c.id, data: { name } })} />
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                    {c.category?.icon} {c.category?.name} · {formatCurrency(c.default_amount)} · {FINANCE_EXPENSE_TYPE_LABELS[c.expense_type]}
+                    {' · '}{FINANCE_PAYMENT_METHOD_LABELS[c.payment_method]} · {FINANCE_RECURRENCE_LABELS[c.recurrence]}
                     {c.recurrence === 'annual' && (
                       <span className="capitalize"> ({getMonthName(c.recurrence_month ?? (new Date(c.created_at).getMonth() + 1))})</span>
                     )}
@@ -2006,6 +2179,176 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Gestión de categorías (Fase 6 — submenú "Categorías"). Mismo patrón visual y de
+ * interacción que ConceptsManager: modal con lista + alta rápida + edición inline.
+ *
+ * ⚠️ Punto delicado: `finance_categories` tiene `ON DELETE CASCADE` hacia
+ * `finance_concepts`, que a su vez cascadea hacia `finance_movements` — borrar una
+ * categoría borra silenciosamente TODOS sus conceptos y TODOS los movimientos de
+ * esos conceptos (de cualquier mes/año), no solo del período actual. Por eso acá
+ * se calcula la cantidad de conceptos asociados (vía useFinanceConcepts, sin pedir
+ * nada nuevo al main process) y se arma una advertencia explícita y disuasiva
+ * antes de confirmar — a diferencia del borrado de un concepto individual, donde
+ * el alcance es mucho más acotado.
+ */
+function CategoriesManager({ onClose }: { onClose: () => void }) {
+  const { data: categories = [], isLoading } = useFinanceCategories()
+  const { data: concepts   = [] } = useFinanceConcepts()
+  const create = useCreateFinanceCategory()
+  const update = useUpdateFinanceCategory()
+  const remove = useDeleteFinanceCategory()
+
+  const [showNew, setShowNew] = useState(false)
+  const [draft, setDraft] = useState<CreateFinanceCategoryInput>({ name: '', icon: '🏷️', color: '#6366f1' })
+
+  const startNew = () => {
+    setDraft({ name: '', icon: '🏷️', color: '#6366f1' })
+    setShowNew(true)
+  }
+
+  const handleCreate = async () => {
+    if (!draft.name.trim()) return
+    await create.mutateAsync(draft)
+    setShowNew(false)
+  }
+
+  // Cantidad de conceptos por categoría — determina qué tan grave es el borrado en cascada.
+  const conceptCountByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of concepts) map.set(c.category_id, (map.get(c.category_id) ?? 0) + 1)
+    return map
+  }, [concepts])
+
+  const handleDelete = async (cat: FinanceCategory) => {
+    const count = conceptCountByCategory.get(cat.id) ?? 0
+    const warning = count > 0
+      ? `⚠️ ATENCIÓN — Borrado en cascada\n\n` +
+        `La categoría "${cat.name}" tiene ${count} concepto${count === 1 ? '' : 's'} asociado${count === 1 ? '' : 's'}.\n\n` +
+        `Si la eliminás, también se eliminarán esos conceptos Y TODOS sus movimientos cargados ` +
+        `(de cualquier mes y año), de forma permanente e irreversible.\n\n` +
+        `¿Seguro que querés continuar?`
+      : `¿Eliminar la categoría "${cat.name}"? Esta acción no se puede deshacer.`
+    if (!confirm(warning)) return
+    await remove.mutateAsync(cat.id)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        style={{ width: 'min(640px, 95vw)', maxHeight: '85vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/50 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600/20 border border-emerald-600/30 flex items-center justify-center">
+              <Tag size={15} className="text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-white">Categorías</h2>
+              <p className="text-[10px] text-slate-500">Agrupan los conceptos para los gráficos y reportes por rubro</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={startNew}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <Plus size={13} /> Nueva categoría
+            </button>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors"><X size={18} /></button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+          {showNew && (
+            <div className="rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-4 space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className={labelCls}>Nombre *</label>
+                  <input autoFocus value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} className={inputCls} placeholder="Ej: Servicios" />
+                </div>
+                <div>
+                  <label className={labelCls}>Ícono (emoji)</label>
+                  <input
+                    value={draft.icon ?? ''}
+                    onChange={e => setDraft(d => ({ ...d, icon: e.target.value }))}
+                    className={cn(inputCls, 'text-center text-lg')}
+                    placeholder="🏷️"
+                    maxLength={4}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Color</label>
+                  <input
+                    type="color"
+                    value={draft.color ?? '#6366f1'}
+                    onChange={e => setDraft(d => ({ ...d, color: e.target.value }))}
+                    className="w-full h-[38px] rounded-lg cursor-pointer bg-slate-700/60 border border-slate-600"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowNew(false)} className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5">Cancelar</button>
+                <button onClick={handleCreate} className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors">
+                  <Check size={13} /> Crear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isLoading && <p className="text-sm text-slate-500 py-6 text-center">Cargando categorías...</p>}
+
+          {categories.map(cat => {
+            const count = conceptCountByCategory.get(cat.id) ?? 0
+            return (
+              <div key={cat.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-800/40 px-4 py-2.5 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <input
+                    type="color"
+                    value={cat.color}
+                    onChange={e => update.mutate({ id: cat.id, data: { color: e.target.value } })}
+                    title="Cambiar color"
+                    className="w-7 h-7 rounded-full cursor-pointer border border-slate-700 bg-transparent p-0 overflow-hidden flex-shrink-0"
+                  />
+                  <input
+                    value={cat.icon}
+                    onChange={e => update.mutate({ id: cat.id, data: { icon: e.target.value } })}
+                    title="Cambiar ícono (emoji)"
+                    maxLength={4}
+                    className="w-9 text-center text-base bg-transparent border border-transparent hover:border-slate-700 focus:border-emerald-500/60 rounded px-1 py-0.5 focus:outline-none flex-shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <EditableInlineTitle value={cat.name} onSave={name => update.mutate({ id: cat.id, data: { name } })} />
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {count} concepto{count === 1 ? '' : 's'} asociado{count === 1 ? '' : 's'}
+                      {cat.is_default ? ' · categoría predeterminada' : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleDelete(cat)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-700/50 transition-colors"
+                    title="Eliminar (también borra en cascada sus conceptos y movimientos)"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+
+          {!isLoading && categories.length === 0 && (
+            <p className="text-sm text-slate-500 py-6 text-center">No hay categorías todavía. Creá la primera con "Nueva categoría".</p>
+          )}
         </div>
       </div>
     </div>
@@ -2410,7 +2753,7 @@ function CategoryView({ breakdown, isLoading, period }: {
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <LayoutGrid size={28} className="text-slate-700 mb-3" />
         <p className="text-sm text-slate-400">No hay movimientos cargados en <span className="capitalize">{getMonthLabel(period.month, period.year)}</span> para desglosar por categoría.</p>
-        <p className="text-xs text-slate-600 mt-1">Generá los movimientos del mes desde "Generar del mes", en la pestaña "Mes actual".</p>
+        <p className="text-xs text-slate-600 mt-1">Generá los movimientos del mes con el botón "Generar del mes", arriba a la derecha.</p>
       </div>
     )
   }
@@ -2561,9 +2904,13 @@ export default function FinanceDashboard() {
 
   const [formMovement, setFormMovement] = useState<FinanceMovement | null | undefined>(undefined) // undefined = cerrado
   const [showConcepts, setShowConcepts] = useState(false)
+  const [showCategories, setShowCategories] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
-  const [activeTab, setActiveTab] = useState<DashboardTab>('month')
+  // 'overview' (Dashboard) como pestaña de entrada: el usuario ve primero el
+  // resumen del mes (alertas, totales) y desde ahí decide si necesita ir a
+  // trabajar con el detalle en "Movimientos".
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview')
   const [filters, setFilters] = useState<MovementFilters>(EMPTY_FILTERS)
   const [historyRange, setHistoryRange] = useState<number>(FINANCE_HISTORY_MONTHS)
 
@@ -2623,6 +2970,15 @@ export default function FinanceDashboard() {
     [upcoming]
   )
 
+  // Cantidad total de pendientes del mes (vencidos + recurrentes sin pagar) —
+  // mismo criterio que pinta MonthAlertsPanel, para mostrar un badge en la
+  // pestaña "Dashboard" y que se note desde cualquier otra pestaña si hay algo
+  // para resolver, sin tener que entrar a mirar.
+  const monthAlertsCount = useMemo(() => {
+    const { overdue, recurringUnpaid } = getMonthAlertMovements(movements)
+    return overdue.length + recurringUnpaid.length
+  }, [movements])
+
   const goToMonth = (delta: number) => {
     const d = new Date(period.year, period.month - 1 + delta, 1)
     setPeriod({ month: d.getMonth() + 1, year: d.getFullYear() })
@@ -2672,10 +3028,10 @@ export default function FinanceDashboard() {
     await generateFromPrev.mutateAsync({ month: period.month, year: period.year })
   }
 
-  /** Desde "Vista histórica": salta directo al detalle de ese mes en la pestaña "Mes actual". */
+  /** Desde "Vista histórica": salta directo a la planilla de ese mes en "Movimientos" — es el detalle que se quiere revisar, no el resumen. */
   const handleSelectHistoryMonth = (month: number, year: number) => {
     setPeriod({ month, year })
-    setActiveTab('month')
+    setActiveTab('movements')
   }
 
   if (locked) {
@@ -2744,6 +3100,13 @@ export default function FinanceDashboard() {
             </button>
 
             <button
+              onClick={() => setShowCategories(true)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 bg-slate-800 rounded-lg px-3 py-2 transition-colors"
+            >
+              <Tag size={13} /> Categorías
+            </button>
+
+            <button
               onClick={() => setShowImport(true)}
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 bg-slate-800 rounded-lg px-3 py-2 transition-colors"
               title="Importar movimientos desde un archivo Excel o CSV, con previsualización"
@@ -2772,19 +3135,40 @@ export default function FinanceDashboard() {
         </div>
       </div>
 
-      {/* Pestañas: vista mensual vs. próximos pagos */}
+      {/* Pestañas: dashboard del mes, planilla de movimientos, próximos pagos, etc. */}
       <div className="flex-shrink-0 px-6 pt-3 border-b border-slate-800 bg-slate-800/10">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setActiveTab('month')}
+            onClick={() => setActiveTab('overview')}
             className={cn(
               'flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-t-lg border-b-2 transition-colors',
-              activeTab === 'month'
+              activeTab === 'overview'
                 ? 'text-emerald-400 border-emerald-500 bg-slate-800/50'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
             )}
+            title="Avisos, alertas y totales del mes — la vista de un vistazo"
           >
-            <Wallet size={13} /> Mes actual
+            <Wallet size={13} /> Dashboard
+            {monthAlertsCount > 0 && (
+              <span className={cn(
+                'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold',
+                'bg-amber-500/20 text-amber-300'
+              )}>
+                {monthAlertsCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('movements')}
+            className={cn(
+              'flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-t-lg border-b-2 transition-colors',
+              activeTab === 'movements'
+                ? 'text-emerald-400 border-emerald-500 bg-slate-800/50'
+                : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
+            )}
+            title="Filtros, selección en lote y la planilla editable de movimientos del mes"
+          >
+            <ListChecks size={13} /> Movimientos
           </button>
           <button
             onClick={() => setActiveTab('upcoming')}
@@ -2817,10 +3201,10 @@ export default function FinanceDashboard() {
             <BarChart3 size={13} /> Gráficos
           </button>
           <button
-            onClick={() => setActiveTab('categories')}
+            onClick={() => setActiveTab('breakdown')}
             className={cn(
               'flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-t-lg border-b-2 transition-colors',
-              activeTab === 'categories'
+              activeTab === 'breakdown'
                 ? 'text-emerald-400 border-emerald-500 bg-slate-800/50'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
             )}
@@ -2843,13 +3227,26 @@ export default function FinanceDashboard() {
 
       {/* Contenido */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-        {showExportReminder && <ExportReminderBanner period={period} onDismiss={handleDismissReminder} />}
-        <SmartAlerts alerts={alerts} />
-
-        {activeTab === 'month' && (
+        {/*
+          "Dashboard" — vista de un vistazo: avisos, alertas y totales del mes.
+          Los banners (recordatorio de respaldo + alertas inteligentes) vivían
+          arriba de todas las pestañas; se mudan acá porque conceptualmente son
+          justamente eso — resumen y avisos — y así "Movimientos"/"Próximos
+          pagos"/"Gráficos" quedan enfocadas en su propia tarea sin un banner
+          que a veces no aplica al contexto.
+        */}
+        {activeTab === 'overview' && (
           <>
+            {showExportReminder && <ExportReminderBanner period={period} onDismiss={handleDismissReminder} />}
+            <SmartAlerts alerts={alerts} />
+            <MonthAlertsPanel movements={movements} period={period} onQuickUpdate={handleQuickUpdate} onEdit={setFormMovement} />
             <StatsCards summary={summary} isLoading={loadingSummary} />
+          </>
+        )}
 
+        {/* "Movimientos" — vista de trabajo: filtrar, seleccionar en lote y editar la planilla del mes. */}
+        {activeTab === 'movements' && (
+          <>
             <FiltersBar
               filters={filters}
               onChange={setFilters}
@@ -2900,7 +3297,7 @@ export default function FinanceDashboard() {
           />
         )}
 
-        {activeTab === 'categories' && (
+        {activeTab === 'breakdown' && (
           <CategoryView breakdown={breakdown} isLoading={loadingBreakdown} period={period} />
         )}
 
@@ -2925,6 +3322,7 @@ export default function FinanceDashboard() {
         />
       )}
       {showConcepts && <ConceptsManager onClose={() => setShowConcepts(false)} />}
+      {showCategories && <CategoriesManager onClose={() => setShowCategories(false)} />}
       {showImport && <ImportManager period={period} concepts={concepts} onClose={() => setShowImport(false)} />}
       {showSecurity && <SecurityManager onClose={() => setShowSecurity(false)} />}
     </div>
