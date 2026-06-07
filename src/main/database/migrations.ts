@@ -1338,6 +1338,31 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         ALTER TABLE finance_concepts ADD COLUMN recurrence_month INTEGER;
       `)
     }
+  },
+  {
+    version: 55,
+    up: (db) => {
+      // Reinicio del módulo Finanzas — migración de un solo uso.
+      //
+      // Diego venía trabajando con conceptos duplicados ("Nafta 1", "Nafta 2",
+      // "Supermercado 1", "Supermercado 2"...) como workaround a la restricción
+      // UNIQUE(concept_id, month, year): no había forma de cargar varias
+      // ocurrencias del mismo gasto en un mes bajo un solo concepto.
+      //
+      // Se decidió rediseñar esto con un "registro de cargas" (sub-entradas que
+      // suman al total de un único movimiento por concepto/mes — Opción C del
+      // plan maestro) y arrancar de cero: se eliminan conceptos y movimientos
+      // existentes para no migrar la data duplicada.
+      //
+      // Cuentas y categorías NO se tocan (siguen siendo válidas en el nuevo
+      // esquema). Los datos previos quedan respaldados automáticamente por el
+      // sistema de backups locales (carpeta "FlowTask Backups") antes de correr
+      // esta migración — no se pierde nada irreversiblemente.
+      db.exec(`
+        DELETE FROM finance_movements;
+        DELETE FROM finance_concepts;
+      `)
+    }
   }
 ]
 
