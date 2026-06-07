@@ -2,11 +2,11 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import {
-  Plus, Clock, CheckCircle2, AlertTriangle, Calendar,
+  Plus, Clock, CheckCircle2, Calendar,
   LayoutList, GitBranch, Settings2, Trash2, Edit3,
-  ChevronRight, RotateCcw, X, Bell, BellOff, Save,
-  RefreshCw, Shield, Tag, Upload, Sparkles, Loader2,
-  Check, AlertCircle, ChevronDown as ChevronDownIcon
+  ChevronRight, ChevronLeft, RotateCcw, X, Bell, Save,
+  RefreshCw, Shield, Tag, Sparkles, Loader2,
+  Check, AlertCircle
 } from 'lucide-react'
 import {
   useExpiryItems, useExpiryCategories,
@@ -16,6 +16,7 @@ import {
   useExpiryAlerts, useSetExpiryAlerts,
   getExpiryUrgency, getDaysUntil, formatExpiryDate
 } from '../../hooks/useExpiry'
+import { usePersonalContact } from '../../hooks/useSettings'
 import type {
   ExpiryItem, ExpiryCategory, ExpiryAlert,
   ExpiryFrequency, ExpiryUrgency,
@@ -85,6 +86,12 @@ function DaysChip({ days, urgency }: { days: number; urgency: ExpiryUrgency }) {
 
 // ── Item Form Modal ───────────────────────────────────────────────────────────
 
+// Fila de alerta en el formulario: además de los campos persistidos, lleva un
+// campo de UI `recipient` para elegir entre "yo mismo" (usa el WhatsApp guardado
+// en Mis datos personales) u "otra persona" (número manual). No se persiste tal
+// cual — se infiere/colapsa al guardar.
+type AlertRow = CreateExpiryAlertInput & { recipient: 'me' | 'other' }
+
 function ExpiryItemForm({
   item, categories, onClose
 }: {
@@ -97,6 +104,12 @@ function ExpiryItemForm({
   const update  = useUpdateExpiryItem()
   const setAlerts = useSetExpiryAlerts()
   const { data: existingAlerts = [] } = useExpiryAlerts(item?.id ?? null)
+  const { data: personalContact } = usePersonalContact()
+  const myWhatsapp = personalContact?.whatsapp_number ?? ''
+
+  // ¿El número guardado en una alerta coincide con el de "Mis datos personales"?
+  const inferRecipient = (whatsapp?: string): 'me' | 'other' =>
+    (myWhatsapp && whatsapp === myWhatsapp) ? 'me' : 'other'
 
   const [form, setForm] = useState<{
     category_id: string
@@ -118,29 +131,53 @@ function ExpiryItemForm({
     notes:                 item?.notes        ?? '',
   })
 
-  const [alerts, setAlertList] = useState<CreateExpiryAlertInput[]>(() =>
+  const [alerts, setAlertList] = useState<AlertRow[]>(() =>
     existingAlerts.length > 0
-      ? existingAlerts.map(a => ({ days_before: a.days_before, channel: a.channel, whatsapp_number: a.whatsapp_number }))
-      : [{ days_before: 30, channel: 'both', whatsapp_number: '' }]
+      ? existingAlerts.map(a => ({
+          days_before: a.days_before, channel: a.channel, whatsapp_number: a.whatsapp_number,
+          recipient: inferRecipient(a.whatsapp_number)
+        }))
+      : [{ days_before: 30, channel: 'both', whatsapp_number: myWhatsapp, recipient: myWhatsapp ? 'me' : 'other' }]
   )
 
   useEffect(() => {
     if (existingAlerts.length > 0) {
       setAlertList(existingAlerts.map(a => ({
-        days_before: a.days_before, channel: a.channel, whatsapp_number: a.whatsapp_number
+        days_before: a.days_before, channel: a.channel, whatsapp_number: a.whatsapp_number,
+        recipient: inferRecipient(a.whatsapp_number)
       })))
     }
   }, [existingAlerts.length])
+
+  // Si "Mis datos personales" carga después del estado inicial, re-evaluar
+  // qué alertas apuntan a mi propio número para reflejarlo como "Para mí"
+  useEffect(() => {
+    if (!myWhatsapp) return
+    setAlertList(list => list.map(a =>
+      a.whatsapp_number === myWhatsapp && a.recipient !== 'me' ? { ...a, recipient: 'me' } : a
+    ))
+  }, [myWhatsapp])
 
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
   const upd = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
 
-  const addAlert = () => setAlertList(a => [...a, { days_before: 7, channel: 'both', whatsapp_number: '' }])
+  const addAlert = () => setAlertList(a => [...a, {
+    days_before: 7, channel: 'both', whatsapp_number: myWhatsapp, recipient: myWhatsapp ? 'me' : 'other'
+  }])
   const removeAlert = (i: number) => setAlertList(a => a.filter((_, idx) => idx !== i))
   const updAlert = (i: number, k: keyof CreateExpiryAlertInput, v: unknown) =>
     setAlertList(a => a.map((al, idx) => idx === i ? { ...al, [k]: v } : al))
+
+  // Cambia el destinatario de una alerta: "Para mí" autocompleta con el WhatsApp
+  // guardado en Mis datos personales; "Otra persona" habilita la carga manual
+  const setAlertRecipient = (i: number, recipient: 'me' | 'other') =>
+    setAlertList(a => a.map((al, idx) => idx === i ? {
+      ...al,
+      recipient,
+      whatsapp_number: recipient === 'me' ? myWhatsapp : (al.recipient === 'me' ? '' : al.whatsapp_number)
+    } : al))
 
   const handleSave = async () => {
     if (!form.title.trim()) { setError('El título es obligatorio'); return }
@@ -166,8 +203,9 @@ function ExpiryItemForm({
       } else {
         savedItem = await create.mutateAsync(data)
       }
-      // Guardar alertas
-      await setAlerts.mutateAsync({ itemId: savedItem.id, alerts })
+      // Guardar alertas (se quita el campo `recipient`, que es solo de UI)
+      const alertsToSave: CreateExpiryAlertInput[] = alerts.map(({ recipient: _recipient, ...rest }) => rest)
+      await setAlerts.mutateAsync({ itemId: savedItem.id, alerts: alertsToSave })
       onClose()
     } catch (e) {
       setError(String(e))
@@ -302,44 +340,67 @@ function ExpiryItemForm({
             </div>
 
             <div className="space-y-2">
-              {alerts.map((alert, i) => (
-                <div key={i} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2 border border-slate-700/50">
-                  <Bell size={12} className="text-amber-400 flex-shrink-0" />
-                  <select
-                    value={alert.days_before}
-                    onChange={e => updAlert(i, 'days_before', Number(e.target.value))}
-                    className="bg-transparent text-xs text-slate-300 outline-none cursor-pointer"
-                  >
-                    {[1,3,7,14,15,30,45,60,90,120,180].map(d => (
-                      <option key={d} value={d}>{d} {d === 1 ? 'día' : 'días'} antes</option>
-                    ))}
-                  </select>
-                  <span className="text-slate-600 text-xs">·</span>
-                  <select
-                    value={alert.channel}
-                    onChange={e => updAlert(i, 'channel', e.target.value)}
-                    className="bg-transparent text-xs text-slate-300 outline-none cursor-pointer"
-                  >
-                    <option value="both">WhatsApp + App</option>
-                    <option value="whatsapp">Solo WhatsApp</option>
-                    <option value="inapp">Solo App</option>
-                  </select>
-                  {(alert.channel === 'both' || alert.channel === 'whatsapp') && (
-                    <>
+              {alerts.map((alert, i) => {
+                const showWhatsapp = alert.channel === 'both' || alert.channel === 'whatsapp'
+                return (
+                <div key={i} className="bg-slate-800/60 rounded-lg px-3 py-2 border border-slate-700/50 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Bell size={12} className="text-amber-400 flex-shrink-0" />
+                    <select
+                      value={alert.days_before}
+                      onChange={e => updAlert(i, 'days_before', Number(e.target.value))}
+                      className="bg-transparent text-xs text-slate-300 outline-none cursor-pointer"
+                    >
+                      {[1,3,7,14,15,30,45,60,90,120,180].map(d => (
+                        <option key={d} value={d}>{d} {d === 1 ? 'día' : 'días'} antes</option>
+                      ))}
+                    </select>
+                    <span className="text-slate-600 text-xs">·</span>
+                    <select
+                      value={alert.channel}
+                      onChange={e => updAlert(i, 'channel', e.target.value)}
+                      className="bg-transparent text-xs text-slate-300 outline-none cursor-pointer"
+                    >
+                      <option value="both">WhatsApp + App</option>
+                      <option value="whatsapp">Solo WhatsApp</option>
+                      <option value="inapp">Solo App</option>
+                    </select>
+                    <button onClick={() => removeAlert(i)} className="text-slate-600 hover:text-red-400 transition-colors ml-auto">
+                      <X size={12} />
+                    </button>
+                  </div>
+
+                  {showWhatsapp && (
+                    <div className="flex items-center gap-2 pl-[20px]">
+                      <select
+                        value={alert.recipient}
+                        onChange={e => setAlertRecipient(i, e.target.value as 'me' | 'other')}
+                        className="bg-transparent text-xs text-slate-400 outline-none cursor-pointer flex-shrink-0"
+                      >
+                        <option value="me">Para mí</option>
+                        <option value="other">Para otra persona</option>
+                      </select>
                       <span className="text-slate-600 text-xs">·</span>
-                      <input
-                        value={alert.whatsapp_number}
-                        onChange={e => updAlert(i, 'whatsapp_number', e.target.value)}
-                        placeholder="+549..."
-                        className="bg-transparent text-xs text-slate-300 outline-none flex-1 placeholder-slate-600"
-                      />
-                    </>
+                      {alert.recipient === 'me' ? (
+                        myWhatsapp ? (
+                          <span className="text-xs text-slate-300 font-mono">{myWhatsapp}</span>
+                        ) : (
+                          <span className="text-[11px] text-amber-400/80 italic">
+                            Sin WhatsApp guardado — cargalo en Configuración → Mis datos personales
+                          </span>
+                        )
+                      ) : (
+                        <input
+                          value={alert.whatsapp_number}
+                          onChange={e => updAlert(i, 'whatsapp_number', e.target.value)}
+                          placeholder="+549... (número de la otra persona)"
+                          className="bg-transparent text-xs text-slate-300 outline-none flex-1 placeholder-slate-600"
+                        />
+                      )}
+                    </div>
                   )}
-                  <button onClick={() => removeAlert(i)} className="text-slate-600 hover:text-red-400 transition-colors ml-auto">
-                    <X size={12} />
-                  </button>
                 </div>
-              ))}
+              )})}
               {alerts.length === 0 && (
                 <p className="text-xs text-slate-600 italic text-center py-2">Sin alertas configuradas</p>
               )}
@@ -698,6 +759,119 @@ function ExpiryCard({
   )
 }
 
+// ── Timeline config ───────────────────────────────────────────────────────────
+
+type ZoomLevel = '1M' | '3M' | '6M' | '1A'
+
+const ZOOM_CONFIG: Record<ZoomLevel, { pxPerDay: number; days: number }> = {
+  '1M': { pxPerDay: 90,  days: 30  },
+  '3M': { pxPerDay: 32,  days: 90  },
+  '6M': { pxPerDay: 17,  days: 180 },
+  '1A': { pxPerDay: 9,   days: 365 },
+}
+
+const TL_LABEL_W = 150
+const TL_LANE_H  = 76
+const TL_HDR_H   = 44
+const TL_PAST    = 14   // días previos visibles (overdue)
+
+// ── Timeline Popover ──────────────────────────────────────────────────────────
+
+function TimelinePopover({
+  item, anchorRect, onEdit, onRenew, onDelete, onMouseEnter, onMouseLeave
+}: {
+  item:         ExpiryItem
+  anchorRect:   DOMRect
+  onEdit:       () => void
+  onRenew:      () => void
+  onDelete:     () => void
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+}) {
+  const urgency = getExpiryUrgency(item)
+  const days    = getDaysUntil(item.expiry_date)
+  const color   = EXPIRY_URGENCY_COLORS[urgency]
+  const W       = 268
+
+  const left    = Math.max(8, Math.min(
+    anchorRect.left + anchorRect.width / 2 - W / 2,
+    (typeof window !== 'undefined' ? window.innerWidth : 1280) - W - 8
+  ))
+  const showAbove = anchorRect.top > 210
+  const top       = showAbove ? anchorRect.top - 210 : anchorRect.bottom + 10
+
+  return (
+    <div
+      style={{ position: 'fixed', left, top, width: W, zIndex: 9999 }}
+      className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl shadow-black/70 overflow-hidden pointer-events-auto"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Franja color superior */}
+      <div className="h-1 w-full" style={{ backgroundColor: color }} />
+
+      <div className="p-4 space-y-3">
+        {/* Categoría + título */}
+        <div>
+          {item.category && (
+            <span
+              className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-md mb-1.5"
+              style={{ color: item.category.color, backgroundColor: item.category.color + '22' }}
+            >
+              {item.category.icon} {item.category.name}
+            </span>
+          )}
+          <p className="text-sm font-bold text-white leading-snug">{item.title}</p>
+          {item.holder && <p className="text-[10px] text-slate-500 mt-0.5">{item.holder}</p>}
+        </div>
+
+        {/* Días + fecha */}
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-3xl font-black leading-none" style={{ color }}>
+              {Math.abs(days)}
+              <span className="text-sm font-semibold ml-1">días</span>
+            </p>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              {days < 0 ? '⚠ vencido' : days === 0 ? '⚡ hoy' : 'restantes'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-mono font-semibold text-slate-300">
+              {formatExpiryDate(item.expiry_date)}
+            </p>
+            <p className="text-[9px] text-slate-500 mt-0.5">
+              {EXPIRY_FREQUENCY_LABELS[item.frequency]}
+            </p>
+          </div>
+        </div>
+
+        {/* Acciones */}
+        <div className="flex gap-2 pt-0.5 border-t border-slate-800">
+          <button
+            onClick={onRenew}
+            className="flex-1 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-800/40 rounded-lg py-2 transition-colors"
+          >
+            <CheckCircle2 size={12} /> Renovar
+          </button>
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1 text-[10px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg py-2 px-3 transition-colors"
+          >
+            <Edit3 size={11} /> Editar
+          </button>
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-1 text-[10px] font-medium text-red-400 hover:text-red-300 bg-red-950/30 hover:bg-red-900/40 border border-red-900/30 rounded-lg py-2 px-2.5 transition-colors"
+          >
+            <Trash2 size={11} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Timeline View ─────────────────────────────────────────────────────────────
 
 function ExpiryTimeline({
@@ -709,197 +883,411 @@ function ExpiryTimeline({
   onDelete:  (item: ExpiryItem) => void
   onUnrenew: (item: ExpiryItem) => void
 }) {
-  const DAYS = 365
-  const today = dayjs().startOf('day')
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [zoom,          setZoom]         = useState<ZoomLevel>('3M')
+  const [urgencyFilter, setUrgencyFilter] = useState<Set<ExpiryUrgency>>(new Set())
+  const [hovered, setHovered]            = useState<{ item: ExpiryItem; rect: DOMRect } | null>(null)
+  const scrollRef  = useRef<HTMLDivElement>(null)
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Pixels por día
-  const PX_PER_DAY = 60
+  const { pxPerDay, days } = ZOOM_CONFIG[zoom]
+  const today      = useMemo(() => dayjs().startOf('day'), [])
+  const totalWidth = (TL_PAST + days) * pxPerDay
+  const todayX     = TL_PAST * pxPerDay
 
-  const totalWidth = DAYS * PX_PER_DAY
+  // ── Filtrado ──────────────────────────────────────────────────────────────
+  const activeItems = useMemo(() =>
+    items.filter(item => {
+      if (item.is_renewed) return false
+      const urgency = getExpiryUrgency(item)
+      if (urgencyFilter.size > 0 && !urgencyFilter.has(urgency)) return false
+      const d = dayjs(item.expiry_date).diff(today, 'day')
+      return d > -(TL_PAST + 1) && d <= days
+    })
+  , [items, urgencyFilter, today, days])
 
-  // Meses en el rango
+  // ── Swim lanes agrupadas por categoría ────────────────────────────────────
+  const lanes = useMemo(() => {
+    const map = new Map<string, { category: ExpiryCategory | null; items: ExpiryItem[] }>()
+    for (const item of activeItems) {
+      const key = item.category_id ?? '__none__'
+      if (!map.has(key)) map.set(key, { category: item.category ?? null, items: [] })
+      map.get(key)!.items.push(item)
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      (a.category?.name ?? '').localeCompare(b.category?.name ?? '')
+    )
+  }, [activeItems])
+
+  // ── Meses ─────────────────────────────────────────────────────────────────
   const months = useMemo(() => {
-    const result: { label: string; x: number; days: number }[] = []
-    let d = today.startOf('month')
-    const end = today.add(DAYS, 'day')
+    const result: { label: string; x: number; w: number }[] = []
+    let d = today.subtract(TL_PAST, 'day').startOf('month')
+    const end = today.add(days + 1, 'day')
     while (d.isBefore(end)) {
-      const offsetDays = d.diff(today, 'day')
-      const daysInMonth = d.daysInMonth()
-      result.push({
-        label: d.format('MMM YYYY'),
-        x:     Math.max(0, offsetDays) * PX_PER_DAY,
-        days:  daysInMonth
-      })
+      const startOff = d.diff(today, 'day') + TL_PAST
+      result.push({ label: d.format('MMM YYYY'), x: startOff * pxPerDay, w: d.daysInMonth() * pxPerDay })
       d = d.add(1, 'month')
     }
     return result
-  }, [today, PX_PER_DAY])
+  }, [zoom, today, pxPerDay, days])
 
-  // Scroll al inicio (hoy)
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollLeft = 0
-  }, [])
+  // ── Días (solo zoom 1M) ────────────────────────────────────────────────────
+  const dayTicks = useMemo(() => {
+    if (zoom !== '1M') return []
+    const result: { label: string; x: number }[] = []
+    for (let i = -TL_PAST; i <= days; i++) {
+      const d = today.add(i, 'day')
+      if (d.day() === 1 || i === 0) { // lunes o hoy
+        result.push({ label: d.format('D'), x: (i + TL_PAST) * pxPerDay })
+      }
+    }
+    return result
+  }, [zoom, today, pxPerDay, days])
 
-  // Items activos ordenados por fecha
-  const activeItems = useMemo(() =>
-    items.filter(i => {
-      if (i.is_renewed) return false
-      const d = dayjs(i.expiry_date).diff(today, 'day')
-      return d > -30 && d < DAYS
-    }).sort((a, b) => a.expiry_date - b.expiry_date)
-  , [items, today])
+  // ── Posición X de un ítem ──────────────────────────────────────────────────
+  const getItemX = (item: ExpiryItem) =>
+    (dayjs(item.expiry_date).diff(today, 'day') + TL_PAST) * pxPerDay
 
-  // Stack de items por posición (evitar superposición vertical)
-  const placements = useMemo(() => {
-    const rows: number[] = []
-    return activeItems.map(item => {
-      const offsetDays = dayjs(item.expiry_date).diff(today, 'day')
-      const x = offsetDays * PX_PER_DAY
-      // Asignar a la primera fila libre
-      let row = 0
-      while (rows[row] !== undefined && rows[row] > x - 120) row++
-      rows[row] = x + 120
-      return { item, x, row }
+  // ── Popover helpers ────────────────────────────────────────────────────────
+  const showPopover = (item: ExpiryItem, e: React.MouseEvent) => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current)
+    setHovered({ item, rect: e.currentTarget.getBoundingClientRect() })
+  }
+  const hidePopover  = () => { leaveTimer.current = setTimeout(() => setHovered(null), 180) }
+  const keepPopover  = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current) }
+
+  // ── Navegación ─────────────────────────────────────────────────────────────
+  const scrollToToday = () =>
+    scrollRef.current?.scrollTo({ left: todayX - 120, behavior: 'smooth' })
+
+  const scrollByMonth = (dir: 1 | -1) =>
+    scrollRef.current?.scrollBy({ left: dir * 30 * pxPerDay, behavior: 'smooth' })
+
+  useEffect(() => { scrollToToday() }, [zoom])  // eslint-disable-line
+
+  // ── Filtro de urgencia ─────────────────────────────────────────────────────
+  const toggleUrgency = (u: ExpiryUrgency) =>
+    setUrgencyFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(u)) next.delete(u); else next.add(u)
+      return next
     })
-  }, [activeItems, today, PX_PER_DAY])
 
-  const maxRow = placements.reduce((m, p) => Math.max(m, p.row), 0)
-  const ITEM_H = 56
-  const HEADER_H = 60
-  const svgHeight = HEADER_H + (maxRow + 1) * ITEM_H + 40
+  const totalActive  = items.filter(i => !i.is_renewed).length
+  const visibleCount = activeItems.length
+  const totalCanvasW = totalWidth + TL_LABEL_W
+
+  // ── Render pill según zoom ─────────────────────────────────────────────────
+  const renderPill = (item: ExpiryItem, color: string) => {
+    if (zoom === '1A') {
+      return (
+        <div
+          className="absolute w-3.5 h-3.5 rounded-full border-2 transition-all group-hover:scale-150 group-hover:shadow-lg"
+          style={{
+            top: TL_LANE_H / 2 - 7,
+            left: -7,
+            borderColor: color,
+            backgroundColor: color + '55',
+            boxShadow: `0 0 6px ${color}40`,
+          }}
+        />
+      )
+    }
+
+    if (zoom === '6M') {
+      return (
+        <div
+          className="absolute flex flex-col items-center gap-0.5 -translate-x-1/2 transition-all group-hover:scale-105"
+          style={{ top: TL_LANE_H / 2 - 30, left: 0 }}
+        >
+          <div
+            className="rounded px-1 py-0.5 text-[7px] font-bold whitespace-nowrap"
+            style={{
+              color,
+              backgroundColor: color + '22',
+              border: `1px solid ${color}40`,
+              maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis'
+            }}
+          >
+            {item.title.split('.')[0]}
+          </div>
+          <div className="w-px h-4" style={{ backgroundColor: color + '50' }} />
+          <div className="w-2.5 h-2.5 rounded-full border-2"
+            style={{ borderColor: color, backgroundColor: color + '35' }} />
+        </div>
+      )
+    }
+
+    // 1M / 3M — pastilla completa
+    const PW = zoom === '1M' ? 138 : 108
+    const PH = zoom === '1M' ? 44  : 38
+    const connH = TL_LANE_H / 2 - PH - 6
+
+    return (
+      <div
+        className="absolute -translate-x-1/2 transition-all group-hover:scale-105"
+        style={{ top: 4, left: 0, width: PW }}
+      >
+        {/* Pill */}
+        <div
+          className="rounded-lg px-2 py-1.5 border shadow-md group-hover:shadow-xl"
+          style={{
+            borderColor: color + '70',
+            backgroundColor: '#0f172a',
+            boxShadow: `0 1px 8px ${color}18`,
+          }}
+        >
+          <div className="text-[9px] font-bold truncate" style={{ color }}>{item.title}</div>
+          {zoom === '1M' && item.holder && (
+            <div className="text-[8px] text-slate-500 truncate">{item.holder}</div>
+          )}
+          <div className="text-[7px] font-mono" style={{ color: color + 'bb' }}>
+            {formatExpiryDate(item.expiry_date)}
+          </div>
+        </div>
+        {/* Conector vertical */}
+        {connH > 0 && (
+          <div className="mx-auto w-px" style={{ height: connH, backgroundColor: color + '40' }} />
+        )}
+        {/* Punto en el eje */}
+        <div
+          className="mx-auto w-2.5 h-2.5 rounded-full border-2"
+          style={{ borderColor: color, backgroundColor: color + '30' }}
+        />
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-700/50 flex items-center gap-2">
-        <GitBranch size={14} className="text-indigo-400" />
-        <span className="text-xs font-semibold text-slate-300">Línea de tiempo — próximos 365 días</span>
-      </div>
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden flex flex-col">
 
-      <div ref={scrollRef} className="overflow-x-auto">
-        <div style={{ width: totalWidth + 80, minHeight: svgHeight + 20 }} className="relative">
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-slate-700/50 bg-slate-800/80 flex-shrink-0 flex-wrap gap-y-2">
 
-          {/* Meses — header */}
-          <div className="flex absolute top-0 left-0" style={{ width: totalWidth + 80 }}>
-            {months.map((m, i) => (
-              <div
-                key={i}
-                className="flex-shrink-0 border-r border-slate-700/40 px-2 py-2"
-                style={{ width: m.days * PX_PER_DAY }}
-              >
-                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-                  {m.label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Línea base */}
-          <div
-            className="absolute bg-slate-700/60 rounded-full"
-            style={{ top: HEADER_H + 10, left: 40, width: totalWidth, height: 2 }}
-          />
-
-          {/* Hoy marker */}
-          <div
-            className="absolute flex flex-col items-center"
-            style={{ top: HEADER_H, left: 40 }}
+        {/* Navegación de mes */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => scrollByMonth(-1)}
+            className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 transition-colors"
           >
-            <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/50" />
-            <div className="w-px bg-cyan-500/40" style={{ height: svgHeight - HEADER_H - 20 }} />
-            <span className="text-[8px] text-cyan-400 font-semibold -rotate-90 mt-1">HOY</span>
-          </div>
+            <ChevronLeft size={11} /> Mes
+          </button>
+          <button
+            onClick={scrollToToday}
+            className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-900/20 hover:bg-cyan-900/40 border border-cyan-700/50 rounded-lg px-2.5 py-1.5 transition-colors"
+          >
+            ⊙ Hoy
+          </button>
+          <button
+            onClick={() => scrollByMonth(1)}
+            className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 transition-colors"
+          >
+            Mes <ChevronRight size={11} />
+          </button>
+        </div>
 
-          {/* Semáforos de fondo */}
-          {[7, 30, 90].map((daysThreshold, ti) => {
-            const colors = ['#ef444420','#f9731620','#f59e0b20']
+        {/* Zoom selector */}
+        <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-0.5">
+          {(['1M', '3M', '6M', '1A'] as ZoomLevel[]).map(z => (
+            <button
+              key={z}
+              onClick={() => setZoom(z)}
+              className={cn(
+                'text-[10px] font-bold px-2.5 py-1.5 rounded-md transition-all',
+                zoom === z
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              )}
+            >
+              {z}
+            </button>
+          ))}
+        </div>
+
+        {/* Filtros de urgencia */}
+        <div className="flex items-center gap-1">
+          {(['overdue', 'urgent', 'soon', 'upcoming'] as ExpiryUrgency[]).map(u => {
+            const isActive = urgencyFilter.size === 0 || urgencyFilter.has(u)
+            const color    = EXPIRY_URGENCY_COLORS[u]
             return (
-              <div
-                key={ti}
-                className="absolute rounded"
-                style={{
-                  top: HEADER_H,
-                  left: 40,
-                  width: daysThreshold * PX_PER_DAY,
-                  height: svgHeight - HEADER_H - 20,
-                  backgroundColor: colors[ti],
-                  opacity: 0.4
-                }}
-              />
+              <button
+                key={u}
+                onClick={() => toggleUrgency(u)}
+                title={EXPIRY_URGENCY_LABELS[u]}
+                className={cn(
+                  'w-7 h-7 rounded-lg border text-sm flex items-center justify-center transition-all',
+                  isActive ? 'opacity-100 scale-100' : 'opacity-30 scale-90'
+                )}
+                style={isActive ? { backgroundColor: color + '22', borderColor: color + '60' } : { borderColor: '#334155' }}
+              >
+                {URGENCY_URGENCY_ICONS[u]}
+              </button>
             )
           })}
+          {urgencyFilter.size > 0 && (
+            <button
+              onClick={() => setUrgencyFilter(new Set())}
+              className="text-[9px] text-slate-500 hover:text-slate-300 ml-0.5 px-1 py-1 transition-colors"
+            >
+              ✕ limpiar
+            </button>
+          )}
+        </div>
 
-          {/* Items */}
-          {placements.map(({ item, x, row }) => {
-            const urgency = getExpiryUrgency(item)
-            const color   = EXPIRY_URGENCY_COLORS[urgency]
-            const topY    = HEADER_H + 20 + row * ITEM_H
-            const posX    = Math.max(0, x)
+        {/* Contador */}
+        <span className="ml-auto text-[10px] text-slate-500">
+          {visibleCount === totalActive
+            ? `${totalActive} vencimiento${totalActive !== 1 ? 's' : ''}`
+            : `${visibleCount} de ${totalActive} visibles`}
+        </span>
+      </div>
 
-            return (
+      {/* ── Canvas ──────────────────────────────────────────────────────────── */}
+      {lanes.length === 0 ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Shield size={36} className="text-slate-700 mx-auto mb-3" />
+            <p className="text-slate-500 text-sm">Sin vencimientos en este rango</p>
+            <p className="text-slate-600 text-xs mt-1">Probá otro zoom o quitá los filtros de urgencia</p>
+          </div>
+        </div>
+      ) : (
+        <div ref={scrollRef} className="overflow-x-auto" style={{ maxHeight: 500 }}>
+          <div style={{ width: totalCanvasW, minWidth: totalCanvasW }}>
+
+            {/* ── Header de meses ── */}
+            <div className="flex sticky top-0 z-20" style={{ height: TL_HDR_H }}>
+
+              {/* Esquina frozen */}
               <div
-                key={item.id}
-                className="absolute group cursor-pointer"
-                style={{ left: 40 + posX, top: topY }}
+                className="sticky left-0 z-30 border-b border-r border-slate-700/50 flex-shrink-0 flex items-center px-3"
+                style={{ width: TL_LABEL_W, minWidth: TL_LABEL_W, backgroundColor: '#0c1221' }}
               >
-                {/* Línea vertical al eje */}
-                <div
-                  className="absolute w-px"
-                  style={{
-                    left: '50%',
-                    bottom: '100%',
-                    height: topY - HEADER_H - 10,
-                    backgroundColor: color + '60'
-                  }}
-                />
-                {/* Punto en el eje */}
-                <div
-                  className="absolute w-2.5 h-2.5 rounded-full border-2"
-                  style={{
-                    left: 'calc(50% - 5px)',
-                    bottom: `calc(100% + ${topY - HEADER_H - 14}px)`,
-                    borderColor: color,
-                    backgroundColor: color + '33'
-                  }}
-                />
+                <GitBranch size={12} className="text-indigo-400 mr-1.5" />
+                <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Timeline</span>
+              </div>
 
-                {/* Pastilla */}
-                <div
-                  onClick={() => onEdit(item)}
-                  className="relative flex flex-col rounded-lg px-2.5 py-1.5 border shadow-lg transition-all duration-150 hover:scale-105 hover:shadow-xl hover:z-10"
-                  style={{
-                    backgroundColor: '#0f172a',
-                    borderColor: color + '80',
-                    boxShadow: `0 2px 12px ${color}20`,
-                    minWidth: 110,
-                    maxWidth: 200
-                  }}
-                >
-                  <span className="text-[9px] font-bold truncate" style={{ color }}>
-                    {item.category?.icon} {item.title}
-                  </span>
-                  {item.holder && (
-                    <span className="text-[8px] text-slate-500 truncate">{item.holder}</span>
-                  )}
-                  <span className="text-[8px] font-mono mt-0.5" style={{ color: color + 'cc' }}>
-                    {formatExpiryDate(item.expiry_date)}
-                  </span>
-
-                  {/* Tooltip acciones */}
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-1 shadow-xl z-20">
-                    <button onClick={e => { e.stopPropagation(); onRenew(item) }} title="Renovar" className="text-emerald-400 hover:text-emerald-300 p-0.5">
-                      <CheckCircle2 size={12} />
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); onDelete(item) }} title="Eliminar" className="text-red-400 hover:text-red-300 p-0.5">
-                      <Trash2 size={12} />
-                    </button>
+              {/* Meses */}
+              <div className="relative flex-1 border-b border-slate-700/40" style={{ height: TL_HDR_H, backgroundColor: '#0c1221' }}>
+                {months.map((m, i) => (
+                  <div
+                    key={i}
+                    className="absolute top-0 bottom-0 flex items-center border-r border-slate-700/20 px-2"
+                    style={{ left: m.x, width: m.w }}
+                  >
+                    <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider whitespace-nowrap">
+                      {m.label}
+                    </span>
                   </div>
+                ))}
+                {/* Ticks de días para 1M */}
+                {dayTicks.map((t, i) => (
+                  <div key={i} className="absolute bottom-0 flex flex-col items-center" style={{ left: t.x }}>
+                    <span className="text-[7px] text-slate-600 mb-0.5">{t.label}</span>
+                    <div className="w-px h-2 bg-slate-700" />
+                  </div>
+                ))}
+                {/* Línea de hoy en header */}
+                <div className="absolute top-0 bottom-0 w-px bg-cyan-500/70" style={{ left: todayX }}>
+                  <div className="absolute top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-cyan-400 shadow-md shadow-cyan-400/60" />
                 </div>
               </div>
-            )
-          })}
+            </div>
+
+            {/* ── Swim lanes ── */}
+            {lanes.map(({ category, items: laneItems }, laneIdx) => {
+              const bg = laneIdx % 2 === 0 ? '#131e30' : '#0f1829'
+
+              return (
+                <div
+                  key={category?.id ?? '__none__'}
+                  className="flex border-b border-slate-700/20"
+                  style={{ height: TL_LANE_H, backgroundColor: bg }}
+                >
+                  {/* Etiqueta frozen */}
+                  <div
+                    className="sticky left-0 z-10 flex items-center gap-2.5 px-3 border-r border-slate-700/30 flex-shrink-0"
+                    style={{ width: TL_LABEL_W, minWidth: TL_LABEL_W, backgroundColor: bg }}
+                  >
+                    <span className="text-lg flex-shrink-0 leading-none">
+                      {category?.icon ?? '📁'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-slate-200 truncate leading-tight">
+                        {category?.name ?? 'Sin categoría'}
+                      </p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">
+                        {laneItems.length} ítem{laneItems.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Área de ítems */}
+                  <div className="relative flex-1 overflow-visible" style={{ height: TL_LANE_H }}>
+
+                    {/* Eje horizontal */}
+                    <div
+                      className="absolute left-0 right-0 h-px"
+                      style={{ top: TL_LANE_H / 2, backgroundColor: '#1e293b' }}
+                    />
+
+                    {/* Línea de hoy */}
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-cyan-500/20"
+                      style={{ left: todayX }}
+                    />
+
+                    {/* Zonas de urgencia */}
+                    {[
+                      { d: 7,  c: '#ef4444' },
+                      { d: 30, c: '#f97316' },
+                      { d: 90, c: '#f59e0b' },
+                    ].map(z => (
+                      <div
+                        key={z.d}
+                        className="absolute top-0 bottom-0"
+                        style={{ left: todayX, width: z.d * pxPerDay, backgroundColor: z.c + '09' }}
+                      />
+                    ))}
+
+                    {/* Ítems */}
+                    {laneItems.map(item => {
+                      const urgency = getExpiryUrgency(item)
+                      const color   = EXPIRY_URGENCY_COLORS[urgency]
+                      const x       = getItemX(item)
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="absolute group cursor-pointer"
+                          style={{ left: x, top: 0, height: TL_LANE_H, width: 1 }}
+                          onMouseEnter={e => showPopover(item, e)}
+                          onMouseLeave={hidePopover}
+                        >
+                          {renderPill(item, color)}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Popover ─────────────────────────────────────────────────────────── */}
+      {hovered && (
+        <TimelinePopover
+          item={hovered.item}
+          anchorRect={hovered.rect}
+          onEdit={() => { onEdit(hovered.item); setHovered(null) }}
+          onRenew={() => { onRenew(hovered.item); setHovered(null) }}
+          onDelete={() => { onDelete(hovered.item); setHovered(null) }}
+          onMouseEnter={keepPopover}
+          onMouseLeave={hidePopover}
+        />
+      )}
     </div>
   )
 }

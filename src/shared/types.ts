@@ -758,6 +758,14 @@ export interface AIConfig {
   models: Record<AIOperation, ClaudeModelId>
 }
 
+// Datos personales de contacto del usuario (para recibir notificaciones propias)
+export interface PersonalContactInfo {
+  name:            string
+  whatsapp_number: string
+  email:           string
+  other:           string
+}
+
 // Tributo individual del despacho
 export interface DespachoTributo {
   codigo:      string         // "010", "415", etc.

@@ -23,6 +23,7 @@ import { registerBNAIpc }  from './ipc/bna.ipc'
 import { registerChatIpc } from './ipc/chat.ipc'
 import { registerBackupIpc } from './ipc/backup.ipc'
 import { registerExpiryIpc } from './ipc/expiry.ipc'
+import { registerSettingsIpc } from './ipc/settings.ipc'
 import { driveService } from './services/drive.service'
 import { schedulerService } from './services/scheduler.service'
 import { questionsService } from './services/questions.service'
@@ -93,6 +94,7 @@ app.whenReady().then(() => {
   registerChatIpc()
   registerBackupIpc()
   registerExpiryIpc()
+  registerSettingsIpc()
 
   // ── Backup automático cada 6 horas ────────────────────────────────────────
   const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000  // 6 horas

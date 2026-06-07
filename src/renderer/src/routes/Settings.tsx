@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Cloud, MessageCircle, RefreshCw, Check, AlertCircle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
-  Database, Download, Sparkles
+  Database, Download, Sparkles, User, Phone, Mail, FileText
 } from 'lucide-react'
 import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -13,6 +13,7 @@ import {
 } from '@shared/types'
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/useProjects'
 import { useAIConfigured, useAIModels, useSaveAIApiKey, useSaveAIModels } from '../hooks/useAI'
+import { usePersonalContact, useSavePersonalContact } from '../hooks/useSettings'
 import { cn } from '../components/ui/utils'
 
 const PROJECT_COLORS = [
@@ -68,6 +69,34 @@ export default function Settings() {
   const [wapiUrl, setWapiUrl] = useState('https://evolution-api-production-d7fd.up.railway.app')
   const [wapiKey, setWapiKey] = useState('flowtask-secret')
   const [waConfigSaved, setWaConfigSaved] = useState(false)
+
+  // Mis datos personales (para recibir notificaciones propias)
+  const { data: personalContact } = usePersonalContact()
+  const savePersonalContact = useSavePersonalContact()
+  const [personalName,  setPersonalName]  = useState('')
+  const [personalWa,    setPersonalWa]    = useState('')
+  const [personalEmail, setPersonalEmail] = useState('')
+  const [personalOther, setPersonalOther] = useState('')
+  const [personalSaved, setPersonalSaved] = useState(false)
+
+  useEffect(() => {
+    if (!personalContact) return
+    setPersonalName(personalContact.name)
+    setPersonalWa(personalContact.whatsapp_number)
+    setPersonalEmail(personalContact.email)
+    setPersonalOther(personalContact.other)
+  }, [personalContact])
+
+  const handleSavePersonalContact = async () => {
+    await savePersonalContact.mutateAsync({
+      name:            personalName.trim(),
+      whatsapp_number: personalWa.trim(),
+      email:           personalEmail.trim(),
+      other:           personalOther.trim(),
+    })
+    setPersonalSaved(true)
+    setTimeout(() => setPersonalSaved(false), 2000)
+  }
 
   // Backup
   const [backupStatus,  setBackupStatus]  = useState<BackupStatus | null>(null)
@@ -241,6 +270,74 @@ export default function Settings() {
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 max-w-2xl">
       <h1 className="text-xl font-bold">Configuración</h1>
+
+      {/* Mis datos personales */}
+      <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <User size={18} className="text-amber-400" />
+          <h2 className="font-semibold">Mis datos personales</h2>
+        </div>
+        <p className="text-xs text-slate-500 -mt-2">
+          Guardá tu WhatsApp, email y otros datos de contacto. Así podés elegir que las
+          notificaciones y recordatorios (por ejemplo, los de Vencimientos) te lleguen a vos
+          mismo en lugar de a otra persona.
+        </p>
+
+        <div className="space-y-2">
+          <div className="relative">
+            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={personalName}
+              onChange={(e) => setPersonalName(e.target.value)}
+              placeholder="Tu nombre"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div className="relative">
+            <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={personalWa}
+              onChange={(e) => setPersonalWa(e.target.value)}
+              placeholder="Tu WhatsApp (ej: +5491122334455)"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div className="relative">
+            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="email"
+              value={personalEmail}
+              onChange={(e) => setPersonalEmail(e.target.value)}
+              placeholder="Tu email"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div className="relative">
+            <FileText size={14} className="absolute left-3 top-3 text-slate-500" />
+            <textarea
+              value={personalOther}
+              onChange={(e) => setPersonalOther(e.target.value)}
+              placeholder="Otros datos de contacto (opcional)"
+              rows={2}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+            />
+          </div>
+          <button
+            onClick={handleSavePersonalContact}
+            disabled={savePersonalContact.isPending}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 text-sm rounded-lg transition-colors"
+          >
+            {personalSaved
+              ? <Check size={13} className="text-emerald-400" />
+              : savePersonalContact.isPending
+                ? <Loader2 size={13} className="animate-spin" />
+                : <Save size={13} />}
+            {personalSaved ? 'Guardado' : 'Guardar mis datos'}
+          </button>
+        </div>
+      </section>
 
       {/* Google Drive */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">

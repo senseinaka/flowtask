@@ -25,7 +25,8 @@ import type {
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
   ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
   ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
-  ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput
+  ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput,
+  PersonalContactInfo
 } from '@shared/types'
 
 const api = {
@@ -502,6 +503,11 @@ const api = {
       listByItem:  (itemId: string): Promise<ExpiryAlert[]>                                      => ipcRenderer.invoke('expiry:alerts:listByItem', itemId),
       setForItem:  (itemId: string, alerts: CreateExpiryAlertInput[]): Promise<ExpiryAlert[]>    => ipcRenderer.invoke('expiry:alerts:setForItem', itemId, alerts),
     }
+  },
+
+  settings: {
+    getPersonalContact:  (): Promise<PersonalContactInfo>                            => ipcRenderer.invoke('settings:personal:get'),
+    savePersonalContact: (data: Partial<PersonalContactInfo>): Promise<PersonalContactInfo> => ipcRenderer.invoke('settings:personal:save', data),
   },
 
   on: (
