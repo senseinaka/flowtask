@@ -5,7 +5,7 @@ import {
   getAIConfig, saveAIConfig, isAIConfigured,
   analyzeDocument, dashboardChat, validateDespachoResult,
   getPromptOverride, savePromptOverride, deletePromptOverride, listPromptOverrides,
-  getEffectiveSystemPrompt, parseExpiryText,
+  getEffectiveSystemPrompt, parseExpiryText, parseFinanceImportText,
 } from '../services/ai.service'
 import { DEFAULT_SYSTEM_PROMPTS, PROMPT_LABELS, PROMPT_DESCRIPTIONS } from '../services/ai.prompts'
 import { getDocument, getImport, getExtraCost, getProforma } from '../database/queries/comex'
@@ -273,5 +273,14 @@ export function registerAIIpc(): void {
   // ── Parseo de texto libre → vencimientos ───────────────────────────────────
   ipcMain.handle('ai:parseExpiryItems', (_e, rawText: string) =>
     parseExpiryText(rawText)
+  )
+
+  // ── Parseo de texto/planillas libres → gastos de Finanzas (modo "pegar datos") ──
+  // Complementa al importador rígido por encabezados: acá la IA interpreta
+  // cualquier formato (tabla pegada de Excel, listas, notas sueltas) y devuelve
+  // filas ya normalizadas, listas para pasar por el mismo matching de conceptos
+  // y detección de duplicados que usa la importación de archivos.
+  ipcMain.handle('ai:finance:parseImportText', (_e, rawText: string, month: number, year: number) =>
+    parseFinanceImportText(rawText, month, year)
   )
 }

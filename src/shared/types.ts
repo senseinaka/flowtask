@@ -1470,6 +1470,16 @@ export interface FinanceConcept {
   payment_method: FinancePaymentMethod
   recurrence:     FinanceRecurrence
   recurrence_month: number | null  // 1-12, solo aplica cuando recurrence='annual' (mes del año en que se genera)
+  /**
+   * Cuando vale 1, el concepto admite "registro de cargas": en vez de un único
+   * monto por mes, su movimiento mensual acumula una sub-lista de entradas
+   * (ej. "Nafta 1: $5.000 (03/06)", "Nafta 2: $4.500 (18/06)") y `amount_actual`
+   * se recalcula automáticamente como la suma — pensado para gastos variables
+   * que ocurren más de una vez al mes (combustible, supermercado, salidas...).
+   * Reemplaza el viejo workaround de crear "Nafta 1", "Nafta 2" como conceptos
+   * separados (Opción C del plan maestro de consolidación).
+   */
+  tracks_multiple_entries: number   // 0 | 1
   is_active:      number   // 0 | 1
   notes:          string
   created_at:     number
@@ -1501,6 +1511,40 @@ export interface FinanceMovement {
    * "próximos" que abarcan varios períodos).
    */
   previous_month_amount?: number | null
+  /**
+   * Cantidad de cargas individuales registradas (solo relevante si
+   * concept.tracks_multiple_entries = 1). Se computa al vuelo junto con la
+   * lista de movimientos — null/undefined para conceptos que no llevan registro
+   * de cargas. Permite mostrar "3 cargas · $23.500" sin pedir las entradas.
+   */
+  entries_count?: number | null
+}
+
+/** Una "carga" individual dentro del registro de un movimiento — ej. una de las
+ *  varias veces que se cargó nafta o se fue al supermercado en el mes. La suma
+ *  de sus `amount` recalcula automáticamente `amount_actual` del movimiento
+ *  padre (ver `recalcMovementFromEntries` en queries/finance.ts). */
+export interface FinanceMovementEntry {
+  id:          string
+  movement_id: string
+  amount:      number
+  entry_date:  number | null   // timestamp ms — fecha de la carga (opcional; "—" si no se especifica)
+  note:        string
+  created_at:  number
+  updated_at:  number
+}
+
+export interface CreateFinanceMovementEntryInput {
+  movement_id: string
+  amount:      number
+  entry_date?: number | null
+  note?:       string
+}
+
+export interface UpdateFinanceMovementEntryInput {
+  amount?:     number
+  entry_date?: number | null
+  note?:       string
 }
 
 export interface CreateFinanceAccountInput {
@@ -1524,6 +1568,7 @@ export interface CreateFinanceConceptInput {
   payment_method?: FinancePaymentMethod
   recurrence?:     FinanceRecurrence
   recurrence_month?: number | null
+  tracks_multiple_entries?: number   // 0 | 1 — ver FinanceConcept.tracks_multiple_entries
   notes?:          string
 }
 
@@ -1584,6 +1629,13 @@ export interface FinanceHistoryEntry {
   totalPending:   number
   totalOverdue:   number
   diffPercent:    number | null   // vs. el mes calendario anterior (null si no hay datos para comparar)
+  /**
+   * Cantidad de movimientos cargados ese mes. Permite distinguir "mes sin
+   * movimientos generados todavía" (0 — los totales en $0 no significan nada)
+   * de "mes con movimientos pero gasto real $0" (poco común, pero posible).
+   * Clave para el estado vacío del Histórico tras un reinicio del módulo.
+   */
+  movementsCount: number
 }
 
 /** Ítem del ranking "Top conceptos": los gastos individuales más altos del mes. */

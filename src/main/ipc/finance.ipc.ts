@@ -6,6 +6,7 @@ import {
   listFinanceConcepts, getFinanceConcept, createFinanceConcept, updateFinanceConcept, deleteFinanceConcept,
   listFinanceMovements, listUpcomingFinanceMovements, getFinanceMovement, createFinanceMovement, updateFinanceMovement,
   quickUpdateFinanceMovement, deleteFinanceMovement, generateMovementsForMonth, generateMovementsFromPreviousMonth,
+  listMovementEntries, addMovementEntry, updateMovementEntry, removeMovementEntry,
   getFinanceMonthSummary,
   getFinanceCategoryBreakdown, getFinanceHistory, getFinanceTopConcepts, getFinanceTopIncreases,
   buildFinanceImportPreview, confirmFinanceImport
@@ -13,12 +14,14 @@ import {
 import {
   parseFinanceImportFile, writeFinanceMovementsFile, writeFinanceSummaryPdf
 } from '../services/finance-io.service'
+import { parseFinanceImportText } from '../services/ai.service'
 import {
   getFinanceSecurityStatus, setFinancePin, verifyFinancePin, disableFinancePin, changeFinancePin
 } from '../services/finance-security.service'
 import type {
   CreateFinanceAccountInput, CreateFinanceCategoryInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
+  CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   FinanceMovementStatus, FinanceImportConfirmItem, FinanceMovement
 } from '@shared/types'
 
@@ -115,6 +118,24 @@ export function registerFinanceIpc(): void {
     generateMovementsFromPreviousMonth(month, year)
   )
 
+  // ── Registro de cargas — conceptos multi-carga (Opción C) ──────────────────
+
+  ipcMain.handle('finance:movementEntries:list', (_e, movementId: string) =>
+    listMovementEntries(movementId)
+  )
+
+  ipcMain.handle('finance:movementEntries:add', (_e, data: CreateFinanceMovementEntryInput) =>
+    addMovementEntry(data)
+  )
+
+  ipcMain.handle('finance:movementEntries:update', (_e, id: string, data: UpdateFinanceMovementEntryInput) =>
+    updateMovementEntry(id, data)
+  )
+
+  ipcMain.handle('finance:movementEntries:remove', (_e, id: string) =>
+    removeMovementEntry(id)
+  )
+
   // ── Resumen / dashboard ─────────────────────────────────────────────────────
   ipcMain.handle('finance:summary:get', (_e, month: number, year: number) =>
     getFinanceMonthSummary(month, year)
@@ -165,6 +186,17 @@ export function registerFinanceIpc(): void {
   ipcMain.handle('finance:import:confirm', (_e, items: FinanceImportConfirmItem[], month: number, year: number) =>
     confirmFinanceImport(items, month, year)
   )
+
+  // ── Modo "pegar datos" (IA) ──────────────────────────────────────────────────
+  //
+  // Mismo flujo de previsualización que la importación de archivos, pero el
+  // origen es texto pegado a mano (tabla de Excel, lista de WhatsApp, notas
+  // sueltas) que la IA interpreta y normaliza a filas — `buildFinanceImportPreview`
+  // hace despues el mismo trabajo de matching/duplicados sin distinguir el origen.
+  ipcMain.handle('finance:import:parseText', async (_e, rawText: string, month: number, year: number) => {
+    const rows = await parseFinanceImportText(rawText, month, year)
+    return buildFinanceImportPreview(rows, month, year, 'Texto pegado')
+  })
 
   // ── Exportación: Excel / CSV / PDF resumen (Fase 5) ──────────────────────────
 

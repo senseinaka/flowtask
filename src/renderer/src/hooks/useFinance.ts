@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement, FinanceMonthSummary,
+  FinanceMovementEntry,
   CreateFinanceAccountInput, CreateFinanceCategoryInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
+  CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   FinanceMovementStatus,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus
@@ -450,6 +452,55 @@ export function useGenerateMovementsFromPreviousMonth() {
   })
 }
 
+// ── Registro de cargas — conceptos multi-carga (Opción C) ────────────────────
+//
+// Sub-ledger de "cargas" por movimiento: un concepto marcado con
+// `tracks_multiple_entries` mantiene UN solo movimiento por mes/año, pero
+// puede acumular varias entradas (p. ej. 3 cargas de nafta) cuya suma
+// recalcula automáticamente `amount_actual`, `status` y `payment_date` del
+// movimiento. Reemplaza el viejo workaround de "Nafta 1/2/3".
+
+export function useMovementEntries(movementId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['finance-movement-entries', movementId],
+    queryFn:  (): Promise<FinanceMovementEntry[]> =>
+      window.api.finance.movementEntries.list(movementId as string),
+    enabled:   !!movementId,
+    staleTime: 10_000
+  })
+}
+
+/** Invalida las entradas de un movimiento puntual + listas de movimientos/resumen (porque cambian montos/estado derivados). */
+function invalidateMovementEntries(qc: ReturnType<typeof useQueryClient>, movementId: string) {
+  qc.invalidateQueries({ queryKey: ['finance-movement-entries', movementId] })
+  invalidateFinanceMovements(qc)
+}
+
+export function useAddMovementEntry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateFinanceMovementEntryInput) => window.api.finance.movementEntries.add(data),
+    onSuccess:  (_entry, variables) => invalidateMovementEntries(qc, variables.movement_id)
+  })
+}
+
+export function useUpdateMovementEntry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; movementId: string; data: UpdateFinanceMovementEntryInput }) =>
+      window.api.finance.movementEntries.update(vars.id, vars.data),
+    onSuccess:  (_entry, variables) => invalidateMovementEntries(qc, variables.movementId)
+  })
+}
+
+export function useRemoveMovementEntry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }: { id: string; movementId: string }) => window.api.finance.movementEntries.remove(id),
+    onSuccess:  (_void, variables) => invalidateMovementEntries(qc, variables.movementId)
+  })
+}
+
 // ── Resumen / dashboard ───────────────────────────────────────────────────────
 
 export function useFinanceMonthSummary(month: number, year: number) {
@@ -520,6 +571,20 @@ export function useFinanceImportSelectFile() {
   return useMutation({
     mutationFn: ({ month, year }: { month: number; year: number }): Promise<FinanceImportPreviewResult | null> =>
       window.api.finance.import.selectFile(month, year)
+  })
+}
+
+/**
+ * Modo "pegar datos": le pasa texto libre a la IA (tabla de Excel pegada, lista
+ * de WhatsApp, notas sueltas) para que lo interprete y devuelva la MISMA forma
+ * de previsualización que `useFinanceImportSelectFile` — así reutiliza sin
+ * cambios el matching de conceptos, la detección de duplicados y toda la UI
+ * de revisión de filas.
+ */
+export function useFinanceImportParseText() {
+  return useMutation({
+    mutationFn: ({ rawText, month, year }: { rawText: string; month: number; year: number }): Promise<FinanceImportPreviewResult> =>
+      window.api.finance.import.parseText(rawText, month, year)
   })
 }
 

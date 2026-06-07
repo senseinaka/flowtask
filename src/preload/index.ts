@@ -28,7 +28,9 @@ import type {
   ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput,
   PersonalContactInfo,
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement, FinanceMonthSummary,
+  FinanceMovementEntry,
   CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinanceConceptInput, CreateFinanceMovementInput,
+  CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   FinanceMovementStatus,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus
@@ -502,6 +504,17 @@ const api = {
       title: string; expiry_date: string; holder: string;
       description: string; frequency: string; category_hint: string
     }>> => ipcRenderer.invoke('ai:parseExpiryItems', rawText),
+    // Modo "pegar datos" del importador de Finanzas: la IA interpreta texto en
+    // cualquier formato (tabla de Excel pegada, listas, notas sueltas) y
+    // devuelve filas ya normalizadas con la MISMA forma que el parser de
+    // archivos (`ParsedImportRow`), listas para pasar por el preview existente.
+    parseFinanceImportText: (rawText: string, month: number, year: number): Promise<Array<{
+      rawConceptName: string
+      amount:         number | null
+      status:         FinanceMovementStatus
+      paymentDate:    number | null
+      notes:          string
+    }>> => ipcRenderer.invoke('ai:finance:parseImportText', rawText, month, year),
   },
 
   expiry: {
@@ -570,6 +583,16 @@ const api = {
       generateForMonth: (month: number, year: number): Promise<FinanceMovement[]>           => ipcRenderer.invoke('finance:movements:generateForMonth', month, year),
       generateFromPreviousMonth: (month: number, year: number): Promise<FinanceMovement[]>  => ipcRenderer.invoke('finance:movements:generateFromPreviousMonth', month, year),
     },
+    // Registro de cargas — conceptos multi-carga (Opción C): sub-ledger de
+    // entradas que se suman dentro de un único movimiento mensual (p. ej.
+    // "Nafta" con 3 cargas en el mes en vez de "Nafta 1/2/3").
+    movementEntries: {
+      list:   (movementId: string): Promise<FinanceMovementEntry[]>                          => ipcRenderer.invoke('finance:movementEntries:list', movementId),
+      add:    (data: CreateFinanceMovementEntryInput): Promise<FinanceMovementEntry>          => ipcRenderer.invoke('finance:movementEntries:add', data),
+      update: (id: string, data: UpdateFinanceMovementEntryInput): Promise<FinanceMovementEntry> =>
+        ipcRenderer.invoke('finance:movementEntries:update', id, data),
+      remove: (id: string): Promise<void>                                                    => ipcRenderer.invoke('finance:movementEntries:remove', id),
+    },
     summary: {
       get: (month: number, year: number): Promise<FinanceMonthSummary> => ipcRenderer.invoke('finance:summary:get', month, year),
     },
@@ -589,6 +612,10 @@ const api = {
         ipcRenderer.invoke('finance:import:selectFile', month, year),
       confirm: (items: FinanceImportConfirmItem[], month: number, year: number): Promise<FinanceImportResult> =>
         ipcRenderer.invoke('finance:import:confirm', items, month, year),
+      // Modo "pegar datos": misma previsualización que `selectFile`, pero a partir
+      // de texto pegado a mano que la IA interpreta y normaliza primero.
+      parseText: (rawText: string, month: number, year: number): Promise<FinanceImportPreviewResult> =>
+        ipcRenderer.invoke('finance:import:parseText', rawText, month, year),
     },
     export: {
       movements: (month: number, year: number, format: 'xlsx' | 'csv'): Promise<{ filePath: string } | null> =>

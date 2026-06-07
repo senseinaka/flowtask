@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { getDb } from '../db'
 import type {
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement,
+  FinanceMovementEntry, CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   CreateFinanceAccountInput, CreateFinanceCategoryInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
   FinanceMonthSummary, FinanceMovementStatus, FinancePaymentMethod,
@@ -140,8 +141,8 @@ export function createFinanceConcept(data: CreateFinanceConceptInput): FinanceCo
   const now = Date.now()
   db.prepare(`
     INSERT INTO finance_concepts
-      (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, is_active, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+      (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, tracks_multiple_entries, is_active, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
   `).run(
     id, data.category_id, data.account_id, data.name,
     data.default_amount ?? 0,
@@ -149,6 +150,7 @@ export function createFinanceConcept(data: CreateFinanceConceptInput): FinanceCo
     data.payment_method ?? 'transfer',
     data.recurrence ?? 'monthly',
     data.recurrence_month ?? null,
+    data.tracks_multiple_entries ?? 0,
     data.notes ?? '', now, now
   )
   return getFinanceConcept(id)!
@@ -160,7 +162,8 @@ export function updateFinanceConcept(
   const db  = getDb()
   const now = Date.now()
   const allowed = ['category_id', 'account_id', 'name', 'default_amount',
-                   'expense_type', 'payment_method', 'recurrence', 'recurrence_month', 'notes', 'is_active'] as const
+                   'expense_type', 'payment_method', 'recurrence', 'recurrence_month',
+                   'tracks_multiple_entries', 'notes', 'is_active'] as const
   const sets: string[] = []
   const vals: unknown[] = []
   for (const key of allowed) {
@@ -183,9 +186,11 @@ export function deleteFinanceConcept(id: string): void {
 type MovementRow = FinanceMovement & {
   c_name: string; c_category_id: string; c_account_id: string; c_default_amount: number
   c_expense_type: string; c_payment_method: string; c_recurrence: string; c_recurrence_month: number | null
+  c_tracks_multiple_entries: number
   c_is_active: number; c_notes: string; c_created_at: number; c_updated_at: number
   cat_name: string; cat_icon: string; cat_color: string
   acc_name: string; acc_icon: string; acc_color: string
+  entries_count: number
 }
 
 function hydrateMovement(r: MovementRow): FinanceMovement {
@@ -195,6 +200,7 @@ function hydrateMovement(r: MovementRow): FinanceMovement {
     status: r.status, payment_method: r.payment_method,
     payment_date: r.payment_date, due_date: r.due_date, notes: r.notes,
     created_at: r.created_at, updated_at: r.updated_at,
+    entries_count: r.entries_count,
     concept: {
       id: r.concept_id, category_id: r.c_category_id, account_id: r.c_account_id,
       name: r.c_name, default_amount: r.c_default_amount,
@@ -202,6 +208,7 @@ function hydrateMovement(r: MovementRow): FinanceMovement {
       payment_method: r.c_payment_method as FinancePaymentMethod,
       recurrence: r.c_recurrence as FinanceConcept['recurrence'],
       recurrence_month: r.c_recurrence_month,
+      tracks_multiple_entries: r.c_tracks_multiple_entries,
       is_active: r.c_is_active, notes: r.c_notes,
       created_at: r.c_created_at, updated_at: r.c_updated_at,
       category: { id: r.c_category_id, name: r.cat_name, icon: r.cat_icon, color: r.cat_color, is_default: 0, created_at: 0, updated_at: 0 },
@@ -216,10 +223,12 @@ const MOVEMENT_BASE_SELECT = `
          c.default_amount as c_default_amount, c.expense_type as c_expense_type,
          c.payment_method as c_payment_method, c.recurrence as c_recurrence,
          c.recurrence_month as c_recurrence_month,
+         c.tracks_multiple_entries as c_tracks_multiple_entries,
          c.is_active as c_is_active, c.notes as c_notes,
          c.created_at as c_created_at, c.updated_at as c_updated_at,
          cat.name as cat_name, cat.icon as cat_icon, cat.color as cat_color,
-         acc.name as acc_name, acc.icon as acc_icon, acc.color as acc_color
+         acc.name as acc_name, acc.icon as acc_icon, acc.color as acc_color,
+         (SELECT COUNT(*) FROM finance_movement_entries fme WHERE fme.movement_id = m.id) as entries_count
   FROM finance_movements m
   JOIN finance_concepts c ON c.id = m.concept_id
   LEFT JOIN finance_categories cat ON cat.id = c.category_id
@@ -335,6 +344,95 @@ export function quickUpdateFinanceMovement(id: string, data: {
 
 export function deleteFinanceMovement(id: string): void {
   getDb().prepare('DELETE FROM finance_movements WHERE id = ?').run(id)
+}
+
+// ── Registro de cargas — conceptos multi-carga (Opción C) ────────────────────
+//
+// Para conceptos con tracks_multiple_entries=1 (ej. "Nafta", "Supermercado":
+// gastos variables que ocurren más de una vez al mes), el movimiento mensual
+// no tiene "un monto" sino una sub-lista de "cargas" — cada una con su fecha,
+// monto y nota — y `amount_actual` se recalcula automáticamente como la suma.
+// Como son gastos que se pagan al momento (efectivo/débito/crédito, sin
+// vencimiento), apenas hay al menos una carga el movimiento pasa a "Pagado"
+// solo; si se borran todas, vuelve a "Pendiente" con monto vacío.
+
+export function listMovementEntries(movementId: string): FinanceMovementEntry[] {
+  return getDb().prepare(`
+    SELECT * FROM finance_movement_entries
+    WHERE movement_id = ?
+    ORDER BY COALESCE(entry_date, created_at) ASC, created_at ASC
+  `).all(movementId) as FinanceMovementEntry[]
+}
+
+/** Recalcula amount_actual / status / payment_date del movimiento padre a partir de la suma de sus cargas. */
+function recalcMovementFromEntries(db: ReturnType<typeof getDb>, movementId: string): void {
+  const now = Date.now()
+  const agg = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n,
+           MAX(COALESCE(entry_date, created_at)) AS lastDate
+    FROM finance_movement_entries
+    WHERE movement_id = ?
+  `).get(movementId) as { total: number; n: number; lastDate: number | null }
+
+  if (agg.n > 0) {
+    db.prepare(`
+      UPDATE finance_movements
+      SET amount_actual = ?, status = 'paid', payment_date = ?, updated_at = ?
+      WHERE id = ?
+    `).run(agg.total, agg.lastDate, now, movementId)
+  } else {
+    db.prepare(`
+      UPDATE finance_movements
+      SET amount_actual = NULL, status = 'pending', payment_date = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(now, movementId)
+  }
+}
+
+export function addMovementEntry(data: CreateFinanceMovementEntryInput): FinanceMovementEntry {
+  const db  = getDb()
+  const id  = randomUUID()
+  const now = Date.now()
+  const run = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, data.movement_id, data.amount, data.entry_date ?? now, data.note ?? '', now, now)
+    recalcMovementFromEntries(db, data.movement_id)
+  })
+  run()
+  return db.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
+}
+
+export function updateMovementEntry(id: string, data: UpdateFinanceMovementEntryInput): FinanceMovementEntry {
+  const db  = getDb()
+  const now = Date.now()
+  const existing = db.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry | undefined
+  if (!existing) throw new Error('La carga que intentás editar ya no existe.')
+
+  const run = db.transaction(() => {
+    const sets: string[] = []
+    const vals: unknown[] = []
+    if (data.amount !== undefined)     { sets.push('amount = ?');     vals.push(data.amount) }
+    if (data.entry_date !== undefined) { sets.push('entry_date = ?'); vals.push(data.entry_date) }
+    if (data.note !== undefined)       { sets.push('note = ?');       vals.push(data.note) }
+    sets.push('updated_at = ?'); vals.push(now); vals.push(id)
+    db.prepare(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+    recalcMovementFromEntries(db, existing.movement_id)
+  })
+  run()
+  return db.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
+}
+
+export function removeMovementEntry(id: string): void {
+  const db = getDb()
+  const existing = db.prepare('SELECT movement_id FROM finance_movement_entries WHERE id = ?').get(id) as { movement_id: string } | undefined
+  if (!existing) return
+  const run = db.transaction(() => {
+    db.prepare('DELETE FROM finance_movement_entries WHERE id = ?').run(id)
+    recalcMovementFromEntries(db, existing.movement_id)
+  })
+  run()
 }
 
 // ── Generación de movimientos / "crear nuevo mes" (Fase 4) ───────────────────
@@ -610,7 +708,10 @@ export function getFinanceHistory(month: number, year: number, monthsBack: numbe
       ? ((totalActual - prevTotalActual) / prevTotalActual) * 100
       : null
 
-    entries.push({ month: m, year: y, totalEstimated, totalActual, totalPaid, totalPending, totalOverdue, diffPercent })
+    entries.push({
+      month: m, year: y, totalEstimated, totalActual, totalPaid, totalPending, totalOverdue, diffPercent,
+      movementsCount: movements.length
+    })
     prevMovements = movements
   }
   return entries

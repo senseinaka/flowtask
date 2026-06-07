@@ -9,7 +9,7 @@ import { getDb } from '../database/db'
 import type {
   AIOperation, AIConfig, ClaudeModelId,
   ExtractedDespacho, ExtractedFactura, AIAnalysisResult,
-  AI_OPERATION_DEFAULT_MODELS
+  AI_OPERATION_DEFAULT_MODELS, FinanceMovementStatus
 } from '@shared/types'
 import { AI_OPERATION_DEFAULT_MODELS as DEFAULT_MODELS } from '@shared/types'
 
@@ -1444,4 +1444,119 @@ Devolvé SOLO el JSON array, sin texto adicional ni markdown. Ejemplo:
   } catch {
     throw new Error(`La IA devolvió un formato inesperado. Respuesta: ${raw.slice(0, 200)}`)
   }
+}
+
+// ── Parse de texto/planillas libres para importación de Finanzas ─────────────
+//
+// Complementa a `parseFinanceImportFile` (parser rígido por encabezados, en
+// finance-io.service): acá el usuario pega CUALQUIER cosa — una tabla copiada
+// de Excel, una lista de WhatsApp, notas sueltas tipo "15/06 nafta 23000" — y
+// la IA hace el trabajo de extraer cada gasto como una fila estructurada.
+// El resultado tiene la MISMA forma que `ParsedImportRow` (finance-io.service)
+// para poder reusar tal cual `buildFinanceImportPreview` (matching de conceptos
+// + detección de duplicados) sin duplicar esa lógica.
+
+export interface ParsedFinanceImportRow {
+  rawConceptName: string
+  amount:         number | null
+  status:         FinanceMovementStatus
+  paymentDate:    number | null   // epoch ms, o null si no se pudo determinar
+  notes:          string
+}
+
+const MONTH_NAMES_ES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+]
+
+const FINANCE_IMPORT_STATUS_VALUES = new Set(['no_status', 'pending', 'paid', 'overdue'])
+
+/** Convierte "YYYY-MM-DD" (o null) devuelto por la IA a epoch ms, sin asumir zona horaria. */
+function isoDateToEpoch(iso: string | null | undefined): number | null {
+  if (!iso) return null
+  const m = String(iso).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const t = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime()
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * Parsea texto en cualquier formato (pegado desde Excel, listas, notas sueltas)
+ * y devuelve gastos estructurados para un mes/año puntual — usado tanto por el
+ * modo "pegar datos" del importador como, a futuro, por cualquier otra fuente
+ * de texto libre. `month`/`year` se le pasan a la IA como contexto para que
+ * pueda resolver fechas incompletas ("el 15", "15/06") contra el período que
+ * el usuario está cargando.
+ */
+export async function parseFinanceImportText(
+  rawText: string,
+  month:   number,
+  year:    number
+): Promise<ParsedFinanceImportRow[]> {
+  const client = getClient()
+  const config = getAIConfig()
+  const model = (config.models['dashboard_chat'] ?? 'claude-haiku-4-5') as string
+
+  const monthName = MONTH_NAMES_ES[month - 1] ?? String(month)
+
+  const systemPrompt = `Sos un asistente que extrae gastos personales de texto en cualquier formato para importarlos a una app de finanzas.
+El usuario va a pegar texto de lo que tenga a mano: una tabla copiada de Excel (con tabs o columnas alineadas), una lista de WhatsApp o notas, líneas sueltas tipo "15/06 nafta 23000", remitos, lo que sea.
+
+El período que el usuario está cargando es ${monthName} de ${year} (mes=${month}, año=${year}). Usalo para:
+- Resolver fechas incompletas: "el 15", "15/06", "miércoles pasado" → asumí que corresponden a ese mes/año salvo que el texto indique claramente otro.
+- Si una fila no tiene fecha y no se puede inferir, devolvé expiry null para esa fila — no inventes.
+
+Para CADA gasto que encuentres, extraé:
+- concept: el nombre del gasto/concepto tal como aparece o se puede inferir (ej: "Nafta", "Supermercado", "Internet", "Tarjeta Visa"). Sin inventar de más: si dice "YPF 23/06" el concepto es "YPF" o "Nafta", lo que sea más natural en español.
+- amount: el monto numérico (sin símbolo de moneda ni separadores de miles). null si no hay monto reconocible.
+- date: fecha de pago en formato YYYY-MM-DD, o null si no se puede determinar.
+- status: uno de "paid" (ya pagado/pagué/aboné), "pending" (pendiente/a pagar/falta pagar), "overdue" (vencido/atrasado), "no_status" (no se menciona estado — usalo como default si no hay pistas).
+- notes: cualquier detalle extra relevante (número de comprobante, cuotas, aclaración). String vacío si no hay nada que agregar.
+
+Ignorá líneas que claramente no son gastos (encabezados, totales, separadores, texto irrelevante).
+
+Devolvé SOLO un array JSON, sin texto adicional ni markdown. Ejemplo:
+[{"concept":"Nafta","amount":23000,"date":"2026-06-15","status":"paid","notes":""},{"concept":"Internet","amount":15500,"date":null,"status":"pending","notes":"vence el 28"}]`
+
+  const resp = await client.messages.create({
+    model,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: rawText }]
+  })
+
+  const raw = resp.content
+    .filter(b => b.type === 'text')
+    .map(b => (b as Anthropic.TextBlock).text)
+    .join('')
+    .trim()
+
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
+  let parsed: Array<{ concept?: unknown; amount?: unknown; date?: unknown; status?: unknown; notes?: unknown }>
+  try {
+    parsed = JSON.parse(cleaned)
+    if (!Array.isArray(parsed)) throw new Error('not an array')
+  } catch {
+    throw new Error(`La IA devolvió un formato inesperado. Respuesta: ${raw.slice(0, 200)}`)
+  }
+
+  return parsed
+    .map((item): ParsedFinanceImportRow | null => {
+      const rawConceptName = String(item.concept ?? '').trim()
+      if (!rawConceptName) return null   // sin nombre de concepto, no hay nada que matchear
+
+      const amount = typeof item.amount === 'number' && Number.isFinite(item.amount) ? item.amount : null
+      const statusRaw = String(item.status ?? '').trim()
+      const status = (FINANCE_IMPORT_STATUS_VALUES.has(statusRaw) ? statusRaw : 'no_status') as FinanceMovementStatus
+
+      return {
+        rawConceptName,
+        amount,
+        status,
+        paymentDate: isoDateToEpoch(typeof item.date === 'string' ? item.date : null),
+        notes: String(item.notes ?? '').trim()
+      }
+    })
+    .filter((r): r is ParsedFinanceImportRow => r !== null)
 }

@@ -13,7 +13,8 @@ import {
   PieChart as PieChartIcon, BarChart3, GitCompare, LineChart as LineChartIcon,
   Trophy, Award, Flame, LayoutGrid, History as HistoryIcon, CopyPlus,
   Upload, Download, FileSpreadsheet, FileText, Lock, Unlock, ShieldCheck, ShieldOff,
-  KeyRound, Eye, EyeOff, ChevronDown, AlertOctagon
+  KeyRound, Eye, EyeOff, ChevronDown, AlertOctagon, Receipt,
+  Sparkles, ClipboardPaste, FilePlus2
 } from 'lucide-react'
 import {
   useFinanceMovements, useUpcomingFinanceMovements, useFinanceMonthSummary,
@@ -22,19 +23,21 @@ import {
   useGenerateMovementsForMonth, useGenerateMovementsFromPreviousMonth,
   useCreateFinanceConcept, useUpdateFinanceConcept, useDeleteFinanceConcept,
   useCreateFinanceCategory, useUpdateFinanceCategory, useDeleteFinanceCategory,
+  useMovementEntries, useAddMovementEntry, useUpdateMovementEntry, useRemoveMovementEntry,
   useFinanceCategoryBreakdown, useFinanceHistory, useFinanceTopConcepts, useFinanceTopIncreases,
   getDiffColor, formatCurrency, formatFinanceDate, getMonthLabel, getMonthName, MONTH_OPTIONS,
   getEffectiveAmount, formatSignedPercent,
   getMovementUrgency, getDueLabel, groupMovementsByUrgency, getFinanceAlerts,
   getDisplayStatus, getNextStatusOnClick,
   FINANCE_URGENCY_ORDER, FINANCE_URGENCY_LABELS, FINANCE_URGENCY_COLORS, FINANCE_HISTORY_MONTHS,
-  useFinanceImportSelectFile, useConfirmFinanceImport,
+  useFinanceImportSelectFile, useFinanceImportParseText, useConfirmFinanceImport,
   useExportFinanceMovements, useExportFinanceMovementsSelection, useExportFinanceSummaryPdf,
   useFinanceSecurityStatus, useSetupFinancePin, useVerifyFinancePin, useDisableFinancePin, useChangeFinancePin,
   type FinanceMovementUrgency, type FinanceAlert, type FinanceAlertKind, type FinanceAlertSeverity
 } from '../../hooks/useFinance'
 import type {
   FinanceMovement, FinanceConcept, FinanceMonthSummary, FinanceCategory, FinanceAccount,
+  FinanceMovementEntry,
   FinanceMovementStatus, FinancePaymentMethod, FinanceExpenseType, FinanceRecurrence,
   CreateFinanceMovementInput, CreateFinanceConceptInput, CreateFinanceCategoryInput,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
@@ -617,6 +620,18 @@ function MovementsTable({
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
                     <span className="font-medium text-slate-200 truncate">{m.concept?.name ?? '—'}</span>
+                    {!!m.concept?.tracks_multiple_entries && (
+                      <span
+                        className="flex items-center gap-0.5 text-[9px] font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 rounded px-1 py-0.5 flex-shrink-0"
+                        title={
+                          m.entries_count
+                            ? `Suma ${m.entries_count} ${m.entries_count === 1 ? 'carga' : 'cargas'} de este mes — el monto real es el total acumulado, no un pago único.`
+                            : 'Este concepto acumula varias cargas en el mes — todavía no cargaste ninguna.'
+                        }
+                      >
+                        <Receipt size={9} /> {m.entries_count ?? 0}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
@@ -643,7 +658,14 @@ function MovementsTable({
                   <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {diffPct !== null ? (
+                  {m.concept?.tracks_multiple_entries ? (
+                    // La variación compara una estimación única contra la SUMA de
+                    // varias cargas — el % puede ser engañoso (ej: "+200%" solo
+                    // porque hubo 3 cargas en vez de 1). Se aclara en vez de alarmar.
+                    <span className="text-[10px] text-slate-600 italic" title="No se compara: el monto real acá es la suma de varias cargas, no una sola estimación.">
+                      suma de cargas
+                    </span>
+                  ) : diffPct !== null ? (
                     <span className="text-xs font-semibold" style={{ color: getDiffColor(diffPct) }}>
                       {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
                     </span>
@@ -1189,6 +1211,20 @@ function MovementForm({ movement, concepts, period, onClose }: {
   const firstConceptId = movement?.concept_id ?? concepts[0]?.id ?? ''
   const firstConcept   = concepts.find(c => c.id === firstConceptId)
 
+  // Para conceptos "de varias cargas" (Opción C), monto/estado/fecha de pago se
+  // derivan en vivo del registro de cargas — no del snapshot `movement` con el
+  // que se abrió el modal (que queda desactualizado en cuanto se agrega una carga).
+  const tracksEntries = isEdit && firstConcept?.tracks_multiple_entries === 1
+  const { data: liveEntries = [] } = useMovementEntries(tracksEntries ? movement!.id : null)
+  const liveTotal = useMemo(
+    () => liveEntries.reduce((sum, e) => sum + e.amount, 0),
+    [liveEntries]
+  )
+  const liveLastDate = useMemo(() => {
+    const dated = liveEntries.filter(e => e.entry_date != null).map(e => e.entry_date as number)
+    return dated.length ? Math.max(...dated) : null
+  }, [liveEntries])
+
   const [form, setForm] = useState({
     concept_id:       firstConceptId,
     amount_estimated: String(movement?.amount_estimated ?? firstConcept?.default_amount ?? 0),
@@ -1284,20 +1320,44 @@ function MovementForm({ movement, concepts, period, onClose }: {
               <label className={labelCls}>Monto estimado</label>
               <input type="number" value={form.amount_estimated} onChange={e => upd('amount_estimated', e.target.value)} className={inputCls} />
             </div>
-            <div>
-              <label className={labelCls}>Monto real (si ya lo conocés)</label>
-              <input type="number" value={form.amount_actual} onChange={e => upd('amount_actual', e.target.value)} placeholder="—" className={inputCls} />
-            </div>
+            {tracksEntries ? (
+              <div>
+                <label className={labelCls}>Monto real (suma de cargas)</label>
+                <div className={cn(inputCls, 'flex items-center justify-between text-slate-400 cursor-not-allowed select-none')}>
+                  <span>{liveEntries.length === 0 ? '—' : formatCurrency(liveTotal)}</span>
+                  <Receipt size={13} className="text-purple-400" />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">Se calcula solo a partir del registro de cargas de abajo.</p>
+              </div>
+            ) : (
+              <div>
+                <label className={labelCls}>Monto real (si ya lo conocés)</label>
+                <input type="number" value={form.amount_actual} onChange={e => upd('amount_actual', e.target.value)} placeholder="—" className={inputCls} />
+              </div>
+            )}
           </div>
+
+          {tracksEntries && (
+            <MovementEntriesLedger movementId={movement!.id} entries={liveEntries} />
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Estado</label>
-              <select value={form.status} onChange={e => upd('status', e.target.value as FinanceMovementStatus)} className={inputCls}>
-                {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
-                  <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
-                ))}
-              </select>
+              {tracksEntries ? (
+                <>
+                  <div className={cn(inputCls, 'flex items-center text-slate-400 cursor-not-allowed select-none')}>
+                    {FINANCE_STATUS_LABELS[liveEntries.length > 0 ? 'paid' : 'pending']}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Se actualiza solo: "pagado" apenas cargás la primera entrada, "pendiente" si no hay ninguna.</p>
+                </>
+              ) : (
+                <select value={form.status} onChange={e => upd('status', e.target.value as FinanceMovementStatus)} className={inputCls}>
+                  {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
+                    <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className={labelCls}>Método de pago</label>
@@ -1312,7 +1372,16 @@ function MovementForm({ movement, concepts, period, onClose }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Fecha de pago</label>
-              <input type="date" value={form.payment_date} onChange={e => upd('payment_date', e.target.value)} className={inputCls} />
+              {tracksEntries ? (
+                <>
+                  <div className={cn(inputCls, 'flex items-center text-slate-400 cursor-not-allowed select-none')}>
+                    {liveLastDate != null ? dayjs(liveLastDate).format('DD/MM/YYYY') : '—'}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Toma la fecha de la última carga registrada.</p>
+                </>
+              ) : (
+                <input type="date" value={form.payment_date} onChange={e => upd('payment_date', e.target.value)} className={inputCls} />
+              )}
             </div>
             <div>
               <label className={labelCls}>Fecha de vencimiento</label>
@@ -1343,6 +1412,195 @@ function MovementForm({ movement, concepts, period, onClose }: {
             {isEdit ? 'Guardar cambios' : 'Crear movimiento'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Registro de cargas (Opción C) — sub-ledger embebido en el modal de edición de
+ * un movimiento cuyo concepto está marcado `tracks_multiple_entries`.
+ *
+ * Reemplaza el viejo workaround de duplicar conceptos ("Nafta 1", "Nafta 2",
+ * "Nafta 3") cuando un mismo gasto ocurre varias veces en el mes: acá se carga
+ * cada ocurrencia como una "entrada" (monto + fecha + nota) dentro del MISMO
+ * movimiento, y el backend recalcula automáticamente `amount_actual`, `status`
+ * y `payment_date` del movimiento a partir de la suma/lista de entradas
+ * (ver `recalcMovementFromEntries` en queries/finance.ts).
+ */
+function MovementEntriesLedger({ movementId, entries }: {
+  movementId: string
+  entries:    FinanceMovementEntry[]
+}) {
+  const add    = useAddMovementEntry()
+  const update = useUpdateMovementEntry()
+  const remove = useRemoveMovementEntry()
+
+  const todayStr = dayjs().format('YYYY-MM-DD')
+  const [draft, setDraft] = useState({ amount: '', entry_date: todayStr, note: '' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState({ amount: '', entry_date: '', note: '' })
+  const [busy, setBusy] = useState(false)
+
+  const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
+
+  const sorted = useMemo(
+    () => [...entries].sort((a, b) => (b.entry_date ?? 0) - (a.entry_date ?? 0) || b.created_at - a.created_at),
+    [entries]
+  )
+
+  const resetDraft = () => setDraft({ amount: '', entry_date: todayStr, note: '' })
+
+  const handleAdd = async () => {
+    const amount = Number(draft.amount.replace(',', '.'))
+    if (!amount || amount <= 0) return
+    setBusy(true)
+    try {
+      await add.mutateAsync({
+        movement_id: movementId,
+        amount,
+        entry_date:  draft.entry_date ? dayjs(draft.entry_date, 'YYYY-MM-DD').valueOf() : null,
+        note:        draft.note.trim()
+      })
+      resetDraft()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const startEdit = (e: FinanceMovementEntry) => {
+    setEditingId(e.id)
+    setEditDraft({
+      amount:     String(e.amount),
+      entry_date: e.entry_date ? dayjs(e.entry_date).format('YYYY-MM-DD') : '',
+      note:       e.note ?? ''
+    })
+  }
+
+  const handleSaveEdit = async (id: string) => {
+    const amount = Number(editDraft.amount.replace(',', '.'))
+    if (!amount || amount <= 0) return
+    setBusy(true)
+    try {
+      await update.mutateAsync({
+        id, movementId,
+        data: {
+          amount,
+          entry_date: editDraft.entry_date ? dayjs(editDraft.entry_date, 'YYYY-MM-DD').valueOf() : null,
+          note:       editDraft.note.trim()
+        }
+      })
+      setEditingId(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRemove = async (e: FinanceMovementEntry) => {
+    if (!confirm(`¿Eliminar esta carga de ${formatCurrency(e.amount)}? El total del movimiento se recalcula solo.`)) return
+    await remove.mutateAsync({ id: e.id, movementId })
+  }
+
+  return (
+    <div className="rounded-xl border border-purple-800/30 bg-purple-950/10 p-3.5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Receipt size={14} className="text-purple-400" />
+          <h3 className="text-xs font-semibold text-slate-200">Registro de cargas</h3>
+          <span className="text-[10px] text-slate-500">({entries.length} {entries.length === 1 ? 'carga' : 'cargas'})</span>
+        </div>
+        <span className="text-xs font-semibold text-purple-300">{formatCurrency(total)}</span>
+      </div>
+
+      {sorted.length > 0 && (
+        <div className="space-y-1.5">
+          {sorted.map(e => (
+            <div key={e.id} className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+              {editingId === e.id ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="number" autoFocus value={editDraft.amount}
+                      onChange={ev => setEditDraft(d => ({ ...d, amount: ev.target.value }))}
+                      className={cn(inputCls, 'py-1.5 text-xs')} placeholder="Monto"
+                    />
+                    <input
+                      type="date" value={editDraft.entry_date}
+                      onChange={ev => setEditDraft(d => ({ ...d, entry_date: ev.target.value }))}
+                      className={cn(inputCls, 'py-1.5 text-xs')}
+                    />
+                    <input
+                      type="text" value={editDraft.note}
+                      onChange={ev => setEditDraft(d => ({ ...d, note: ev.target.value }))}
+                      className={cn(inputCls, 'py-1.5 text-xs')} placeholder="Nota (opcional)"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setEditingId(null)} className="text-[11px] text-slate-400 hover:text-slate-200 px-2 py-1">Cancelar</button>
+                    <button
+                      onClick={() => handleSaveEdit(e.id)} disabled={busy}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 rounded-lg px-2.5 py-1"
+                    >
+                      <Check size={11} /> Guardar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-baseline gap-2.5">
+                    <span className="text-sm font-semibold text-slate-100 flex-shrink-0">{formatCurrency(e.amount)}</span>
+                    <span className="text-[11px] text-slate-500 flex-shrink-0">
+                      {e.entry_date ? dayjs(e.entry_date).format('DD/MM/YYYY') : 'sin fecha'}
+                    </span>
+                    {e.note && <span className="text-[11px] text-slate-500 truncate">· {e.note}</span>}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => startEdit(e)} className="p-1 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-700/50 transition-colors" title="Editar carga">
+                      <Edit3 size={12} />
+                    </button>
+                    <button onClick={() => handleRemove(e)} className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-700/50 transition-colors" title="Eliminar carga">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sorted.length === 0 && (
+        <p className="text-[11px] text-slate-500 italic">Todavía no cargaste ninguna entrada para este mes.</p>
+      )}
+
+      <div className="grid grid-cols-3 gap-2 pt-1">
+        <input
+          type="number" value={draft.amount}
+          onChange={e => setDraft(d => ({ ...d, amount: e.target.value }))}
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          className={cn(inputCls, 'py-1.5 text-xs')} placeholder="Monto de la carga"
+        />
+        <input
+          type="date" value={draft.entry_date}
+          onChange={e => setDraft(d => ({ ...d, entry_date: e.target.value }))}
+          className={cn(inputCls, 'py-1.5 text-xs')}
+        />
+        <input
+          type="text" value={draft.note}
+          onChange={e => setDraft(d => ({ ...d, note: e.target.value }))}
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          className={cn(inputCls, 'py-1.5 text-xs')} placeholder="Nota (opcional)"
+        />
+      </div>
+      <div className="flex justify-end">
+        <button
+          onClick={handleAdd}
+          disabled={busy || !draft.amount.trim()}
+          className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg px-3 py-1.5 transition-colors"
+        >
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+          Agregar carga
+        </button>
       </div>
     </div>
   )
@@ -1727,20 +1985,55 @@ function ImportManager({
   onClose: () => void
 }) {
   const selectFile    = useFinanceImportSelectFile()
+  const parseText     = useFinanceImportParseText()
   const confirmImport = useConfirmFinanceImport()
+  const createConcept = useCreateFinanceConcept()
+  const { data: categories = [] } = useFinanceCategories()
+  const { data: accounts   = [] } = useFinanceAccounts()
+
+  // Dos orígenes posibles: archivo (Excel/CSV, parseo rígido por encabezados) o
+  // texto pegado (la IA lo interpreta) — ambos terminan en la MISMA previsualización
+  // y reusan toda la UI de revisión de filas de abajo.
+  const [mode, setMode] = useState<'file' | 'paste'>('file')
+  const [pastedText, setPastedText] = useState('')
 
   const [fileName, setFileName] = useState<string | null>(null)
   const [rows, setRows] = useState<ImportRowDraft[]>([])
   const [result, setResult] = useState<FinanceImportResult | null>(null)
   const [onlyIssues, setOnlyIssues] = useState(false)
 
+  // Creación inline de conceptos para filas "concepto no encontrado": un solo
+  // formulario abierto a la vez, prellenado con el nombre crudo detectado en la fila.
+  const [conceptDraftIdx, setConceptDraftIdx] = useState<number | null>(null)
+  const [conceptDraft, setConceptDraft] = useState({ name: '', category_id: '', account_id: '' })
+
   const handlePickFile = async () => {
     setResult(null)
     setOnlyIssues(false)
+    setConceptDraftIdx(null)
     const preview = await selectFile.mutateAsync({ month: period.month, year: period.year })
     if (!preview) return
     setFileName(preview.fileName)
     setRows(buildImportRowDrafts(preview.items))
+  }
+
+  const handleProcessText = async () => {
+    if (!pastedText.trim()) return
+    setResult(null)
+    setOnlyIssues(false)
+    setConceptDraftIdx(null)
+    const preview = await parseText.mutateAsync({ rawText: pastedText, month: period.month, year: period.year })
+    if (!preview) return
+    setFileName(preview.fileName)
+    setRows(buildImportRowDrafts(preview.items))
+  }
+
+  /** Vuelve a la pantalla inicial (elegir archivo / pegar texto) sin cerrar el modal. */
+  const handleStartOver = () => {
+    setFileName(null)
+    setRows([])
+    setResult(null)
+    setConceptDraftIdx(null)
   }
 
   const updateRow = (idx: number, patch: Partial<ImportRowDraft>) =>
@@ -1751,6 +2044,25 @@ function ImportManager({
     const row = rows[idx]
     const sameAsMatched = conceptId === row.item.matchedConceptId
     updateRow(idx, { conceptId: conceptId || null, overwrite: sameAsMatched ? row.overwrite : false })
+    setConceptDraftIdx(null)
+  }
+
+  /** Abre el mini-formulario de creación de concepto, prellenado con el nombre crudo de la fila. */
+  const handleOpenConceptDraft = (idx: number, rawName: string) => {
+    setConceptDraftIdx(idx)
+    setConceptDraft({ name: rawName, category_id: categories[0]?.id ?? '', account_id: accounts[0]?.id ?? '' })
+  }
+
+  /** Crea el concepto nuevo y lo asigna de una a la fila que lo originó. */
+  const handleCreateConceptForRow = async (idx: number) => {
+    const name = conceptDraft.name.trim()
+    if (!name || !conceptDraft.category_id || !conceptDraft.account_id) return
+    const created = await createConcept.mutateAsync({
+      category_id: conceptDraft.category_id,
+      account_id:  conceptDraft.account_id,
+      name
+    })
+    handleConceptChange(idx, created.id)
   }
 
   const includedRows = rows.filter(r => r.include)
@@ -1779,7 +2091,11 @@ function ImportManager({
     setFileName(null)
   }
 
-  const handleClose = () => { setFileName(null); setRows([]); setResult(null); onClose() }
+  const handleClose = () => {
+    setFileName(null); setRows([]); setResult(null)
+    setPastedText(''); setConceptDraftIdx(null)
+    onClose()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={handleClose}>
@@ -1796,7 +2112,7 @@ function ImportManager({
             <div>
               <h2 className="text-sm font-semibold text-white">Importar movimientos</h2>
               <p className="text-[10px] text-slate-500">
-                Excel o CSV → {getMonthLabel(period.month, period.year)} · con previsualización antes de cargar nada
+                Excel, CSV o texto pegado → {getMonthLabel(period.month, period.year)} · con previsualización antes de cargar nada
               </p>
             </div>
           </div>
@@ -1819,33 +2135,96 @@ function ImportManager({
           )}
 
           {!fileName && !result && (
-            <div className="text-center py-10 space-y-4">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
-                <FileSpreadsheet size={22} className="text-slate-500" />
+            <div className="space-y-5">
+              <div className="flex items-center justify-center gap-1 p-1 rounded-xl bg-slate-800/60 border border-slate-700 w-fit mx-auto">
+                <button
+                  onClick={() => setMode('file')}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs font-medium rounded-lg px-3.5 py-1.5 transition-colors',
+                    mode === 'file' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  <FileSpreadsheet size={13} /> Archivo
+                </button>
+                <button
+                  onClick={() => setMode('paste')}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs font-medium rounded-lg px-3.5 py-1.5 transition-colors',
+                    mode === 'paste' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  <ClipboardPaste size={13} /> Pegar datos
+                </button>
               </div>
-              <div>
-                <p className="text-sm text-slate-300 font-medium">Elegí un archivo Excel o CSV para importar</p>
-                <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto leading-relaxed">
-                  Se reconocen columnas como "Concepto", "Monto", "Estado", "Fecha de pago" y "Notas" en cualquier orden
-                  (con o sin acentos). Vas a poder revisar y ajustar cada fila — incluido a qué concepto corresponde —
-                  antes de cargar nada.
-                </p>
-              </div>
-              <button
-                onClick={handlePickFile}
-                disabled={selectFile.isPending}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
-              >
-                {selectFile.isPending ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-                Elegir archivo…
-              </button>
+
+              {mode === 'file' ? (
+                <div className="text-center py-6 space-y-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                    <FileSpreadsheet size={22} className="text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-300 font-medium">Elegí un archivo Excel o CSV para importar</p>
+                    <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto leading-relaxed">
+                      Se reconocen columnas como "Concepto", "Monto", "Estado", "Fecha de pago" y "Notas" en cualquier orden
+                      (con o sin acentos). Vas a poder revisar y ajustar cada fila — incluido a qué concepto corresponde —
+                      antes de cargar nada.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handlePickFile}
+                    disabled={selectFile.isPending}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
+                  >
+                    {selectFile.isPending ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    Elegir archivo…
+                  </button>
+                </div>
+              ) : (
+                <div className="py-2 space-y-3 max-w-xl mx-auto">
+                  <div className="text-center">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-3">
+                      <Sparkles size={20} className="text-purple-400" />
+                    </div>
+                    <p className="text-sm text-slate-300 font-medium">Pegá una lista o tabla de gastos</p>
+                    <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto leading-relaxed">
+                      Copiá y pegá texto libre — una tabla de Excel, una lista de WhatsApp, notas sueltas, lo que tengas — y
+                      la IA va a interpretar cada gasto (concepto, monto, fecha, estado) usando{' '}
+                      <span className="text-slate-300">{getMonthLabel(period.month, period.year)}</span> como referencia
+                      para completar fechas incompletas.
+                    </p>
+                  </div>
+                  <textarea
+                    value={pastedText}
+                    onChange={e => setPastedText(e.target.value)}
+                    placeholder={'Ej:\nNafta 1  25000  pagado  03/06\nLuz  18.500  pendiente\nAlquiler — 350000 — 01/06 — transferencia'}
+                    rows={7}
+                    className={cn(inputCls, 'text-xs leading-relaxed font-mono resize-y')}
+                  />
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      onClick={handleProcessText}
+                      disabled={parseText.isPending || !pastedText.trim()}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
+                    >
+                      {parseText.isPending ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                      {parseText.isPending ? 'Analizando con IA…' : 'Procesar con IA'}
+                    </button>
+                    {parseText.isError && (
+                      <p className="text-[11px] text-rose-400 text-center max-w-sm">
+                        No se pudo interpretar el texto pegado. Probá con un formato más simple (una línea por gasto) o
+                        revisá que la IA esté configurada en Ajustes.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {result && (
             <div className="text-center pt-2">
-              <button onClick={handlePickFile} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 bg-slate-800 rounded-lg px-3.5 py-2 transition-colors">
-                <Upload size={13} /> Importar otro archivo
+              <button onClick={handleStartOver} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 bg-slate-800 rounded-lg px-3.5 py-2 transition-colors">
+                <Upload size={13} /> Importar más
               </button>
             </div>
           )}
@@ -1868,8 +2247,11 @@ function ImportManager({
                       Mostrar solo filas con problemas ({issueRows.length})
                     </label>
                   )}
-                  <button onClick={handlePickFile} className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1">
-                    <Upload size={11} /> Elegir otro archivo
+                  <button
+                    onClick={mode === 'file' ? handlePickFile : handleStartOver}
+                    className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+                  >
+                    {mode === 'file' ? <><Upload size={11} /> Elegir otro archivo</> : <><ClipboardPaste size={11} /> Pegar otro texto</>}
                   </button>
                 </div>
               </div>
@@ -1912,6 +2294,15 @@ function ImportManager({
                                 <option value="">— Sin asignar —</option>
                                 {concepts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                               </select>
+                              {row.item.issue === 'concept_not_found' && conceptDraftIdx !== idx && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenConceptDraft(idx, row.item.rawConceptName)}
+                                  className="mt-1 inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"
+                                >
+                                  <FilePlus2 size={11} /> Crear concepto nuevo
+                                </button>
+                              )}
                             </div>
                             <div>
                               <label className={labelCls}>Monto</label>
@@ -1943,6 +2334,64 @@ function ImportManager({
                               />
                             </div>
                           </div>
+                          {conceptDraftIdx === idx && (
+                            <div className="rounded-lg border border-emerald-700/30 bg-emerald-950/10 p-2.5 space-y-2">
+                              <p className="text-[10px] text-emerald-300/90 font-medium flex items-center gap-1.5">
+                                <Sparkles size={11} /> Concepto nuevo — se crea y se asigna a esta fila
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div>
+                                  <label className={labelCls}>Nombre</label>
+                                  <input
+                                    autoFocus
+                                    value={conceptDraft.name}
+                                    onChange={e => setConceptDraft(d => ({ ...d, name: e.target.value }))}
+                                    className={cn(inputCls, 'text-xs py-1.5')}
+                                  />
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Categoría</label>
+                                  <select
+                                    value={conceptDraft.category_id}
+                                    onChange={e => setConceptDraft(d => ({ ...d, category_id: e.target.value }))}
+                                    className={cn(inputCls, 'text-xs py-1.5')}
+                                  >
+                                    <option value="">— Elegir —</option>
+                                    {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Cuenta</label>
+                                  <select
+                                    value={conceptDraft.account_id}
+                                    onChange={e => setConceptDraft(d => ({ ...d, account_id: e.target.value }))}
+                                    className={cn(inputCls, 'text-xs py-1.5')}
+                                  >
+                                    <option value="">— Elegir —</option>
+                                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.icon} {acc.name}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCreateConceptForRow(idx)}
+                                  disabled={createConcept.isPending || !conceptDraft.name.trim() || !conceptDraft.category_id || !conceptDraft.account_id}
+                                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-md px-2.5 py-1.5 transition-colors disabled:opacity-50"
+                                >
+                                  {createConcept.isPending ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                                  Crear y asignar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConceptDraftIdx(null)}
+                                  className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           {showOverwrite && (
                             <label className="flex items-center gap-1.5 text-[11px] text-orange-300 cursor-pointer">
                               <input
@@ -1999,7 +2448,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
     category_id: categories[0]?.id ?? '',
     account_id:  accounts[0]?.id ?? '',
     name: '', default_amount: 0, expense_type: 'fixed', payment_method: 'transfer',
-    recurrence: 'monthly', recurrence_month: null, notes: ''
+    recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0
   })
 
   const startNew = () => {
@@ -2007,7 +2456,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
       category_id: categories[0]?.id ?? '',
       account_id:  accounts[0]?.id ?? '',
       name: '', default_amount: 0, expense_type: 'fixed', payment_method: 'transfer',
-      recurrence: 'monthly', recurrence_month: null, notes: ''
+      recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0
     })
     setShowNew(true)
   }
@@ -2131,6 +2580,22 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
               )}
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 cursor-pointer hover:border-slate-700 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={!!draft.tracks_multiple_entries}
+                  onChange={e => setDraft(d => ({ ...d, tracks_multiple_entries: e.target.checked ? 1 : 0 }))}
+                  className="mt-0.5 accent-emerald-500"
+                />
+                <span>
+                  <span className="block text-xs font-medium text-slate-200">Puede recibir varias cargas en el mes</span>
+                  <span className="block text-[10px] text-slate-500 mt-0.5">
+                    Para gastos que se repiten dentro de un mismo período (ej: nafta, supermercado).
+                    En vez de crear "{draft.name || 'Concepto'} 1", "{draft.name || 'Concepto'} 2", etc.,
+                    vas a poder cargar cada gasto por separado y el sistema suma el total automáticamente.
+                  </span>
+                </span>
+              </label>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowNew(false)} className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5">Cancelar</button>
                 <button onClick={handleCreate} className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors">
@@ -2157,10 +2622,25 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                     {c.recurrence === 'annual' && (
                       <span className="capitalize"> ({getMonthName(c.recurrence_month ?? (new Date(c.created_at).getMonth() + 1))})</span>
                     )}
+                    {!!c.tracks_multiple_entries && (
+                      <span className="text-purple-400"> · acepta varias cargas</span>
+                    )}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => update.mutate({ id: c.id, data: { tracks_multiple_entries: c.tracks_multiple_entries ? 0 : 1 } })}
+                  className={cn(
+                    'text-[10px] px-2 py-1 rounded-lg font-medium border transition-colors',
+                    c.tracks_multiple_entries
+                      ? 'border-purple-700/50 text-purple-400 hover:bg-purple-900/20'
+                      : 'border-slate-700 text-slate-500 hover:bg-slate-800'
+                  )}
+                  title={c.tracks_multiple_entries ? 'Acepta varias cargas por mes (clic para desactivar)' : 'Activar registro de varias cargas por mes (ej: nafta, súper)'}
+                >
+                  {c.tracks_multiple_entries ? '☰ Varias cargas' : '☰ Una carga'}
+                </button>
                 <button
                   onClick={() => toggleActive(c)}
                   className={cn(
@@ -2793,41 +3273,62 @@ function HistoryTable({ history, onSelectMonth }: {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
-          {rows.map(h => (
-            <tr key={`${h.year}-${h.month}`}
-                onClick={() => onSelectMonth(h.month, h.year)}
-                className="hover:bg-slate-800/40 cursor-pointer transition-colors group">
-              <td className="px-3 py-2.5 font-medium capitalize">
-                <span className="text-slate-200 group-hover:text-emerald-400 transition-colors">{getMonthLabel(h.month, h.year)}</span>
-              </td>
-              <td className="px-3 py-2.5 text-right text-slate-400">{formatCurrency(h.totalEstimated)}</td>
-              <td className="px-3 py-2.5 text-right text-slate-100 font-semibold">{formatCurrency(h.totalActual)}</td>
-              <td className="px-3 py-2.5 text-right" style={{ color: FINANCE_STATUS_COLORS.paid }}>{formatCurrency(h.totalPaid)}</td>
-              <td className="px-3 py-2.5 text-right" style={{ color: FINANCE_STATUS_COLORS.pending }}>{formatCurrency(h.totalPending)}</td>
-              <td className="px-3 py-2.5 text-right" style={{ color: FINANCE_STATUS_COLORS.overdue }}>{formatCurrency(h.totalOverdue)}</td>
-              <td className="px-3 py-2.5 text-right">
-                {h.diffPercent !== null ? (
-                  <span className="inline-flex items-center gap-1 font-semibold justify-end" style={{ color: getDiffColor(h.diffPercent) }}>
-                    {h.diffPercent > 0 ? <TrendingUp size={11} /> : h.diffPercent < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
-                    {formatSignedPercent(h.diffPercent)}
-                  </span>
-                ) : <span className="text-slate-600">—</span>}
-              </td>
-            </tr>
-          ))}
+          {rows.map(h => {
+            // Mes sin movimientos generados todavía: los $0 no representan gasto
+            // real, sino ausencia de datos — se muestran atenuados con "—" en vez
+            // de cifras, para no leerse como "no gastaste nada este mes".
+            const empty = h.movementsCount === 0
+            return (
+              <tr key={`${h.year}-${h.month}`}
+                  onClick={() => onSelectMonth(h.month, h.year)}
+                  className="hover:bg-slate-800/40 cursor-pointer transition-colors group">
+                <td className="px-3 py-2.5 font-medium capitalize">
+                  <span className="text-slate-200 group-hover:text-emerald-400 transition-colors">{getMonthLabel(h.month, h.year)}</span>
+                  {empty && <span className="ml-2 text-[9px] uppercase tracking-wider text-slate-600 font-semibold">sin movimientos</span>}
+                </td>
+                {empty ? (
+                  <td colSpan={5} className="px-3 py-2.5 text-right text-slate-600 italic">Todavía no se generaron movimientos para este mes</td>
+                ) : (
+                  <>
+                    <td className="px-3 py-2.5 text-right text-slate-400">{formatCurrency(h.totalEstimated)}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-100 font-semibold">{formatCurrency(h.totalActual)}</td>
+                    <td className="px-3 py-2.5 text-right" style={{ color: FINANCE_STATUS_COLORS.paid }}>{formatCurrency(h.totalPaid)}</td>
+                    <td className="px-3 py-2.5 text-right" style={{ color: FINANCE_STATUS_COLORS.pending }}>{formatCurrency(h.totalPending)}</td>
+                    <td className="px-3 py-2.5 text-right" style={{ color: FINANCE_STATUS_COLORS.overdue }}>{formatCurrency(h.totalOverdue)}</td>
+                  </>
+                )}
+                <td className="px-3 py-2.5 text-right">
+                  {!empty && h.diffPercent !== null ? (
+                    <span className="inline-flex items-center gap-1 font-semibold justify-end" style={{ color: getDiffColor(h.diffPercent) }}>
+                      {h.diffPercent > 0 ? <TrendingUp size={11} /> : h.diffPercent < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
+                      {formatSignedPercent(h.diffPercent)}
+                    </span>
+                  ) : <span className="text-slate-600">—</span>}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
 }
 
-function HistoryView({ history, isLoading, range, onRangeChange, onSelectMonth }: {
+function HistoryView({ history, isLoading, range, onRangeChange, onSelectMonth, period, onGenerateCurrentMonth, generating }: {
   history: FinanceHistoryEntry[]; isLoading: boolean
   range: number; onRangeChange: (n: number) => void
   onSelectMonth: (month: number, year: number) => void
+  period: { month: number; year: number }
+  onGenerateCurrentMonth: () => void | Promise<void>
+  generating: boolean
 }) {
+  // Solo cuentan los meses que efectivamente tienen movimientos cargados —
+  // un mes "vacío" (recién reseteado, o futuro) no debe ensuciar promedios
+  // ni aparecer como "el mes de menor gasto" por descarte.
+  const withData = useMemo(() => history.filter(h => h.movementsCount > 0), [history])
+  const isEmpty  = !isLoading && withData.length === 0
+
   const stats = useMemo(() => {
-    const withData = history.filter(h => h.totalActual > 0)
     if (!withData.length) return null
     const avg = withData.reduce((acc, h) => acc + h.totalActual, 0) / withData.length
     let max = withData[0]; let min = withData[0]
@@ -2836,7 +3337,7 @@ function HistoryView({ history, isLoading, range, onRangeChange, onSelectMonth }
       if (h.totalActual < min.totalActual) min = h
     }
     return { avg, max, min }
-  }, [history])
+  }, [withData])
 
   return (
     <div className="space-y-4">
@@ -2855,26 +3356,60 @@ function HistoryView({ history, isLoading, range, onRangeChange, onSelectMonth }
         </div>
       </div>
 
-      {stats && (
-        <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Promedio mensual" value={formatCurrency(stats.avg)} icon={Wallet} />
-          <StatCard label="Mes con mayor gasto"
-            value={<span className="capitalize">{getMonthLabel(stats.max.month, stats.max.year)}</span>}
-            sub={<span className="text-slate-400">{formatCurrency(stats.max.totalActual)}</span>}
-            color="#ef4444" icon={TrendingUp} />
-          <StatCard label="Mes con menor gasto"
-            value={<span className="capitalize">{getMonthLabel(stats.min.month, stats.min.year)}</span>}
-            sub={<span className="text-slate-400">{formatCurrency(stats.min.totalActual)}</span>}
-            color="#10b981" icon={TrendingDown} />
-        </div>
-      )}
-
       {isLoading ? (
         <div className="flex items-center gap-2 text-slate-500 text-sm py-10 justify-center">
           <RefreshCw size={16} className="animate-spin" /> Calculando historial...
         </div>
+      ) : isEmpty ? (
+        <div className="flex flex-col items-center text-center gap-3 rounded-2xl border border-dashed border-slate-700 bg-slate-800/20 px-6 py-14">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-600/10 border border-emerald-600/20 flex items-center justify-center">
+            <HistoryIcon size={24} className="text-emerald-400/70" />
+          </div>
+          <div className="space-y-1 max-w-sm">
+            <h3 className="text-sm font-semibold text-slate-200">Todavía no hay historial para mostrar</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Esto es esperable: el módulo de Finanzas se reinició y por ahora no hay movimientos cargados en ningún mes.
+              El histórico se va a ir armando solo, mes a mes, a medida que generes y cargues los movimientos —
+              no hay nada que precalcular ni migrar a mano.
+            </p>
+          </div>
+          <button
+            onClick={() => { void onGenerateCurrentMonth() }}
+            disabled={generating}
+            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 rounded-lg px-4 py-2 transition-colors mt-1"
+          >
+            {generating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Generar movimientos de <span className="capitalize">{getMonthLabel(period.month, period.year)}</span>
+          </button>
+          <p className="text-[10px] text-slate-600">Crea un movimiento pendiente por cada concepto activo, listo para que cargues los montos reales a medida que pagás.</p>
+        </div>
       ) : (
-        <HistoryTable history={history} onSelectMonth={onSelectMonth} />
+        <>
+          {stats && (
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Promedio mensual" value={formatCurrency(stats.avg)} icon={Wallet} />
+              <StatCard label="Mes con mayor gasto"
+                value={<span className="capitalize">{getMonthLabel(stats.max.month, stats.max.year)}</span>}
+                sub={<span className="text-slate-400">{formatCurrency(stats.max.totalActual)}</span>}
+                color="#ef4444" icon={TrendingUp} />
+              <StatCard label="Mes con menor gasto"
+                value={<span className="capitalize">{getMonthLabel(stats.min.month, stats.min.year)}</span>}
+                sub={<span className="text-slate-400">{formatCurrency(stats.min.totalActual)}</span>}
+                color="#10b981" icon={TrendingDown} />
+            </div>
+          )}
+
+          {withData.length < history.length && (
+            <p className="text-[10px] text-slate-600 flex items-center gap-1.5">
+              <Info size={11} />
+              {history.length - withData.length === 1
+                ? 'Hay 1 mes en este rango sin movimientos generados — se muestra atenuado en la tabla y no afecta los promedios de arriba.'
+                : `Hay ${history.length - withData.length} meses en este rango sin movimientos generados — se muestran atenuados en la tabla y no afectan los promedios de arriba.`}
+            </p>
+          )}
+
+          <HistoryTable history={history} onSelectMonth={onSelectMonth} />
+        </>
       )}
     </div>
   )
@@ -3031,6 +3566,12 @@ export default function FinanceDashboard() {
   /** Desde "Vista histórica": salta directo a la planilla de ese mes en "Movimientos" — es el detalle que se quiere revisar, no el resumen. */
   const handleSelectHistoryMonth = (month: number, year: number) => {
     setPeriod({ month, year })
+    setActiveTab('movements')
+  }
+
+  /** CTA del estado vacío del Histórico: genera los movimientos del mes actual y lleva directo a "Movimientos" para empezar a cargar montos. */
+  const handleGenerateAndViewCurrentMonth = async () => {
+    await generateMov.mutateAsync({ month: period.month, year: period.year })
     setActiveTab('movements')
   }
 
@@ -3308,6 +3849,9 @@ export default function FinanceDashboard() {
             range={historyRange}
             onRangeChange={setHistoryRange}
             onSelectMonth={handleSelectHistoryMonth}
+            period={period}
+            onGenerateCurrentMonth={handleGenerateAndViewCurrentMonth}
+            generating={generateMov.isPending}
           />
         )}
       </div>

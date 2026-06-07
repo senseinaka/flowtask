@@ -1363,6 +1363,33 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         DELETE FROM finance_concepts;
       `)
     }
+  },
+  {
+    version: 56,
+    up: (db) => {
+      // Opción C del plan maestro de "conceptos multi-carga": Nafta, Supermercado
+      // y similares dejan de necesitar duplicados ("Nafta 1", "Nafta 2"...). Un
+      // concepto marcado con tracks_multiple_entries=1 sigue teniendo un único
+      // movimiento por mes (no se toca el UNIQUE(concept_id, month, year)), pero
+      // ese movimiento acumula un "registro de cargas" — cada carga con su monto,
+      // fecha y nota — y `amount_actual` se recalcula como la suma automáticamente.
+      db.exec(`
+        ALTER TABLE finance_concepts ADD COLUMN tracks_multiple_entries INTEGER NOT NULL DEFAULT 0;
+
+        CREATE TABLE IF NOT EXISTS finance_movement_entries (
+          id           TEXT PRIMARY KEY,
+          movement_id  TEXT NOT NULL REFERENCES finance_movements(id) ON DELETE CASCADE,
+          amount       REAL NOT NULL,
+          entry_date   INTEGER,
+          note         TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_finance_movement_entries_movement
+          ON finance_movement_entries(movement_id);
+      `)
+    }
   }
 ]
 
