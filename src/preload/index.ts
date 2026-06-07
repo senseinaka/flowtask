@@ -4,7 +4,7 @@ import type {
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
-  BackupStatus,
+  BackupStatus, LocalBackupStatus,
   Task, Project, Attachment, Reminder, Contact, CreateContactInput,
   DelegatedTask, CreateDelegatedTaskInput,
   MessageTemplate, ScheduledMessage, CreateScheduledMessageInput,
@@ -29,7 +29,9 @@ import type {
   PersonalContactInfo,
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement, FinanceMonthSummary,
   CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinanceConceptInput, CreateFinanceMovementInput,
-  FinanceMovementStatus
+  FinanceMovementStatus,
+  FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
+  FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus
 } from '@shared/types'
 
 const api = {
@@ -409,7 +411,17 @@ const api = {
   backup: {
     runNow:   (): Promise<BackupStatus>        => ipcRenderer.invoke('backup:runNow'),
     getStatus:(): Promise<BackupStatus | null> => ipcRenderer.invoke('backup:getStatus'),
-    isReady:  (): Promise<boolean>             => ipcRenderer.invoke('backup:isReady')
+    isReady:  (): Promise<boolean>             => ipcRenderer.invoke('backup:isReady'),
+
+    // Backup local — copia DB + adjuntos a una carpeta del disco, sin
+    // depender de ninguna cuenta. Corre siempre, conectado o no a Drive.
+    local: {
+      runNow:    (): Promise<LocalBackupStatus>        => ipcRenderer.invoke('backup:local:runNow'),
+      getStatus: (): Promise<LocalBackupStatus | null> => ipcRenderer.invoke('backup:local:getStatus'),
+      getDir:    (): Promise<string>                   => ipcRenderer.invoke('backup:local:getDir'),
+      chooseDir: (): Promise<string | null>            => ipcRenderer.invoke('backup:local:chooseDir'),
+      openDir:   (): Promise<void>                     => ipcRenderer.invoke('backup:local:openDir')
+    }
   },
 
   bna: {
@@ -536,6 +548,7 @@ const api = {
     },
     movements: {
       list:   (month: number, year: number): Promise<FinanceMovement[]>                     => ipcRenderer.invoke('finance:movements:list', month, year),
+      listUpcoming: (): Promise<FinanceMovement[]>                                          => ipcRenderer.invoke('finance:movements:listUpcoming'),
       get:    (id: string): Promise<FinanceMovement | null>                                 => ipcRenderer.invoke('finance:movements:get', id),
       create: (data: CreateFinanceMovementInput): Promise<FinanceMovement>                  => ipcRenderer.invoke('finance:movements:create', data),
       update: (id: string, data: Partial<CreateFinanceMovementInput>): Promise<FinanceMovement> =>
@@ -549,14 +562,47 @@ const api = {
       }): Promise<FinanceMovement> => ipcRenderer.invoke('finance:movements:quickUpdate', id, data),
       delete:           (id: string): Promise<void>                                         => ipcRenderer.invoke('finance:movements:delete', id),
       generateForMonth: (month: number, year: number): Promise<FinanceMovement[]>           => ipcRenderer.invoke('finance:movements:generateForMonth', month, year),
+      generateFromPreviousMonth: (month: number, year: number): Promise<FinanceMovement[]>  => ipcRenderer.invoke('finance:movements:generateFromPreviousMonth', month, year),
     },
     summary: {
       get: (month: number, year: number): Promise<FinanceMonthSummary> => ipcRenderer.invoke('finance:summary:get', month, year),
+    },
+    analytics: {
+      categoryBreakdown: (month: number, year: number): Promise<FinanceCategoryBreakdownItem[]> =>
+        ipcRenderer.invoke('finance:analytics:categoryBreakdown', month, year),
+      history: (month: number, year: number, monthsBack: number): Promise<FinanceHistoryEntry[]> =>
+        ipcRenderer.invoke('finance:analytics:history', month, year, monthsBack),
+      topConcepts: (month: number, year: number, limit?: number): Promise<FinanceRankingConcept[]> =>
+        ipcRenderer.invoke('finance:analytics:topConcepts', month, year, limit),
+      topIncreases: (month: number, year: number, limit?: number): Promise<FinanceRankingIncrease[]> =>
+        ipcRenderer.invoke('finance:analytics:topIncreases', month, year, limit),
+    },
+    // Fase 5 — Importación / Exportación / Seguridad
+    import: {
+      selectFile: (month: number, year: number): Promise<FinanceImportPreviewResult | null> =>
+        ipcRenderer.invoke('finance:import:selectFile', month, year),
+      confirm: (items: FinanceImportConfirmItem[], month: number, year: number): Promise<FinanceImportResult> =>
+        ipcRenderer.invoke('finance:import:confirm', items, month, year),
+    },
+    export: {
+      movements: (month: number, year: number, format: 'xlsx' | 'csv'): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('finance:export:movements', month, year, format),
+      selection: (movements: FinanceMovement[], format: 'xlsx' | 'csv'): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('finance:export:selection', movements, format),
+      summaryPdf: (month: number, year: number): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('finance:export:summaryPdf', month, year),
+    },
+    security: {
+      status:  (): Promise<FinanceSecurityStatus>                                  => ipcRenderer.invoke('finance:security:status'),
+      setup:   (pin: string): Promise<FinanceSecurityStatus>                       => ipcRenderer.invoke('finance:security:setup', pin),
+      verify:  (pin: string): Promise<boolean>                                     => ipcRenderer.invoke('finance:security:verify', pin),
+      disable: (currentPin: string): Promise<boolean>                              => ipcRenderer.invoke('finance:security:disable', currentPin),
+      change:  (currentPin: string, newPin: string): Promise<boolean>              => ipcRenderer.invoke('finance:security:change', currentPin, newPin),
     }
   },
 
   on: (
-    channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts',
+    channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'backup:local:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts',
     callback: (data: unknown) => void
   ) => {
     ipcRenderer.on(channel, (_event, data) => callback(data))

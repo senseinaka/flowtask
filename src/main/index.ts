@@ -26,6 +26,7 @@ import { registerExpiryIpc } from './ipc/expiry.ipc'
 import { registerSettingsIpc } from './ipc/settings.ipc'
 import { registerFinanceIpc } from './ipc/finance.ipc'
 import { driveService } from './services/drive.service'
+import { localBackupService } from './services/local-backup.service'
 import { schedulerService } from './services/scheduler.service'
 import { questionsService } from './services/questions.service'
 import { startPolling, stopPolling } from './services/polling.service'
@@ -115,6 +116,14 @@ app.whenReady().then(() => {
   const push = (channel: string, data: unknown) => {
     mainWindow?.webContents.send(channel, data)
   }
+
+  // ── Backup local automático (red de seguridad, no depende de Drive) ──────
+  // A diferencia del backup a Drive, este SIEMPRE corre — copia DB + adjuntos
+  // a una carpeta del disco cada 6 horas (y de nuevo al cerrar la app, más
+  // abajo). Así, aunque la cuenta de Google nunca se conecte o pierda el
+  // token, siempre queda al menos una copia reciente y restaurable a mano.
+  localBackupService.start(push)
+
   schedulerService.start(push)
   questionsService.setPushFn(push)
 
@@ -162,25 +171,39 @@ app.on('before-quit', (event) => {
   schedulerService.stop()
   stopProactiveScheduler()
   stopPolling()
+  localBackupService.stop()
   if (_backupInterval) clearInterval(_backupInterval)
 
-  // Hacer backup al cerrar si Drive está configurado (máx 30 seg)
-  if (driveService.isAuthenticated() && !_quittingAfterBackup) {
-    event.preventDefault()
-    _quittingAfterBackup = true
+  if (_quittingAfterBackup) return  // ya se esperó por los backups, dejar cerrar
 
-    const timeout = setTimeout(() => {
-      console.warn('[Backup] Timeout al cerrar — cerrando sin backup')
-      app.quit()
-    }, 30_000)
+  event.preventDefault()
+  _quittingAfterBackup = true
 
-    // 1. Backup DB en Drive
-    const dbBackup = driveService.fullBackup()
-      .then(s => console.log('[Backup] DB backup completado:', s.driveFolder))
-      .catch(e => console.error('[Backup] DB error:', e))
+  const timeout = setTimeout(() => {
+    console.warn('[Backup] Timeout al cerrar — cerrando sin esperar más backups')
+    app.quit()
+  }, 30_000)
 
-    // 2. Backup código en GitHub (si hay cambios)
-    const codeBackup = new Promise<void>((resolve) => {
+  // 1. Backup LOCAL — siempre corre, sin depender de ninguna cuenta ni
+  //    conexión. Es la red de seguridad mínima: aunque Drive nunca se haya
+  //    conectado (como pasó hasta ahora), siempre queda al menos esta copia
+  //    reciente y restaurable a mano en el disco.
+  const pending: Promise<unknown>[] = [
+    localBackupService.runBackup()
+      .then(s => console.log('[BackupLocal] Copia al cerrar completada:', s.folder))
+      .catch(e => console.error('[BackupLocal] Error al cerrar:', e))
+  ]
+
+  // 2 y 3. Backup a Drive (DB completa) + código a GitHub — sólo si Drive
+  //        está conectado (máx 30 seg en total junto con el de arriba)
+  if (driveService.isAuthenticated()) {
+    pending.push(
+      driveService.fullBackup()
+        .then(s => console.log('[Backup] DB backup completado:', s.driveFolder))
+        .catch(e => console.error('[Backup] DB error:', e))
+    )
+
+    pending.push(new Promise<void>((resolve) => {
       const date = new Date().toLocaleString('es-AR').replace(/[/:]/g, '-')
       const cmd  = [
         'cd /d "C:\\Projects\\flowtask"',
@@ -193,11 +216,11 @@ app.on('before-quit', (event) => {
         else     console.log('[Backup] Código subido a GitHub')
         resolve()
       })
-    })
-
-    Promise.allSettled([dbBackup, codeBackup])
-      .finally(() => { clearTimeout(timeout); app.quit() })
+    }))
   }
+
+  Promise.allSettled(pending)
+    .finally(() => { clearTimeout(timeout); app.quit() })
 })
 
 export function getMainWindow(): BrowserWindow | null {

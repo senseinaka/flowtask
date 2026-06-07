@@ -702,6 +702,20 @@ export interface BackupStatus {
   error?:       string
 }
 
+/**
+ * Backup local — copia completa (DB + adjuntos) en una carpeta del disco,
+ * independiente de si Google Drive está conectado o no. Pensada como red de
+ * seguridad adicional: si la carpeta elegida está dentro de OneDrive/Drive
+ * File Stream/Dropbox, también queda replicada en la nube "gratis".
+ */
+export interface LocalBackupStatus {
+  timestamp: string     // ISO string
+  success:   boolean
+  folder?:   string     // ruta absoluta de la carpeta del backup
+  sizeMB?:   string
+  error?:    string
+}
+
 // ── IA / Claude ───────────────────────────────────────────────────────────────
 
 export const CLAUDE_MODELS = [
@@ -1439,6 +1453,7 @@ export interface FinanceConcept {
   expense_type:   FinanceExpenseType
   payment_method: FinancePaymentMethod
   recurrence:     FinanceRecurrence
+  recurrence_month: number | null  // 1-12, solo aplica cuando recurrence='annual' (mes del año en que se genera)
   is_active:      number   // 0 | 1
   notes:          string
   created_at:     number
@@ -1482,6 +1497,7 @@ export interface CreateFinanceConceptInput {
   expense_type?:   FinanceExpenseType
   payment_method?: FinancePaymentMethod
   recurrence?:     FinanceRecurrence
+  recurrence_month?: number | null
   notes?:          string
 }
 
@@ -1512,6 +1528,111 @@ export interface FinanceMonthSummary {
   upcomingDueCount:    number          // movimientos pendientes con vencimiento en los próx. 7 días
   biggestIncrease:     { conceptName: string; diffAmount: number; diffPercent: number | null } | null
   topCategory:         { categoryName: string; total: number } | null
+}
+
+// ── Visualización / análisis (Fase 3) ─────────────────────────────────────────
+//
+// Igual que FinanceMonthSummary: todo se computa al vuelo a partir de los
+// movimientos crudos del período pedido — nada de esto se persiste en la base.
+
+/** Desglose del gasto del mes agrupado por categoría, con sus conceptos principales. */
+export interface FinanceCategoryBreakdownItem {
+  categoryId:     string | null
+  categoryName:   string
+  categoryIcon:   string
+  categoryColor:  string
+  totalEstimated: number
+  totalActual:    number
+  count:          number          // cantidad de movimientos
+  percent:        number          // % del gasto total del mes (sobre totalActual)
+  topConcepts:    { conceptId: string; conceptName: string; amount: number }[]
+}
+
+/** Punto de la serie histórica: totales de un mes + variación vs. el mes inmediatamente anterior. */
+export interface FinanceHistoryEntry {
+  month:          number
+  year:           number
+  totalEstimated: number
+  totalActual:    number
+  totalPaid:      number
+  totalPending:   number
+  totalOverdue:   number
+  diffPercent:    number | null   // vs. el mes calendario anterior (null si no hay datos para comparar)
+}
+
+/** Ítem del ranking "Top conceptos": los gastos individuales más altos del mes. */
+export interface FinanceRankingConcept {
+  conceptId:     string
+  conceptName:   string
+  categoryName:  string
+  categoryIcon:  string
+  categoryColor: string
+  amount:        number
+  percent:       number   // % del gasto total del mes
+}
+
+/** Ítem del ranking "Mayores aumentos": conceptos que más subieron vs. el mes anterior. */
+export interface FinanceRankingIncrease {
+  conceptId:      string
+  conceptName:    string
+  categoryName:   string
+  previousAmount: number
+  currentAmount:  number
+  diffAmount:     number
+  diffPercent:    number | null
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Finanzas Personales — Fase 5: Importación / Exportación / Seguridad
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Por qué una fila del archivo importado no se puede cargar tal cual (o requiere decisión del usuario). */
+export type FinanceImportIssue = 'ok' | 'concept_not_found' | 'invalid_amount' | 'duplicate'
+
+/** Una fila ya parseada del Excel/CSV, enriquecida con el resultado del matching contra conceptos existentes y la detección de duplicados — lista para mostrarse en la previsualización. */
+export interface FinanceImportPreviewItem {
+  rowIndex:           number
+  rawConceptName:     string
+  matchedConceptId:   string | null
+  matchedConceptName: string | null
+  categoryName:       string | null
+  amount:             number | null
+  status:             FinanceMovementStatus
+  paymentDate:        number | null
+  notes:              string
+  issue:              FinanceImportIssue
+  existingMovementId: string | null   // si issue='duplicate': el movimiento ya cargado para ese concepto+período
+}
+
+/** Resultado de parsear el archivo: filas listas para preview + metadatos del archivo. */
+export interface FinanceImportPreviewResult {
+  fileName: string
+  month:    number
+  year:     number
+  items:    FinanceImportPreviewItem[]
+}
+
+/** Una fila que el usuario confirmó importar (tras revisar la previsualización). */
+export interface FinanceImportConfirmItem {
+  rowIndex:        number
+  conceptId:       string
+  amount:          number
+  status:          FinanceMovementStatus
+  paymentDate:     number | null
+  notes:           string
+  /** Si es un duplicado y el usuario eligió sobreescribir, el id del movimiento existente a actualizar. */
+  overwriteMovementId: string | null
+}
+
+export interface FinanceImportResult {
+  imported: number
+  updated:  number
+  skipped:  number
+}
+
+/** Estado de seguridad del módulo (sin exponer nunca el PIN ni su hash). */
+export interface FinanceSecurityStatus {
+  enabled: boolean
 }
 
 export const FINANCE_STATUS_LABELS: Record<FinanceMovementStatus, string> = {

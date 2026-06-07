@@ -1327,6 +1327,17 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         }
       }
     }
+  },
+  {
+    version: 54,
+    up: (db) => {
+      // Fase 4 — Recurrencia y meses: los conceptos "anuales" necesitan saber
+      // en qué mes del año corresponde generar su movimiento (ej: un seguro
+      // que se paga cada marzo). Nullable porque solo aplica a recurrence='annual'.
+      db.exec(`
+        ALTER TABLE finance_concepts ADD COLUMN recurrence_month INTEGER;
+      `)
+    }
   }
 ]
 

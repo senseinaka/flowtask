@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import {
   Cloud, MessageCircle, RefreshCw, Check, AlertCircle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
-  Database, Download, Sparkles, User, Phone, Mail, FileText
+  Database, Download, Sparkles, User, Phone, Mail, FileText,
+  HardDrive, FolderOpen, FolderCog
 } from 'lucide-react'
 import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus } from '@shared/types'
+import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus } from '@shared/types'
 import {
   CLAUDE_MODELS, AI_OPERATIONS, AI_OPERATION_LABELS,
   AI_OPERATION_DEFAULT_MODELS
@@ -131,6 +132,56 @@ export default function Settings() {
       setBackupMsg({ type: 'error', text: err instanceof Error ? err.message : 'Error al hacer backup' })
     } finally {
       setBackupLoading(false)
+    }
+  }
+
+  // Backup local — red de seguridad independiente de Drive (corre siempre,
+  // sin depender de ninguna cuenta ni conexión a internet).
+  const [localBackupStatus,  setLocalBackupStatus]  = useState<LocalBackupStatus | null>(null)
+  const [localBackupLoading, setLocalBackupLoading] = useState(false)
+  const [localBackupMsg,     setLocalBackupMsg]     = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [localBackupDir,     setLocalBackupDir]     = useState('')
+  const [choosingDir,        setChoosingDir]        = useState(false)
+
+  useEffect(() => {
+    window.api.backup.local.getStatus().then(setLocalBackupStatus)
+    window.api.backup.local.getDir().then(setLocalBackupDir)
+  }, [])
+
+  // Notificación cuando el backup local automático completa (cada 6hs / al cerrar)
+  useEffect(() => {
+    window.api.on('backup:local:complete', (data) => {
+      setLocalBackupStatus(data as LocalBackupStatus)
+    })
+    return () => window.api.off('backup:local:complete')
+  }, [])
+
+  const handleLocalBackupNow = async () => {
+    setLocalBackupLoading(true)
+    setLocalBackupMsg(null)
+    try {
+      const result = await window.api.backup.local.runNow()
+      setLocalBackupStatus(result)
+      setLocalBackupMsg(
+        result.success
+          ? { type: 'ok', text: `Copia local creada — ${result.sizeMB} MB` }
+          : { type: 'error', text: result.error ?? 'Error al hacer el backup local' }
+      )
+      setTimeout(() => setLocalBackupMsg(null), 5000)
+    } catch (err) {
+      setLocalBackupMsg({ type: 'error', text: err instanceof Error ? err.message : 'Error al hacer el backup local' })
+    } finally {
+      setLocalBackupLoading(false)
+    }
+  }
+
+  const handleChooseBackupDir = async () => {
+    setChoosingDir(true)
+    try {
+      const dir = await window.api.backup.local.chooseDir()
+      if (dir) setLocalBackupDir(dir)
+    } finally {
+      setChoosingDir(false)
     }
   }
 
@@ -676,6 +727,89 @@ export default function Settings() {
           <div className="flex items-center gap-2 text-xs text-red-400 bg-red-900/20 rounded-lg px-3 py-2">
             <AlertCircle size={12} />
             Último backup falló: {backupStatus.error}
+          </div>
+        )}
+      </section>
+
+      {/* Backup local — red de seguridad, no depende de Drive */}
+      <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <HardDrive size={18} className="text-amber-400" />
+          <h2 className="font-semibold">Backup local</h2>
+          {localBackupStatus?.success && (
+            <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400">
+              <Check size={12} />
+              Último: {new Date(localBackupStatus.timestamp).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-2 text-sm text-slate-400">
+          <p>
+            Copia completa (base de datos + adjuntos) a una carpeta de tu disco cada{' '}
+            <strong className="text-slate-300">6 horas</strong> y al <strong className="text-slate-300">cerrar la app</strong> —
+            {' '}<strong className="text-slate-300">no depende de ninguna cuenta ni conexión a internet</strong>.
+            Es la red de seguridad mínima para que nunca vuelva a pasar lo de los vencimientos: pase lo
+            que pase con Drive, siempre va a quedar al menos esta copia reciente.
+          </p>
+          <p className="text-xs text-slate-500">
+            Tip: si elegís una carpeta sincronizada (OneDrive, Google Drive, Dropbox), el backup además
+            queda replicado en la nube automáticamente, sin nada extra de tu parte.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex-1 min-w-[220px] flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900/60 border border-slate-700 text-xs font-mono text-slate-400 overflow-hidden">
+            <FolderOpen size={13} className="shrink-0 text-slate-500" />
+            <span className="truncate" title={localBackupDir}>{localBackupDir || '—'}</span>
+          </div>
+          <button
+            onClick={handleChooseBackupDir}
+            disabled={choosingDir}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors disabled:opacity-50"
+          >
+            {choosingDir ? <Loader2 size={13} className="animate-spin" /> : <FolderCog size={13} />}
+            Elegir carpeta...
+          </button>
+          <button
+            onClick={() => window.api.backup.local.openDir()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+          >
+            <ExternalLink size={13} />
+            Abrir carpeta
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleLocalBackupNow}
+            disabled={localBackupLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 hover:bg-amber-500 text-white transition-colors disabled:opacity-50"
+          >
+            {localBackupLoading
+              ? <><Loader2 size={14} className="animate-spin" /> Haciendo backup local...</>
+              : <><Download size={14} /> Hacer backup local ahora</>
+            }
+          </button>
+
+          {localBackupMsg && (
+            <p className={cn('text-xs', localBackupMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400')}>
+              {localBackupMsg.type === 'ok' ? '✓' : '✗'} {localBackupMsg.text}
+            </p>
+          )}
+        </div>
+
+        {localBackupStatus?.success && localBackupStatus.folder && (
+          <p className="text-xs text-slate-500">
+            Última copia: <span className="font-mono text-slate-400">{localBackupStatus.folder}</span>
+            {localBackupStatus.sizeMB && <> · {localBackupStatus.sizeMB} MB</>}
+          </p>
+        )}
+
+        {localBackupStatus && !localBackupStatus.success && localBackupStatus.error && (
+          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-900/20 rounded-lg px-3 py-2">
+            <AlertCircle size={12} />
+            Último backup local falló: {localBackupStatus.error}
           </div>
         )}
       </section>
