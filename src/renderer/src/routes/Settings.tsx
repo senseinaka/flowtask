@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import {
-  Cloud, MessageCircle, RefreshCw, Check, AlertCircle,
+  Cloud, MessageCircle, RefreshCw, Check, AlertCircle, AlertTriangle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
   Database, Download, Sparkles, User, Phone, Mail, FileText,
-  HardDrive, FolderOpen, FolderCog
+  HardDrive, FolderOpen, FolderCog, Clock, ArchiveRestore, RotateCcw
 } from 'lucide-react'
 import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus } from '@shared/types'
+import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus, LocalBackupEntry } from '@shared/types'
 import {
   CLAUDE_MODELS, AI_OPERATIONS, AI_OPERATION_LABELS,
   AI_OPERATION_DEFAULT_MODELS
@@ -143,10 +143,70 @@ export default function Settings() {
   const [localBackupDir,     setLocalBackupDir]     = useState('')
   const [choosingDir,        setChoosingDir]        = useState(false)
 
+  // Frecuencia configurable del backup automático (en horas; 0 = solo manual)
+  const [backupIntervalHours, setBackupIntervalHoursState] = useState<number | null>(null)
+  const [savingInterval,      setSavingInterval]           = useState(false)
+
+  // Restaurar una copia anterior
+  const [showRestorePanel,  setShowRestorePanel]  = useState(false)
+  const [backupList,        setBackupList]        = useState<LocalBackupEntry[]>([])
+  const [loadingBackupList, setLoadingBackupList] = useState(false)
+  const [restoringFolder,   setRestoringFolder]   = useState<string | null>(null)
+  const [confirmRestore,    setConfirmRestore]    = useState<string | null>(null)
+  const [restoreMsg,        setRestoreMsg]        = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+
   useEffect(() => {
     window.api.backup.local.getStatus().then(setLocalBackupStatus)
     window.api.backup.local.getDir().then(setLocalBackupDir)
+    window.api.backup.local.getInterval().then(setBackupIntervalHoursState)
   }, [])
+
+  const handleChangeInterval = async (hours: number) => {
+    setSavingInterval(true)
+    try {
+      await window.api.backup.local.setInterval(hours)
+      setBackupIntervalHoursState(hours)
+    } finally {
+      setSavingInterval(false)
+    }
+  }
+
+  const loadBackupList = async () => {
+    setLoadingBackupList(true)
+    try {
+      const list = await window.api.backup.local.list()
+      setBackupList(list)
+    } finally {
+      setLoadingBackupList(false)
+    }
+  }
+
+  const handleToggleRestorePanel = () => {
+    const next = !showRestorePanel
+    setShowRestorePanel(next)
+    setConfirmRestore(null)
+    setRestoreMsg(null)
+    if (next) loadBackupList()
+  }
+
+  const handleRestore = async (folder: string) => {
+    setRestoringFolder(folder)
+    setRestoreMsg(null)
+    try {
+      const result = await window.api.backup.local.restore(folder)
+      if (result.success) {
+        setRestoreMsg({ type: 'ok', text: 'Restauración aplicada — la app se va a reiniciar en unos segundos...' })
+      } else {
+        setRestoreMsg({ type: 'error', text: result.error ?? 'No se pudo restaurar esa copia' })
+        setRestoringFolder(null)
+      }
+    } catch (err) {
+      setRestoreMsg({ type: 'error', text: err instanceof Error ? err.message : 'No se pudo restaurar esa copia' })
+      setRestoringFolder(null)
+    } finally {
+      setConfirmRestore(null)
+    }
+  }
 
   // Notificación cuando el backup local automático completa (cada 6hs / al cerrar)
   useEffect(() => {
@@ -746,13 +806,21 @@ export default function Settings() {
 
         <div className="space-y-2 text-sm text-slate-400">
           <p>
-            Copia completa (base de datos + adjuntos) a una carpeta de tu disco cada{' '}
-            <strong className="text-slate-300">6 horas</strong> y al <strong className="text-slate-300">cerrar la app</strong> —
+            Copia completa (base de datos + un espejo incremental de adjuntos) a una carpeta de tu disco,
+            {' '}<strong className="text-slate-300">
+              {backupIntervalHours === null ? '...' :
+               backupIntervalHours === 0 ? 'solo cuando vos lo pidas' :
+               backupIntervalHours === 24 ? 'una vez al día' :
+               `cada ${backupIntervalHours} horas`}
+            </strong> y al <strong className="text-slate-300">cerrar la app</strong> —
             {' '}<strong className="text-slate-300">no depende de ninguna cuenta ni conexión a internet</strong>.
             Es la red de seguridad mínima para que nunca vuelva a pasar lo de los vencimientos: pase lo
-            que pase con Drive, siempre va a quedar al menos esta copia reciente.
+            que pase con Drive, siempre va a quedar al menos esta copia reciente, y vas a poder restaurarla
+            vos mismo desde acá.
           </p>
           <p className="text-xs text-slate-500">
+            Los adjuntos (facturas, PDFs) se guardan en una carpeta compartida que solo crece — cada copia
+            agrega los archivos nuevos sin duplicar los que ya estaban, así no se ocupa espacio de más.
             Tip: si elegís una carpeta sincronizada (OneDrive, Google Drive, Dropbox), el backup además
             queda replicado en la nube automáticamente, sin nada extra de tu parte.
           </p>
@@ -778,6 +846,35 @@ export default function Settings() {
             <ExternalLink size={13} />
             Abrir carpeta
           </button>
+        </div>
+
+        {/* Frecuencia del backup automático */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs text-slate-500 mr-1">
+            <Clock size={13} />
+            Repetir:
+          </span>
+          {([
+            { hours: 6,  label: 'Cada 6 horas' },
+            { hours: 12, label: 'Cada 12 horas' },
+            { hours: 24, label: '1 vez al día' },
+            { hours: 0,  label: 'Solo manual' }
+          ] as const).map(opt => (
+            <button
+              key={opt.hours}
+              onClick={() => handleChangeInterval(opt.hours)}
+              disabled={savingInterval || backupIntervalHours === null}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50',
+                backupIntervalHours === opt.hours
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {savingInterval && <Loader2 size={13} className="animate-spin text-slate-500" />}
         </div>
 
         <div className="flex items-center gap-3 pt-1">
@@ -812,6 +909,101 @@ export default function Settings() {
             Último backup local falló: {localBackupStatus.error}
           </div>
         )}
+
+        {/* ── Restaurar una copia anterior ──────────────────────────────── */}
+        <div className="pt-2 border-t border-slate-700/60">
+          <button
+            onClick={handleToggleRestorePanel}
+            className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            <ArchiveRestore size={15} className="text-amber-400" />
+            Restaurar una copia anterior
+            <ChevronDown size={14} className={cn('transition-transform text-slate-500', showRestorePanel && 'rotate-180')} />
+          </button>
+
+          {showRestorePanel && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-start gap-2 text-xs text-amber-300/90 bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <span>
+                  Restaurar reemplaza la base de datos en uso por la de la copia elegida y{' '}
+                  <strong>reinicia la app</strong>. Antes de tocar nada, se guarda automáticamente una
+                  copia de seguridad del estado actual — así que esto siempre se puede deshacer
+                  restaurando esa copia "antes de restaurar" si te arrepentís.
+                </span>
+              </div>
+
+              {loadingBackupList ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500 px-1 py-2">
+                  <Loader2 size={13} className="animate-spin" /> Buscando copias disponibles...
+                </div>
+              ) : backupList.length === 0 ? (
+                <p className="text-xs text-slate-500 px-1 py-2">
+                  Todavía no hay copias locales en esta carpeta. Se va a crear la primera automáticamente
+                  (a los 2 minutos de abrir la app, o con "Hacer backup local ahora" más arriba).
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {backupList.map(entry => (
+                    <li
+                      key={entry.folder}
+                      className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-slate-900/60 border border-slate-700"
+                    >
+                      <span className="text-xs font-mono text-slate-300">
+                        {new Date(entry.timestamp).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {entry.totalSizeMB && (
+                        <span className="text-xs text-slate-500">· {entry.totalSizeMB} MB</span>
+                      )}
+                      <span className="text-xs text-slate-600 font-mono truncate" title={entry.path}>{entry.folder}</span>
+
+                      <div className="ml-auto flex items-center gap-2">
+                        {confirmRestore === entry.folder ? (
+                          <>
+                            <span className="text-xs text-amber-300">¿Restaurar y reiniciar la app?</span>
+                            <button
+                              onClick={() => handleRestore(entry.folder)}
+                              disabled={restoringFolder !== null}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+                            >
+                              {restoringFolder === entry.folder
+                                ? <><Loader2 size={12} className="animate-spin" /> Restaurando...</>
+                                : <>Sí, restaurar</>
+                              }
+                            </button>
+                            <button
+                              onClick={() => setConfirmRestore(null)}
+                              disabled={restoringFolder !== null}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors disabled:opacity-50"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmRestore(entry.folder)}
+                            disabled={restoringFolder !== null}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors disabled:opacity-50"
+                          >
+                            <RotateCcw size={12} />
+                            Restaurar esta copia
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {restoreMsg && (
+                <p className={cn('text-xs flex items-center gap-1.5', restoreMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400')}>
+                  {restoreMsg.type === 'ok' ? <Check size={13} /> : <AlertCircle size={13} />}
+                  {restoreMsg.text}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* IA / Claude */}

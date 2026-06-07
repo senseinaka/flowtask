@@ -716,6 +716,22 @@ export interface LocalBackupStatus {
   error?:    string
 }
 
+/** Una copia local disponible para restaurar (carpeta con fecha + datos del manifest.json). */
+export interface LocalBackupEntry {
+  folder:      string   // nombre de la subcarpeta, ej. "2026-06-07_10-30"
+  path:        string   // ruta absoluta completa
+  timestamp:   string   // ISO string (del manifest)
+  dbSizeMB?:   string
+  totalSizeMB?: string
+}
+
+/** Resultado de restaurar una copia local — si success, la app debe reiniciarse para aplicarla. */
+export interface RestoreResult {
+  success:      boolean
+  error?:       string
+  willRestart?: boolean
+}
+
 // ── IA / Claude ───────────────────────────────────────────────────────────────
 
 export const CLAUDE_MODELS = [

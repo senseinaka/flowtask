@@ -26,3 +26,21 @@ export function getAttachmentsDir(): string {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return dir
 }
+
+/** Ruta absoluta del archivo .db en uso (sin abrirlo). Útil para restaurar backups. */
+export function getDbPath(): string {
+  const userDataPath = app.getPath('userData')
+  return path.join(userDataPath, 'flowtask', 'flowtask.db')
+}
+
+/**
+ * Cierra la conexión activa a la base de datos y libera el handle del archivo.
+ * Necesario antes de reemplazar el .db por una copia restaurada — getDb() vuelve
+ * a abrirla (y a crear una nueva conexión) la próxima vez que se llame.
+ */
+export function closeDb(): void {
+  if (_db) {
+    try { _db.close() } catch { /* ignore */ }
+    _db = null
+  }
+}

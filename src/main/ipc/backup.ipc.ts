@@ -47,4 +47,29 @@ export function registerBackupIpc(): void {
   ipcMain.handle('backup:local:openDir', () => {
     localBackupService.openBackupDir()
   })
+
+  /** Frecuencia del backup automático, en horas (0 = solo manual). */
+  ipcMain.handle('backup:local:getInterval', () => {
+    return localBackupService.getIntervalHours()
+  })
+
+  ipcMain.handle('backup:local:setInterval', (_e, hours: number) => {
+    localBackupService.setIntervalHours(hours)
+  })
+
+  // ── Restaurar una copia anterior ─────────────────────────────────────────
+
+  /** Lista las copias disponibles para restaurar (carpeta, fecha, tamaño). */
+  ipcMain.handle('backup:local:list', async () => {
+    return localBackupService.listBackups()
+  })
+
+  /**
+   * Restaura la copia elegida. Antes de tocar nada, guarda un respaldo del
+   * estado actual (por si hay que deshacerlo) y, si todo sale bien, reinicia
+   * la app para que la base restaurada se cargue desde cero.
+   */
+  ipcMain.handle('backup:local:restore', async (_e, folder: string) => {
+    return localBackupService.restoreBackup(folder)
+  })
 }

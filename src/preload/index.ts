@@ -4,7 +4,7 @@ import type {
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
-  BackupStatus, LocalBackupStatus,
+  BackupStatus, LocalBackupStatus, LocalBackupEntry, RestoreResult,
   Task, Project, Attachment, Reminder, Contact, CreateContactInput,
   DelegatedTask, CreateDelegatedTaskInput,
   MessageTemplate, ScheduledMessage, CreateScheduledMessageInput,
@@ -420,7 +420,13 @@ const api = {
       getStatus: (): Promise<LocalBackupStatus | null> => ipcRenderer.invoke('backup:local:getStatus'),
       getDir:    (): Promise<string>                   => ipcRenderer.invoke('backup:local:getDir'),
       chooseDir: (): Promise<string | null>            => ipcRenderer.invoke('backup:local:chooseDir'),
-      openDir:   (): Promise<void>                     => ipcRenderer.invoke('backup:local:openDir')
+      openDir:   (): Promise<void>                     => ipcRenderer.invoke('backup:local:openDir'),
+      // Frecuencia del backup automático (en horas; 0 = solo manual)
+      getInterval: (): Promise<number>                  => ipcRenderer.invoke('backup:local:getInterval'),
+      setInterval: (hours: number): Promise<void>       => ipcRenderer.invoke('backup:local:setInterval', hours),
+      // Restaurar una copia anterior — la app se reinicia sola si sale bien
+      list:    (): Promise<LocalBackupEntry[]>          => ipcRenderer.invoke('backup:local:list'),
+      restore: (folder: string): Promise<RestoreResult> => ipcRenderer.invoke('backup:local:restore', folder)
     }
   },
 
