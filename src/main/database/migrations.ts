@@ -1119,6 +1119,214 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         insert.run(uuidv4(), cat.name, cat.icon, cat.color, now, now)
       }
     }
+  },
+  {
+    version: 53,
+    up: (db) => {
+      const now = Date.now()
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_accounts (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '💰',
+          color       TEXT NOT NULL DEFAULT '#10b981',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS finance_categories (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '📁',
+          color       TEXT NOT NULL DEFAULT '#6366f1',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS finance_concepts (
+          id              TEXT PRIMARY KEY,
+          category_id     TEXT NOT NULL REFERENCES finance_categories(id) ON DELETE CASCADE,
+          account_id      TEXT NOT NULL REFERENCES finance_accounts(id) ON DELETE CASCADE,
+          name            TEXT NOT NULL,
+          default_amount  REAL NOT NULL DEFAULT 0,
+          expense_type    TEXT NOT NULL DEFAULT 'fixed',
+          payment_method  TEXT NOT NULL DEFAULT 'transfer',
+          recurrence      TEXT NOT NULL DEFAULT 'monthly',
+          is_active       INTEGER NOT NULL DEFAULT 1,
+          notes           TEXT NOT NULL DEFAULT '',
+          created_at      INTEGER NOT NULL,
+          updated_at      INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS finance_movements (
+          id                TEXT PRIMARY KEY,
+          concept_id        TEXT NOT NULL REFERENCES finance_concepts(id) ON DELETE CASCADE,
+          month             INTEGER NOT NULL,
+          year              INTEGER NOT NULL,
+          amount_estimated  REAL NOT NULL DEFAULT 0,
+          amount_actual     REAL,
+          status            TEXT NOT NULL DEFAULT 'pending',
+          payment_method    TEXT NOT NULL DEFAULT 'transfer',
+          payment_date      INTEGER,
+          due_date          INTEGER,
+          notes             TEXT NOT NULL DEFAULT '',
+          created_at        INTEGER NOT NULL,
+          updated_at        INTEGER NOT NULL,
+          UNIQUE(concept_id, month, year)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_finance_movements_period ON finance_movements(year, month);
+      `)
+
+      const { v4: uuidv4 } = require('uuid')
+
+      // ── Cuenta por defecto ────────────────────────────────────────────────
+      const accountId = uuidv4()
+      db.prepare(`
+        INSERT INTO finance_accounts (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `).run(accountId, 'Personal', '👤', '#10b981', now, now)
+
+      // ── Categorías por defecto ────────────────────────────────────────────
+      const categoriesData = [
+        { key: 'hogar',       name: 'Hogar fijo mensual',  icon: '🏠', color: '#3b82f6' },
+        { key: 'hijos',       name: 'Ciro Jano Maia',      icon: '👨‍👩‍👧‍👦', color: '#ec4899' },
+        { key: 'personal',    name: 'Personal',            icon: '🙋', color: '#8b5cf6' },
+        { key: 'salidas',     name: 'Salidas',             icon: '🍽️', color: '#f97316' },
+        { key: 'tarjetas',    name: 'Tarjetas',            icon: '💳', color: '#ef4444' },
+        { key: 'auto',        name: 'Auto Lancha',         icon: '🚤', color: '#06b6d4' },
+        { key: 'varios',      name: 'Varios',              icon: '📦', color: '#64748b' },
+        { key: 'refacciones', name: 'Refacciones hogar',   icon: '🔨', color: '#f59e0b' },
+      ]
+      const insertCategory = db.prepare(`
+        INSERT INTO finance_categories (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `)
+      const categoryIds: Record<string, string> = {}
+      for (const cat of categoriesData) {
+        const id = uuidv4()
+        categoryIds[cat.key] = id
+        insertCategory.run(id, cat.name, cat.icon, cat.color, now, now)
+      }
+
+      // ── Conceptos de prueba (con nombres reales del usuario) ──────────────
+      const conceptsData = [
+        // Hogar fijo mensual
+        { name: 'ABL',                            cat: 'hogar',       amount: 18500,  type: 'fixed',    method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Cablevisión internet',           cat: 'hogar',       amount: 32000,  type: 'fixed',    method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Edenor',                         cat: 'hogar',       amount: 27000,  type: 'variable', method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Seguridad',                      cat: 'hogar',       amount: 45000,  type: 'fixed',    method: 'transfer',    rec: 'monthly'  },
+        { name: 'Limpieza',                       cat: 'hogar',       amount: 60000,  type: 'fixed',    method: 'cash',        rec: 'monthly'  },
+        { name: 'Jardinero',                      cat: 'hogar',       amount: 35000,  type: 'fixed',    method: 'cash',        rec: 'monthly'  },
+        { name: 'Expensas',                       cat: 'hogar',       amount: 52000,  type: 'fixed',    method: 'transfer',    rec: 'monthly'  },
+        // Ciro Jano Maia
+        { name: 'Colegio',                        cat: 'hijos',       amount: 180000, type: 'fixed',    method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Uniformes',                      cat: 'hijos',       amount: 25000,  type: 'variable', method: 'transfer',    rec: 'one_time' },
+        { name: 'Actividades extracurriculares',  cat: 'hijos',       amount: 40000,  type: 'fixed',    method: 'transfer',    rec: 'monthly'  },
+        { name: 'Pediatra',                       cat: 'hijos',       amount: 15000,  type: 'variable', method: 'cash',        rec: 'monthly'  },
+        // Personal
+        { name: 'Gimnasio',                       cat: 'personal',    amount: 22000,  type: 'fixed',    method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Obra social / Prepaga',          cat: 'personal',    amount: 95000,  type: 'fixed',    method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Peluquería',                     cat: 'personal',    amount: 18000,  type: 'variable', method: 'cash',        rec: 'monthly'  },
+        // Salidas
+        { name: 'Restaurantes',                   cat: 'salidas',     amount: 60000,  type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        { name: 'Cine',                           cat: 'salidas',     amount: 15000,  type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        { name: 'Entretenimiento',                cat: 'salidas',     amount: 20000,  type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        // Tarjetas
+        { name: 'Visa',                           cat: 'tarjetas',    amount: 220000, type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        { name: 'Mastercard',                     cat: 'tarjetas',    amount: 140000, type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        { name: 'American Express',               cat: 'tarjetas',    amount: 80000,  type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        // Auto Lancha
+        { name: 'Nafta',                          cat: 'auto',        amount: 50000,  type: 'variable', method: 'cash',        rec: 'monthly'  },
+        { name: 'Seguro auto',                    cat: 'auto',        amount: 38000,  type: 'fixed',    method: 'debit_auto',  rec: 'monthly'  },
+        { name: 'Service',                        cat: 'auto',        amount: 45000,  type: 'variable', method: 'transfer',    rec: 'one_time' },
+        { name: 'Amarra / Guardería náutica',     cat: 'auto',        amount: 60000,  type: 'fixed',    method: 'transfer',    rec: 'monthly'  },
+        // Varios
+        { name: 'Regalos',                        cat: 'varios',      amount: 25000,  type: 'variable', method: 'credit_card', rec: 'monthly'  },
+        { name: 'Imprevistos',                    cat: 'varios',      amount: 30000,  type: 'variable', method: 'cash',        rec: 'monthly'  },
+        { name: 'Donaciones',                     cat: 'varios',      amount: 10000,  type: 'fixed',    method: 'transfer',    rec: 'monthly'  },
+        // Refacciones hogar
+        { name: 'Plomería',                       cat: 'refacciones', amount: 35000,  type: 'variable', method: 'transfer',    rec: 'one_time' },
+        { name: 'Pintura',                        cat: 'refacciones', amount: 50000,  type: 'variable', method: 'transfer',    rec: 'one_time' },
+        { name: 'Electricidad',                   cat: 'refacciones', amount: 28000,  type: 'variable', method: 'transfer',    rec: 'one_time' },
+      ]
+      const insertConcept = db.prepare(`
+        INSERT INTO finance_concepts
+          (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, is_active, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, '', ?, ?)
+      `)
+      const concepts: { id: string; cat: string; amount: number; method: string }[] = []
+      for (const c of conceptsData) {
+        const id = uuidv4()
+        concepts.push({ id, cat: c.cat, amount: c.amount, method: c.method })
+        insertConcept.run(id, categoryIds[c.cat], accountId, c.name, c.amount, c.type, c.method, c.rec, now, now)
+      }
+
+      // ── Movimientos de prueba: mes actual + 2 anteriores ─────────────────
+      const insertMovement = db.prepare(`
+        INSERT INTO finance_movements
+          (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+      `)
+
+      const today = new Date(now)
+      const periods: { month: number; year: number; offset: number }[] = []
+      for (let i = 2; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        periods.push({ month: d.getMonth() + 1, year: d.getFullYear(), offset: i })
+      }
+
+      // Generador determinístico simple (evita Math.random para datos reproducibles)
+      let seed = 42
+      const rand = (): number => {
+        seed = (seed * 9301 + 49297) % 233280
+        return seed / 233280
+      }
+
+      for (const period of periods) {
+        for (const concept of concepts) {
+          // El monto real varía un poco respecto al estimado (entre -8% y +18%)
+          const variation    = 1 + (rand() * 0.26 - 0.08)
+          const amountActual = Math.round(concept.amount * variation)
+          const dueDate      = new Date(period.year, period.month - 1, 10).getTime()
+
+          let status: string
+          let paymentDate: number | null
+          let actualToStore: number | null
+
+          if (period.offset === 0) {
+            // Mes actual: mezcla realista de pagados / pendientes / vencidos
+            const r = rand()
+            if (r < 0.45) {
+              status        = 'paid'
+              paymentDate   = new Date(period.year, period.month - 1, Math.min(8, today.getDate())).getTime()
+              actualToStore = amountActual
+            } else if (r < 0.8) {
+              status        = 'pending'
+              paymentDate   = null
+              actualToStore = null
+            } else {
+              status        = 'overdue'
+              paymentDate   = null
+              actualToStore = null
+            }
+          } else {
+            // Meses anteriores: todo ya pagado (para alimentar la comparación mes a mes)
+            status        = 'paid'
+            paymentDate   = new Date(period.year, period.month - 1, 5 + Math.floor(rand() * 15)).getTime()
+            actualToStore = amountActual
+          }
+
+          insertMovement.run(
+            uuidv4(), concept.id, period.month, period.year,
+            concept.amount, actualToStore, status, concept.method,
+            paymentDate, dueDate, now, now
+          )
+        }
+      }
+    }
   }
 ]
 

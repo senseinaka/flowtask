@@ -20,6 +20,7 @@ import ComexGestores from './routes/comex/ComexGestores'
 import ComexDespachantes from './routes/comex/ComexDespachantes'
 import ComexLogistics from './routes/comex/ComexLogistics'
 import ExpiryDashboard from './routes/expiry/ExpiryDashboard'
+import FinanceDashboard from './routes/finance/FinanceDashboard'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -50,7 +51,8 @@ const router = createHashRouter([
       { path: 'comex/gestores',    element: <ComexGestores />    },
       { path: 'comex/despachantes',element: <ComexDespachantes /> },
       { path: 'comex/logistics',   element: <ComexLogistics />   },
-      { path: 'expiry', element: <ExpiryDashboard /> }
+      { path: 'expiry', element: <ExpiryDashboard /> },
+      { path: 'finance', element: <FinanceDashboard /> }
     ]
   }
 ])

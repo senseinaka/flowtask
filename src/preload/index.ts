@@ -26,7 +26,10 @@ import type {
   ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
   ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
   ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput,
-  PersonalContactInfo
+  PersonalContactInfo,
+  FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement, FinanceMonthSummary,
+  CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinanceConceptInput, CreateFinanceMovementInput,
+  FinanceMovementStatus
 } from '@shared/types'
 
 const api = {
@@ -508,6 +511,48 @@ const api = {
   settings: {
     getPersonalContact:  (): Promise<PersonalContactInfo>                            => ipcRenderer.invoke('settings:personal:get'),
     savePersonalContact: (data: Partial<PersonalContactInfo>): Promise<PersonalContactInfo> => ipcRenderer.invoke('settings:personal:save', data),
+  },
+
+  finance: {
+    accounts: {
+      list:   (): Promise<FinanceAccount[]>                                                => ipcRenderer.invoke('finance:accounts:list'),
+      create: (data: CreateFinanceAccountInput): Promise<FinanceAccount>                   => ipcRenderer.invoke('finance:accounts:create', data),
+      update: (id: string, data: Partial<CreateFinanceAccountInput>): Promise<FinanceAccount> => ipcRenderer.invoke('finance:accounts:update', id, data),
+      delete: (id: string): Promise<void>                                                  => ipcRenderer.invoke('finance:accounts:delete', id),
+    },
+    categories: {
+      list:   (): Promise<FinanceCategory[]>                                                => ipcRenderer.invoke('finance:categories:list'),
+      create: (data: CreateFinanceCategoryInput): Promise<FinanceCategory>                  => ipcRenderer.invoke('finance:categories:create', data),
+      update: (id: string, data: Partial<CreateFinanceCategoryInput>): Promise<FinanceCategory> => ipcRenderer.invoke('finance:categories:update', id, data),
+      delete: (id: string): Promise<void>                                                   => ipcRenderer.invoke('finance:categories:delete', id),
+    },
+    concepts: {
+      list:   (opts?: { activeOnly?: boolean }): Promise<FinanceConcept[]>                  => ipcRenderer.invoke('finance:concepts:list', opts),
+      get:    (id: string): Promise<FinanceConcept | null>                                  => ipcRenderer.invoke('finance:concepts:get', id),
+      create: (data: CreateFinanceConceptInput): Promise<FinanceConcept>                    => ipcRenderer.invoke('finance:concepts:create', data),
+      update: (id: string, data: Partial<CreateFinanceConceptInput> & { is_active?: number }): Promise<FinanceConcept> =>
+        ipcRenderer.invoke('finance:concepts:update', id, data),
+      delete: (id: string): Promise<void>                                                   => ipcRenderer.invoke('finance:concepts:delete', id),
+    },
+    movements: {
+      list:   (month: number, year: number): Promise<FinanceMovement[]>                     => ipcRenderer.invoke('finance:movements:list', month, year),
+      get:    (id: string): Promise<FinanceMovement | null>                                 => ipcRenderer.invoke('finance:movements:get', id),
+      create: (data: CreateFinanceMovementInput): Promise<FinanceMovement>                  => ipcRenderer.invoke('finance:movements:create', data),
+      update: (id: string, data: Partial<CreateFinanceMovementInput>): Promise<FinanceMovement> =>
+        ipcRenderer.invoke('finance:movements:update', id, data),
+      quickUpdate: (id: string, data: {
+        amount_actual?: number | null
+        status?:        FinanceMovementStatus
+        payment_date?:  number | null
+        due_date?:      number | null
+        notes?:         string
+      }): Promise<FinanceMovement> => ipcRenderer.invoke('finance:movements:quickUpdate', id, data),
+      delete:           (id: string): Promise<void>                                         => ipcRenderer.invoke('finance:movements:delete', id),
+      generateForMonth: (month: number, year: number): Promise<FinanceMovement[]>           => ipcRenderer.invoke('finance:movements:generateForMonth', month, year),
+    },
+    summary: {
+      get: (month: number, year: number): Promise<FinanceMonthSummary> => ipcRenderer.invoke('finance:summary:get', month, year),
+    }
   },
 
   on: (

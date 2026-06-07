@@ -1392,3 +1392,172 @@ export const DEFAULT_EXPIRY_CATEGORIES: Omit<ExpiryCategory, 'id' | 'created_at'
   { name: 'Legales / Registros',    icon: '⚖️', color: '#f97316', is_default: 1 },
   { name: 'Membresías',             icon: '🎫', color: '#ec4899', is_default: 1 },
 ]
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Finanzas Personales
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type FinanceMovementStatus = 'pending' | 'paid' | 'overdue'
+export type FinancePaymentMethod  =
+  | 'cash'         // efectivo
+  | 'transfer'     // transferencia
+  | 'debit_auto'   // débito automático
+  | 'debit_card'   // tarjeta de débito
+  | 'credit_card'  // tarjeta de crédito
+  | 'other'        // otro
+export type FinanceExpenseType = 'fixed' | 'variable'      // fijo | variable
+export type FinanceRecurrence  = 'monthly' | 'biweekly' | 'annual' | 'one_time'
+
+export interface FinanceAccount {
+  id:         string
+  name:       string
+  icon:       string    // emoji
+  color:      string    // hex
+  is_default: number    // 0 | 1
+  created_at: number
+  updated_at: number
+}
+
+export interface FinanceCategory {
+  id:         string
+  name:       string
+  icon:       string    // emoji
+  color:      string    // hex
+  is_default: number    // 0 | 1
+  created_at: number
+  updated_at: number
+}
+
+export interface FinanceConcept {
+  id:             string
+  category_id:    string
+  category?:      FinanceCategory
+  account_id:     string
+  account?:       FinanceAccount
+  name:           string
+  default_amount: number
+  expense_type:   FinanceExpenseType
+  payment_method: FinancePaymentMethod
+  recurrence:     FinanceRecurrence
+  is_active:      number   // 0 | 1
+  notes:          string
+  created_at:     number
+  updated_at:     number
+}
+
+export interface FinanceMovement {
+  id:               string
+  concept_id:       string
+  concept?:         FinanceConcept
+  month:            number          // 1-12
+  year:             number
+  amount_estimated: number
+  amount_actual:    number | null
+  status:           FinanceMovementStatus
+  payment_method:   FinancePaymentMethod
+  payment_date:     number | null   // timestamp ms
+  due_date:         number | null   // timestamp ms
+  notes:            string
+  created_at:       number
+  updated_at:       number
+}
+
+export interface CreateFinanceAccountInput {
+  name:  string
+  icon?: string
+  color?: string
+}
+
+export interface CreateFinanceCategoryInput {
+  name:  string
+  icon?: string
+  color?: string
+}
+
+export interface CreateFinanceConceptInput {
+  category_id:     string
+  account_id:      string
+  name:            string
+  default_amount?: number
+  expense_type?:   FinanceExpenseType
+  payment_method?: FinancePaymentMethod
+  recurrence?:     FinanceRecurrence
+  notes?:          string
+}
+
+export interface CreateFinanceMovementInput {
+  concept_id:        string
+  month:             number
+  year:              number
+  amount_estimated?: number
+  amount_actual?:    number | null
+  status?:           FinanceMovementStatus
+  payment_method?:   FinancePaymentMethod
+  payment_date?:     number | null
+  due_date?:         number | null
+  notes?:            string
+}
+
+export interface FinanceMonthSummary {
+  month:               number
+  year:                number
+  totalEstimated:      number
+  totalActual:         number
+  totalPaid:           number
+  totalPending:        number
+  totalOverdue:        number
+  prevMonthTotalActual: number | null
+  diffAmount:          number | null   // totalActual - prevMonthTotalActual
+  diffPercent:         number | null   // (diffAmount / prevMonthTotalActual) * 100
+  upcomingDueCount:    number          // movimientos pendientes con vencimiento en los próx. 7 días
+  biggestIncrease:     { conceptName: string; diffAmount: number; diffPercent: number | null } | null
+  topCategory:         { categoryName: string; total: number } | null
+}
+
+export const FINANCE_STATUS_LABELS: Record<FinanceMovementStatus, string> = {
+  pending: 'Pendiente',
+  paid:    'Pagado',
+  overdue: 'Vencido',
+}
+
+export const FINANCE_STATUS_COLORS: Record<FinanceMovementStatus, string> = {
+  pending: '#f59e0b',  // amber
+  paid:    '#10b981',  // emerald
+  overdue: '#ef4444',  // red
+}
+
+export const FINANCE_PAYMENT_METHOD_LABELS: Record<FinancePaymentMethod, string> = {
+  cash:        'Efectivo',
+  transfer:    'Transferencia',
+  debit_auto:  'Débito automático',
+  debit_card:  'Tarjeta de débito',
+  credit_card: 'Tarjeta de crédito',
+  other:       'Otro',
+}
+
+export const FINANCE_EXPENSE_TYPE_LABELS: Record<FinanceExpenseType, string> = {
+  fixed:    'Fijo',
+  variable: 'Variable',
+}
+
+export const FINANCE_RECURRENCE_LABELS: Record<FinanceRecurrence, string> = {
+  monthly:  'Mensual',
+  biweekly: 'Quincenal',
+  annual:   'Anual',
+  one_time: 'Puntual',
+}
+
+export const DEFAULT_FINANCE_ACCOUNTS: Omit<FinanceAccount, 'id' | 'created_at' | 'updated_at'>[] = [
+  { name: 'Personal', icon: '👤', color: '#10b981', is_default: 1 },
+]
+
+export const DEFAULT_FINANCE_CATEGORIES: Omit<FinanceCategory, 'id' | 'created_at' | 'updated_at'>[] = [
+  { name: 'Hogar fijo mensual',  icon: '🏠', color: '#3b82f6', is_default: 1 },
+  { name: 'Ciro Jano Maia',      icon: '👨‍👩‍👧‍👦', color: '#ec4899', is_default: 1 },
+  { name: 'Personal',            icon: '🙋', color: '#8b5cf6', is_default: 1 },
+  { name: 'Salidas',             icon: '🍽️', color: '#f97316', is_default: 1 },
+  { name: 'Tarjetas',            icon: '💳', color: '#ef4444', is_default: 1 },
+  { name: 'Auto Lancha',         icon: '🚤', color: '#06b6d4', is_default: 1 },
+  { name: 'Varios',              icon: '📦', color: '#64748b', is_default: 1 },
+  { name: 'Refacciones hogar',   icon: '🔨', color: '#f59e0b', is_default: 1 },
+]

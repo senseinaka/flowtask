@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
-  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock
+  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { useUIStore } from '../../store/ui.store'
@@ -223,6 +223,22 @@ export default function Sidebar() {
           >
             <Clock size={16} />
             Vencimientos
+          </NavLink>
+        </div>
+
+        {/* ── Finanzas Personales ───────────────────────────────────────── */}
+        <div className="pt-1">
+          <NavLink
+            to="/finance"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+              )
+            }
+          >
+            <Wallet size={16} />
+            Finanzas
           </NavLink>
         </div>
 
