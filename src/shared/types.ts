@@ -1625,6 +1625,24 @@ export interface FinanceMonthSummary {
   topCategory:         { categoryName: string; total: number } | null
 }
 
+// ── Notas y análisis IA del mes (Dashboard) ───────────────────────────────────
+//
+// A diferencia de FinanceMonthSummary/breakdown/etc. (todo computado al vuelo),
+// esto SÍ se persiste — son anotaciones del usuario explicando variaciones del
+// gasto, y el análisis comparativo que genera la IA cuando el usuario pide
+// "Guardar" (no es un chat efímero: queda guardado por mes/año y visible al
+// volver a entrar). Una fila por (month, year) — UNIQUE en la tabla.
+export interface FinanceMonthInsight {
+  id:              string
+  month:           number
+  year:            number
+  notes:           string           // comentario libre del usuario sobre el mes
+  ai_analysis:     string | null    // último análisis comparativo guardado (o null si nunca se guardó uno)
+  ai_generated_at: number | null    // epoch ms de cuándo se guardó ese análisis
+  created_at:      number
+  updated_at:      number
+}
+
 // ── Visualización / análisis (Fase 3) ─────────────────────────────────────────
 //
 // Igual que FinanceMonthSummary: todo se computa al vuelo a partir de los

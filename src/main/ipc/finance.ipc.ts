@@ -10,12 +10,13 @@ import {
   listMovementEntries, addMovementEntry, updateMovementEntry, removeMovementEntry,
   getFinanceMonthSummary,
   getFinanceCategoryBreakdown, getFinanceHistory, getFinanceTopConcepts, getFinanceTopIncreases,
+  getFinanceMonthInsight, saveFinanceMonthNotes, saveFinanceMonthAIAnalysis,
   buildFinanceImportPreview, confirmFinanceImport
 } from '../database/queries/finance'
 import {
   parseFinanceImportFile, writeFinanceMovementsFile, writeFinanceSummaryPdf
 } from '../services/finance-io.service'
-import { parseFinanceImportText } from '../services/ai.service'
+import { parseFinanceImportText, compareFinanceMonths } from '../services/ai.service'
 import {
   getFinanceSecurityStatus, setFinancePin, verifyFinancePin, disableFinancePin, changeFinancePin
 } from '../services/finance-security.service'
@@ -168,6 +169,38 @@ export function registerFinanceIpc(): void {
   // ── Resumen / dashboard ─────────────────────────────────────────────────────
   ipcMain.handle('finance:summary:get', (_e, month: number, year: number) =>
     getFinanceMonthSummary(month, year)
+  )
+
+  // ── Notas y comparador con IA del mes (Dashboard) ───────────────────────────
+  //
+  // "generateAnalysis" SOLO genera y devuelve el texto — no guarda nada, así el
+  // usuario puede revisar la conclusión antes de decidir conservarla. El guardado
+  // es una acción separada y explícita ("saveAnalysis"), igual que pidió Diego:
+  // conclusiones que queden guardadas (y visibles después) recién al hacer click
+  // en "Guardar", no automáticamente.
+
+  ipcMain.handle('finance:insights:get', (_e, month: number, year: number) =>
+    getFinanceMonthInsight(month, year)
+  )
+
+  ipcMain.handle('finance:insights:saveNotes', (_e, month: number, year: number, notes: string) =>
+    saveFinanceMonthNotes(month, year, notes)
+  )
+
+  ipcMain.handle('finance:insights:generateAnalysis', async (_e, month: number, year: number) => {
+    const insight = getFinanceMonthInsight(month, year)
+    return compareFinanceMonths({
+      month, year,
+      summary:      getFinanceMonthSummary(month, year),
+      breakdown:    getFinanceCategoryBreakdown(month, year),
+      topConcepts:  getFinanceTopConcepts(month, year),
+      topIncreases: getFinanceTopIncreases(month, year),
+      userNotes:    insight?.notes
+    })
+  })
+
+  ipcMain.handle('finance:insights:saveAnalysis', (_e, month: number, year: number, analysis: string) =>
+    saveFinanceMonthAIAnalysis(month, year, analysis)
   )
 
   // ── Visualización / análisis (Fase 3) ───────────────────────────────────────

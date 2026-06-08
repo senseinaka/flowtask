@@ -9,7 +9,8 @@ import { getDb } from '../database/db'
 import type {
   AIOperation, AIConfig, ClaudeModelId,
   ExtractedDespacho, ExtractedFactura, AIAnalysisResult,
-  AI_OPERATION_DEFAULT_MODELS, FinanceMovementStatus
+  AI_OPERATION_DEFAULT_MODELS, FinanceMovementStatus,
+  FinanceMonthSummary, FinanceCategoryBreakdownItem, FinanceRankingConcept, FinanceRankingIncrease
 } from '@shared/types'
 import { AI_OPERATION_DEFAULT_MODELS as DEFAULT_MODELS } from '@shared/types'
 
@@ -1559,4 +1560,81 @@ Devolvé SOLO un array JSON, sin texto adicional ni markdown. Ejemplo:
       }
     })
     .filter((r): r is ParsedFinanceImportRow => r !== null)
+}
+
+// ── Comparador de meses con IA (Dashboard) ───────────────────────────────────
+//
+// El usuario pidió un "comparador con IA" que analice el mes actual contra el
+// anterior y saque conclusiones sobre las variaciones del gasto. Reusamos los
+// datos que el dashboard YA calcula (getFinanceMonthSummary trae totales +
+// comparación + mayor aumento + categoría top; el breakdown y los rankings
+// completan el panorama) — así no se le pide nada nuevo a la DB, solo se le
+// arma a la IA un contexto rico para que interprete en vez de repetir números.
+//
+// Importante: esta función SOLO genera texto — no persiste nada. El guardado
+// (saveFinanceMonthAIAnalysis) es una acción explícita y separada que dispara
+// el botón "Guardar" en la UI, tal como pidió el usuario ("que queden
+// guardadas si le doy guardar y visibles").
+
+export interface FinanceMonthComparisonInput {
+  month:         number
+  year:          number
+  summary:       FinanceMonthSummary
+  breakdown:     FinanceCategoryBreakdownItem[]
+  topConcepts:   FinanceRankingConcept[]
+  topIncreases:  FinanceRankingIncrease[]
+  /** Notas que el usuario ya haya escrito explicando variaciones — si existen, se le pasan como contexto para que la IA las relacione con los números. */
+  userNotes?:    string | null
+}
+
+export async function compareFinanceMonths(input: FinanceMonthComparisonInput): Promise<string> {
+  const client = getClient()
+  const config = getAIConfig()
+  const model  = (config.models['dashboard_chat'] ?? 'claude-haiku-4-5') as string
+
+  const monthName     = MONTH_NAMES_ES[input.month - 1] ?? String(input.month)
+  const prevDate      = new Date(input.year, input.month - 2, 1)
+  const prevMonthName = MONTH_NAMES_ES[prevDate.getMonth()] ?? String(prevDate.getMonth() + 1)
+
+  const contextData = {
+    mes_actual:               `${monthName} ${input.year}`,
+    mes_anterior:             `${prevMonthName} ${prevDate.getFullYear()}`,
+    resumen_comparativo:      input.summary,
+    gasto_por_categoria:      input.breakdown.map(b => ({
+      categoria: b.categoryName, total: b.totalActual, porcentaje_del_mes: b.percent, movimientos: b.count
+    })),
+    conceptos_de_mayor_peso:  input.topConcepts.map(c => ({ concepto: c.conceptName, categoria: c.categoryName, monto: c.amount, porcentaje_del_mes: c.percent })),
+    mayores_aumentos_vs_mes_anterior: input.topIncreases.map(i => ({
+      concepto: i.conceptName, categoria: i.categoryName, monto_anterior: i.previousAmount, monto_actual: i.currentAmount, diferencia: i.diffAmount, variacion_pct: i.diffPercent
+    })),
+    notas_del_usuario: input.userNotes?.trim() || null
+  }
+
+  const systemPrompt = `Sos un asistente financiero personal que ayuda a un usuario en Argentina (montos en pesos ARS) a entender por qué varió su gasto mes a mes.
+
+Te paso datos YA CALCULADOS por el sistema, comparando ${monthName} ${input.year} contra ${prevMonthName} ${prevDate.getFullYear()}: totales, diferencia y variación porcentual, desglose de gasto por categoría, los conceptos de mayor peso del mes y los que más aumentaron respecto al mes anterior. Si el usuario ya dejó notas explicando alguna variación, también te las incluyo.
+
+DATOS:
+${JSON.stringify(contextData, null, 2).slice(0, 70_000)}
+
+Tu tarea: redactar un análisis breve (4-7 líneas o una lista corta de conclusiones) en español que:
+- Indique cómo varió el gasto total respecto al mes anterior (si "resumen_comparativo.prevMonthTotalActual" es null, no hay datos del mes anterior — decilo y enfocate en lo más relevante del mes actual).
+- Señale qué categorías o conceptos puntuales explican la mayor parte de esa variación (apoyate en "gasto_por_categoria" y "mayores_aumentos_vs_mes_anterior").
+- Si hay notas del usuario, relacionalas con los números (confirmá si explican o no la variación observada).
+- Cierre con UNA conclusión práctica (algo a vigilar, una categoría que conviene revisar, una tendencia que se repite, etc.).
+
+Interpretá los números, no los repitas tal cual. Sé concreto y evitá relleno o generalidades vagas ("este mes gastaste más en varias cosas"). Devolvé SOLO el texto del análisis en párrafos cortos o viñetas simples (guiones), sin encabezados ni markdown de títulos, sin saludos ni cierres de cortesía.`
+
+  const resp = await client.messages.create({
+    model,
+    max_tokens: 1536,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: 'Generá el análisis comparativo de este mes contra el anterior.' }]
+  })
+
+  return resp.content
+    .filter(b => b.type === 'text')
+    .map(b => (b as Anthropic.TextBlock).text)
+    .join('\n')
+    .trim()
 }

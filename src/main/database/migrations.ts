@@ -1434,6 +1434,31 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         insertMethod.run(m.id, m.name, m.icon, m.color, now, now)
       }
     }
+  },
+  {
+    version: 58,
+    up: (db) => {
+      // Dashboard mensual — dos campos nuevos que el usuario pidió agregar justo
+      // debajo de las tarjetas de resumen: notas libres (para anotar el "por qué"
+      // de las variaciones del gasto) y un análisis comparativo generado por IA.
+      // A diferencia de summary/breakdown/etc. (todo "al vuelo", nada persiste),
+      // ACÁ SÍ se persiste — son contenido del usuario / resultado guardado a
+      // pedido, no un cómputo derivable de los movimientos. Una fila por
+      // (month, year): UNIQUE garantiza upsert limpio vía ON CONFLICT.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_month_insights (
+          id              TEXT PRIMARY KEY,
+          month           INTEGER NOT NULL,
+          year            INTEGER NOT NULL,
+          notes           TEXT NOT NULL DEFAULT '',
+          ai_analysis     TEXT,
+          ai_generated_at INTEGER,
+          created_at      INTEGER NOT NULL,
+          updated_at      INTEGER NOT NULL,
+          UNIQUE(month, year)
+        );
+      `)
+    }
   }
 ]
 

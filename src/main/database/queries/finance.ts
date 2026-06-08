@@ -6,7 +6,7 @@ import type {
   FinancePaymentMethodEntity, CreateFinancePaymentMethodInput,
   CreateFinanceAccountInput, CreateFinanceCategoryInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
-  FinanceMonthSummary, FinanceMovementStatus, FinancePaymentMethod,
+  FinanceMonthSummary, FinanceMonthInsight, FinanceMovementStatus, FinancePaymentMethod,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportIssue, FinanceImportPreviewItem, FinanceImportPreviewResult,
   FinanceImportConfirmItem, FinanceImportResult
@@ -667,6 +667,51 @@ export function getFinanceMonthSummary(month: number, year: number): FinanceMont
     prevMonthTotalActual, diffAmount, diffPercent,
     upcomingDueCount, biggestIncrease, topCategory
   }
+}
+
+// ── Notas y análisis IA del mes (Dashboard) ───────────────────────────────────
+//
+// Único rincón de "summary/analytics" que SÍ persiste — es contenido del
+// usuario (notas explicando variaciones) y un resultado guardado a pedido
+// (análisis comparativo de IA), no algo derivable de los movimientos. Una fila
+// por (month, year): el UNIQUE de la tabla permite upsert limpio vía
+// ON CONFLICT, sin necesidad de un SELECT previo para decidir INSERT vs UPDATE.
+
+/** Devuelve las notas/análisis guardados para el mes, o null si todavía no se guardó nada. */
+export function getFinanceMonthInsight(month: number, year: number): FinanceMonthInsight | null {
+  return (getDb()
+    .prepare('SELECT * FROM finance_month_insights WHERE month = ? AND year = ?')
+    .get(month, year) as FinanceMonthInsight | undefined) ?? null
+}
+
+/** Guarda (crea o actualiza) las notas del usuario para el mes — no toca el análisis de IA si ya existe uno. */
+export function saveFinanceMonthNotes(month: number, year: number, notes: string): FinanceMonthInsight {
+  const db  = getDb()
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)
+    ON CONFLICT(month, year) DO UPDATE SET notes = excluded.notes, updated_at = excluded.updated_at
+  `).run(randomUUID(), month, year, notes, now, now)
+  return getFinanceMonthInsight(month, year) as FinanceMonthInsight
+}
+
+/**
+ * Persiste el análisis comparativo de IA — se llama recién cuando el usuario
+ * hace click en "Guardar" sobre el análisis recién generado (ver
+ * `compareFinanceMonths` en ai.service): la generación en sí NO guarda nada,
+ * así el usuario puede revisar la conclusión antes de decidir conservarla.
+ * No toca `notes` si ya existe una fila para el mes.
+ */
+export function saveFinanceMonthAIAnalysis(month: number, year: number, analysis: string): FinanceMonthInsight {
+  const db  = getDb()
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at)
+    VALUES (?, ?, ?, '', ?, ?, ?, ?)
+    ON CONFLICT(month, year) DO UPDATE SET ai_analysis = excluded.ai_analysis, ai_generated_at = excluded.ai_generated_at, updated_at = excluded.updated_at
+  `).run(randomUUID(), month, year, analysis, now, now, now)
+  return getFinanceMonthInsight(month, year) as FinanceMonthInsight
 }
 
 // ── Visualización / análisis (Fase 3) ─────────────────────────────────────────

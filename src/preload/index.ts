@@ -28,6 +28,7 @@ import type {
   ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput,
   PersonalContactInfo,
   FinanceAccount, FinanceCategory, FinancePaymentMethodEntity, FinanceConcept, FinanceMovement, FinanceMonthSummary,
+  FinanceMonthInsight,
   FinanceMovementEntry,
   CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinancePaymentMethodInput, CreateFinanceConceptInput, CreateFinanceMovementInput,
   CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
@@ -601,6 +602,12 @@ const api = {
     },
     summary: {
       get: (month: number, year: number): Promise<FinanceMonthSummary> => ipcRenderer.invoke('finance:summary:get', month, year),
+    },
+    insights: {
+      get:              (month: number, year: number): Promise<FinanceMonthInsight | null> => ipcRenderer.invoke('finance:insights:get', month, year),
+      saveNotes:        (month: number, year: number, notes: string): Promise<FinanceMonthInsight>   => ipcRenderer.invoke('finance:insights:saveNotes', month, year, notes),
+      generateAnalysis: (month: number, year: number): Promise<string>                               => ipcRenderer.invoke('finance:insights:generateAnalysis', month, year),
+      saveAnalysis:     (month: number, year: number, analysis: string): Promise<FinanceMonthInsight> => ipcRenderer.invoke('finance:insights:saveAnalysis', month, year, analysis),
     },
     analytics: {
       categoryBreakdown: (month: number, year: number): Promise<FinanceCategoryBreakdownItem[]> =>

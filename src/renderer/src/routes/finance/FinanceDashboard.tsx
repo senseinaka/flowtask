@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import {
   useFinanceMovements, useUpcomingFinanceMovements, useFinanceMonthSummary,
+  useFinanceMonthInsight, useSaveFinanceMonthNotes, useGenerateFinanceMonthAnalysis, useSaveFinanceMonthAnalysis,
   useFinanceConcepts, useFinanceCategories, useFinanceAccounts, useFinancePaymentMethods,
   useCreateFinanceMovement, useUpdateFinanceMovement, useQuickUpdateFinanceMovement, useDeleteFinanceMovement,
   useGenerateMovementsForMonth, useGenerateMovementsFromPreviousMonth,
@@ -223,6 +224,172 @@ function StatsCards({ summary, isLoading }: { summary: FinanceMonthSummary | und
           icon={Tag}
         />
       </div>
+    </div>
+  )
+}
+
+// ── Notas del mes (Dashboard) ─────────────────────────────────────────────────
+//
+// Campo de texto libre para que el usuario anote POR QUÉ varió el gasto este
+// mes (ej: "pagué el seguro del auto en una cuota") — se persiste por mes/año
+// (finance_month_insights) y queda visible al volver a entrar. A diferencia de
+// EditableNotes (click-to-edit puntual sobre una fila), acá el texto puede ser
+// largo, así que es un <textarea> con botón "Guardar" explícito — el usuario
+// decide cuándo confirmar el cambio, no se guarda en cada tecla.
+
+function MonthNotesPanel({ period }: { period: { month: number; year: number } }) {
+  const { data: insight, isLoading } = useFinanceMonthInsight(period.month, period.year)
+  const saveNotes = useSaveFinanceMonthNotes()
+
+  const [draft, setDraft] = useState('')
+  const [dirty, setDirty] = useState(false)
+
+  // Sincroniza el borrador con lo guardado cuando cambian de mes o llegan datos
+  // nuevos de la DB — así nunca se pisa lo recién tipeado con un refetch, pero
+  // al cambiar de período se parte siempre de lo guardado para ESE mes.
+  useEffect(() => {
+    setDraft(insight?.notes ?? '')
+    setDirty(false)
+  }, [insight?.notes, period.month, period.year])
+
+  const handleSave = () => {
+    saveNotes.mutate({ month: period.month, year: period.year, notes: draft }, {
+      onSuccess: () => setDirty(false)
+    })
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-4">
+      <div className="flex items-center gap-2 mb-2.5">
+        <Edit3 size={14} className="text-slate-400" />
+        <h3 className="text-sm font-semibold text-slate-200">Notas del mes</h3>
+        <span className="text-[11px] text-slate-500">— anotá a qué se debieron las variaciones del gasto</span>
+      </div>
+      <textarea
+        value={draft}
+        onChange={e => { setDraft(e.target.value); setDirty(true) }}
+        placeholder='Ej: "Este mes pagué el seguro del auto en una sola cuota, por eso subió tanto Seguros..."'
+        rows={3}
+        disabled={isLoading}
+        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/60 transition-colors resize-y disabled:opacity-50"
+      />
+      <div className="flex items-center justify-end gap-2.5 mt-2">
+        {!dirty && saveNotes.isSuccess && (
+          <span className="text-[11px] text-emerald-400 flex items-center gap-1"><CheckCircle2 size={12} /> Guardado</span>
+        )}
+        {saveNotes.isError && (
+          <span className="text-[11px] text-rose-400">No se pudo guardar — probá de nuevo.</span>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={!dirty || saveNotes.isPending}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saveNotes.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          Guardar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Comparador con IA del mes (Dashboard) ─────────────────────────────────────
+//
+// Genera (a pedido) un análisis comparativo del mes actual contra el anterior
+// usando IA — y lo muestra como BORRADOR hasta que el usuario hace click en
+// "Guardar": recién ahí se persiste (finance_month_insights.ai_analysis) y
+// queda visible al volver a entrar al mes, tal cual pidió Diego ("que queden
+// guardadas si le doy guardar y visibles"). No es un chat efímero: una vez
+// guardado, reemplaza al análisis anterior de ESE mes (un análisis por mes/año).
+
+function MonthAIComparator({ period }: { period: { month: number; year: number } }) {
+  const { data: insight } = useFinanceMonthInsight(period.month, period.year)
+  const generate     = useGenerateFinanceMonthAnalysis()
+  const saveAnalysis = useSaveFinanceMonthAnalysis()
+
+  // Borrador recién generado, todavía sin guardar — se descarta al cambiar de mes.
+  const [draftAnalysis, setDraftAnalysis] = useState<string | null>(null)
+  useEffect(() => { setDraftAnalysis(null); generate.reset(); saveAnalysis.reset() }, [period.month, period.year])
+
+  const handleGenerate = async () => {
+    setDraftAnalysis(null)
+    try {
+      const text = await generate.mutateAsync({ month: period.month, year: period.year })
+      setDraftAnalysis(text)
+    } catch { /* el error ya queda reflejado en generate.isError */ }
+  }
+
+  const handleSave = () => {
+    if (draftAnalysis === null) return
+    saveAnalysis.mutate({ month: period.month, year: period.year, analysis: draftAnalysis }, {
+      onSuccess: () => setDraftAnalysis(null)   // pasa a mostrarse como el análisis guardado (insight.ai_analysis)
+    })
+  }
+
+  // Lo que se muestra: el borrador recién generado (si lo hay y no se guardó
+  // todavía) tiene prioridad; si no, el último análisis guardado para el mes.
+  const isDraft  = draftAnalysis !== null
+  const shown    = draftAnalysis ?? insight?.ai_analysis ?? null
+
+  return (
+    <div className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-4">
+      <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-violet-400" />
+          <h3 className="text-sm font-semibold text-slate-200">Comparador con IA</h3>
+          <span className="text-[11px] text-slate-500">— compara este mes contra el anterior y saca conclusiones</span>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={generate.isPending}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-300 hover:text-white border border-violet-700/50 hover:border-violet-500 bg-violet-900/20 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+        >
+          {generate.isPending ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          {generate.isPending ? 'Analizando…' : (insight?.ai_analysis ? 'Volver a analizar' : 'Analizar con IA')}
+        </button>
+      </div>
+
+      {generate.isError && (
+        <p className="text-[11px] text-rose-400 mb-2.5">
+          No se pudo generar el análisis. Revisá que la IA esté configurada en Ajustes e intentá de nuevo.
+        </p>
+      )}
+
+      {!shown && !generate.isPending && (
+        <p className="text-xs text-slate-500 italic">
+          Todavía no hay un análisis para {getMonthLabel(period.month, period.year)} — tocá "Analizar con IA" para comparar el gasto contra el mes anterior y generar conclusiones.
+        </p>
+      )}
+
+      {shown && (
+        <div className="space-y-2.5">
+          <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line bg-slate-900/40 border border-slate-700/50 rounded-lg px-3.5 py-3">
+            {shown}
+          </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              {isDraft ? (
+                <><Sparkles size={11} className="text-violet-400" /> Recién generado — todavía no se guardó.</>
+              ) : insight?.ai_generated_at ? (
+                <><CheckCircle2 size={11} className="text-emerald-400" /> Guardado · {dayjs(insight.ai_generated_at).format('DD/MM/YYYY HH:mm')}</>
+              ) : null}
+            </span>
+            {isDraft && (
+              <div className="flex items-center gap-2">
+                {saveAnalysis.isError && <span className="text-[11px] text-rose-400">No se pudo guardar — probá de nuevo.</span>}
+                <button
+                  onClick={handleSave}
+                  disabled={saveAnalysis.isPending}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3.5 py-1.5 transition-colors disabled:opacity-50"
+                >
+                  {saveAnalysis.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Guardar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -4287,6 +4454,10 @@ export default function FinanceDashboard() {
             <SmartAlerts alerts={alerts} />
             <MonthAlertsPanel movements={movements} period={period} onQuickUpdate={handleQuickUpdate} onEdit={setFormMovement} />
             <StatsCards summary={summary} isLoading={loadingSummary} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <MonthNotesPanel period={period} />
+              <MonthAIComparator period={period} />
+            </div>
           </>
         )}
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   FinanceAccount, FinanceCategory, FinancePaymentMethodEntity, FinanceConcept, FinanceMovement, FinanceMonthSummary,
+  FinanceMonthInsight,
   FinanceMovementEntry,
   CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinancePaymentMethodInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
@@ -566,6 +567,47 @@ export function useFinanceMonthSummary(month: number, year: number) {
     queryKey: ['finance-summary', month, year],
     queryFn:  (): Promise<FinanceMonthSummary> => window.api.finance.summary.get(month, year),
     staleTime: 30_000
+  })
+}
+
+// ── Notas y comparador con IA del mes (Dashboard) ─────────────────────────────
+//
+// `useGenerateFinanceMonthAnalysis` SOLO pide el texto a la IA — no persiste
+// nada (por eso no invalida queries: el resultado vive como borrador en el
+// componente hasta que el usuario decide guardarlo). `useSaveFinanceMonthAnalysis`
+// es la acción explícita de "Guardar" que pidió Diego — recién ahí se persiste
+// y queda visible al volver a entrar al mes.
+
+export function useFinanceMonthInsight(month: number, year: number) {
+  return useQuery({
+    queryKey: ['finance-month-insight', month, year],
+    queryFn:  (): Promise<FinanceMonthInsight | null> => window.api.finance.insights.get(month, year),
+    staleTime: 30_000
+  })
+}
+
+export function useSaveFinanceMonthNotes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ month, year, notes }: { month: number; year: number; notes: string }): Promise<FinanceMonthInsight> =>
+      window.api.finance.insights.saveNotes(month, year, notes),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['finance-month-insight', vars.month, vars.year] })
+  })
+}
+
+export function useGenerateFinanceMonthAnalysis() {
+  return useMutation({
+    mutationFn: ({ month, year }: { month: number; year: number }): Promise<string> =>
+      window.api.finance.insights.generateAnalysis(month, year)
+  })
+}
+
+export function useSaveFinanceMonthAnalysis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ month, year, analysis }: { month: number; year: number; analysis: string }): Promise<FinanceMonthInsight> =>
+      window.api.finance.insights.saveAnalysis(month, year, analysis),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['finance-month-insight', vars.month, vars.year] })
   })
 }
 
