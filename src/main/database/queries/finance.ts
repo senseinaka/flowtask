@@ -861,13 +861,57 @@ export function confirmFinanceImport(
   const findExisting = db.prepare(
     'SELECT id FROM finance_movements WHERE concept_id = ? AND month = ? AND year = ?'
   )
+  const insertEntry = db.prepare(`
+    INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
 
   let imported = 0, updated = 0, skipped = 0
+
+  // Conceptos "de varias cargas" (tracks_multiple_entries) tienen UN solo
+  // movimiento por (concepto, período) que acumula una sub-lista de entradas
+  // — pero el archivo/texto importado puede traer VARIAS filas para el mismo
+  // concepto (ej. dos compras de supermercado distintas en el mismo mes). Sin
+  // este mapeo, la salvaguarda de abajo (`findExisting`) detectaba el
+  // movimiento recién insertado por la primera fila y descartaba todas las
+  // siguientes como "ya existe" — el bug reportado: "toma una sola carga".
+  // Acá, en cambio, cada fila adicional para el mismo concepto se agrega como
+  // una entrada más al MISMO movimiento, y `recalcMovementFromEntries` se
+  // encarga de recalcular `amount_actual`/`status`/`payment_date` como la
+  // suma — el mismo mecanismo que usa el registro manual de cargas.
+  const movementIdByConceptId = new Map<string, string>()
 
   const run = db.transaction((list: FinanceImportConfirmItem[]) => {
     for (const item of list) {
       const concept = conceptsById.get(item.conceptId)
       if (!concept) { skipped++; continue }
+
+      if (concept.tracks_multiple_entries) {
+        // Reusar, en este orden: (a) el movimiento que el usuario eligió
+        // sobreescribir desde el preview, (b) el que ya creamos/reutilizamos
+        // para este concepto en esta misma corrida, o (c) el que ya existía
+        // en la DB para este período. Si no hay ninguno, se crea uno nuevo
+        // "vacío" (sin monto real todavía — lo define la suma de cargas).
+        let movementId = item.overwriteMovementId
+          ?? movementIdByConceptId.get(item.conceptId)
+          ?? (findExisting.get(item.conceptId, month, year) as { id: string } | undefined)?.id
+          ?? null
+
+        if (!movementId) {
+          movementId = randomUUID()
+          insert.run(
+            movementId, item.conceptId, month, year,
+            concept.default_amount, null, initialStatusForConcept(concept), concept.payment_method,
+            null, '', now, now
+          )
+        }
+        movementIdByConceptId.set(item.conceptId, movementId)
+
+        insertEntry.run(randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now)
+        recalcMovementFromEntries(db, movementId)
+        imported++
+        continue
+      }
 
       if (item.overwriteMovementId) {
         update.run(item.amount, item.status, item.paymentDate, item.notes, now, item.overwriteMovementId)

@@ -407,6 +407,94 @@ function EditableInlineTitle({ value, onSave }: { value: string; onSave: (v: str
   )
 }
 
+// Paleta curada de emojis frecuentes para categorías/cuentas de Finanzas —
+// cubre los rubros típicos (vivienda, transporte, comida, salud, ocio, etc.)
+// para que elegir un ícono no dependa de tener un selector de emojis del
+// sistema operativo a mano ni de acordarse cómo se escribe cada uno.
+const FINANCE_ICON_PALETTE = [
+  '🏷️', '🏠', '🏢', '🚗', '⛽', '🚌', '✈️',
+  '🍽️', '🛒', '☕', '🍔', '🍺',
+  '💡', '🔌', '🚰', '📱', '🌐', '📺',
+  '💳', '💰', '🏦', '🪙', '🧾',
+  '🏥', '💊', '🏋️', '⚽', '🎮', '🎬', '🎵', '🎁',
+  '🎓', '📚', '👕', '🐶', '🧹', '🔧', '🧰', '📦'
+]
+
+/**
+ * Selector de ícono (emoji) para categorías y cuentas — antes era un simple
+ * `<input>` de texto donde había que pegar o tipear el emoji a mano. Ahora
+ * muestra un botón con el ícono actual que, al hacer clic, abre un panel con
+ * una paleta curada (clic directo) + un campo de texto para emojis fuera de
+ * la paleta. `onChange` se dispara recién al elegir/confirmar — no en cada
+ * tecleo — para no disparar un update por cada carácter intermedio.
+ */
+function EmojiPickerButton({ value, onChange, title }: { value: string; onChange: (emoji: string) => void; title?: string }) {
+  const [open, setOpen]     = useState(false)
+  const [custom, setCustom] = useState(value)
+
+  const openPicker = () => { setCustom(value); setOpen(true) }
+  const pick = (emoji: string) => { onChange(emoji); setOpen(false) }
+  const confirmCustom = () => { const trimmed = custom.trim(); if (trimmed) pick(trimmed) }
+
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => (open ? setOpen(false) : openPicker())}
+        title={title ?? 'Elegir ícono (emoji)'}
+        className="w-9 h-9 flex items-center justify-center text-base bg-slate-900/60 border border-slate-700 hover:border-emerald-500/60 rounded-lg transition-colors"
+      >
+        {value || '🏷️'}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[80]" onClick={() => setOpen(false)} />
+          <div
+            className="absolute z-[90] top-full left-0 mt-1.5 w-60 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl p-3 space-y-2.5"
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Elegí un ícono</p>
+            <div className="grid grid-cols-7 gap-1">
+              {FINANCE_ICON_PALETTE.map(emoji => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => pick(emoji)}
+                  className={cn(
+                    'w-7 h-7 flex items-center justify-center text-base rounded-lg transition-colors hover:bg-slate-700',
+                    value === emoji && 'bg-emerald-600/30 ring-1 ring-emerald-500/60'
+                  )}
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5 pt-2 border-t border-slate-700/70">
+              <input
+                autoFocus
+                value={custom}
+                onChange={e => setCustom(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmCustom(); if (e.key === 'Escape') setOpen(false) }}
+                maxLength={4}
+                placeholder="Otro emoji…"
+                className={cn(inputCls, 'text-center text-sm py-1')}
+              />
+              <button
+                type="button"
+                onClick={confirmCustom}
+                className="text-[10px] font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-2.5 py-[7px] transition-colors flex-shrink-0"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Encabezado de columna ordenable ───────────────────────────────────────────
 
 function SortableHeader({ label, sortKey, currentKey, currentDir, onSort, className }: {
@@ -592,7 +680,7 @@ function MovementsTable({
             <SortableHeader label="Categoría"  sortKey="category" currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
             <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Tipo</th>
             <SortableHeader label="Mes anterior" sortKey="previous" currentKey={sortKey} currentDir={sortDir} onSort={onSort} className="text-right" />
-            <SortableHeader label="Real"       sortKey="actual"    currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
+            <SortableHeader label="Mes actual" sortKey="actual"    currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
             <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Var.</th>
             <SortableHeader label="Estado"       sortKey="status"       currentKey={sortKey} currentDir={sortDir} onSort={onSort} />
             <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Método</th>
@@ -1265,12 +1353,19 @@ function MovementForm({ movement, concepts, period, onClose }: {
         month:            period.month,
         year:             period.year,
         amount_estimated: Number(form.amount_estimated.replace(',', '.')) || 0,
-        amount_actual:    form.amount_actual.trim() === '' ? null : (Number(form.amount_actual.replace(',', '.')) || 0),
-        status:           form.status,
         payment_method:   form.payment_method,
-        payment_date:     form.payment_date ? dayjs(form.payment_date, 'YYYY-MM-DD').valueOf() : null,
         due_date:         form.due_date ? dayjs(form.due_date, 'YYYY-MM-DD').valueOf() : null,
         notes:            form.notes,
+        // OJO: para conceptos "de varias cargas" (tracksEntries), monto real,
+        // estado y fecha de pago los gobierna el backend en base al registro de
+        // cargas (ver recalcMovementFromEntries). Si los mandáramos acá pisaríamos
+        // ese cálculo con la "foto" vieja que tenía el formulario al abrirse —
+        // por eso se omiten del todo: el update parcial deja esas columnas intactas.
+        ...(tracksEntries ? {} : {
+          amount_actual: form.amount_actual.trim() === '' ? null : (Number(form.amount_actual.replace(',', '.')) || 0),
+          status:        form.status,
+          payment_date:  form.payment_date ? dayjs(form.payment_date, 'YYYY-MM-DD').valueOf() : null,
+        })
       }
       if (isEdit) await update.mutateAsync({ id: movement!.id, data })
       else        await create.mutateAsync(data)
@@ -2303,6 +2398,20 @@ function ImportManager({
                                   <FilePlus2 size={11} /> Crear concepto nuevo
                                 </button>
                               )}
+                              {(() => {
+                                // Aviso para conceptos "de varias cargas": si el mismo concepto
+                                // aparece en más de una fila de este lote (ej. dos compras de
+                                // supermercado distintas), todas se combinan como cargas dentro
+                                // de un único movimiento — no se pierden ni se sobrescriben entre sí.
+                                const sc = concepts.find(c => c.id === row.conceptId)
+                                if (!sc?.tracks_multiple_entries) return null
+                                return (
+                                  <p className="mt-1 text-[10px] text-purple-400/90 flex items-center gap-1">
+                                    <CopyPlus size={11} className="flex-shrink-0" />
+                                    "{sc.name}" acepta varias cargas — si aparece en más de una fila, se suman todas en un mismo movimiento.
+                                  </p>
+                                )
+                              })()}
                             </div>
                             <div>
                               <label className={labelCls}>Monto</label>
@@ -2451,7 +2560,40 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
     recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0
   })
 
+  // Edición de un concepto existente: antes solo se podían tocar nombre,
+  // "varias cargas" y activo/inactivo desde esta lista — para cambiar tipo de
+  // gasto, categoría, cuenta, monto habitual, método de pago o recurrencia
+  // había que borrar el concepto y crearlo de nuevo. Ahora "Editar" abre un
+  // formulario inline (mismo layout que "Nuevo concepto") precargado con los
+  // valores actuales, y se guarda con un único update parcial.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<Partial<CreateFinanceConceptInput> | null>(null)
+
+  const startEdit = (c: FinanceConcept) => {
+    setShowNew(false)
+    setEditDraft({
+      category_id:      c.category_id,
+      account_id:       c.account_id,
+      default_amount:   c.default_amount,
+      expense_type:     c.expense_type,
+      payment_method:   c.payment_method,
+      recurrence:       c.recurrence,
+      recurrence_month: c.recurrence_month
+    })
+    setEditingId(c.id)
+  }
+
+  const cancelEdit = () => { setEditingId(null); setEditDraft(null) }
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editDraft) return
+    await update.mutateAsync({ id: editingId, data: editDraft })
+    cancelEdit()
+  }
+
   const startNew = () => {
+    setEditingId(null)
+    setEditDraft(null)
     setDraft({
       category_id: categories[0]?.id ?? '',
       account_id:  accounts[0]?.id ?? '',
@@ -2607,58 +2749,188 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
 
           {isLoading && <p className="text-sm text-slate-500 py-6 text-center">Cargando conceptos...</p>}
 
-          {concepts.map(c => (
-            <div key={c.id} className={cn(
-              'flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 transition-colors',
-              c.is_active ? 'border-slate-800 bg-slate-800/40' : 'border-slate-800/50 bg-slate-900/40 opacity-60'
-            )}>
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.category?.color ?? '#6366f1' }} />
-                <div className="min-w-0">
-                  <EditableInlineTitle value={c.name} onSave={name => update.mutate({ id: c.id, data: { name } })} />
-                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                    {c.category?.icon} {c.category?.name} · {formatCurrency(c.default_amount)} · {FINANCE_EXPENSE_TYPE_LABELS[c.expense_type]}
-                    {' · '}{FINANCE_PAYMENT_METHOD_LABELS[c.payment_method]} · {FINANCE_RECURRENCE_LABELS[c.recurrence]}
-                    {c.recurrence === 'annual' && (
-                      <span className="capitalize"> ({getMonthName(c.recurrence_month ?? (new Date(c.created_at).getMonth() + 1))})</span>
+          {concepts.map(c => {
+            const isEditing = editingId === c.id
+
+            if (isEditing && editDraft) {
+              return (
+                <div key={c.id} className="rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                    <Edit3 size={13} /> Editando "{c.name}"
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Categoría</label>
+                      <select
+                        value={editDraft.category_id}
+                        onChange={e => setEditDraft(d => d && ({ ...d, category_id: e.target.value }))}
+                        className={inputCls}
+                      >
+                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Cuenta</label>
+                      <select
+                        value={editDraft.account_id}
+                        onChange={e => setEditDraft(d => d && ({ ...d, account_id: e.target.value }))}
+                        className={inputCls}
+                      >
+                        {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelCls}>Monto habitual</label>
+                      <input
+                        type="number"
+                        value={editDraft.default_amount}
+                        onChange={e => setEditDraft(d => d && ({ ...d, default_amount: Number(e.target.value) || 0 }))}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Tipo de gasto</label>
+                      <select
+                        value={editDraft.expense_type}
+                        onChange={e => setEditDraft(d => d && ({ ...d, expense_type: e.target.value as FinanceExpenseType }))}
+                        className={cn(
+                          inputCls,
+                          editDraft.expense_type === 'fixed' ? 'text-sky-300' : 'text-amber-300'
+                        )}
+                      >
+                        {(Object.keys(FINANCE_EXPENSE_TYPE_LABELS) as Array<keyof typeof FINANCE_EXPENSE_TYPE_LABELS>).map(t => (
+                          <option key={t} value={t}>{FINANCE_EXPENSE_TYPE_LABELS[t]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Método de pago habitual</label>
+                      <select
+                        value={editDraft.payment_method}
+                        onChange={e => setEditDraft(d => d && ({ ...d, payment_method: e.target.value as FinancePaymentMethod }))}
+                        className={inputCls}
+                      >
+                        {(Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as Array<keyof typeof FINANCE_PAYMENT_METHOD_LABELS>).map(p => (
+                          <option key={p} value={p}>{FINANCE_PAYMENT_METHOD_LABELS[p]}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Recurrencia</label>
+                      <select
+                        value={editDraft.recurrence}
+                        onChange={e => {
+                          const recurrence = e.target.value as FinanceRecurrence
+                          setEditDraft(d => d && ({ ...d, recurrence, recurrence_month: recurrence === 'annual' ? (d.recurrence_month ?? new Date().getMonth() + 1) : null }))
+                        }}
+                        className={inputCls}
+                      >
+                        {(Object.keys(FINANCE_RECURRENCE_LABELS) as Array<keyof typeof FINANCE_RECURRENCE_LABELS>).map(r => (
+                          <option key={r} value={r}>{FINANCE_RECURRENCE_LABELS[r]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {editDraft.recurrence === 'annual' && (
+                      <div>
+                        <label className={labelCls}>Mes del año en que se paga</label>
+                        <select
+                          value={editDraft.recurrence_month ?? new Date().getMonth() + 1}
+                          onChange={e => setEditDraft(d => d && ({ ...d, recurrence_month: Number(e.target.value) }))}
+                          className={inputCls}
+                        >
+                          {MONTH_OPTIONS.map(m => (
+                            <option key={m.value} value={m.value} className="capitalize">{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     )}
-                    {!!c.tracks_multiple_entries && (
-                      <span className="text-purple-400"> · acepta varias cargas</span>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button onClick={cancelEdit} className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5">Cancelar</button>
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={update.isPending}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors"
+                    >
+                      {update.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Guardar cambios
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            return (
+              <div key={c.id} className={cn(
+                'flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 transition-colors',
+                c.is_active ? 'border-slate-800 bg-slate-800/40' : 'border-slate-800/50 bg-slate-900/40 opacity-60'
+              )}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.category?.color ?? '#6366f1' }} />
+                  <div className="min-w-0">
+                    <EditableInlineTitle value={c.name} onSave={name => update.mutate({ id: c.id, data: { name } })} />
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {c.category?.icon} {c.category?.name} · {c.account?.icon} {c.account?.name} · {formatCurrency(c.default_amount)}
+                      {' · '}{FINANCE_PAYMENT_METHOD_LABELS[c.payment_method]} · {FINANCE_RECURRENCE_LABELS[c.recurrence]}
+                      {c.recurrence === 'annual' && (
+                        <span className="capitalize"> ({getMonthName(c.recurrence_month ?? (new Date(c.created_at).getMonth() + 1))})</span>
+                      )}
+                      {!!c.tracks_multiple_entries && (
+                        <span className="text-purple-400"> · acepta varias cargas</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => update.mutate({ id: c.id, data: { expense_type: c.expense_type === 'fixed' ? 'variable' : 'fixed' } })}
+                    className={cn(
+                      'text-[10px] px-2 py-1 rounded-lg font-medium border transition-colors',
+                      c.expense_type === 'fixed'
+                        ? 'border-sky-700/50 text-sky-400 hover:bg-sky-900/20'
+                        : 'border-amber-700/50 text-amber-400 hover:bg-amber-900/20'
                     )}
-                  </p>
+                    title={c.expense_type === 'fixed' ? 'Gasto fijo — clic para marcar como variable' : 'Gasto variable — clic para marcar como fijo'}
+                  >
+                    {c.expense_type === 'fixed' ? '📌 Fijo' : '📈 Variable'}
+                  </button>
+                  <button
+                    onClick={() => update.mutate({ id: c.id, data: { tracks_multiple_entries: c.tracks_multiple_entries ? 0 : 1 } })}
+                    className={cn(
+                      'text-[10px] px-2 py-1 rounded-lg font-medium border transition-colors',
+                      c.tracks_multiple_entries
+                        ? 'border-purple-700/50 text-purple-400 hover:bg-purple-900/20'
+                        : 'border-slate-700 text-slate-500 hover:bg-slate-800'
+                    )}
+                    title={c.tracks_multiple_entries ? 'Acepta varias cargas por mes (clic para desactivar)' : 'Activar registro de varias cargas por mes (ej: nafta, súper)'}
+                  >
+                    {c.tracks_multiple_entries ? '☰ Varias cargas' : '☰ Una carga'}
+                  </button>
+                  <button
+                    onClick={() => toggleActive(c)}
+                    className={cn(
+                      'text-[10px] px-2 py-1 rounded-lg font-medium border transition-colors',
+                      c.is_active
+                        ? 'border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/20'
+                        : 'border-slate-700 text-slate-500 hover:bg-slate-800'
+                    )}
+                    title={c.is_active ? 'Marcar como inactivo (no genera movimientos nuevos)' : 'Reactivar concepto'}
+                  >
+                    {c.is_active ? 'Activo' : 'Inactivo'}
+                  </button>
+                  <button onClick={() => startEdit(c)} className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-700/50 transition-colors" title="Editar categoría, cuenta, monto, método de pago y recurrencia">
+                    <Edit3 size={13} />
+                  </button>
+                  <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-700/50 transition-colors" title="Eliminar">
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  onClick={() => update.mutate({ id: c.id, data: { tracks_multiple_entries: c.tracks_multiple_entries ? 0 : 1 } })}
-                  className={cn(
-                    'text-[10px] px-2 py-1 rounded-lg font-medium border transition-colors',
-                    c.tracks_multiple_entries
-                      ? 'border-purple-700/50 text-purple-400 hover:bg-purple-900/20'
-                      : 'border-slate-700 text-slate-500 hover:bg-slate-800'
-                  )}
-                  title={c.tracks_multiple_entries ? 'Acepta varias cargas por mes (clic para desactivar)' : 'Activar registro de varias cargas por mes (ej: nafta, súper)'}
-                >
-                  {c.tracks_multiple_entries ? '☰ Varias cargas' : '☰ Una carga'}
-                </button>
-                <button
-                  onClick={() => toggleActive(c)}
-                  className={cn(
-                    'text-[10px] px-2 py-1 rounded-lg font-medium border transition-colors',
-                    c.is_active
-                      ? 'border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/20'
-                      : 'border-slate-700 text-slate-500 hover:bg-slate-800'
-                  )}
-                  title={c.is_active ? 'Marcar como inactivo (no genera movimientos nuevos)' : 'Reactivar concepto'}
-                >
-                  {c.is_active ? 'Activo' : 'Inactivo'}
-                </button>
-                <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-700/50 transition-colors" title="Eliminar">
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
@@ -2756,13 +3028,11 @@ function CategoriesManager({ onClose }: { onClose: () => void }) {
                   <input autoFocus value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} className={inputCls} placeholder="Ej: Servicios" />
                 </div>
                 <div>
-                  <label className={labelCls}>Ícono (emoji)</label>
-                  <input
-                    value={draft.icon ?? ''}
-                    onChange={e => setDraft(d => ({ ...d, icon: e.target.value }))}
-                    className={cn(inputCls, 'text-center text-lg')}
-                    placeholder="🏷️"
-                    maxLength={4}
+                  <label className={labelCls}>Ícono</label>
+                  <EmojiPickerButton
+                    value={draft.icon ?? '🏷️'}
+                    onChange={icon => setDraft(d => ({ ...d, icon }))}
+                    title="Elegir ícono (emoji) para la categoría"
                   />
                 </div>
                 <div>
@@ -2798,12 +3068,10 @@ function CategoriesManager({ onClose }: { onClose: () => void }) {
                     title="Cambiar color"
                     className="w-7 h-7 rounded-full cursor-pointer border border-slate-700 bg-transparent p-0 overflow-hidden flex-shrink-0"
                   />
-                  <input
+                  <EmojiPickerButton
                     value={cat.icon}
-                    onChange={e => update.mutate({ id: cat.id, data: { icon: e.target.value } })}
-                    title="Cambiar ícono (emoji)"
-                    maxLength={4}
-                    className="w-9 text-center text-base bg-transparent border border-transparent hover:border-slate-700 focus:border-emerald-500/60 rounded px-1 py-0.5 focus:outline-none flex-shrink-0"
+                    onChange={icon => update.mutate({ id: cat.id, data: { icon } })}
+                    title="Cambiar ícono (emoji) de la categoría"
                   />
                   <div className="min-w-0">
                     <EditableInlineTitle value={cat.name} onSave={name => update.mutate({ id: cat.id, data: { name } })} />
