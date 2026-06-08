@@ -14,15 +14,16 @@ import {
   Trophy, Award, Flame, LayoutGrid, History as HistoryIcon, CopyPlus,
   Upload, Download, FileSpreadsheet, FileText, Lock, Unlock, ShieldCheck, ShieldOff,
   KeyRound, Eye, EyeOff, ChevronDown, AlertOctagon, Receipt,
-  Sparkles, ClipboardPaste, FilePlus2
+  Sparkles, ClipboardPaste, FilePlus2, CreditCard
 } from 'lucide-react'
 import {
   useFinanceMovements, useUpcomingFinanceMovements, useFinanceMonthSummary,
-  useFinanceConcepts, useFinanceCategories, useFinanceAccounts,
+  useFinanceConcepts, useFinanceCategories, useFinanceAccounts, useFinancePaymentMethods,
   useCreateFinanceMovement, useUpdateFinanceMovement, useQuickUpdateFinanceMovement, useDeleteFinanceMovement,
   useGenerateMovementsForMonth, useGenerateMovementsFromPreviousMonth,
   useCreateFinanceConcept, useUpdateFinanceConcept, useDeleteFinanceConcept,
   useCreateFinanceCategory, useUpdateFinanceCategory, useDeleteFinanceCategory,
+  useCreateFinancePaymentMethod, useUpdateFinancePaymentMethod, useDeleteFinancePaymentMethod, getPaymentMethodLabel,
   useMovementEntries, useAddMovementEntry, useUpdateMovementEntry, useRemoveMovementEntry,
   useFinanceCategoryBreakdown, useFinanceHistory, useFinanceTopConcepts, useFinanceTopIncreases,
   getDiffColor, formatCurrency, formatFinanceDate, getMonthLabel, getMonthName, MONTH_OPTIONS,
@@ -37,9 +38,9 @@ import {
 } from '../../hooks/useFinance'
 import type {
   FinanceMovement, FinanceConcept, FinanceMonthSummary, FinanceCategory, FinanceAccount,
-  FinanceMovementEntry,
+  FinancePaymentMethodEntity, FinanceMovementEntry,
   FinanceMovementStatus, FinancePaymentMethod, FinanceExpenseType, FinanceRecurrence,
-  CreateFinanceMovementInput, CreateFinanceConceptInput, CreateFinanceCategoryInput,
+  CreateFinanceMovementInput, CreateFinanceConceptInput, CreateFinanceCategoryInput, CreateFinancePaymentMethodInput,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewItem, FinanceImportConfirmItem, FinanceImportIssue, FinanceImportResult
 } from '@shared/types'
@@ -307,6 +308,50 @@ function EditableStatus({ movement, onSave }: { movement: FinanceMovement; onSav
   )
 }
 
+/**
+ * Método de pago editable inline — mismo patrón "click para editar" que
+ * EditableNotes/EditableDate: texto por defecto, se vuelve un <select> enfocado
+ * al hacer click, y se guarda y cierra apenas se elige una opción (sin
+ * necesidad de blur/Enter).
+ *
+ * Las opciones salen de la lista dinámica `useFinancePaymentMethods` (incluye
+ * los métodos personalizados que el usuario haya creado vía "Métodos de pago"),
+ * con fallback al mapa estático de los 6 "de fábrica" mientras carga.
+ */
+function EditablePaymentMethod({ value, onSave }: { value: FinancePaymentMethod; onSave: (v: FinancePaymentMethod) => void }) {
+  const [editing, setEditing] = useState(false)
+  const { data: methods } = useFinancePaymentMethods()
+  const options = methods?.length
+    ? methods
+    : (Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as string[]).map(id => ({ id, name: FINANCE_PAYMENT_METHOD_LABELS[id] }))
+
+  if (editing) {
+    return (
+      <select
+        autoFocus
+        value={value}
+        onChange={e => { onSave(e.target.value as FinancePaymentMethod); setEditing(false) }}
+        onBlur={() => setEditing(false)}
+        className="bg-slate-700 border border-emerald-500/60 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
+      >
+        {options.map(p => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="text-left text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 rounded px-1.5 py-0.5 -mx-1.5 transition-colors"
+      title="Click para cambiar el método de pago"
+    >
+      {getPaymentMethodLabel(methods, value)}
+    </button>
+  )
+}
+
 function EditableDate({ value, onSave }: { value: number | null; onSave: (v: number | null) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState(value ? dayjs(value).format('YYYY-MM-DD') : '')
@@ -523,12 +568,13 @@ function SortableHeader({ label, sortKey, currentKey, currentDir, onSort, classN
 const selectCls = 'bg-slate-700/60 border border-slate-600 rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-colors'
 
 function FiltersBar({
-  filters, onChange, categories, accounts, resultCount, totalCount
+  filters, onChange, categories, accounts, paymentMethods, resultCount, totalCount
 }: {
   filters: MovementFilters
   onChange: (f: MovementFilters) => void
   categories: FinanceCategory[]
   accounts: FinanceAccount[]
+  paymentMethods: FinancePaymentMethodEntity[]
   resultCount: number
   totalCount: number
 }) {
@@ -572,8 +618,8 @@ function FiltersBar({
 
         <select value={filters.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} className={selectCls}>
           <option value="all">Todos los métodos de pago</option>
-          {(Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as FinancePaymentMethod[]).map(p => (
-            <option key={p} value={p}>{FINANCE_PAYMENT_METHOD_LABELS[p]}</option>
+          {paymentMethods.map(p => (
+            <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
           ))}
         </select>
 
@@ -616,7 +662,7 @@ function MovementsTable({
   movements, onQuickUpdate, onEdit, onDelete, selectedIds, onToggleSelect, onToggleSelectAll
 }: {
   movements: FinanceMovement[]
-  onQuickUpdate: (id: string, data: { amount_actual?: number | null; status?: FinanceMovementStatus; payment_date?: number | null; due_date?: number | null; notes?: string }) => void
+  onQuickUpdate: (id: string, data: { amount_actual?: number | null; status?: FinanceMovementStatus; payment_method?: FinancePaymentMethod; payment_date?: number | null; due_date?: number | null; notes?: string }) => void
   onEdit:   (m: FinanceMovement) => void
   onDelete: (m: FinanceMovement) => void
   selectedIds: Set<string>
@@ -692,7 +738,15 @@ function MovementsTable({
         </thead>
         <tbody className="divide-y divide-slate-800/70">
           {sorted.map(m => {
-            const diffPct = m.amount_actual !== null ? diffPercentOf(m.amount_actual, m.amount_estimated) : null
+            // "Var." compara el monto real de este mes contra el del mes anterior
+            // (no contra el estimado — esa columna ya no se muestra acá desde que
+            // "Mes anterior"/"Mes actual" reemplazaron a "Estimado"/"Real"). Si
+            // falta el dato de cualquiera de los dos meses (o el anterior fue $0,
+            // lo que volvería el % indefinido/infinito), no se calcula nada — se
+            // muestra "—" en vez de un engañoso "0.0%".
+            const diffPct = (m.amount_actual !== null && m.previous_month_amount != null)
+              ? diffPercentOf(m.amount_actual, m.previous_month_amount)
+              : null
             const catColor  = m.concept?.category?.color ?? '#6366f1'
             return (
               <tr key={m.id} className={cn('hover:bg-slate-800/40 transition-colors group', selectedIds.has(m.id) && 'bg-emerald-500/5')}>
@@ -746,18 +800,17 @@ function MovementsTable({
                   <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {m.concept?.tracks_multiple_entries ? (
-                    // La variación compara una estimación única contra la SUMA de
-                    // varias cargas — el % puede ser engañoso (ej: "+200%" solo
-                    // porque hubo 3 cargas en vez de 1). Se aclara en vez de alarmar.
-                    <span className="text-[10px] text-slate-600 italic" title="No se compara: el monto real acá es la suma de varias cargas, no una sola estimación.">
-                      suma de cargas
-                    </span>
-                  ) : diffPct !== null ? (
-                    <span className="text-xs font-semibold" style={{ color: getDiffColor(diffPct) }}>
+                  {diffPct !== null ? (
+                    <span
+                      className="text-xs font-semibold"
+                      style={{ color: getDiffColor(diffPct) }}
+                      title={`${formatCurrency(m.previous_month_amount)} → ${formatCurrency(m.amount_actual)} respecto del mes anterior`}
+                    >
                       {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
                     </span>
-                  ) : <span className="text-slate-600 text-xs">—</span>}
+                  ) : (
+                    <span className="text-slate-600 text-xs" title="Sin datos suficientes para comparar (falta el monto real de este mes o del anterior)">—</span>
+                  )}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="flex items-center gap-1">
@@ -773,8 +826,8 @@ function MovementsTable({
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">
-                  {FINANCE_PAYMENT_METHOD_LABELS[m.payment_method]}
+                <td className="px-3 py-2 text-xs whitespace-nowrap">
+                  <EditablePaymentMethod value={m.payment_method} onSave={v => onQuickUpdate(m.id, { payment_method: v })} />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <EditableDate value={m.payment_date} onSave={v => onQuickUpdate(m.id, { payment_date: v })} />
@@ -1293,6 +1346,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
   const isEdit = !!movement
   const create = useCreateFinanceMovement()
   const update = useUpdateFinanceMovement()
+  const { data: paymentMethods = [] } = useFinancePaymentMethods()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -1457,8 +1511,8 @@ function MovementForm({ movement, concepts, period, onClose }: {
             <div>
               <label className={labelCls}>Método de pago</label>
               <select value={form.payment_method} onChange={e => upd('payment_method', e.target.value as FinancePaymentMethod)} className={inputCls}>
-                {(Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as FinancePaymentMethod[]).map(p => (
-                  <option key={p} value={p}>{FINANCE_PAYMENT_METHOD_LABELS[p]}</option>
+                {paymentMethods.map(p => (
+                  <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
                 ))}
               </select>
             </div>
@@ -2548,6 +2602,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
   const { data: concepts   = [], isLoading } = useFinanceConcepts()
   const { data: categories = [] } = useFinanceCategories()
   const { data: accounts   = [] } = useFinanceAccounts()
+  const { data: paymentMethods = [] } = useFinancePaymentMethods()
   const create = useCreateFinanceConcept()
   const update = useUpdateFinanceConcept()
   const remove = useDeleteFinanceConcept()
@@ -2684,8 +2739,8 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                 <div>
                   <label className={labelCls}>Método de pago habitual</label>
                   <select value={draft.payment_method} onChange={e => setDraft(d => ({ ...d, payment_method: e.target.value as CreateFinanceConceptInput['payment_method'] }))} className={inputCls}>
-                    {(Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as Array<keyof typeof FINANCE_PAYMENT_METHOD_LABELS>).map(p => (
-                      <option key={p} value={p}>{FINANCE_PAYMENT_METHOD_LABELS[p]}</option>
+                    {paymentMethods.map(p => (
+                      <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
                     ))}
                   </select>
                 </div>
@@ -2812,8 +2867,8 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                         onChange={e => setEditDraft(d => d && ({ ...d, payment_method: e.target.value as FinancePaymentMethod }))}
                         className={inputCls}
                       >
-                        {(Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as Array<keyof typeof FINANCE_PAYMENT_METHOD_LABELS>).map(p => (
-                          <option key={p} value={p}>{FINANCE_PAYMENT_METHOD_LABELS[p]}</option>
+                        {paymentMethods.map(p => (
+                          <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
                         ))}
                       </select>
                     </div>
@@ -2874,7 +2929,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                     <EditableInlineTitle value={c.name} onSave={name => update.mutate({ id: c.id, data: { name } })} />
                     <p className="text-[11px] text-slate-500 truncate mt-0.5">
                       {c.category?.icon} {c.category?.name} · {c.account?.icon} {c.account?.name} · {formatCurrency(c.default_amount)}
-                      {' · '}{FINANCE_PAYMENT_METHOD_LABELS[c.payment_method]} · {FINANCE_RECURRENCE_LABELS[c.recurrence]}
+                      {' · '}{getPaymentMethodLabel(paymentMethods, c.payment_method)} · {FINANCE_RECURRENCE_LABELS[c.recurrence]}
                       {c.recurrence === 'annual' && (
                         <span className="capitalize"> ({getMonthName(c.recurrence_month ?? (new Date(c.created_at).getMonth() + 1))})</span>
                       )}
@@ -3096,6 +3151,178 @@ function CategoriesManager({ onClose }: { onClose: () => void }) {
 
           {!isLoading && categories.length === 0 && (
             <p className="text-sm text-slate-500 py-6 text-center">No hay categorías todavía. Creá la primera con "Nueva categoría".</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Gestión de métodos de pago — mismo patrón visual e interacción que
+ * CategoriesManager: modal con lista + alta rápida + edición inline (emoji,
+ * color, nombre vía EditableInlineTitle/EmojiPickerButton).
+ *
+ * Diferencia clave con categorías/cuentas: `payment_method` ya NO es un union
+ * type fijo sino un id de texto libre (ver comentario en `FinancePaymentMethod`,
+ * types.ts) y NO es una foreign key — no hay `ON DELETE CASCADE`. Borrar un
+ * método entonces no borra nada en cascada, pero puede dejar conceptos y
+ * movimientos "huérfanos" (su `payment_method` deja de resolver a un nombre
+ * conocido y se muestra el id crudo como fallback). Por eso se avisa cuántos
+ * conceptos lo usan antes de confirmar — análogo en espíritu a la advertencia
+ * de borrado en cascada de categorías, aunque la consecuencia acá es distinta
+ * (referencias huérfanas, no pérdida de datos).
+ */
+function PaymentMethodsManager({ onClose }: { onClose: () => void }) {
+  const { data: methods  = [], isLoading } = useFinancePaymentMethods()
+  const { data: concepts = [] } = useFinanceConcepts()
+  const create = useCreateFinancePaymentMethod()
+  const update = useUpdateFinancePaymentMethod()
+  const remove = useDeleteFinancePaymentMethod()
+
+  const [showNew, setShowNew] = useState(false)
+  const [draft, setDraft] = useState<CreateFinancePaymentMethodInput>({ name: '', icon: '💳', color: '#64748b' })
+
+  const startNew = () => {
+    setDraft({ name: '', icon: '💳', color: '#64748b' })
+    setShowNew(true)
+  }
+
+  const handleCreate = async () => {
+    if (!draft.name.trim()) return
+    await create.mutateAsync(draft)
+    setShowNew(false)
+  }
+
+  // Cantidad de conceptos que tienen este método como habitual — sirve de proxy
+  // para advertir el alcance del borrado (los movimientos de cualquier mes/año
+  // que lo usen también quedarían huérfanos, pero no se pueden contar sin pedir
+  // algo nuevo al main process; el conteo de conceptos ya es representativo).
+  const conceptCountByMethod = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of concepts) map.set(c.payment_method, (map.get(c.payment_method) ?? 0) + 1)
+    return map
+  }, [concepts])
+
+  const handleDelete = async (method: FinancePaymentMethodEntity) => {
+    const count = conceptCountByMethod.get(method.id) ?? 0
+    const warning = count > 0
+      ? `⚠️ "${method.name}" está en uso\n\n` +
+        `${count} concepto${count === 1 ? '' : 's'} lo tienen como método habitual (y posiblemente ` +
+        `también varios movimientos cargados, de cualquier mes y año).\n\n` +
+        `Si lo eliminás, esos registros NO se borran — pero quedan con un método "huérfano" que ya ` +
+        `no se va a poder mostrar con su nombre ni elegir desde la lista.\n\n` +
+        `¿Seguro que querés continuar?`
+      : `¿Eliminar el método de pago "${method.name}"? Esta acción no se puede deshacer.`
+    if (!confirm(warning)) return
+    await remove.mutateAsync(method.id)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        style={{ width: 'min(640px, 95vw)', maxHeight: '85vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/50 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600/20 border border-emerald-600/30 flex items-center justify-center">
+              <CreditCard size={15} className="text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-white">Métodos de pago</h2>
+              <p className="text-[10px] text-slate-500">Cómo se paga cada concepto o movimiento — agregá los tuyos además de los predeterminados</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={startNew}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <Plus size={13} /> Nuevo método
+            </button>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors"><X size={18} /></button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+          {showNew && (
+            <div className="rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-4 space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className={labelCls}>Nombre *</label>
+                  <input autoFocus value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} className={inputCls} placeholder="Ej: Mercado Pago" />
+                </div>
+                <div>
+                  <label className={labelCls}>Ícono</label>
+                  <EmojiPickerButton
+                    value={draft.icon ?? '💳'}
+                    onChange={icon => setDraft(d => ({ ...d, icon }))}
+                    title="Elegir ícono (emoji) para el método de pago"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Color</label>
+                  <input
+                    type="color"
+                    value={draft.color ?? '#64748b'}
+                    onChange={e => setDraft(d => ({ ...d, color: e.target.value }))}
+                    className="w-full h-[38px] rounded-lg cursor-pointer bg-slate-700/60 border border-slate-600"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowNew(false)} className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5">Cancelar</button>
+                <button onClick={handleCreate} className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors">
+                  <Check size={13} /> Crear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isLoading && <p className="text-sm text-slate-500 py-6 text-center">Cargando métodos de pago...</p>}
+
+          {methods.map(method => {
+            const count = conceptCountByMethod.get(method.id) ?? 0
+            return (
+              <div key={method.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-800/40 px-4 py-2.5 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <input
+                    type="color"
+                    value={method.color}
+                    onChange={e => update.mutate({ id: method.id, data: { color: e.target.value } })}
+                    title="Cambiar color"
+                    className="w-7 h-7 rounded-full cursor-pointer border border-slate-700 bg-transparent p-0 overflow-hidden flex-shrink-0"
+                  />
+                  <EmojiPickerButton
+                    value={method.icon}
+                    onChange={icon => update.mutate({ id: method.id, data: { icon } })}
+                    title="Cambiar ícono (emoji) del método de pago"
+                  />
+                  <div className="min-w-0">
+                    <EditableInlineTitle value={method.name} onSave={name => update.mutate({ id: method.id, data: { name } })} />
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {count} concepto{count === 1 ? '' : 's'} con este método
+                      {method.is_default ? ' · método predeterminado' : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleDelete(method)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-700/50 transition-colors"
+                    title="Eliminar (no borra conceptos ni movimientos, pero pueden quedar con un método huérfano)"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+
+          {!isLoading && methods.length === 0 && (
+            <p className="text-sm text-slate-500 py-6 text-center">No hay métodos de pago todavía. Creá el primero con "Nuevo método".</p>
           )}
         </div>
       </div>
@@ -3696,6 +3923,7 @@ export default function FinanceDashboard() {
   const { data: concepts  = [] } = useFinanceConcepts({ activeOnly: true })
   const { data: categories = [] } = useFinanceCategories()
   const { data: accounts   = [] } = useFinanceAccounts()
+  const { data: paymentMethods = [] } = useFinancePaymentMethods()
   const { data: upcoming   = [] } = useUpcomingFinanceMovements()
 
   // Bloqueo por PIN (Fase 5): se consulta una sola vez al entrar; "unlocked" vive
@@ -3708,6 +3936,7 @@ export default function FinanceDashboard() {
   const [formMovement, setFormMovement] = useState<FinanceMovement | null | undefined>(undefined) // undefined = cerrado
   const [showConcepts, setShowConcepts] = useState(false)
   const [showCategories, setShowCategories] = useState(false)
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
   // 'overview' (Dashboard) como pestaña de entrada: el usuario ve primero el
@@ -3916,6 +4145,14 @@ export default function FinanceDashboard() {
             </button>
 
             <button
+              onClick={() => setShowPaymentMethods(true)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 bg-slate-800 rounded-lg px-3 py-2 transition-colors"
+              title="Crear, editar o eliminar métodos de pago propios además de los predeterminados"
+            >
+              <CreditCard size={13} /> Métodos de pago
+            </button>
+
+            <button
               onClick={() => setShowImport(true)}
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 bg-slate-800 rounded-lg px-3 py-2 transition-colors"
               title="Importar movimientos desde un archivo Excel o CSV, con previsualización"
@@ -4061,6 +4298,7 @@ export default function FinanceDashboard() {
               onChange={setFilters}
               categories={categories}
               accounts={accounts}
+              paymentMethods={paymentMethods}
               resultCount={filteredMovements.length}
               totalCount={movements.length}
             />
@@ -4135,6 +4373,7 @@ export default function FinanceDashboard() {
       )}
       {showConcepts && <ConceptsManager onClose={() => setShowConcepts(false)} />}
       {showCategories && <CategoriesManager onClose={() => setShowCategories(false)} />}
+      {showPaymentMethods && <PaymentMethodsManager onClose={() => setShowPaymentMethods(false)} />}
       {showImport && <ImportManager period={period} concepts={concepts} onClose={() => setShowImport(false)} />}
       {showSecurity && <SecurityManager onClose={() => setShowSecurity(false)} />}
     </div>

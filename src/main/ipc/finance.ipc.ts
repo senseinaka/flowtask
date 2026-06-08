@@ -3,6 +3,7 @@ import path from 'path'
 import {
   listFinanceAccounts, createFinanceAccount, updateFinanceAccount, deleteFinanceAccount,
   listFinanceCategories, createFinanceCategory, updateFinanceCategory, deleteFinanceCategory,
+  listFinancePaymentMethods, createFinancePaymentMethod, updateFinancePaymentMethod, deleteFinancePaymentMethod,
   listFinanceConcepts, getFinanceConcept, createFinanceConcept, updateFinanceConcept, deleteFinanceConcept,
   listFinanceMovements, listUpcomingFinanceMovements, getFinanceMovement, createFinanceMovement, updateFinanceMovement,
   quickUpdateFinanceMovement, deleteFinanceMovement, generateMovementsForMonth, generateMovementsFromPreviousMonth,
@@ -19,7 +20,7 @@ import {
   getFinanceSecurityStatus, setFinancePin, verifyFinancePin, disableFinancePin, changeFinancePin
 } from '../services/finance-security.service'
 import type {
-  CreateFinanceAccountInput, CreateFinanceCategoryInput,
+  CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinancePaymentMethodInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
   CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   FinanceMovementStatus, FinanceImportConfirmItem, FinanceMovement
@@ -29,6 +30,19 @@ const MONTH_NAMES_ES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
 ]
+
+/**
+ * `finance-io.service` es un servicio "de I/O puro" que no toca la DB, así que
+ * no puede resolver los nombres de métodos de pago dinámicos por su cuenta —
+ * se le pasa este mapa armado acá (id → nombre), construido desde la tabla
+ * gestionable `finance_payment_methods` para reflejar también los métodos
+ * personalizados que el usuario haya creado.
+ */
+function buildPaymentMethodLabels(): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const m of listFinancePaymentMethods()) map[m.id] = m.name
+  return map
+}
 
 export function registerFinanceIpc(): void {
 
@@ -60,6 +74,21 @@ export function registerFinanceIpc(): void {
 
   ipcMain.handle('finance:categories:delete', (_e, id: string) =>
     deleteFinanceCategory(id)
+  )
+
+  // ── Payment methods ─────────────────────────────────────────────────────────
+  ipcMain.handle('finance:paymentMethods:list', () => listFinancePaymentMethods())
+
+  ipcMain.handle('finance:paymentMethods:create', (_e, data: CreateFinancePaymentMethodInput) =>
+    createFinancePaymentMethod(data)
+  )
+
+  ipcMain.handle('finance:paymentMethods:update', (_e, id: string, data: Partial<CreateFinancePaymentMethodInput>) =>
+    updateFinancePaymentMethod(id, data)
+  )
+
+  ipcMain.handle('finance:paymentMethods:delete', (_e, id: string) =>
+    deleteFinancePaymentMethod(id)
   )
 
   // ── Concepts ────────────────────────────────────────────────────────────────
@@ -213,7 +242,7 @@ export function registerFinanceIpc(): void {
     if (result.canceled || !result.filePath) return null
 
     const movements = listFinanceMovements(month, year)
-    writeFinanceMovementsFile(result.filePath, format, movements)
+    writeFinanceMovementsFile(result.filePath, format, movements, buildPaymentMethodLabels())
     shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
   })
@@ -235,7 +264,7 @@ export function registerFinanceIpc(): void {
     })
     if (result.canceled || !result.filePath) return null
 
-    writeFinanceMovementsFile(result.filePath, format, movements)
+    writeFinanceMovementsFile(result.filePath, format, movements, buildPaymentMethodLabels())
     shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
   })

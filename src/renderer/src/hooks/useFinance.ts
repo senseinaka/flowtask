@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
-  FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement, FinanceMonthSummary,
+  FinanceAccount, FinanceCategory, FinancePaymentMethodEntity, FinanceConcept, FinanceMovement, FinanceMonthSummary,
   FinanceMovementEntry,
-  CreateFinanceAccountInput, CreateFinanceCategoryInput,
+  CreateFinanceAccountInput, CreateFinanceCategoryInput, CreateFinancePaymentMethodInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
   CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   FinanceMovementStatus,
@@ -10,7 +10,7 @@ import type {
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus
 } from '@shared/types'
 import {
-  FINANCE_STATUS_CYCLE_RECURRING, FINANCE_STATUS_CYCLE_NON_RECURRING
+  FINANCE_STATUS_CYCLE_RECURRING, FINANCE_STATUS_CYCLE_NON_RECURRING, FINANCE_PAYMENT_METHOD_LABELS
 } from '@shared/types'
 import dayjs from 'dayjs'
 
@@ -316,6 +316,64 @@ export function useDeleteFinanceCategory() {
       qc.invalidateQueries({ queryKey: ['finance-concepts'] })
     }
   })
+}
+
+// ── Payment methods ───────────────────────────────────────────────────────────
+// Mismo patrón que cuentas/categorías. A diferencia de esas, `payment_method`
+// no es una FK (es un id de texto libre guardado tal cual en concepts/movements),
+// así que borrar/editar un método no dispara cascada — pero sí invalidamos
+// concepts/movements para que las celdas que muestran su nombre se actualicen.
+
+export function useFinancePaymentMethods() {
+  return useQuery({
+    queryKey: ['finance-payment-methods'],
+    queryFn:  (): Promise<FinancePaymentMethodEntity[]> => window.api.finance.paymentMethods.list(),
+    staleTime: 60_000
+  })
+}
+
+export function useCreateFinancePaymentMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateFinancePaymentMethodInput) => window.api.finance.paymentMethods.create(data),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['finance-payment-methods'] })
+  })
+}
+
+export function useUpdateFinancePaymentMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateFinancePaymentMethodInput> }) =>
+      window.api.finance.paymentMethods.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['finance-payment-methods'] })
+      qc.invalidateQueries({ queryKey: ['finance-concepts'] })
+      qc.invalidateQueries({ queryKey: ['finance-movements'] })
+    }
+  })
+}
+
+export function useDeleteFinancePaymentMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.finance.paymentMethods.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['finance-payment-methods'] })
+      qc.invalidateQueries({ queryKey: ['finance-concepts'] })
+      qc.invalidateQueries({ queryKey: ['finance-movements'] })
+    }
+  })
+}
+
+/**
+ * Etiqueta de un método de pago — busca primero en la lista dinámica (que
+ * incluye los personalizados) y cae al mapa estático de los 6 "de fábrica"
+ * como fallback (p.ej. mientras la query todavía está cargando, o un id huérfano).
+ */
+export function getPaymentMethodLabel(
+  methods: FinancePaymentMethodEntity[] | undefined, id: string
+): string {
+  return methods?.find(m => m.id === id)?.name ?? FINANCE_PAYMENT_METHOD_LABELS[id] ?? id
 }
 
 // ── Concepts ──────────────────────────────────────────────────────────────────

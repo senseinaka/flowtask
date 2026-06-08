@@ -1390,6 +1390,50 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
           ON finance_movement_entries(movement_id);
       `)
     }
+  },
+  {
+    version: 57,
+    up: (db) => {
+      // "Métodos de pago" pasa de ser un union type fijo (6 valores hardcodeados
+      // en types.ts) a una entidad gestionable por el usuario — mismo patrón que
+      // `finance_categories` / `finance_accounts` (alta, edición, borrado desde
+      // la UI, con un set de métodos "de fábrica" protegidos).
+      //
+      // Sembramos los 6 métodos originales reusando EXACTAMENTE los mismos ids
+      // de texto que ya estaban guardados en `finance_concepts.payment_method` y
+      // `finance_movements.payment_method` ('cash', 'transfer', 'debit_auto',
+      // 'debit_card', 'credit_card', 'other') — así no hace falta migrar ni un
+      // solo registro existente: los valores ya guardados siguen resolviendo
+      // correctamente contra la nueva tabla.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS finance_payment_methods (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '💳',
+          color       TEXT NOT NULL DEFAULT '#64748b',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+      `)
+
+      const now = Date.now()
+      const methodsData = [
+        { id: 'cash',        name: 'Efectivo',           icon: '💵', color: '#22c55e' },
+        { id: 'transfer',    name: 'Transferencia',      icon: '🏦', color: '#3b82f6' },
+        { id: 'debit_auto',  name: 'Débito automático',  icon: '🔄', color: '#8b5cf6' },
+        { id: 'debit_card',  name: 'Tarjeta de débito',  icon: '💳', color: '#06b6d4' },
+        { id: 'credit_card', name: 'Tarjeta de crédito', icon: '💳', color: '#ef4444' },
+        { id: 'other',       name: 'Otro',               icon: '🔖', color: '#64748b' },
+      ]
+      const insertMethod = db.prepare(`
+        INSERT INTO finance_payment_methods (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `)
+      for (const m of methodsData) {
+        insertMethod.run(m.id, m.name, m.icon, m.color, now, now)
+      }
+    }
   }
 ]
 

@@ -151,8 +151,21 @@ function fmtDate(ts: number | null): string {
   return ts ? dayjs(ts).format('DD/MM/YYYY') : ''
 }
 
-/** Genera las filas con encabezados en español — simétricos a los que reconoce la importación. */
-function buildMovementExportRows(movements: FinanceMovement[]): Record<string, string | number>[] {
+/**
+ * Genera las filas con encabezados en español — simétricos a los que reconoce
+ * la importación.
+ *
+ * `paymentMethodLabels` es un mapa dinámico (id → nombre) armado por el caller
+ * a partir de la tabla gestionable `finance_payment_methods` — este servicio es
+ * "de I/O puro" y no consulta la DB, así que no puede resolver por su cuenta
+ * los métodos de pago personalizados que el usuario haya creado. Si no se pasa
+ * (o el id no aparece, p.ej. datos viejos), cae al mapa estático de los 6
+ * métodos "de fábrica" como fallback.
+ */
+function buildMovementExportRows(
+  movements: FinanceMovement[],
+  paymentMethodLabels: Record<string, string> = FINANCE_PAYMENT_METHOD_LABELS
+): Record<string, string | number>[] {
   return movements.map(m => ({
     'Concepto':             m.concept?.name ?? '',
     'Categoría':            m.concept?.category?.name ?? '',
@@ -160,15 +173,18 @@ function buildMovementExportRows(movements: FinanceMovement[]): Record<string, s
     'Monto estimado':       m.amount_estimated,
     'Monto real':           m.amount_actual ?? '',
     'Estado':               FINANCE_STATUS_LABELS[m.status],
-    'Forma de pago':        FINANCE_PAYMENT_METHOD_LABELS[m.payment_method],
+    'Forma de pago':        paymentMethodLabels[m.payment_method] ?? FINANCE_PAYMENT_METHOD_LABELS[m.payment_method] ?? m.payment_method,
     'Fecha de pago':        fmtDate(m.payment_date),
     'Fecha de vencimiento': fmtDate(m.due_date),
     'Notas':                m.notes ?? ''
   }))
 }
 
-export function writeFinanceMovementsFile(filePath: string, format: 'xlsx' | 'csv', movements: FinanceMovement[]): void {
-  const rows = buildMovementExportRows(movements)
+export function writeFinanceMovementsFile(
+  filePath: string, format: 'xlsx' | 'csv', movements: FinanceMovement[],
+  paymentMethodLabels?: Record<string, string>
+): void {
+  const rows = buildMovementExportRows(movements, paymentMethodLabels)
   const ws = XLSX.utils.json_to_sheet(rows)
   ws['!cols'] = [
     { wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 14 },

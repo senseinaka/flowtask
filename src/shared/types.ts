@@ -1428,13 +1428,15 @@ export const DEFAULT_EXPIRY_CATEGORIES: Omit<ExpiryCategory, 'id' | 'created_at'
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type FinanceMovementStatus = 'no_status' | 'pending' | 'paid' | 'overdue'
-export type FinancePaymentMethod  =
-  | 'cash'         // efectivo
-  | 'transfer'     // transferencia
-  | 'debit_auto'   // débito automático
-  | 'debit_card'   // tarjeta de débito
-  | 'credit_card'  // tarjeta de crédito
-  | 'other'        // otro
+/**
+ * Antes era un union type fijo de 6 valores. Ahora es un id de texto libre que
+ * referencia la tabla `finance_payment_methods` — entidad gestionable por el
+ * usuario (alta/edición/borrado), igual que categorías o cuentas. Los 6 ids
+ * originales ('cash' | 'transfer' | 'debit_auto' | 'debit_card' | 'credit_card'
+ * | 'other') se siguen sembrando como métodos "de fábrica" (`is_default=1`,
+ * no eliminables) para no requerir migrar los `payment_method` ya guardados.
+ */
+export type FinancePaymentMethod = string
 export type FinanceExpenseType = 'fixed' | 'variable'      // fijo | variable
 export type FinanceRecurrence  = 'monthly' | 'biweekly' | 'annual' | 'one_time'
 
@@ -1449,6 +1451,22 @@ export interface FinanceAccount {
 }
 
 export interface FinanceCategory {
+  id:         string
+  name:       string
+  icon:       string    // emoji
+  color:      string    // hex
+  is_default: number    // 0 | 1
+  created_at: number
+  updated_at: number
+}
+
+/**
+ * Entidad gestionable que respalda los valores de `FinancePaymentMethod`
+ * (que ahora es solo un id de texto). Mismo esquema que `FinanceCategory` /
+ * `FinanceAccount`: `is_default=1` marca los 6 métodos "de fábrica"
+ * sembrados en la migración (no eliminables desde la UI).
+ */
+export interface FinancePaymentMethodEntity {
   id:         string
   name:       string
   icon:       string    // emoji
@@ -1554,6 +1572,12 @@ export interface CreateFinanceAccountInput {
 }
 
 export interface CreateFinanceCategoryInput {
+  name:  string
+  icon?: string
+  color?: string
+}
+
+export interface CreateFinancePaymentMethodInput {
   name:  string
   icon?: string
   color?: string
@@ -1741,6 +1765,13 @@ export const FINANCE_STATUS_COLORS: Record<FinanceMovementStatus, string> = {
 export const FINANCE_STATUS_CYCLE_NON_RECURRING: FinanceMovementStatus[] = ['no_status', 'pending', 'paid']
 export const FINANCE_STATUS_CYCLE_RECURRING: FinanceMovementStatus[] = ['pending', 'paid']
 
+/**
+ * Etiquetas de los 6 métodos "de fábrica" — hoy son solo el `seed` de
+ * `finance_payment_methods` y un fallback para ids que no se encuentren en la
+ * lista dinámica (p.ej. datos antiguos). La fuente de verdad para mostrar
+ * nombres/colores/emojis es la tabla gestionable (ver `useFinancePaymentMethods`
+ * y `PaymentMethodsManager`), que permite agregar métodos propios.
+ */
 export const FINANCE_PAYMENT_METHOD_LABELS: Record<FinancePaymentMethod, string> = {
   cash:        'Efectivo',
   transfer:    'Transferencia',

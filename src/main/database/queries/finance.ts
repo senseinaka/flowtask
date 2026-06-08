@@ -3,6 +3,7 @@ import { getDb } from '../db'
 import type {
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement,
   FinanceMovementEntry, CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
+  FinancePaymentMethodEntity, CreateFinancePaymentMethodInput,
   CreateFinanceAccountInput, CreateFinanceCategoryInput,
   CreateFinanceConceptInput, CreateFinanceMovementInput,
   FinanceMonthSummary, FinanceMovementStatus, FinancePaymentMethod,
@@ -86,6 +87,46 @@ export function updateFinanceCategory(
 
 export function deleteFinanceCategory(id: string): void {
   getDb().prepare('DELETE FROM finance_categories WHERE id = ?').run(id)
+}
+
+// ── Payment methods ───────────────────────────────────────────────────────────
+// Mismo patrón CRUD que cuentas/categorías — entidad gestionable que respalda
+// los ids de texto libre guardados en `payment_method` (concepts y movements).
+
+export function listFinancePaymentMethods(): FinancePaymentMethodEntity[] {
+  return getDb().prepare(`
+    SELECT * FROM finance_payment_methods ORDER BY is_default DESC, name ASC
+  `).all() as FinancePaymentMethodEntity[]
+}
+
+export function createFinancePaymentMethod(data: CreateFinancePaymentMethodInput): FinancePaymentMethodEntity {
+  const db  = getDb()
+  const id  = randomUUID()
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO finance_payment_methods (id, name, icon, color, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 0, ?, ?)
+  `).run(id, data.name, data.icon ?? '💳', data.color ?? '#64748b', now, now)
+  return db.prepare('SELECT * FROM finance_payment_methods WHERE id = ?').get(id) as FinancePaymentMethodEntity
+}
+
+export function updateFinancePaymentMethod(
+  id: string, data: Partial<CreateFinancePaymentMethodInput>
+): FinancePaymentMethodEntity {
+  const db  = getDb()
+  const now = Date.now()
+  const sets: string[] = []
+  const vals: unknown[] = []
+  if (data.name  !== undefined) { sets.push('name = ?');  vals.push(data.name)  }
+  if (data.icon  !== undefined) { sets.push('icon = ?');  vals.push(data.icon)  }
+  if (data.color !== undefined) { sets.push('color = ?'); vals.push(data.color) }
+  sets.push('updated_at = ?'); vals.push(now); vals.push(id)
+  db.prepare(`UPDATE finance_payment_methods SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  return db.prepare('SELECT * FROM finance_payment_methods WHERE id = ?').get(id) as FinancePaymentMethodEntity
+}
+
+export function deleteFinancePaymentMethod(id: string): void {
+  getDb().prepare('DELETE FROM finance_payment_methods WHERE id = ?').run(id)
 }
 
 // ── Concepts ──────────────────────────────────────────────────────────────────
