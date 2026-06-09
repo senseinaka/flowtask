@@ -1467,250 +1467,365 @@ function QuickFillMode({
   onBatchCreate: (items: CreateFinanceMovementInput[]) => void
   isSaving:      boolean
 }) {
-  // Mapa conceptId → movimiento existente del período (para saber cuáles ya están cargados)
   const existingMap = useMemo(() => {
     const m = new Map<string, FinanceMovement>()
     for (const mov of movements) if (mov.concept_id) m.set(mov.concept_id, mov)
     return m
   }, [movements])
 
-  // Drafts: solo para conceptos SIN movimiento existente (o en editMode)
+  const todayStr = new Date().toISOString().slice(0, 10)
+
   const [drafts, setDrafts] = useState<Record<string, QuickFillDraft>>(() => {
     const init: Record<string, QuickFillDraft> = {}
     for (const c of concepts) {
       if (!existingMap.has(c.id)) {
-        init[c.id] = { amount: '', status: 'paid', dateStr: new Date().toISOString().slice(0, 10), editMode: false }
+        init[c.id] = { amount: '', status: 'paid', dateStr: todayStr, editMode: false }
       }
     }
     return init
   })
 
   const [filterEmpty, setFilterEmpty] = useState(false)
-
-  const setDraft = (conceptId: string, patch: Partial<QuickFillDraft>) =>
-    setDrafts(prev => ({ ...prev, [conceptId]: { ...prev[conceptId], ...patch } }))
-
-  // Refs para Tab/Enter entre inputs de monto
   const amountRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
-  const conceptList = useMemo(() => {
-    const filtered = filterEmpty
-      ? concepts.filter(c => !existingMap.has(c.id))
-      : concepts
-    // Agrupar por categoría
+  const setDraft = (id: string, patch: Partial<QuickFillDraft>) =>
+    setDrafts(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+
+  const conceptGroups = useMemo(() => {
+    const src = filterEmpty ? concepts.filter(c => !existingMap.has(c.id)) : concepts
     const map = new Map<string, { catName: string; catIcon: string; catColor: string; items: FinanceConcept[] }>()
-    for (const c of filtered) {
-      const key  = c.category?.name ?? '__sin_cat__'
-      const grp  = map.get(key) ?? { catName: c.category?.name ?? 'Sin categoría', catIcon: c.category?.icon ?? '📦', catColor: c.category?.color ?? '#64748b', items: [] }
-      grp.items.push(c)
-      map.set(key, grp)
+    for (const c of src) {
+      const key = c.category?.name ?? '__sin__'
+      const g   = map.get(key) ?? { catName: c.category?.name ?? 'Sin categoría', catIcon: c.category?.icon ?? '📦', catColor: c.category?.color ?? '#64748b', items: [] }
+      g.items.push(c)
+      map.set(key, g)
     }
     return [...map.values()]
   }, [concepts, existingMap, filterEmpty])
 
-  const emptyCount   = concepts.filter(c => !existingMap.has(c.id)).length
-  const filledDrafts = Object.entries(drafts).filter(([, d]) => d.amount.trim() !== '' && Number.isFinite(parseFloat(d.amount)))
+  const allConceptIds  = useMemo(() => conceptGroups.flatMap(g => g.items.map(c => c.id)), [conceptGroups])
+  const emptyCount     = concepts.filter(c => !existingMap.has(c.id)).length
+  const loadedCount    = concepts.length - emptyCount
+  const filledDrafts   = Object.entries(drafts).filter(([, d]) => d.amount.trim() !== '' && Number.isFinite(parseFloat(d.amount)))
+
+  const focusNext = (conceptId: string) => {
+    const idx = allConceptIds.indexOf(conceptId)
+    for (let i = idx + 1; i < allConceptIds.length; i++) {
+      const id = allConceptIds[i]
+      if (amountRefs.current[id] && drafts[id] && !existingMap.has(id)) { amountRefs.current[id]!.focus(); break }
+    }
+  }
 
   const handleSave = () => {
-    const items: CreateFinanceMovementInput[] = filledDrafts.map(([conceptId, d]) => {
-      const concept = concepts.find(c => c.id === conceptId)
+    const items: CreateFinanceMovementInput[] = filledDrafts.map(([cid, d]) => {
+      const concept = concepts.find(c => c.id === cid)
       const amount  = parseFloat(d.amount)
       return {
-        concept_id:      conceptId,
-        month:           period.month,
-        year:            period.year,
+        concept_id:       cid,
+        month:            period.month,
+        year:             period.year,
         amount_estimated: concept?.default_amount ?? amount,
-        amount_actual:   amount,
-        status:          d.status,
-        payment_method:  concept?.payment_method ?? 'other',
-        payment_date:    d.status === 'paid' && d.dateStr ? dayjs(d.dateStr, 'YYYY-MM-DD').valueOf() : null,
+        amount_actual:    amount,
+        status:           d.status,
+        payment_method:   concept?.payment_method ?? 'other',
+        payment_date:     d.status === 'paid' && d.dateStr ? dayjs(d.dateStr, 'YYYY-MM-DD').valueOf() : null,
       }
     })
     if (items.length > 0) onBatchCreate(items)
     else onClose()
   }
 
-  // Navega al siguiente input de monto vacío (Tab/Enter behavior)
-  const focusNext = (conceptId: string) => {
-    const allConceptIds = conceptList.flatMap(g => g.items.map(c => c.id))
-    const idx = allConceptIds.indexOf(conceptId)
-    for (let i = idx + 1; i < allConceptIds.length; i++) {
-      const id  = allConceptIds[i]
-      const ref = amountRefs.current[id]
-      const d   = drafts[id]
-      if (ref && d && !existingMap.has(id)) { ref.focus(); break }
-    }
-  }
-
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-900 overflow-hidden">
-      {/* Header del modo planilla */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-sm font-bold text-slate-200">
-            <ListChecks size={15} className="text-emerald-400" /> Modo planilla
+
+      {/* ── Toolbar ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 border-b border-slate-700 gap-4">
+        {/* Izquierda: título + contadores */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-200 flex-shrink-0">
+            <ListChecks size={14} className="text-emerald-400" />
+            Modo planilla
           </div>
-          <span className="text-[11px] text-slate-500">{emptyCount} sin cargar · {concepts.length - emptyCount} ya cargados</span>
-          {/* Toggle "solo sin cargar" */}
-          <button
-            onClick={() => setFilterEmpty(f => !f)}
-            className={cn('inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors',
-              filterEmpty
-                ? 'bg-amber-900/30 border-amber-700/50 text-amber-300'
-                : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:text-slate-200')}
-          >
-            {filterEmpty ? <Eye size={12} /> : <EyeOff size={12} />}
-            {filterEmpty ? 'Mostrando solo sin cargar' : 'Solo sin cargar'}
-          </button>
+          <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-500 flex-shrink-0">
+            <span className="inline-flex items-center gap-1 bg-slate-700/60 rounded px-1.5 py-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              {emptyCount} pendientes
+            </span>
+            <span className="inline-flex items-center gap-1 bg-slate-700/60 rounded px-1.5 py-0.5">
+              <Check size={10} className="text-slate-400" />
+              {loadedCount} cargados
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-500">{filledDrafts.length} con monto cargado</span>
+
+        {/* Centro: toggle "solo sin cargar" */}
+        <button
+          onClick={() => setFilterEmpty(f => !f)}
+          className={cn(
+            'inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0',
+            filterEmpty
+              ? 'bg-amber-950/40 border-amber-700/50 text-amber-300'
+              : 'bg-slate-700/40 border-slate-600/70 text-slate-400 hover:text-slate-200 hover:border-slate-500'
+          )}
+        >
+          {filterEmpty ? <Eye size={11} /> : <EyeOff size={11} />}
+          {filterEmpty ? 'Solo pendientes' : 'Mostrar solo pendientes'}
+        </button>
+
+        {/* Derecha: guardar + cerrar */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {filledDrafts.length > 0 && (
+            <span className="text-[11px] text-emerald-400 font-medium hidden sm:block">
+              {filledDrafts.length} listos
+            </span>
+          )}
           <button
             onClick={handleSave}
             disabled={isSaving || filledDrafts.length === 0}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-4 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg px-3.5 py-1.5 transition-colors"
           >
             {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-            Guardar todo ({filledDrafts.length})
+            Guardar{filledDrafts.length > 0 ? ` (${filledDrafts.length})` : ''}
           </button>
-          <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors" title="Salir del modo planilla">
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-500 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors"
+            title="Salir del modo planilla"
+          >
             <X size={14} />
           </button>
         </div>
       </div>
 
-      {/* Cuerpo — grupos por categoría */}
-      <div className="overflow-y-auto max-h-[65vh]">
-        {conceptList.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <CheckCircle2 size={24} className="text-emerald-600 mb-2" />
-            <p className="text-sm text-slate-400">Todos los conceptos activos ya tienen movimiento este mes.</p>
+      {/* ── Tabla ────────────────────────────────────────────────────── */}
+      <div className="overflow-y-auto max-h-[62vh]">
+        {conceptGroups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 gap-2 text-center">
+            <CheckCircle2 size={28} className="text-emerald-600/70" />
+            <p className="text-sm font-medium text-slate-300">Todo al día</p>
+            <p className="text-xs text-slate-500">Todos los conceptos activos ya tienen movimiento este mes.</p>
           </div>
+        ) : (
+          <table className="w-full border-collapse text-sm">
+            <colgroup>
+              <col style={{ width: '4px' }} />       {/* borde color */}
+              <col />                                  {/* nombre — flexible */}
+              <col style={{ width: '100px' }} />      {/* habitual */}
+              <col style={{ width: '130px' }} />      {/* monto input */}
+              <col style={{ width: '120px' }} />      {/* estado */}
+              <col style={{ width: '130px' }} />      {/* fecha */}
+              <col style={{ width: '32px' }} />       {/* acción */}
+            </colgroup>
+
+            {/* Cabecera fija */}
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-slate-800 border-b border-slate-700">
+                <th className="p-0" />
+                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-2">Concepto</th>
+                <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2">Habitual</th>
+                <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2">Monto real</th>
+                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2">Estado</th>
+                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2">Fecha pago</th>
+                <th className="p-0" />
+              </tr>
+            </thead>
+
+            <tbody>
+              {conceptGroups.map(group => (
+                <React.Fragment key={group.catName}>
+                  {/* Fila cabecera de categoría */}
+                  <tr
+                    className="sticky top-[33px] z-10 bg-slate-800/90"
+                    style={{ boxShadow: `inset 3px 0 0 ${group.catColor}` }}
+                  >
+                    <td className="p-0" style={{ background: group.catColor + '22' }} />
+                    <td
+                      colSpan={5}
+                      className="px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider"
+                      style={{ color: group.catColor, background: group.catColor + '11' }}
+                    >
+                      <span className="mr-2">{group.catIcon}</span>
+                      {group.catName}
+                      <span className="ml-2 font-normal text-slate-500">
+                        · {group.items.filter(c => !existingMap.has(c.id)).length} sin cargar
+                      </span>
+                    </td>
+                    <td className="p-0" style={{ background: group.catColor + '11' }} />
+                  </tr>
+
+                  {/* Filas de conceptos */}
+                  {group.items.map(c => {
+                    const existing = existingMap.get(c.id)
+                    const draft    = drafts[c.id]
+                    const isLoaded = !!existing && !draft?.editMode
+
+                    if (isLoaded) {
+                      return (
+                        <tr
+                          key={c.id}
+                          className="border-b border-slate-800 opacity-40 hover:opacity-70 transition-opacity"
+                        >
+                          <td className="p-0 w-1" style={{ background: group.catColor + '30' }} />
+                          <td className="px-4 py-2 text-xs text-slate-400 truncate max-w-0">
+                            <span className="flex items-center gap-1.5">
+                              <Check size={11} className="text-emerald-600 flex-shrink-0" />
+                              {c.name}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-500 text-right">
+                            {c.default_amount ? formatCurrency(c.default_amount) : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-400 text-right font-medium">
+                            {formatCurrency(existing!.amount_actual ?? existing!.amount_estimated)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-500">
+                            {FINANCE_STATUS_LABELS[existing!.status]}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-600">
+                            {existing!.payment_date ? dayjs(existing!.payment_date).format('DD/MM') : '—'}
+                          </td>
+                          <td className="px-1 py-2 text-center">
+                            <button
+                              onClick={() => setDrafts(prev => ({
+                                ...prev,
+                                [c.id]: {
+                                  amount:   String(existing!.amount_actual ?? existing!.amount_estimated ?? ''),
+                                  status:   existing!.status,
+                                  dateStr:  existing!.payment_date ? dayjs(existing!.payment_date).format('YYYY-MM-DD') : todayStr,
+                                  editMode: true
+                                }
+                              }))}
+                              className="p-1 text-slate-600 hover:text-emerald-400 transition-colors rounded"
+                              title="Editar"
+                            >
+                              <Edit3 size={11} />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    }
+
+                    if (!draft) return null
+
+                    const hasDraft = draft.amount.trim() !== '' && Number.isFinite(parseFloat(draft.amount))
+
+                    return (
+                      <tr
+                        key={c.id}
+                        className={cn(
+                          'border-b border-slate-800/70 hover:bg-slate-800/30 transition-colors group',
+                          hasDraft ? 'bg-emerald-950/15' : ''
+                        )}
+                      >
+                        {/* Borde color categoría */}
+                        <td
+                          className="p-0 w-1"
+                          style={{ background: hasDraft ? group.catColor + '60' : group.catColor + '20' }}
+                        />
+
+                        {/* Nombre */}
+                        <td className="px-4 py-2 max-w-0">
+                          <span className="block text-sm text-slate-200 truncate" title={c.name}>{c.name}</span>
+                        </td>
+
+                        {/* Monto habitual (referencia) */}
+                        <td className="px-3 py-2 text-xs text-slate-600 text-right tabular-nums">
+                          {c.default_amount ? formatCurrency(c.default_amount) : ''}
+                        </td>
+
+                        {/* Input monto */}
+                        <td className="px-3 py-1.5">
+                          <input
+                            ref={el => { amountRefs.current[c.id] = el }}
+                            type="number"
+                            value={draft.amount}
+                            onChange={e => setDraft(c.id, { amount: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); focusNext(c.id) } }}
+                            placeholder={c.default_amount ? String(c.default_amount) : '0'}
+                            className={cn(
+                              'w-full bg-slate-800 border rounded-md px-2.5 py-1.5 text-sm text-right tabular-nums text-slate-100 placeholder:text-slate-700',
+                              'focus:outline-none focus:ring-1 transition-colors',
+                              hasDraft
+                                ? 'border-emerald-600/50 focus:border-emerald-500 focus:ring-emerald-500/20 bg-emerald-950/20'
+                                : 'border-slate-700 focus:border-slate-500 focus:ring-slate-500/20'
+                            )}
+                          />
+                        </td>
+
+                        {/* Select estado */}
+                        <td className="px-3 py-1.5">
+                          <select
+                            value={draft.status}
+                            onChange={e => setDraft(c.id, { status: e.target.value as FinanceMovementStatus })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-500 appearance-none cursor-pointer"
+                          >
+                            {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
+                              <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Fecha */}
+                        <td className="px-3 py-1.5">
+                          {draft.status === 'paid' ? (
+                            <input
+                              type="date"
+                              value={draft.dateStr}
+                              onChange={e => setDraft(c.id, { dateStr: e.target.value })}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-slate-500"
+                            />
+                          ) : (
+                            <span className="text-xs text-slate-700 px-2">—</span>
+                          )}
+                        </td>
+
+                        {/* Botón limpiar */}
+                        <td className="px-1 py-1.5 text-center">
+                          {hasDraft ? (
+                            <button
+                              onClick={() => setDraft(c.id, { amount: '' })}
+                              className="p-1 text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-all rounded"
+                              title="Limpiar"
+                            >
+                              <X size={11} />
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+
+            {/* Footer total */}
+            {filledDrafts.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-800/80 border-t border-slate-600">
+                  <td className="p-0" />
+                  <td className="px-4 py-2.5 text-xs font-semibold text-slate-300">
+                    {filledDrafts.length} {filledDrafts.length === 1 ? 'movimiento listo' : 'movimientos listos'}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-right text-slate-500 tabular-nums">
+                    {formatCurrency(filledDrafts.reduce((s, [, d]) => s + parseFloat(d.amount), 0))}
+                  </td>
+                  <td colSpan={3} className="px-3 py-2.5 text-right">
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg px-4 py-1.5 transition-colors"
+                    >
+                      {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                      Guardar todo ({filledDrafts.length})
+                    </button>
+                  </td>
+                  <td className="p-0" />
+                </tr>
+              </tfoot>
+            )}
+          </table>
         )}
-        {conceptList.map(group => (
-          <div key={group.catName}>
-            {/* Cabecera de categoría */}
-            <div
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border-b border-t border-slate-700/60 sticky top-0 z-10"
-              style={{ borderLeft: `3px solid ${group.catColor}` }}
-            >
-              <span className="text-sm">{group.catIcon}</span>
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: group.catColor }}>{group.catName}</span>
-              <span className="text-[11px] text-slate-500">{group.items.filter(c => !existingMap.has(c.id)).length} sin cargar</span>
-            </div>
-
-            {/* Filas de conceptos */}
-            {group.items.map(c => {
-              const existing = existingMap.get(c.id)
-              const draft    = drafts[c.id]
-              const isLoaded = !!existing && !draft?.editMode
-
-              if (isLoaded) {
-                // Fila "ya cargado"
-                return (
-                  <div
-                    key={c.id}
-                    className="flex items-center gap-3 px-4 py-2 border-b border-slate-800/60 opacity-50 hover:opacity-80 transition-opacity"
-                  >
-                    <span className="w-44 text-xs text-slate-400 truncate">{c.name}</span>
-                    <span className="w-28 text-xs text-slate-500 text-right">{formatCurrency(existing!.amount_actual ?? existing!.amount_estimated)}</span>
-                    <span className="text-xs text-slate-500 flex-1">{FINANCE_STATUS_LABELS[existing!.status]}</span>
-                    <button
-                      onClick={() => {
-                        const d = { amount: String(existing!.amount_actual ?? existing!.amount_estimated ?? ''), status: existing!.status, dateStr: existing!.payment_date ? dayjs(existing!.payment_date).format('YYYY-MM-DD') : '', editMode: true }
-                        setDrafts(prev => ({ ...prev, [c.id]: d }))
-                      }}
-                      className="text-[10px] text-slate-500 hover:text-emerald-400 border border-slate-700 hover:border-emerald-700 rounded px-1.5 py-0.5 transition-colors"
-                    >
-                      editar
-                    </button>
-                  </div>
-                )
-              }
-
-              if (!draft) return null  // concepto sin draft y sin movimiento — no debería ocurrir
-
-              // Fila editable
-              return (
-                <div
-                  key={c.id}
-                  className={cn('flex items-center gap-3 px-4 py-2 border-b border-slate-800/60 hover:bg-slate-800/20 transition-colors group',
-                    draft.amount ? 'bg-emerald-950/10' : '')}
-                >
-                  {/* Nombre del concepto */}
-                  <span className="w-44 text-sm text-slate-200 truncate flex-shrink-0" title={c.name}>{c.name}</span>
-
-                  {/* Monto */}
-                  <input
-                    ref={el => { amountRefs.current[c.id] = el }}
-                    type="number"
-                    value={draft.amount}
-                    onChange={e => setDraft(c.id, { amount: e.target.value })}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); focusNext(c.id) } }}
-                    placeholder={c.default_amount ? String(c.default_amount) : 'Monto...'}
-                    className={cn('w-32 bg-slate-800 border rounded-lg px-2.5 py-1.5 text-sm text-right text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-1 transition-colors flex-shrink-0',
-                      draft.amount ? 'border-emerald-600/60 focus:border-emerald-500 focus:ring-emerald-500/30' : 'border-slate-700 focus:border-emerald-500/60 focus:ring-emerald-500/20')}
-                  />
-
-                  {/* Estado */}
-                  <select
-                    value={draft.status}
-                    onChange={e => setDraft(c.id, { status: e.target.value as FinanceMovementStatus })}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60 flex-shrink-0"
-                  >
-                    {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
-                      <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
-                    ))}
-                  </select>
-
-                  {/* Fecha de pago */}
-                  {draft.status === 'paid' && (
-                    <input
-                      type="date"
-                      value={draft.dateStr}
-                      onChange={e => setDraft(c.id, { dateStr: e.target.value })}
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/60 flex-shrink-0"
-                    />
-                  )}
-
-                  {/* Info del mes anterior */}
-                  {c.default_amount > 0 && (
-                    <span className="text-[11px] text-slate-600 flex-1 truncate">habitual: {formatCurrency(c.default_amount)}</span>
-                  )}
-
-                  {/* Limpiar si ya tiene valor */}
-                  {draft.amount && (
-                    <button
-                      onClick={() => setDraft(c.id, { amount: '' })}
-                      className="p-1 text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-all"
-                      title="Limpiar"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ))}
       </div>
-
-      {/* Footer */}
-      {filledDrafts.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 bg-slate-800/60 border-t border-slate-700">
-          <span className="text-xs text-slate-400">
-            {filledDrafts.length} {filledDrafts.length === 1 ? 'movimiento' : 'movimientos'} listos para crear
-          </span>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-5 py-2 transition-colors disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            Guardar todo ({filledDrafts.length})
-          </button>
-        </div>
-      )}
     </div>
   )
 }
