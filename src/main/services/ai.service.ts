@@ -1511,7 +1511,7 @@ Para CADA gasto que encuentres, extraé:
 - concept: el nombre del gasto/concepto tal como aparece o se puede inferir (ej: "Nafta", "Supermercado", "Internet", "Tarjeta Visa"). Sin inventar de más: si dice "YPF 23/06" el concepto es "YPF" o "Nafta", lo que sea más natural en español.
 - amount: el monto numérico (sin símbolo de moneda ni separadores de miles). null si no hay monto reconocible.
 - date: fecha de pago en formato YYYY-MM-DD, o null si no se puede determinar.
-- status: uno de "paid" (ya pagado/pagué/aboné), "pending" (pendiente/a pagar/falta pagar), "overdue" (vencido/atrasado), "no_status" (no se menciona estado — usalo como default si no hay pistas).
+- status: uno de "paid" (ya pagado/pagué/aboné/compré/gasté — usalo como DEFAULT si no hay pistas: quien pega gastos del mes casi siempre ya los pagó), "pending" (pendiente/a pagar/falta pagar — solo si el texto lo indica explícitamente), "overdue" (vencido/atrasado), "no_status" (solo si hay ambigüedad real y no querés asumir nada).
 - notes: cualquier detalle extra relevante (número de comprobante, cuotas, aclaración). String vacío si no hay nada que agregar.
 
 Ignorá líneas que claramente no son gastos (encabezados, totales, separadores, texto irrelevante).
@@ -1549,7 +1549,10 @@ Devolvé SOLO un array JSON, sin texto adicional ni markdown. Ejemplo:
 
       const amount = typeof item.amount === 'number' && Number.isFinite(item.amount) ? item.amount : null
       const statusRaw = String(item.status ?? '').trim()
-      const status = (FINANCE_IMPORT_STATUS_VALUES.has(statusRaw) ? statusRaw : 'no_status') as FinanceMovementStatus
+      // Default "paid": cuando el usuario pega una lista de gastos propios del mes,
+      // lo más probable es que sean gastos ya realizados — fallback a "no_status"
+      // solo si la IA devuelve algo desconocido y tampoco coincide con "paid".
+      const status = (FINANCE_IMPORT_STATUS_VALUES.has(statusRaw) ? statusRaw : 'paid') as FinanceMovementStatus
 
       return {
         rawConceptName,

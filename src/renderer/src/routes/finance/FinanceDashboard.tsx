@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import {
@@ -224,6 +224,141 @@ function StatsCards({ summary, isLoading }: { summary: FinanceMonthSummary | und
           icon={Tag}
         />
       </div>
+    </div>
+  )
+}
+
+// ── Selector rápido de mes (dropdown 4×3 grid) ────────────────────────────────
+//
+// Reemplaza la limitación de "clickear flecha N veces" para saltar de período.
+// Las flechas laterales < > siguen como atajos ±1 mes; el botón central (nombre
+// del mes) abre un dropdown con grilla de 12 meses + año navegable con flechas.
+// Se cierra al elegir un mes o al clickear afuera.
+
+const MONTH_LABELS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+function MonthPickerDropdown({
+  period, onChange, isCurrentMonth, onGoToToday
+}: {
+  period:         { month: number; year: number }
+  onChange:       (month: number, year: number) => void
+  isCurrentMonth: boolean
+  onGoToToday:    () => void
+}) {
+  const [open, setOpen]         = useState(false)
+  const [pickerYear, setPickerYear] = useState(period.year)
+  const containerRef            = useRef<HTMLDivElement>(null)
+
+  // Sincroniza el año del picker con el período cuando cambia desde afuera
+  useEffect(() => { if (!open) setPickerYear(period.year) }, [period.year, open])
+
+  // Cierre al clickear afuera
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const handleSelect = (month: number) => {
+    onChange(month, pickerYear)
+    setOpen(false)
+  }
+
+  const todayMonth = new Date().getMonth() + 1
+  const todayYear  = new Date().getFullYear()
+
+  return (
+    <div ref={containerRef} className="relative flex items-center bg-slate-800 border border-slate-700 rounded-lg">
+      {/* Flecha izquierda ±1 mes */}
+      <button
+        onClick={() => { const d = new Date(period.year, period.month - 2, 1); onChange(d.getMonth() + 1, d.getFullYear()) }}
+        className="p-2 text-slate-400 hover:text-slate-200 transition-colors"
+        title="Mes anterior"
+      >
+        <ChevronLeft size={15} />
+      </button>
+
+      {/* Label central — abre/cierra el picker */}
+      <button
+        onClick={() => { setPickerYear(period.year); setOpen(o => !o) }}
+        className={cn('px-3 py-1.5 text-xs font-semibold capitalize min-w-[140px] text-center transition-colors',
+          isCurrentMonth ? 'text-emerald-400' : 'text-slate-200 hover:text-emerald-300')}
+        title="Elegir mes y año"
+      >
+        {getMonthLabel(period.month, period.year)}
+      </button>
+
+      {/* Flecha derecha ±1 mes */}
+      <button
+        onClick={() => { const d = new Date(period.year, period.month, 1); onChange(d.getMonth() + 1, d.getFullYear()) }}
+        className="p-2 text-slate-400 hover:text-slate-200 transition-colors"
+        title="Mes siguiente"
+      >
+        <ChevronRight size={15} />
+      </button>
+
+      {/* Dropdown picker */}
+      {open && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-3 w-56">
+          {/* Navegación de año */}
+          <div className="flex items-center justify-between mb-2.5">
+            <button
+              onClick={() => setPickerYear(y => y - 1)}
+              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Año anterior"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-sm font-bold text-slate-200">{pickerYear}</span>
+            <button
+              onClick={() => setPickerYear(y => y + 1)}
+              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Año siguiente"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Grilla 3×4 de meses */}
+          <div className="grid grid-cols-4 gap-1 mb-2.5">
+            {MONTH_LABELS_SHORT.map((label, idx) => {
+              const m       = idx + 1
+              const isSel   = m === period.month && pickerYear === period.year
+              const isToday = m === todayMonth && pickerYear === todayYear
+              return (
+                <button
+                  key={m}
+                  onClick={() => handleSelect(m)}
+                  className={cn(
+                    'py-1.5 rounded-lg text-xs font-semibold transition-colors relative',
+                    isSel
+                      ? 'bg-emerald-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                  )}
+                >
+                  {label}
+                  {isToday && !isSel && (
+                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-emerald-400" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Botón "Hoy" */}
+          {!isCurrentMonth && (
+            <button
+              onClick={() => { onGoToToday(); setOpen(false) }}
+              className="w-full text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-slate-700/50 rounded-lg py-1.5 transition-colors"
+            >
+              Ir al mes actual
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1032,6 +1167,254 @@ function MovementsTable({
           </tr>
         </tfoot>
       </table>
+    </div>
+  )
+}
+
+// ── Vista de movimientos agrupada por categoría ──────────────────────────────
+//
+// Modo alternativo a MovementsTable (toggle "Lista / Por categoría" en la barra
+// de filtros). Cada categoría se muestra en su propia card colapsable con:
+// — header: icono + nombre + cantidad de movimientos + mini-chips de estado +
+//   total pagado en negrita
+// — tabla compacta interna (mismas celdas editables, sin columna "Categoría"
+//   ya que está en el header) con borde izquierdo del color de la categoría
+// — footer global con totales de todos los movimientos visibles
+
+function CategoryGroupedMovements({
+  movements, onQuickUpdate, onEdit, onDelete, selectedIds, onToggleSelect, onToggleSelectAll
+}: {
+  movements: FinanceMovement[]
+  onQuickUpdate: (id: string, data: { amount_actual?: number | null; status?: FinanceMovementStatus; payment_method?: FinancePaymentMethod; payment_date?: number | null; due_date?: number | null; notes?: string }) => void
+  onEdit:   (m: FinanceMovement) => void
+  onDelete: (m: FinanceMovement) => void
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
+  onToggleSelectAll: (ids: string[]) => void
+}) {
+  // Construye grupos ordenados por total pagado desc
+  const groups = useMemo(() => {
+    const map = new Map<string, { id: string | null; name: string; icon: string; color: string; movements: FinanceMovement[] }>()
+    for (const m of movements) {
+      const key   = m.concept?.category?.name ?? '__sin_cat__'
+      const entry = map.get(key) ?? {
+        id:    m.concept?.category?.id ?? null,
+        name:  m.concept?.category?.name ?? 'Sin categoría',
+        icon:  m.concept?.category?.icon ?? '📦',
+        color: m.concept?.category?.color ?? '#64748b',
+        movements: []
+      }
+      entry.movements.push(m)
+      map.set(key, entry)
+    }
+    return [...map.values()].sort((a, b) => {
+      const totalA = a.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+      const totalB = b.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+      return totalB - totalA
+    })
+  }, [movements])
+
+  // Estado de colapso por categoría (key = nombre)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const toggleCollapse = (name: string) =>
+    setCollapsed(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s })
+
+  if (movements.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Wallet size={28} className="text-slate-700 mb-3" />
+        <p className="text-sm text-slate-400">No hay movimientos cargados para este mes.</p>
+        <p className="text-xs text-slate-600 mt-1">Agregá uno nuevo o generá los movimientos a partir de tus conceptos activos.</p>
+      </div>
+    )
+  }
+
+  const grandTotal    = movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandPaid     = movements.filter(m => m.status === 'paid').reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandPending  = movements.filter(m => m.status === 'pending').reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandOverdue  = movements.filter(m => m.status === 'overdue').reduce((s, m) => s + getEffectiveAmount(m), 0)
+
+  return (
+    <div className="space-y-3">
+      {groups.map(group => {
+        const isCollapsed = collapsed.has(group.name)
+        const total       = group.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+        const paidCount   = group.movements.filter(m => m.status === 'paid').length
+        const pendCount   = group.movements.filter(m => m.status === 'pending').length
+        const overdCount  = group.movements.filter(m => m.status === 'overdue').length
+        const ids         = group.movements.map(m => m.id)
+        const allSel      = ids.length > 0 && ids.every(id => selectedIds.has(id))
+
+        return (
+          <div
+            key={group.name}
+            className="rounded-xl border border-slate-700/70 overflow-hidden"
+            style={{ borderLeftColor: group.color, borderLeftWidth: 3 }}
+          >
+            {/* ── Header de categoría ────────────────────────────────────────── */}
+            <div
+              className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-800/70 cursor-pointer select-none hover:bg-slate-800 transition-colors"
+              onClick={() => toggleCollapse(group.name)}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Checkbox de selección de toda la categoría */}
+                <input
+                  type="checkbox"
+                  checked={allSel}
+                  onChange={e => { e.stopPropagation(); onToggleSelectAll(ids) }}
+                  onClick={e => e.stopPropagation()}
+                  className="accent-emerald-500 flex-shrink-0"
+                  title={allSel ? 'Deseleccionar categoría' : 'Seleccionar categoría'}
+                />
+                <span className="text-base leading-none">{group.icon}</span>
+                <span className="text-sm font-semibold text-slate-200 truncate">{group.name}</span>
+                <span className="text-[11px] text-slate-500 flex-shrink-0">{group.movements.length} mov.</span>
+                {/* Mini chips de estado */}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {paidCount  > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 rounded-full px-1.5 py-0.5">{paidCount} ✓</span>}
+                  {pendCount  > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400 bg-amber-950/50 border border-amber-800/40 rounded-full px-1.5 py-0.5">{pendCount} ○</span>}
+                  {overdCount > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-400 bg-rose-950/50 border border-rose-800/40 rounded-full px-1.5 py-0.5">{overdCount} !</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span className="text-sm font-bold text-slate-100">{formatCurrency(total)}</span>
+                <ChevronDown size={14} className={cn('text-slate-500 transition-transform', isCollapsed ? '' : 'rotate-180')} />
+              </div>
+            </div>
+
+            {/* ── Tabla compacta de movimientos de la categoría ─────────────── */}
+            {!isCollapsed && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-800/40">
+                    <tr className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
+                      <th className="px-3 py-1.5 w-8">
+                        <input type="checkbox" checked={allSel}
+                          onChange={() => onToggleSelectAll(ids)}
+                          ref={el => { if (el) el.indeterminate = ids.some(id => selectedIds.has(id)) && !allSel }}
+                          className="accent-emerald-500"
+                        />
+                      </th>
+                      <th className="px-3 py-1.5 text-left">Concepto</th>
+                      <th className="px-3 py-1.5 text-left">Tipo</th>
+                      <th className="px-3 py-1.5 text-right">Mes ant.</th>
+                      <th className="px-3 py-1.5 text-left">Actual</th>
+                      <th className="px-3 py-1.5 text-left">Var.</th>
+                      <th className="px-3 py-1.5 text-left">Estado</th>
+                      <th className="px-3 py-1.5 text-left">Método</th>
+                      <th className="px-3 py-1.5 text-left">Pago</th>
+                      <th className="px-3 py-1.5 text-left">Venc.</th>
+                      <th className="px-3 py-1.5 text-left">Notas</th>
+                      <th className="px-3 py-1.5 text-right">Acc.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {group.movements.map(m => {
+                      const diffPct   = (m.previous_month_amount && m.amount_actual !== null)
+                        ? ((m.amount_actual - m.previous_month_amount) / m.previous_month_amount) * 100
+                        : null
+                      const isSel = selectedIds.has(m.id)
+                      return (
+                        <tr key={m.id} className={cn('group hover:bg-slate-800/30 transition-colors', isSel && 'bg-emerald-950/20')}>
+                          <td className="px-3 py-1.5">
+                            <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(m.id)} className="accent-emerald-500" />
+                          </td>
+                          <td className="px-3 py-1.5 font-medium text-slate-200 whitespace-nowrap">{m.concept?.name ?? '—'}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <span className="text-[11px] text-slate-400">{FINANCE_EXPENSE_TYPE_LABELS[m.concept?.expense_type ?? 'variable'] ?? '—'}</span>
+                          </td>
+                          <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                            {m.previous_month_amount !== null ? (
+                              <span className="text-xs text-slate-500">{formatCurrency(m.previous_month_amount)}</span>
+                            ) : <span className="text-slate-600 text-xs">—</span>}
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {diffPct !== null ? (
+                              <span className="text-xs font-semibold" style={{ color: getDiffColor(diffPct) }}>
+                                {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
+                              </span>
+                            ) : <span className="text-slate-600 text-xs">—</span>}
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              <EditableStatus movement={m} onSave={v => onQuickUpdate(m.id, { status: v, payment_date: v === 'paid' ? (m.payment_date ?? Date.now()) : m.payment_date })} />
+                              {m.status !== 'paid' && (
+                                <button
+                                  onClick={() => onQuickUpdate(m.id, { status: 'paid', payment_date: m.payment_date ?? Date.now() })}
+                                  title="Marcar como pagado"
+                                  className="p-1 rounded-md text-slate-600 hover:text-emerald-400 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <CheckCircle2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-1.5 text-xs whitespace-nowrap">
+                            <EditablePaymentMethod value={m.payment_method} onSave={v => onQuickUpdate(m.id, { payment_method: v })} />
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <EditableDate value={m.payment_date} onSave={v => onQuickUpdate(m.id, { payment_date: v })} />
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <EditableDate value={m.due_date} onSave={v => onQuickUpdate(m.id, { due_date: v })} />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <EditableNotes value={m.notes} onSave={v => onQuickUpdate(m.id, { notes: v })} />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => onEdit(m)} title="Editar" className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"><Edit3 size={13} /></button>
+                              <button onClick={() => onDelete(m)} title="Eliminar" className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 transition-colors"><Trash2 size={13} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  {/* Subtotal por categoría */}
+                  <tfoot className="bg-slate-800/30 border-t border-slate-700/60">
+                    <tr>
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-[11px] font-semibold text-slate-500">Subtotal {group.name}</td>
+                      <td className="px-3 py-1.5 text-right text-xs font-semibold text-slate-500">
+                        {formatCurrency(group.movements.reduce((s, m) => s + (m.previous_month_amount ?? 0), 0))}
+                      </td>
+                      <td className="px-3 py-1.5 text-sm font-bold text-slate-200" style={{ color: group.color }}>
+                        {formatCurrency(total)}
+                      </td>
+                      <td colSpan={7} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* ── Footer global ─────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-700/70 bg-slate-800/50 px-5 py-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-0.5">Total del mes</p>
+            <p className="text-base font-bold text-slate-100">{formatCurrency(grandTotal)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-emerald-600 mb-0.5">Pagado</p>
+            <p className="text-base font-bold text-emerald-400">{formatCurrency(grandPaid)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-600 mb-0.5">Pendiente</p>
+            <p className="text-base font-bold text-amber-400">{formatCurrency(grandPending)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-rose-700 mb-0.5">Vencido</p>
+            <p className="text-base font-bold text-rose-400">{formatCurrency(grandOverdue)}</p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -4106,6 +4489,8 @@ export default function FinanceDashboard() {
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
+  // Vista de movimientos: 'table' (tabla plana clásica) | 'grouped' (agrupada por categoría)
+  const [movementsView, setMovementsView] = useState<'table' | 'grouped'>('table')
   // 'overview' (Dashboard) como pestaña de entrada: el usuario ve primero el
   // resumen del mes (alertas, totales) y desde ahí decide si necesita ir a
   // trabajar con el detalle en "Movimientos".
@@ -4177,11 +4562,6 @@ export default function FinanceDashboard() {
     const { overdue, recurringUnpaid } = getMonthAlertMovements(movements)
     return overdue.length + recurringUnpaid.length
   }, [movements])
-
-  const goToMonth = (delta: number) => {
-    const d = new Date(period.year, period.month - 1 + delta, 1)
-    setPeriod({ month: d.getMonth() + 1, year: d.getFullYear() })
-  }
 
   const goToToday = () => {
     const d = new Date()
@@ -4259,23 +4639,13 @@ export default function FinanceDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Navegación de mes */}
-            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg">
-              <button onClick={() => goToMonth(-1)} className="p-2 text-slate-400 hover:text-slate-200 transition-colors" title="Mes anterior">
-                <ChevronLeft size={15} />
-              </button>
-              <button
-                onClick={goToToday}
-                className={cn('px-3 py-1.5 text-xs font-semibold capitalize min-w-[140px] text-center transition-colors',
-                  isCurrentMonth ? 'text-emerald-400' : 'text-slate-200 hover:text-emerald-300')}
-                title="Ir al mes actual"
-              >
-                {getMonthLabel(period.month, period.year)}
-              </button>
-              <button onClick={() => goToMonth(1)} className="p-2 text-slate-400 hover:text-slate-200 transition-colors" title="Mes siguiente">
-                <ChevronRight size={15} />
-              </button>
-            </div>
+            {/* Navegación de mes — selector rápido con grilla de meses */}
+            <MonthPickerDropdown
+              period={period}
+              onChange={(month, year) => setPeriod({ month, year })}
+              isCurrentMonth={isCurrentMonth}
+              onGoToToday={goToToday}
+            />
 
             <button
               onClick={handleGenerate}
@@ -4474,6 +4844,32 @@ export default function FinanceDashboard() {
               totalCount={movements.length}
             />
 
+            {/* Toggle vista: Lista plana ↔ Agrupada por categoría */}
+            <div className="flex items-center justify-end -mt-2">
+              <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+                <button
+                  onClick={() => setMovementsView('table')}
+                  title="Vista de lista"
+                  className={cn('flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors',
+                    movementsView === 'table'
+                      ? 'bg-slate-700 text-slate-200'
+                      : 'text-slate-500 hover:text-slate-300')}
+                >
+                  <ListChecks size={13} /> Lista
+                </button>
+                <button
+                  onClick={() => setMovementsView('grouped')}
+                  title="Vista agrupada por categoría"
+                  className={cn('flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors',
+                    movementsView === 'grouped'
+                      ? 'bg-slate-700 text-slate-200'
+                      : 'text-slate-500 hover:text-slate-300')}
+                >
+                  <LayoutGrid size={13} /> Por categoría
+                </button>
+              </div>
+            </div>
+
             {selectedIds.size > 0 && (
               <BulkActionsBar
                 selected={selectedMovements}
@@ -4486,6 +4882,16 @@ export default function FinanceDashboard() {
               <div className="flex items-center gap-2 text-slate-500 text-sm py-10 justify-center">
                 <RefreshCw size={16} className="animate-spin" /> Cargando movimientos...
               </div>
+            ) : movementsView === 'grouped' ? (
+              <CategoryGroupedMovements
+                movements={filteredMovements}
+                onQuickUpdate={handleQuickUpdate}
+                onEdit={setFormMovement}
+                onDelete={handleDelete}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onToggleSelectAll={toggleSelectAll}
+              />
             ) : (
               <MovementsTable
                 movements={filteredMovements}
