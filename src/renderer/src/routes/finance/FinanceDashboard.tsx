@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import {
@@ -1844,38 +1845,70 @@ function QuickAddMovement({
   onCreate:  (data: CreateFinanceMovementInput) => void
   isPending: boolean
 }) {
-  const [open, setOpen]           = useState(false)
-  const [search, setSearch]       = useState('')
-  const [selected, setSelected]   = useState<FinanceConcept | null>(null)
-  const [amount, setAmount]       = useState('')
-  const [status, setStatus]       = useState<FinanceMovementStatus>('paid')
-  const [dateStr, setDateStr]     = useState(new Date().toISOString().slice(0, 10))
-  const containerRef              = useRef<HTMLDivElement>(null)
-  const searchRef                 = useRef<HTMLInputElement>(null)
-  const amountRef                 = useRef<HTMLInputElement>(null)
+  const [open, setOpen]         = useState(false)
+  const [search, setSearch]     = useState('')
+  const [selected, setSelected] = useState<FinanceConcept | null>(null)
+  const [amount, setAmount]     = useState('')
+  const [status, setStatus]     = useState<FinanceMovementStatus>('paid')
+  const [dateStr, setDateStr]   = useState(new Date().toISOString().slice(0, 10))
+  // Posición fija del dropdown — calculada desde el botón para no quedar cortada por
+  // contenedores ancestros con overflow:hidden
+  const [dropPos, setDropPos]   = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  // Cierre al click afuera
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropRef   = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const amountRef = useRef<HTMLInputElement>(null)
+
+  const DROP_WIDTH = 304  // px
+
+  const handleOpen = () => {
+    if (open) { handleClose(); return }
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (rect) {
+      // Alinear borde derecho del dropdown con borde derecho del botón,
+      // asegurando que no se vaya fuera del viewport por la izquierda.
+      const left = Math.max(8, rect.right - DROP_WIDTH)
+      setDropPos({ top: rect.bottom + 6, left })
+    }
+    setOpen(true)
+  }
+
+  // Cierre al click afuera (verifica tanto botón como dropdown — ahora son nodos separados)
   useEffect(() => {
     if (!open) return
-    const h = (e: MouseEvent) => { if (containerRef.current && !containerRef.current.contains(e.target as Node)) handleClose() }
+    const h = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (!buttonRef.current?.contains(t) && !dropRef.current?.contains(t)) handleClose()
+    }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [open])
 
-  // Foco en el search al abrir
-  useEffect(() => { if (open) setTimeout(() => searchRef.current?.focus(), 50) }, [open])
-  // Foco en monto al seleccionar concepto
-  useEffect(() => { if (selected) setTimeout(() => amountRef.current?.focus(), 50) }, [selected])
+  // Cierre al scroll para que no flote desconectado del botón
+  useEffect(() => {
+    if (!open) return
+    const h = () => handleClose()
+    window.addEventListener('scroll', h, true)
+    return () => window.removeEventListener('scroll', h, true)
+  }, [open])
+
+  // Foco automático
+  useEffect(() => { if (open)     setTimeout(() => searchRef.current?.focus(), 40) }, [open])
+  useEffect(() => { if (selected) setTimeout(() => amountRef.current?.focus(),  40) }, [selected])
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return concepts.slice(0, 8)
+    if (!search.trim()) return concepts.slice(0, 10)
     const q = search.toLowerCase()
     return concepts.filter(c =>
       c.name.toLowerCase().includes(q) || (c.category?.name ?? '').toLowerCase().includes(q)
-    ).slice(0, 8)
+    ).slice(0, 10)
   }, [concepts, search])
 
-  const handleClose = () => { setOpen(false); setSearch(''); setSelected(null); setAmount(''); setStatus('paid'); setDateStr(new Date().toISOString().slice(0, 10)) }
+  const handleClose = () => {
+    setOpen(false); setSearch(''); setSelected(null)
+    setAmount(''); setStatus('paid'); setDateStr(new Date().toISOString().slice(0, 10))
+  }
 
   const handleSelect = (c: FinanceConcept) => {
     setSelected(c)
@@ -1901,114 +1934,140 @@ function QuickAddMovement({
     handleClose()
   }
 
+  const dropdown = open ? createPortal(
+    <div
+      ref={dropRef}
+      style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: DROP_WIDTH, zIndex: 9999 }}
+      className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+    >
+      {/* Buscador */}
+      <div className="p-3 border-b border-slate-700/80">
+        <div className="relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={e => { setSearch(e.target.value); setSelected(null) }}
+            onKeyDown={e => { if (e.key === 'Escape') handleClose() }}
+            placeholder="Buscar concepto..."
+            className="w-full pl-8 pr-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+          />
+        </div>
+      </div>
+
+      {/* Lista de conceptos */}
+      {!selected && (
+        <div className="max-h-52 overflow-y-auto py-1">
+          {filtered.length === 0
+            ? <p className="px-3 py-4 text-xs text-slate-500 text-center">Sin coincidencias</p>
+            : filtered.map(c => (
+              <button
+                key={c.id}
+                onClick={() => handleSelect(c)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-700/60 active:bg-slate-700 transition-colors text-left"
+              >
+                <span className="text-base leading-none flex-shrink-0">{c.category?.icon ?? '📦'}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-200 truncate leading-tight">{c.name}</p>
+                  <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5">
+                    {c.category?.name ?? 'Sin categoría'}
+                    {c.default_amount ? <span className="text-slate-600"> · {formatCurrency(c.default_amount)}</span> : null}
+                  </p>
+                </div>
+              </button>
+            ))
+          }
+        </div>
+      )}
+
+      {/* Mini-formulario tras seleccionar */}
+      {selected && (
+        <div className="p-3 space-y-2.5">
+          {/* Cabecera del concepto seleccionado */}
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-700/60">
+            <span className="text-base leading-none">{selected.category?.icon ?? '📦'}</span>
+            <span className="text-sm font-semibold text-slate-200 truncate flex-1">{selected.name}</span>
+            <button
+              onClick={() => { setSelected(null); setSearch('') }}
+              className="text-[10px] text-slate-500 hover:text-emerald-400 border border-slate-700 hover:border-emerald-700/60 rounded px-1.5 py-0.5 transition-colors flex-shrink-0"
+            >
+              cambiar
+            </button>
+          </div>
+
+          {/* Monto */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] text-slate-500 w-12 flex-shrink-0">Monto</label>
+            <input
+              ref={amountRef}
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') handleClose() }}
+              placeholder={selected.default_amount ? String(selected.default_amount) : '0'}
+              className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-sm text-right tabular-nums text-slate-100 placeholder:text-slate-700 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20"
+            />
+          </div>
+
+          {/* Estado */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] text-slate-500 w-12 flex-shrink-0">Estado</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value as FinanceMovementStatus)}
+              className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
+            >
+              {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
+                <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Fecha */}
+          {status === 'paid' && (
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-slate-500 w-12 flex-shrink-0">Fecha</label>
+              <input
+                type="date"
+                value={dateStr}
+                onChange={e => setDateStr(e.target.value)}
+                className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/60"
+              />
+            </div>
+          )}
+
+          {/* Botón crear */}
+          <button
+            onClick={handleCreate}
+            disabled={isPending || !amount || !Number.isFinite(parseFloat(amount))}
+            className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg py-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+          >
+            {isPending ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+            Crear movimiento
+          </button>
+        </div>
+      )}
+    </div>,
+    document.body
+  ) : null
+
   return (
-    <div ref={containerRef} className="relative">
+    <>
       <button
-        onClick={() => setOpen(o => !o)}
-        className={cn('inline-flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-3 py-2 transition-colors',
+        ref={buttonRef}
+        onClick={handleOpen}
+        className={cn(
+          'inline-flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-3 py-2 transition-colors',
           open
             ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-300'
-            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500')}
+            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500'
+        )}
         title="Búsqueda rápida de concepto"
       >
         <Search size={13} /> Carga rápida
       </button>
-
-      {open && (
-        <div className="absolute top-full right-0 mt-1.5 z-50 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-80">
-          {/* Campo de búsqueda */}
-          <div className="p-3 border-b border-slate-700">
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-              <input
-                ref={searchRef}
-                value={search}
-                onChange={e => { setSearch(e.target.value); setSelected(null) }}
-                onKeyDown={e => { if (e.key === 'Escape') handleClose() }}
-                placeholder="Buscar concepto..."
-                className="w-full pl-8 pr-3 py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/60"
-              />
-            </div>
-          </div>
-
-          {/* Lista de conceptos filtrados */}
-          {!selected && (
-            <div className="py-1 max-h-48 overflow-y-auto">
-              {filtered.length === 0 && (
-                <p className="px-3 py-3 text-xs text-slate-500 text-center">Sin coincidencias</p>
-              )}
-              {filtered.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => handleSelect(c)}
-                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-700/50 transition-colors text-left"
-                >
-                  <span className="text-sm leading-none">{c.category?.icon ?? '📦'}</span>
-                  <div className="min-w-0">
-                    <p className="text-sm text-slate-200 truncate">{c.name}</p>
-                    <p className="text-[11px] text-slate-500">{c.category?.name ?? 'Sin categoría'}{c.default_amount ? ` · ${formatCurrency(c.default_amount)}` : ''}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Mini-formulario después de seleccionar */}
-          {selected && (
-            <div className="p-3 space-y-2.5">
-              <div className="flex items-center gap-2 text-sm text-slate-200 mb-1">
-                <span>{selected.category?.icon ?? '📦'}</span>
-                <span className="font-semibold truncate">{selected.name}</span>
-                <button onClick={() => { setSelected(null); setSearch('') }} className="ml-auto text-slate-500 hover:text-slate-300 text-[10px]">cambiar</button>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-slate-500 w-14 flex-shrink-0">Monto</label>
-                <input
-                  ref={amountRef}
-                  type="number"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') handleClose() }}
-                  placeholder="0"
-                  className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-sm text-right text-slate-100 focus:outline-none focus:border-emerald-500/60"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-slate-500 w-14 flex-shrink-0">Estado</label>
-                <select
-                  value={status}
-                  onChange={e => setStatus(e.target.value as FinanceMovementStatus)}
-                  className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
-                >
-                  {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
-                    <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
-                  ))}
-                </select>
-              </div>
-              {status === 'paid' && (
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] text-slate-500 w-14 flex-shrink-0">Fecha</label>
-                  <input
-                    type="date"
-                    value={dateStr}
-                    onChange={e => setDateStr(e.target.value)}
-                    className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/60"
-                  />
-                </div>
-              )}
-              <button
-                onClick={handleCreate}
-                disabled={isPending || !amount || !Number.isFinite(parseFloat(amount))}
-                className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg py-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isPending ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                Crear movimiento
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      {dropdown}
+    </>
   )
 }
 
