@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import {
@@ -1192,13 +1192,11 @@ function CategoryGroupedMovements({
   onToggleSelect: (id: string) => void
   onToggleSelectAll: (ids: string[]) => void
 }) {
-  // Construye grupos ordenados por total pagado desc
   const groups = useMemo(() => {
-    const map = new Map<string, { id: string | null; name: string; icon: string; color: string; movements: FinanceMovement[] }>()
+    const map = new Map<string, { name: string; icon: string; color: string; movements: FinanceMovement[] }>()
     for (const m of movements) {
       const key   = m.concept?.category?.name ?? '__sin_cat__'
       const entry = map.get(key) ?? {
-        id:    m.concept?.category?.id ?? null,
         name:  m.concept?.category?.name ?? 'Sin categoría',
         icon:  m.concept?.category?.icon ?? '📦',
         color: m.concept?.category?.color ?? '#64748b',
@@ -1207,14 +1205,12 @@ function CategoryGroupedMovements({
       entry.movements.push(m)
       map.set(key, entry)
     }
-    return [...map.values()].sort((a, b) => {
-      const totalA = a.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
-      const totalB = b.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
-      return totalB - totalA
-    })
+    return [...map.values()].sort((a, b) =>
+      b.movements.reduce((s, m) => s + getEffectiveAmount(m), 0) -
+      a.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+    )
   }, [movements])
 
-  // Estado de colapso por categoría (key = nombre)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const toggleCollapse = (name: string) =>
     setCollapsed(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s })
@@ -1229,192 +1225,674 @@ function CategoryGroupedMovements({
     )
   }
 
-  const grandTotal    = movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
-  const grandPaid     = movements.filter(m => m.status === 'paid').reduce((s, m) => s + getEffectiveAmount(m), 0)
-  const grandPending  = movements.filter(m => m.status === 'pending').reduce((s, m) => s + getEffectiveAmount(m), 0)
-  const grandOverdue  = movements.filter(m => m.status === 'overdue').reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandTotal   = movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandPaid    = movements.filter(m => m.status === 'paid').reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandPending = movements.filter(m => m.status === 'pending').reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandOverdue = movements.filter(m => m.status === 'overdue').reduce((s, m) => s + getEffectiveAmount(m), 0)
+  const grandPrev    = movements.reduce((s, m) => s + (m.previous_month_amount ?? 0), 0)
+
+  // TABLA ÚNICA — las columnas son compartidas por todos los grupos, así que
+  // Tipo, Mes ant., Actual, etc. quedan perfectamente alineadas entre categorías.
+  // Las filas de cabecera de categoría usan colSpan total y separan visualmente
+  // los grupos sin romper el layout de columnas.
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-800">
+      <table className="w-full text-sm">
+        {/* Anchos fijos por columna para alineación perfecta en toda la tabla */}
+        <colgroup>
+          <col className="w-9" />          {/* checkbox */}
+          <col className="w-44" />         {/* concepto */}
+          <col className="w-24" />         {/* tipo */}
+          <col className="w-28" />         {/* mes ant. */}
+          <col className="w-28" />         {/* actual */}
+          <col className="w-16" />         {/* var. % */}
+          <col className="w-36" />         {/* estado */}
+          <col className="w-28" />         {/* método */}
+          <col className="w-24" />         {/* pago */}
+          <col className="w-24" />         {/* venc. */}
+          <col />                          {/* notas (flexible) */}
+          <col className="w-16" />         {/* acciones */}
+        </colgroup>
+
+        <thead className="bg-slate-800/70 sticky top-0 z-10">
+          <tr>
+            <th className="px-3 py-2 w-9">
+              <input
+                type="checkbox"
+                title="Seleccionar todo"
+                checked={movements.length > 0 && movements.every(m => selectedIds.has(m.id))}
+                ref={el => { if (el) el.indeterminate = movements.some(m => selectedIds.has(m.id)) && !movements.every(m => selectedIds.has(m.id)) }}
+                onChange={() => onToggleSelectAll(movements.map(m => m.id))}
+                className="accent-emerald-500"
+              />
+            </th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Concepto</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Tipo</th>
+            <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider font-semibold text-slate-500">Mes anterior</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Mes actual</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Var.</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Estado</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Método</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Pago</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Vencimiento</th>
+            <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">Notas</th>
+            <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider font-semibold text-slate-500">Acc.</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {groups.map(group => {
+            const isCollapsed = collapsed.has(group.name)
+            const total       = group.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
+            const prevTotal   = group.movements.reduce((s, m) => s + (m.previous_month_amount ?? 0), 0)
+            const paidCount   = group.movements.filter(m => m.status === 'paid').length
+            const pendCount   = group.movements.filter(m => m.status === 'pending').length
+            const overdCount  = group.movements.filter(m => m.status === 'overdue').length
+            const ids         = group.movements.map(m => m.id)
+            const allSel      = ids.length > 0 && ids.every(id => selectedIds.has(id))
+
+            return (
+              <React.Fragment key={group.name}>
+                {/* ── Fila cabecera de categoría ─────────────────────────── */}
+                <tr
+                  className="cursor-pointer select-none hover:brightness-110 transition-all"
+                  style={{ backgroundColor: group.color + '18', borderLeft: `3px solid ${group.color}` }}
+                  onClick={() => toggleCollapse(group.name)}
+                >
+                  {/* Checkbox selección de categoría completa */}
+                  <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={allSel}
+                      ref={el => { if (el) el.indeterminate = ids.some(id => selectedIds.has(id)) && !allSel }}
+                      onChange={() => onToggleSelectAll(ids)}
+                      className="accent-emerald-500"
+                    />
+                  </td>
+                  {/* Info de la categoría — ocupa col 2-10 */}
+                  <td colSpan={9} className="px-3 py-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-sm leading-none">{group.icon}</span>
+                      <span className="text-sm font-bold" style={{ color: group.color }}>{group.name}</span>
+                      <span className="text-[11px] text-slate-500">{group.movements.length} {group.movements.length === 1 ? 'movimiento' : 'movimientos'}</span>
+                      <div className="flex items-center gap-1">
+                        {paidCount  > 0 && <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 rounded-full px-1.5 py-0.5">{paidCount} ✓</span>}
+                        {pendCount  > 0 && <span className="text-[10px] font-semibold text-amber-400  bg-amber-950/60  border border-amber-800/40  rounded-full px-1.5 py-0.5">{pendCount} ○</span>}
+                        {overdCount > 0 && <span className="text-[10px] font-semibold text-rose-400   bg-rose-950/60   border border-rose-800/40   rounded-full px-1.5 py-0.5">{overdCount} !</span>}
+                      </div>
+                    </div>
+                  </td>
+                  {/* Total de la categoría — col 11 (notas) */}
+                  <td className="px-3 py-2 text-left">
+                    <span className="text-sm font-bold text-slate-100">{formatCurrency(total)}</span>
+                  </td>
+                  {/* Chevron — col 12 (acciones) */}
+                  <td className="px-3 py-2 text-right">
+                    <ChevronDown size={14} className={cn('text-slate-400 transition-transform inline-block', isCollapsed ? '' : 'rotate-180')} />
+                  </td>
+                </tr>
+
+                {/* ── Filas de movimientos de la categoría ───────────────── */}
+                {!isCollapsed && group.movements.map(m => {
+                  const diffPct = (m.previous_month_amount && m.amount_actual !== null)
+                    ? ((m.amount_actual - m.previous_month_amount) / m.previous_month_amount) * 100
+                    : null
+                  const isSel = selectedIds.has(m.id)
+                  return (
+                    <tr
+                      key={m.id}
+                      style={{ borderLeft: `3px solid ${group.color}40` }}
+                      className={cn('group divide-y divide-slate-800/60 hover:bg-slate-800/30 transition-colors', isSel && 'bg-emerald-950/20')}
+                    >
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(m.id)} className="accent-emerald-500" />
+                      </td>
+                      <td className="px-3 py-2 font-medium text-slate-200 whitespace-nowrap">{m.concept?.name ?? '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-[11px] text-slate-400">{FINANCE_EXPENSE_TYPE_LABELS[m.concept?.expense_type ?? 'variable'] ?? '—'}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {m.previous_month_amount !== null
+                          ? <span className="text-xs text-slate-500">{formatCurrency(m.previous_month_amount)}</span>
+                          : <span className="text-slate-600 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {diffPct !== null
+                          ? <span className="text-xs font-semibold" style={{ color: getDiffColor(diffPct) }}>{diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%</span>
+                          : <span className="text-slate-600 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <EditableStatus movement={m} onSave={v => onQuickUpdate(m.id, { status: v, payment_date: v === 'paid' ? (m.payment_date ?? Date.now()) : m.payment_date })} />
+                          {m.status !== 'paid' && (
+                            <button
+                              onClick={() => onQuickUpdate(m.id, { status: 'paid', payment_date: m.payment_date ?? Date.now() })}
+                              title="Marcar como pagado"
+                              className="p-1 rounded-md text-slate-600 hover:text-emerald-400 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <CheckCircle2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">
+                        <EditablePaymentMethod value={m.payment_method} onSave={v => onQuickUpdate(m.id, { payment_method: v })} />
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <EditableDate value={m.payment_date} onSave={v => onQuickUpdate(m.id, { payment_date: v })} />
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <EditableDate value={m.due_date} onSave={v => onQuickUpdate(m.id, { due_date: v })} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <EditableNotes value={m.notes} onSave={v => onQuickUpdate(m.id, { notes: v })} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => onEdit(m)}   title="Editar"    className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"><Edit3  size={13} /></button>
+                          <button onClick={() => onDelete(m)} title="Eliminar"  className="p-1 rounded text-slate-500 hover:text-rose-400  hover:bg-slate-700/50 transition-colors"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+
+                {/* ── Subtotal de la categoría ──────────────────────────── */}
+                {!isCollapsed && (
+                  <tr className="bg-slate-800/40 border-b border-slate-700">
+                    <td colSpan={3} className="px-3 py-1.5 text-right text-[11px] font-semibold text-slate-500">
+                      Subtotal {group.name}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-[11px] font-semibold text-slate-500">
+                      {formatCurrency(prevTotal)}
+                    </td>
+                    <td className="px-3 py-1.5 text-sm font-bold" style={{ color: group.color }}>
+                      {formatCurrency(total)}
+                    </td>
+                    <td colSpan={7} />
+                  </tr>
+                )}
+              </React.Fragment>
+            )
+          })}
+        </tbody>
+
+        {/* ── Totales globales ──────────────────────────────────────────────── */}
+        <tfoot className="bg-slate-800/60 border-t-2 border-slate-600">
+          <tr>
+            <td colSpan={3} className="px-3 py-2.5 text-right text-xs font-semibold text-slate-400">Total del mes</td>
+            <td className="px-3 py-2.5 text-right text-xs font-semibold text-slate-400">{formatCurrency(grandPrev)}</td>
+            <td className="px-3 py-2.5 text-sm font-bold text-slate-100">{formatCurrency(grandTotal)}</td>
+            <td className="px-3 py-2.5" />
+            <td className="px-3 py-2.5">
+              <div className="flex items-center gap-2 text-[11px] font-semibold flex-wrap">
+                <span className="text-emerald-400">✓ {formatCurrency(grandPaid)}</span>
+                {grandPending > 0 && <span className="text-amber-400">○ {formatCurrency(grandPending)}</span>}
+                {grandOverdue > 0 && <span className="text-rose-400">! {formatCurrency(grandOverdue)}</span>}
+              </div>
+            </td>
+            <td colSpan={5} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+// ── Modo Planilla — carga masiva estilo Excel ─────────────────────────────────
+//
+// Todos los conceptos activos del mes en filas editables agrupadas por categoría.
+// Los que ya tienen movimiento se muestran como "cargados" (en tono suave) para
+// no perder contexto; los que no, tienen campos vacíos listos para tipear.
+// Tab/Enter navega entre los campos de monto en orden visual — igual que Excel.
+// Los cambios se acumulan localmente y se crean todos juntos con "Guardar todo".
+
+type QuickFillDraft = {
+  amount:      string               // string para el <input type="number">, "" = sin valor
+  status:      FinanceMovementStatus
+  dateStr:     string               // YYYY-MM-DD o ""
+  editMode:    boolean              // true = concepto ya cargado pero en modo edición
+}
+
+function QuickFillMode({
+  concepts, movements, period, onClose, onBatchCreate, isSaving
+}: {
+  concepts:      FinanceConcept[]
+  movements:     FinanceMovement[]
+  period:        { month: number; year: number }
+  onClose:       () => void
+  onBatchCreate: (items: CreateFinanceMovementInput[]) => void
+  isSaving:      boolean
+}) {
+  // Mapa conceptId → movimiento existente del período (para saber cuáles ya están cargados)
+  const existingMap = useMemo(() => {
+    const m = new Map<string, FinanceMovement>()
+    for (const mov of movements) if (mov.concept_id) m.set(mov.concept_id, mov)
+    return m
+  }, [movements])
+
+  // Drafts: solo para conceptos SIN movimiento existente (o en editMode)
+  const [drafts, setDrafts] = useState<Record<string, QuickFillDraft>>(() => {
+    const init: Record<string, QuickFillDraft> = {}
+    for (const c of concepts) {
+      if (!existingMap.has(c.id)) {
+        init[c.id] = { amount: '', status: 'paid', dateStr: new Date().toISOString().slice(0, 10), editMode: false }
+      }
+    }
+    return init
+  })
+
+  const [filterEmpty, setFilterEmpty] = useState(false)
+
+  const setDraft = (conceptId: string, patch: Partial<QuickFillDraft>) =>
+    setDrafts(prev => ({ ...prev, [conceptId]: { ...prev[conceptId], ...patch } }))
+
+  // Refs para Tab/Enter entre inputs de monto
+  const amountRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const conceptList = useMemo(() => {
+    const filtered = filterEmpty
+      ? concepts.filter(c => !existingMap.has(c.id))
+      : concepts
+    // Agrupar por categoría
+    const map = new Map<string, { catName: string; catIcon: string; catColor: string; items: FinanceConcept[] }>()
+    for (const c of filtered) {
+      const key  = c.category?.name ?? '__sin_cat__'
+      const grp  = map.get(key) ?? { catName: c.category?.name ?? 'Sin categoría', catIcon: c.category?.icon ?? '📦', catColor: c.category?.color ?? '#64748b', items: [] }
+      grp.items.push(c)
+      map.set(key, grp)
+    }
+    return [...map.values()]
+  }, [concepts, existingMap, filterEmpty])
+
+  const emptyCount   = concepts.filter(c => !existingMap.has(c.id)).length
+  const filledDrafts = Object.entries(drafts).filter(([, d]) => d.amount.trim() !== '' && Number.isFinite(parseFloat(d.amount)))
+
+  const handleSave = () => {
+    const items: CreateFinanceMovementInput[] = filledDrafts.map(([conceptId, d]) => {
+      const concept = concepts.find(c => c.id === conceptId)
+      const amount  = parseFloat(d.amount)
+      return {
+        concept_id:      conceptId,
+        month:           period.month,
+        year:            period.year,
+        amount_estimated: concept?.default_amount ?? amount,
+        amount_actual:   amount,
+        status:          d.status,
+        payment_method:  concept?.payment_method ?? 'other',
+        payment_date:    d.status === 'paid' && d.dateStr ? dayjs(d.dateStr, 'YYYY-MM-DD').valueOf() : null,
+      }
+    })
+    if (items.length > 0) onBatchCreate(items)
+    else onClose()
+  }
+
+  // Navega al siguiente input de monto vacío (Tab/Enter behavior)
+  const focusNext = (conceptId: string) => {
+    const allConceptIds = conceptList.flatMap(g => g.items.map(c => c.id))
+    const idx = allConceptIds.indexOf(conceptId)
+    for (let i = idx + 1; i < allConceptIds.length; i++) {
+      const id  = allConceptIds[i]
+      const ref = amountRefs.current[id]
+      const d   = drafts[id]
+      if (ref && d && !existingMap.has(id)) { ref.focus(); break }
+    }
+  }
 
   return (
-    <div className="space-y-3">
-      {groups.map(group => {
-        const isCollapsed = collapsed.has(group.name)
-        const total       = group.movements.reduce((s, m) => s + getEffectiveAmount(m), 0)
-        const paidCount   = group.movements.filter(m => m.status === 'paid').length
-        const pendCount   = group.movements.filter(m => m.status === 'pending').length
-        const overdCount  = group.movements.filter(m => m.status === 'overdue').length
-        const ids         = group.movements.map(m => m.id)
-        const allSel      = ids.length > 0 && ids.every(id => selectedIds.has(id))
-
-        return (
-          <div
-            key={group.name}
-            className="rounded-xl border border-slate-700/70 overflow-hidden"
-            style={{ borderLeftColor: group.color, borderLeftWidth: 3 }}
+    <div className="rounded-xl border border-slate-700/50 bg-slate-900 overflow-hidden">
+      {/* Header del modo planilla */}
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-sm font-bold text-slate-200">
+            <ListChecks size={15} className="text-emerald-400" /> Modo planilla
+          </div>
+          <span className="text-[11px] text-slate-500">{emptyCount} sin cargar · {concepts.length - emptyCount} ya cargados</span>
+          {/* Toggle "solo sin cargar" */}
+          <button
+            onClick={() => setFilterEmpty(f => !f)}
+            className={cn('inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors',
+              filterEmpty
+                ? 'bg-amber-900/30 border-amber-700/50 text-amber-300'
+                : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:text-slate-200')}
           >
-            {/* ── Header de categoría ────────────────────────────────────────── */}
-            <div
-              className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-800/70 cursor-pointer select-none hover:bg-slate-800 transition-colors"
-              onClick={() => toggleCollapse(group.name)}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                {/* Checkbox de selección de toda la categoría */}
-                <input
-                  type="checkbox"
-                  checked={allSel}
-                  onChange={e => { e.stopPropagation(); onToggleSelectAll(ids) }}
-                  onClick={e => e.stopPropagation()}
-                  className="accent-emerald-500 flex-shrink-0"
-                  title={allSel ? 'Deseleccionar categoría' : 'Seleccionar categoría'}
-                />
-                <span className="text-base leading-none">{group.icon}</span>
-                <span className="text-sm font-semibold text-slate-200 truncate">{group.name}</span>
-                <span className="text-[11px] text-slate-500 flex-shrink-0">{group.movements.length} mov.</span>
-                {/* Mini chips de estado */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {paidCount  > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 rounded-full px-1.5 py-0.5">{paidCount} ✓</span>}
-                  {pendCount  > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400 bg-amber-950/50 border border-amber-800/40 rounded-full px-1.5 py-0.5">{pendCount} ○</span>}
-                  {overdCount > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-400 bg-rose-950/50 border border-rose-800/40 rounded-full px-1.5 py-0.5">{overdCount} !</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <span className="text-sm font-bold text-slate-100">{formatCurrency(total)}</span>
-                <ChevronDown size={14} className={cn('text-slate-500 transition-transform', isCollapsed ? '' : 'rotate-180')} />
-              </div>
-            </div>
-
-            {/* ── Tabla compacta de movimientos de la categoría ─────────────── */}
-            {!isCollapsed && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-800/40">
-                    <tr className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
-                      <th className="px-3 py-1.5 w-8">
-                        <input type="checkbox" checked={allSel}
-                          onChange={() => onToggleSelectAll(ids)}
-                          ref={el => { if (el) el.indeterminate = ids.some(id => selectedIds.has(id)) && !allSel }}
-                          className="accent-emerald-500"
-                        />
-                      </th>
-                      <th className="px-3 py-1.5 text-left">Concepto</th>
-                      <th className="px-3 py-1.5 text-left">Tipo</th>
-                      <th className="px-3 py-1.5 text-right">Mes ant.</th>
-                      <th className="px-3 py-1.5 text-left">Actual</th>
-                      <th className="px-3 py-1.5 text-left">Var.</th>
-                      <th className="px-3 py-1.5 text-left">Estado</th>
-                      <th className="px-3 py-1.5 text-left">Método</th>
-                      <th className="px-3 py-1.5 text-left">Pago</th>
-                      <th className="px-3 py-1.5 text-left">Venc.</th>
-                      <th className="px-3 py-1.5 text-left">Notas</th>
-                      <th className="px-3 py-1.5 text-right">Acc.</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {group.movements.map(m => {
-                      const diffPct   = (m.previous_month_amount && m.amount_actual !== null)
-                        ? ((m.amount_actual - m.previous_month_amount) / m.previous_month_amount) * 100
-                        : null
-                      const isSel = selectedIds.has(m.id)
-                      return (
-                        <tr key={m.id} className={cn('group hover:bg-slate-800/30 transition-colors', isSel && 'bg-emerald-950/20')}>
-                          <td className="px-3 py-1.5">
-                            <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(m.id)} className="accent-emerald-500" />
-                          </td>
-                          <td className="px-3 py-1.5 font-medium text-slate-200 whitespace-nowrap">{m.concept?.name ?? '—'}</td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            <span className="text-[11px] text-slate-400">{FINANCE_EXPENSE_TYPE_LABELS[m.concept?.expense_type ?? 'variable'] ?? '—'}</span>
-                          </td>
-                          <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                            {m.previous_month_amount !== null ? (
-                              <span className="text-xs text-slate-500">{formatCurrency(m.previous_month_amount)}</span>
-                            ) : <span className="text-slate-600 text-xs">—</span>}
-                          </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
-                          </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            {diffPct !== null ? (
-                              <span className="text-xs font-semibold" style={{ color: getDiffColor(diffPct) }}>
-                                {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
-                              </span>
-                            ) : <span className="text-slate-600 text-xs">—</span>}
-                          </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
-                              <EditableStatus movement={m} onSave={v => onQuickUpdate(m.id, { status: v, payment_date: v === 'paid' ? (m.payment_date ?? Date.now()) : m.payment_date })} />
-                              {m.status !== 'paid' && (
-                                <button
-                                  onClick={() => onQuickUpdate(m.id, { status: 'paid', payment_date: m.payment_date ?? Date.now() })}
-                                  title="Marcar como pagado"
-                                  className="p-1 rounded-md text-slate-600 hover:text-emerald-400 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all"
-                                >
-                                  <CheckCircle2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-1.5 text-xs whitespace-nowrap">
-                            <EditablePaymentMethod value={m.payment_method} onSave={v => onQuickUpdate(m.id, { payment_method: v })} />
-                          </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            <EditableDate value={m.payment_date} onSave={v => onQuickUpdate(m.id, { payment_date: v })} />
-                          </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            <EditableDate value={m.due_date} onSave={v => onQuickUpdate(m.id, { due_date: v })} />
-                          </td>
-                          <td className="px-3 py-1.5">
-                            <EditableNotes value={m.notes} onSave={v => onQuickUpdate(m.id, { notes: v })} />
-                          </td>
-                          <td className="px-3 py-1.5">
-                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => onEdit(m)} title="Editar" className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"><Edit3 size={13} /></button>
-                              <button onClick={() => onDelete(m)} title="Eliminar" className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 transition-colors"><Trash2 size={13} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  {/* Subtotal por categoría */}
-                  <tfoot className="bg-slate-800/30 border-t border-slate-700/60">
-                    <tr>
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-[11px] font-semibold text-slate-500">Subtotal {group.name}</td>
-                      <td className="px-3 py-1.5 text-right text-xs font-semibold text-slate-500">
-                        {formatCurrency(group.movements.reduce((s, m) => s + (m.previous_month_amount ?? 0), 0))}
-                      </td>
-                      <td className="px-3 py-1.5 text-sm font-bold text-slate-200" style={{ color: group.color }}>
-                        {formatCurrency(total)}
-                      </td>
-                      <td colSpan={7} />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
-        )
-      })}
-
-      {/* ── Footer global ─────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-700/70 bg-slate-800/50 px-5 py-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-0.5">Total del mes</p>
-            <p className="text-base font-bold text-slate-100">{formatCurrency(grandTotal)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-emerald-600 mb-0.5">Pagado</p>
-            <p className="text-base font-bold text-emerald-400">{formatCurrency(grandPaid)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-600 mb-0.5">Pendiente</p>
-            <p className="text-base font-bold text-amber-400">{formatCurrency(grandPending)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-rose-700 mb-0.5">Vencido</p>
-            <p className="text-base font-bold text-rose-400">{formatCurrency(grandOverdue)}</p>
-          </div>
+            {filterEmpty ? <Eye size={12} /> : <EyeOff size={12} />}
+            {filterEmpty ? 'Mostrando solo sin cargar' : 'Solo sin cargar'}
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-slate-500">{filledDrafts.length} con monto cargado</span>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || filledDrafts.length === 0}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-4 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            Guardar todo ({filledDrafts.length})
+          </button>
+          <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors" title="Salir del modo planilla">
+            <X size={14} />
+          </button>
         </div>
       </div>
+
+      {/* Cuerpo — grupos por categoría */}
+      <div className="overflow-y-auto max-h-[65vh]">
+        {conceptList.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <CheckCircle2 size={24} className="text-emerald-600 mb-2" />
+            <p className="text-sm text-slate-400">Todos los conceptos activos ya tienen movimiento este mes.</p>
+          </div>
+        )}
+        {conceptList.map(group => (
+          <div key={group.catName}>
+            {/* Cabecera de categoría */}
+            <div
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border-b border-t border-slate-700/60 sticky top-0 z-10"
+              style={{ borderLeft: `3px solid ${group.catColor}` }}
+            >
+              <span className="text-sm">{group.catIcon}</span>
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: group.catColor }}>{group.catName}</span>
+              <span className="text-[11px] text-slate-500">{group.items.filter(c => !existingMap.has(c.id)).length} sin cargar</span>
+            </div>
+
+            {/* Filas de conceptos */}
+            {group.items.map(c => {
+              const existing = existingMap.get(c.id)
+              const draft    = drafts[c.id]
+              const isLoaded = !!existing && !draft?.editMode
+
+              if (isLoaded) {
+                // Fila "ya cargado"
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 px-4 py-2 border-b border-slate-800/60 opacity-50 hover:opacity-80 transition-opacity"
+                  >
+                    <span className="w-44 text-xs text-slate-400 truncate">{c.name}</span>
+                    <span className="w-28 text-xs text-slate-500 text-right">{formatCurrency(existing!.amount_actual ?? existing!.amount_estimated)}</span>
+                    <span className="text-xs text-slate-500 flex-1">{FINANCE_STATUS_LABELS[existing!.status]}</span>
+                    <button
+                      onClick={() => {
+                        const d = { amount: String(existing!.amount_actual ?? existing!.amount_estimated ?? ''), status: existing!.status, dateStr: existing!.payment_date ? dayjs(existing!.payment_date).format('YYYY-MM-DD') : '', editMode: true }
+                        setDrafts(prev => ({ ...prev, [c.id]: d }))
+                      }}
+                      className="text-[10px] text-slate-500 hover:text-emerald-400 border border-slate-700 hover:border-emerald-700 rounded px-1.5 py-0.5 transition-colors"
+                    >
+                      editar
+                    </button>
+                  </div>
+                )
+              }
+
+              if (!draft) return null  // concepto sin draft y sin movimiento — no debería ocurrir
+
+              // Fila editable
+              return (
+                <div
+                  key={c.id}
+                  className={cn('flex items-center gap-3 px-4 py-2 border-b border-slate-800/60 hover:bg-slate-800/20 transition-colors group',
+                    draft.amount ? 'bg-emerald-950/10' : '')}
+                >
+                  {/* Nombre del concepto */}
+                  <span className="w-44 text-sm text-slate-200 truncate flex-shrink-0" title={c.name}>{c.name}</span>
+
+                  {/* Monto */}
+                  <input
+                    ref={el => { amountRefs.current[c.id] = el }}
+                    type="number"
+                    value={draft.amount}
+                    onChange={e => setDraft(c.id, { amount: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); focusNext(c.id) } }}
+                    placeholder={c.default_amount ? String(c.default_amount) : 'Monto...'}
+                    className={cn('w-32 bg-slate-800 border rounded-lg px-2.5 py-1.5 text-sm text-right text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-1 transition-colors flex-shrink-0',
+                      draft.amount ? 'border-emerald-600/60 focus:border-emerald-500 focus:ring-emerald-500/30' : 'border-slate-700 focus:border-emerald-500/60 focus:ring-emerald-500/20')}
+                  />
+
+                  {/* Estado */}
+                  <select
+                    value={draft.status}
+                    onChange={e => setDraft(c.id, { status: e.target.value as FinanceMovementStatus })}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60 flex-shrink-0"
+                  >
+                    {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
+                      <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+
+                  {/* Fecha de pago */}
+                  {draft.status === 'paid' && (
+                    <input
+                      type="date"
+                      value={draft.dateStr}
+                      onChange={e => setDraft(c.id, { dateStr: e.target.value })}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/60 flex-shrink-0"
+                    />
+                  )}
+
+                  {/* Info del mes anterior */}
+                  {c.default_amount > 0 && (
+                    <span className="text-[11px] text-slate-600 flex-1 truncate">habitual: {formatCurrency(c.default_amount)}</span>
+                  )}
+
+                  {/* Limpiar si ya tiene valor */}
+                  {draft.amount && (
+                    <button
+                      onClick={() => setDraft(c.id, { amount: '' })}
+                      className="p-1 text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Limpiar"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      {filledDrafts.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-800/60 border-t border-slate-700">
+          <span className="text-xs text-slate-400">
+            {filledDrafts.length} {filledDrafts.length === 1 ? 'movimiento' : 'movimientos'} listos para crear
+          </span>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-5 py-2 transition-colors disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+            Guardar todo ({filledDrafts.length})
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Búsqueda rápida / paleta de comandos ──────────────────────────────────────
+//
+// Mini paleta de búsqueda de conceptos para agregar un gasto puntual sin abrir
+// el formulario completo. Ideal para el día a día ("pagué el taxi, la nafta")
+// cuando ya tenés el mes armado pero querés registrar algo rápido.
+
+function QuickAddMovement({
+  concepts, period, onCreate, isPending
+}: {
+  concepts:  FinanceConcept[]
+  period:    { month: number; year: number }
+  onCreate:  (data: CreateFinanceMovementInput) => void
+  isPending: boolean
+}) {
+  const [open, setOpen]           = useState(false)
+  const [search, setSearch]       = useState('')
+  const [selected, setSelected]   = useState<FinanceConcept | null>(null)
+  const [amount, setAmount]       = useState('')
+  const [status, setStatus]       = useState<FinanceMovementStatus>('paid')
+  const [dateStr, setDateStr]     = useState(new Date().toISOString().slice(0, 10))
+  const containerRef              = useRef<HTMLDivElement>(null)
+  const searchRef                 = useRef<HTMLInputElement>(null)
+  const amountRef                 = useRef<HTMLInputElement>(null)
+
+  // Cierre al click afuera
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => { if (containerRef.current && !containerRef.current.contains(e.target as Node)) handleClose() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  // Foco en el search al abrir
+  useEffect(() => { if (open) setTimeout(() => searchRef.current?.focus(), 50) }, [open])
+  // Foco en monto al seleccionar concepto
+  useEffect(() => { if (selected) setTimeout(() => amountRef.current?.focus(), 50) }, [selected])
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return concepts.slice(0, 8)
+    const q = search.toLowerCase()
+    return concepts.filter(c =>
+      c.name.toLowerCase().includes(q) || (c.category?.name ?? '').toLowerCase().includes(q)
+    ).slice(0, 8)
+  }, [concepts, search])
+
+  const handleClose = () => { setOpen(false); setSearch(''); setSelected(null); setAmount(''); setStatus('paid'); setDateStr(new Date().toISOString().slice(0, 10)) }
+
+  const handleSelect = (c: FinanceConcept) => {
+    setSelected(c)
+    setSearch(c.name)
+    setAmount(c.default_amount ? String(c.default_amount) : '')
+    setStatus('paid')
+  }
+
+  const handleCreate = () => {
+    if (!selected) return
+    const num = parseFloat(amount)
+    if (!Number.isFinite(num)) return
+    onCreate({
+      concept_id:       selected.id,
+      month:            period.month,
+      year:             period.year,
+      amount_estimated: selected.default_amount ?? num,
+      amount_actual:    num,
+      status,
+      payment_method:   selected.payment_method,
+      payment_date:     status === 'paid' && dateStr ? dayjs(dateStr, 'YYYY-MM-DD').valueOf() : null,
+    })
+    handleClose()
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn('inline-flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-3 py-2 transition-colors',
+          open
+            ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-300'
+            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500')}
+        title="Búsqueda rápida de concepto"
+      >
+        <Search size={13} /> Carga rápida
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-1.5 z-50 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-80">
+          {/* Campo de búsqueda */}
+          <div className="p-3 border-b border-slate-700">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={e => { setSearch(e.target.value); setSelected(null) }}
+                onKeyDown={e => { if (e.key === 'Escape') handleClose() }}
+                placeholder="Buscar concepto..."
+                className="w-full pl-8 pr-3 py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/60"
+              />
+            </div>
+          </div>
+
+          {/* Lista de conceptos filtrados */}
+          {!selected && (
+            <div className="py-1 max-h-48 overflow-y-auto">
+              {filtered.length === 0 && (
+                <p className="px-3 py-3 text-xs text-slate-500 text-center">Sin coincidencias</p>
+              )}
+              {filtered.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => handleSelect(c)}
+                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-700/50 transition-colors text-left"
+                >
+                  <span className="text-sm leading-none">{c.category?.icon ?? '📦'}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-200 truncate">{c.name}</p>
+                    <p className="text-[11px] text-slate-500">{c.category?.name ?? 'Sin categoría'}{c.default_amount ? ` · ${formatCurrency(c.default_amount)}` : ''}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mini-formulario después de seleccionar */}
+          {selected && (
+            <div className="p-3 space-y-2.5">
+              <div className="flex items-center gap-2 text-sm text-slate-200 mb-1">
+                <span>{selected.category?.icon ?? '📦'}</span>
+                <span className="font-semibold truncate">{selected.name}</span>
+                <button onClick={() => { setSelected(null); setSearch('') }} className="ml-auto text-slate-500 hover:text-slate-300 text-[10px]">cambiar</button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-slate-500 w-14 flex-shrink-0">Monto</label>
+                <input
+                  ref={amountRef}
+                  type="number"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') handleClose() }}
+                  placeholder="0"
+                  className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-sm text-right text-slate-100 focus:outline-none focus:border-emerald-500/60"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-slate-500 w-14 flex-shrink-0">Estado</label>
+                <select
+                  value={status}
+                  onChange={e => setStatus(e.target.value as FinanceMovementStatus)}
+                  className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
+                >
+                  {(Object.keys(FINANCE_STATUS_LABELS) as FinanceMovementStatus[]).map(s => (
+                    <option key={s} value={s}>{FINANCE_STATUS_LABELS[s]}</option>
+                  ))}
+                </select>
+              </div>
+              {status === 'paid' && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] text-slate-500 w-14 flex-shrink-0">Fecha</label>
+                  <input
+                    type="date"
+                    value={dateStr}
+                    onChange={e => setDateStr(e.target.value)}
+                    className="flex-1 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/60"
+                  />
+                </div>
+              )}
+              <button
+                onClick={handleCreate}
+                disabled={isPending || !amount || !Number.isFinite(parseFloat(amount))}
+                className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg py-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isPending ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                Crear movimiento
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -4490,7 +4968,10 @@ export default function FinanceDashboard() {
   const [showImport, setShowImport] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
   // Vista de movimientos: 'table' (tabla plana clásica) | 'grouped' (agrupada por categoría)
-  const [movementsView, setMovementsView] = useState<'table' | 'grouped'>('table')
+  const [movementsView, setMovementsView] = useState<'table' | 'grouped'>('grouped')
+  // Modo planilla: reemplaza la tabla de movimientos con la vista de carga masiva estilo Excel.
+  // Al activarlo se ocultan las vistas normales (lista / por categoría) hasta cerrarlo.
+  const [showQuickFill, setShowQuickFill] = useState(false)
   // 'overview' (Dashboard) como pestaña de entrada: el usuario ve primero el
   // resumen del mes (alertas, totales) y desde ahí decide si necesita ir a
   // trabajar con el detalle en "Movimientos".
@@ -4506,6 +4987,7 @@ export default function FinanceDashboard() {
   const { data: topIncreases = [] } = useFinanceTopIncreases(period.month, period.year)
 
   const quickUpdate     = useQuickUpdateFinanceMovement()
+  const createMovement  = useCreateFinanceMovement()
   const deleteMov       = useDeleteFinanceMovement()
   const generateMov     = useGenerateMovementsForMonth()
   const generateFromPrev = useGenerateMovementsFromPreviousMonth()
@@ -4592,6 +5074,14 @@ export default function FinanceDashboard() {
 
   const handleQuickUpdate = (id: string, data: Parameters<typeof quickUpdate.mutate>[0]['data']) =>
     quickUpdate.mutate({ id, data })
+
+  /** Modo planilla — crea en secuencia todos los drafts acumulados y cierra el modo al terminar. */
+  const handleBatchCreate = async (items: CreateFinanceMovementInput[]) => {
+    for (const item of items) {
+      await createMovement.mutateAsync(item)
+    }
+    setShowQuickFill(false)
+  }
 
   const handleDelete = async (m: FinanceMovement) => {
     if (!confirm(`¿Eliminar el movimiento "${m.concept?.name ?? ''}" de ${getMonthLabel(m.month, m.year)}?`)) return
@@ -4844,33 +5334,67 @@ export default function FinanceDashboard() {
               totalCount={movements.length}
             />
 
-            {/* Toggle vista: Lista plana ↔ Agrupada por categoría */}
-            <div className="flex items-center justify-end -mt-2">
-              <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+            {/* Toggle vista + botones de carga rápida */}
+            <div className="flex items-center justify-between -mt-2 gap-2">
+              {/* Izquierda: acciones de carga rápida */}
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setMovementsView('table')}
-                  title="Vista de lista"
-                  className={cn('flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors',
-                    movementsView === 'table'
-                      ? 'bg-slate-700 text-slate-200'
-                      : 'text-slate-500 hover:text-slate-300')}
+                  onClick={() => setShowQuickFill(f => !f)}
+                  title="Modo planilla — carga masiva estilo Excel"
+                  className={cn('inline-flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-3 py-2 transition-colors',
+                    showQuickFill
+                      ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500')}
                 >
-                  <ListChecks size={13} /> Lista
+                  <ListChecks size={13} /> Modo planilla
                 </button>
-                <button
-                  onClick={() => setMovementsView('grouped')}
-                  title="Vista agrupada por categoría"
-                  className={cn('flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors',
-                    movementsView === 'grouped'
-                      ? 'bg-slate-700 text-slate-200'
-                      : 'text-slate-500 hover:text-slate-300')}
-                >
-                  <LayoutGrid size={13} /> Por categoría
-                </button>
+                <QuickAddMovement
+                  concepts={concepts}
+                  period={period}
+                  onCreate={data => createMovement.mutate(data)}
+                  isPending={createMovement.isPending}
+                />
               </div>
+              {/* Derecha: toggle lista / por categoría (solo visible si no está en modo planilla) */}
+              {!showQuickFill && (
+                <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setMovementsView('table')}
+                    title="Vista de lista"
+                    className={cn('flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors',
+                      movementsView === 'table'
+                        ? 'bg-slate-700 text-slate-200'
+                        : 'text-slate-500 hover:text-slate-300')}
+                  >
+                    <ListChecks size={13} /> Lista
+                  </button>
+                  <button
+                    onClick={() => setMovementsView('grouped')}
+                    title="Vista agrupada por categoría"
+                    className={cn('flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors',
+                      movementsView === 'grouped'
+                        ? 'bg-slate-700 text-slate-200'
+                        : 'text-slate-500 hover:text-slate-300')}
+                  >
+                    <LayoutGrid size={13} /> Por categoría
+                  </button>
+                </div>
+              )}
             </div>
 
-            {selectedIds.size > 0 && (
+            {/* Modo planilla — carga masiva */}
+            {showQuickFill && (
+              <QuickFillMode
+                concepts={concepts.filter(c => c.is_active !== 0)}
+                movements={movements}
+                period={period}
+                onClose={() => setShowQuickFill(false)}
+                onBatchCreate={handleBatchCreate}
+                isSaving={createMovement.isPending}
+              />
+            )}
+
+            {!showQuickFill && selectedIds.size > 0 && (
               <BulkActionsBar
                 selected={selectedMovements}
                 onMarkPaid={handleBulkMarkPaid}
@@ -4878,7 +5402,7 @@ export default function FinanceDashboard() {
               />
             )}
 
-            {loadingMovements ? (
+            {!showQuickFill && (loadingMovements ? (
               <div className="flex items-center gap-2 text-slate-500 text-sm py-10 justify-center">
                 <RefreshCw size={16} className="animate-spin" /> Cargando movimientos...
               </div>
@@ -4902,7 +5426,7 @@ export default function FinanceDashboard() {
                 onToggleSelect={toggleSelect}
                 onToggleSelectAll={toggleSelectAll}
               />
-            )}
+            ))}
           </>
         )}
 
