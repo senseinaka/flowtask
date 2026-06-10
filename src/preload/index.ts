@@ -19,6 +19,7 @@ import type {
   ComexFreightOperatorContact,
   ComexBrand, CreateComexBrandInput,
   ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone,
+  ImportOrderPlanningAIReport, PlanningAIReportType,
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
   CreateComexQuoteInput, CreateComexPaymentInput,
@@ -205,10 +206,23 @@ const api = {
       create:      (input: CreateImportOrderPlanningInput):            Promise<ImportOrderPlanning>        => ipcRenderer.invoke('comex:plannings:create', input),
       update:      (id: string, data: Partial<ImportOrderPlanning>):   Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:update', id, data),
       delete:      (id: string):                                       Promise<void>                       => ipcRenderer.invoke('comex:plannings:delete', id),
-      recalculate: (id: string):                                       Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:recalculate', id)
+      recalculate: (id: string):                                       Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:recalculate', id),
+      export:      (plannings: ImportOrderPlanning[]):                 Promise<{ filePath: string } | null> => ipcRenderer.invoke('comex:plannings:export', plannings),
+      ai: {
+        recommend: (planningId: string): Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:ai:recommend', planningId)
+      }
     },
     planningMilestones: {
       update: (id: string, data: Partial<ImportOrderPlanningMilestone>): Promise<ImportOrderPlanningMilestone | null> => ipcRenderer.invoke('comex:planningMilestones:update', id, data)
+    },
+    planningAIReports: {
+      list: (filters?: { reportType?: PlanningAIReportType; brandId?: string; supplierId?: string }): Promise<ImportOrderPlanningAIReport[]> =>
+        ipcRenderer.invoke('comex:planningAIReports:list', filters),
+      generate: (input: { reportType: PlanningAIReportType; brandId?: string | null; supplierId?: string | null; periodStartDate?: number | null; periodEndDate?: number | null }): Promise<ImportOrderPlanningAIReport> =>
+        ipcRenderer.invoke('comex:planningAIReports:generate', input),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('comex:planningAIReports:delete', id),
+      export: (reports: ImportOrderPlanningAIReport[]): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('comex:planningAIReports:export', reports)
     },
     supplierContacts: {
       list:   (supplierId: string):                                      Promise<ComexSupplierContact[]> => ipcRenderer.invoke('comex:supplier-contacts:list', supplierId),

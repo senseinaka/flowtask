@@ -12,7 +12,8 @@ import type {
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
   ComexBrand, CreateComexBrandInput,
-  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone
+  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone,
+  PlanningAIReportType, ImportOrderPlanningAIReport
 } from '@shared/types'
 
 // ── Suppliers ─────────────────────────────────────────────────────────────────
@@ -170,6 +171,57 @@ export function useUpdatePlanningMilestone() {
       qc.invalidateQueries({ queryKey: ['comex-planning', planningId] })
       qc.invalidateQueries({ queryKey: ['comex-plannings'] })
     }
+  })
+}
+
+// ── IA de Programación Pedidos ──────────────────────────────────────────────────
+
+export function useGenerateComexPlanningAIRecommendation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (planningId: string) => window.api.comex.plannings.ai.recommend(planningId),
+    onSuccess: (_r, planningId) => {
+      qc.invalidateQueries({ queryKey: ['comex-planning', planningId] })
+      qc.invalidateQueries({ queryKey: ['comex-plannings'] })
+    }
+  })
+}
+
+export function useComexPlanningAIReports(filters?: { reportType?: PlanningAIReportType; brandId?: string; supplierId?: string }) {
+  return useQuery({
+    queryKey: ['comex-planning-ai-reports', filters],
+    queryFn: () => window.api.comex.planningAIReports.list(filters)
+  })
+}
+
+export function useGenerateComexPlanningAIReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { reportType: PlanningAIReportType; brandId?: string | null; supplierId?: string | null; periodStartDate?: number | null; periodEndDate?: number | null }) =>
+      window.api.comex.planningAIReports.generate(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comex-planning-ai-reports'] }) }
+  })
+}
+
+export function useDeleteComexPlanningAIReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.planningAIReports.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comex-planning-ai-reports'] }) }
+  })
+}
+
+// ── Exportación: Programación Pedidos ────────────────────────────────────────
+
+export function useExportComexPlannings() {
+  return useMutation({
+    mutationFn: (plannings: ImportOrderPlanning[]) => window.api.comex.plannings.export(plannings)
+  })
+}
+
+export function useExportComexPlanningAIReports() {
+  return useMutation({
+    mutationFn: (reports: ImportOrderPlanningAIReport[]) => window.api.comex.planningAIReports.export(reports)
   })
 }
 

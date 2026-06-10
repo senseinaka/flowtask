@@ -25,8 +25,12 @@ import {
   createDespachanteContact, updateDespachanteContact, deleteDespachanteContact,
   listBrands, getBrand, createBrand, updateBrand, deleteBrand,
   listPlannings, getPlanning, createPlanning, updatePlanning, deletePlanning, recalculatePlanning,
-  updateMilestone
+  updateMilestone,
+  listPlanningAIReports, createPlanningAIReport, deletePlanningAIReport
 } from '../database/queries/comex'
+import { generatePlanningRecommendation, generatePlanningAIReport } from '../services/planning-ai.service'
+import type { GeneratePlanningAIReportInput } from '../services/planning-ai.service'
+import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/comex-planning-io.service'
 import { driveService } from '../services/drive.service'
 import { getAttachmentsDir } from '../database/db'
 import type {
@@ -45,8 +49,10 @@ import type {
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
   ComexBrand, CreateComexBrandInput,
-  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone
+  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone,
+  ImportOrderPlanningAIReport
 } from '@shared/types'
+import type { PlanningAIReportType } from '@shared/types'
 
 // ── Subcarpetas Drive por defecto para cada importación ───────────────────────
 
@@ -190,6 +196,62 @@ export function registerComexIpc(): void {
 
   // ── Hitos de programación ──────────────────────────────────────────────────────
   ipcMain.handle('comex:planningMilestones:update', (_e, id: string, data: Partial<ImportOrderPlanningMilestone>) => updateMilestone(id, data))
+
+  // ── IA de Programación Pedidos ────────────────────────────────────────────────
+  ipcMain.handle('comex:plannings:ai:recommend', async (_e, planningId: string) => {
+    const { summary, riskExplanation } = await generatePlanningRecommendation(planningId)
+    return updatePlanning(planningId, {
+      ai_recommendation_summary: summary,
+      ai_risk_explanation: riskExplanation
+    })
+  })
+
+  ipcMain.handle('comex:planningAIReports:list', (_e, filters?: { reportType?: PlanningAIReportType; brandId?: string; supplierId?: string }) =>
+    listPlanningAIReports(filters)
+  )
+  ipcMain.handle('comex:planningAIReports:generate', async (_e, input: GeneratePlanningAIReportInput) => {
+    const { tokensUsed, ...reportInput } = await generatePlanningAIReport(input)
+    void tokensUsed
+    return createPlanningAIReport(reportInput)
+  })
+  ipcMain.handle('comex:planningAIReports:delete', (_e, id: string) => deletePlanningAIReport(id))
+
+  // ── Exportación: Programación Pedidos ─────────────────────────────────────────
+  // Exporta la lista ya filtrada en pantalla (incluye filtros client-side de
+  // riesgo/proveedor/tipo/rango de fechas que no maneja `listPlannings`).
+  ipcMain.handle('comex:plannings:export', async (e, plannings: ImportOrderPlanning[]) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    if (!plannings.length) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Exportar programaciones',
+      defaultPath: 'programaciones-pedidos.xlsx',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+
+    writePlanningsExcel(result.filePath, plannings)
+    shell.showItemInFolder(result.filePath)
+    return { filePath: result.filePath }
+  })
+
+  ipcMain.handle('comex:planningAIReports:export', async (e, reports: ImportOrderPlanningAIReport[]) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    if (!reports.length) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Exportar reportes IA',
+      defaultPath: 'reportes-ia-programacion.xlsx',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+
+    const brandLabels = Object.fromEntries(listBrands().map((b) => [b.id, b.name]))
+    const supplierLabels = Object.fromEntries(listSuppliers().map((s) => [s.id, s.name]))
+    writePlanningAIReportsExcel(result.filePath, reports, brandLabels, supplierLabels)
+    shell.showItemInFolder(result.filePath)
+    return { filePath: result.filePath }
+  })
 
   // ── Imports ──────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:imports:list',   (_e, status?: string) => listImports(status))

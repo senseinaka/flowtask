@@ -10,7 +10,7 @@ dayjs.locale('es')
 
 import {
   useComexPlanning, useUpdateComexPlanning, useRecalculateComexPlanning,
-  useUpdatePlanningMilestone, useComexSuppliers
+  useUpdatePlanningMilestone, useComexSuppliers, useGenerateComexPlanningAIRecommendation
 } from '../../hooks/useComex'
 import {
   PLANNING_TYPES, PLANNING_TYPE_LABELS,
@@ -293,6 +293,7 @@ export default function ComexPlanningDetail() {
   const navigate = useNavigate()
   const updatePlanning = useUpdateComexPlanning()
   const recalculate = useRecalculateComexPlanning()
+  const generateAIRecommendation = useGenerateComexPlanningAIRecommendation()
 
   const { data: planning, isLoading } = useComexPlanning(id ?? null)
   const { data: suppliers = [] } = useComexSuppliers()
@@ -333,6 +334,14 @@ export default function ComexPlanningDetail() {
           )}
         </div>
         <RiskBadge status={planning.risk_status} />
+        <button
+          onClick={() => generateAIRecommendation.mutate(planning.id)}
+          disabled={generateAIRecommendation.isPending}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+        >
+          <Sparkles size={13} className={generateAIRecommendation.isPending ? 'animate-pulse' : ''} />
+          {generateAIRecommendation.isPending ? 'Analizando...' : 'Análisis IA'}
+        </button>
         <button
           onClick={() => recalculate.mutate(planning.id)}
           disabled={recalculate.isPending}
@@ -446,6 +455,19 @@ export default function ComexPlanningDetail() {
           placeholder="Observaciones sobre esta programación..."
           multiline
         />
+        {generateAIRecommendation.isPending && (
+          <div className="mt-4 pt-4 border-t border-slate-700/50">
+            <p className="text-sm text-slate-400 flex items-center gap-1.5">
+              <Sparkles size={13} className="animate-pulse text-cyan-400" />
+              Generando análisis con IA...
+            </p>
+          </div>
+        )}
+        {generateAIRecommendation.isError && (
+          <div className="mt-4 pt-4 border-t border-slate-700/50">
+            <p className="text-sm text-red-400">No se pudo generar el análisis IA. Verificá la configuración de IA e intentá nuevamente.</p>
+          </div>
+        )}
         {(planning.ai_recommendation_summary || planning.ai_risk_explanation) && (
           <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-3">
             {planning.ai_recommendation_summary && (

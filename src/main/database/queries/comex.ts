@@ -1118,7 +1118,8 @@ export function deleteBrand(id: string): void {
 
 import type {
   ImportOrderPlanning, CreateImportOrderPlanningInput,
-  ImportOrderPlanningMilestone
+  ImportOrderPlanningMilestone,
+  ImportOrderPlanningAIReport, CreateImportOrderPlanningAIReportInput
 } from '@shared/types'
 import { calculatePlanning, buildMilestoneRecords } from '../../services/order-planning.service'
 
@@ -1284,4 +1285,51 @@ export function updateMilestone(id: string, data: Partial<ImportOrderPlanningMil
   vals.push(id)
   db.prepare(`UPDATE import_order_planning_milestones SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
   return db.prepare('SELECT * FROM import_order_planning_milestones WHERE id = ?').get(id) as ImportOrderPlanningMilestone | null
+}
+
+// ─── Reportes IA de programación ───────────────────────────────────────────────
+
+export function listPlanningAIReports(filters?: {
+  reportType?: string
+  brandId?: string
+  supplierId?: string
+}): ImportOrderPlanningAIReport[] {
+  const db = getDb()
+  let sql = 'SELECT * FROM import_order_planning_ai_reports'
+  const conditions: string[] = []
+  const params: unknown[] = []
+  if (filters?.reportType) { conditions.push('report_type = ?'); params.push(filters.reportType) }
+  if (filters?.brandId) { conditions.push('brand_id = ?'); params.push(filters.brandId) }
+  if (filters?.supplierId) { conditions.push('supplier_id = ?'); params.push(filters.supplierId) }
+  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
+  sql += ' ORDER BY created_at DESC'
+  const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+  return rows as unknown as ImportOrderPlanningAIReport[]
+}
+
+export function getPlanningAIReport(id: string): ImportOrderPlanningAIReport | null {
+  const db = getDb()
+  const row = db.prepare('SELECT * FROM import_order_planning_ai_reports WHERE id = ?').get(id) as Record<string, unknown> | null
+  return row as unknown as ImportOrderPlanningAIReport | null
+}
+
+export function createPlanningAIReport(input: CreateImportOrderPlanningAIReportInput): ImportOrderPlanningAIReport {
+  const db = getDb()
+  const id = randomUUID()
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO import_order_planning_ai_reports
+      (id, report_type, brand_id, supplier_id, period_start_date, period_end_date, summary, findings, recommendations, risks, generated_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, input.report_type, input.brand_id, input.supplier_id,
+    input.period_start_date, input.period_end_date,
+    input.summary, input.findings, input.recommendations, input.risks,
+    input.generated_by, now
+  )
+  return getPlanningAIReport(id)!
+}
+
+export function deletePlanningAIReport(id: string): void {
+  getDb().prepare('DELETE FROM import_order_planning_ai_reports WHERE id = ?').run(id)
 }

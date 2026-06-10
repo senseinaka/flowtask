@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, DollarSign, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff } from 'lucide-react'
-import { useComexImports } from '../../hooks/useComex'
+import { useComexImports, useComexPlannings } from '../../hooks/useComex'
+import { PlanningDashboardPanel } from './ComexPlanningSummary'
 import { IMPORT_STATUS_LABELS, IMPORT_STATUS_COLORS } from '@shared/types'
 import type { ImportStatus, ComexImport } from '@shared/types'
 import { cn } from '../../components/ui/utils'
@@ -712,6 +713,7 @@ function InalPanel({ imports }: { imports: ComexImport[] }) {
 
 export default function ComexDashboard() {
   const { data: imports = [] } = useComexImports()
+  const { data: plannings = [] } = useComexPlannings({})
   const navigate = useNavigate()
   const today = dayjs()
 
@@ -846,6 +848,9 @@ export default function ComexDashboard() {
           </p>
         </div>
       </div>
+
+      {/* ── Programación de pedidos ── */}
+      {plannings.length > 0 && <PlanningDashboardPanel plannings={plannings} />}
 
       {/* ── Pipeline ── */}
       <Pipeline imports={imports} />

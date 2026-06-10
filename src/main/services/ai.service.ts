@@ -39,7 +39,7 @@ export function isAIConfigured(): boolean {
 
 let _client: Anthropic | null = null
 
-function getClient(): Anthropic {
+export function getClient(): Anthropic {
   if (!_client) {
     const key = store.get<string>('apiKey', '')
     if (!key) throw new Error('API key de Anthropic no configurada. Configurála en Ajustes → IA.')

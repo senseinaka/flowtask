@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarClock, Plus, X, Trash2, Check, ChevronRight, ArrowRight, Tag, Building2 } from 'lucide-react'
+import { CalendarClock, Plus, X, Trash2, Check, ChevronRight, ArrowRight, Tag, Building2, List, CalendarDays, GanttChartSquare, Sparkles, Download } from 'lucide-react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
@@ -10,17 +10,29 @@ import {
   useCreateComexPlanning,
   useDeleteComexPlanning,
   useComexBrands,
-  useComexSuppliers
+  useComexSuppliers,
+  useExportComexPlannings
 } from '../../hooks/useComex'
 import {
   PLANNING_STATUSES, PLANNING_STATUS_LABELS,
-  PLANNING_RISK_LABELS, PLANNING_RISK_COLORS,
+  PLANNING_RISK_STATUSES, PLANNING_RISK_LABELS, PLANNING_RISK_COLORS,
   PLANNING_TYPES, PLANNING_TYPE_LABELS
 } from '@shared/types'
 import type {
-  ImportOrderPlanning, PlanningStatus, PlanningType, ComexBrand
+  ImportOrderPlanning, PlanningStatus, PlanningType, PlanningRiskStatus, ComexBrand
 } from '@shared/types'
 import { cn } from '../../components/ui/utils'
+import ComexPlanningCalendar from './ComexPlanningCalendar'
+import ComexPlanningTimeline from './ComexPlanningTimeline'
+import { PlanningSummaryPanel, PlanningAlertsPanel } from './ComexPlanningSummary'
+
+type ViewMode = 'table' | 'calendar' | 'timeline'
+
+const VIEW_TABS: { value: ViewMode; label: string; icon: typeof List }[] = [
+  { value: 'table', label: 'Tabla', icon: List },
+  { value: 'calendar', label: 'Calendario', icon: CalendarDays },
+  { value: 'timeline', label: 'Timeline', icon: GanttChartSquare }
+]
 
 // ── Risk badge ──────────────────────────────────────────────────────────────────
 
@@ -285,23 +297,56 @@ function PlanningRow({ planning }: { planning: ImportOrderPlanning }) {
 // ── Main View ─────────────────────────────────────────────────────────────────
 
 export default function ComexPlannings() {
+  const navigate = useNavigate()
   const [brandFilter, setBrandFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<PlanningStatus | ''>('')
+  const [riskFilter, setRiskFilter] = useState<PlanningRiskStatus | ''>('')
+  const [supplierFilter, setSupplierFilter] = useState('')
+  const [planningTypeFilter, setPlanningTypeFilter] = useState<PlanningType | ''>('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [view, setView] = useState<ViewMode>('table')
 
   const { data: brands = [] } = useComexBrands()
+  const { data: suppliers = [] } = useComexSuppliers()
   const { data: plannings = [], isLoading } = useComexPlannings({
     brandId: brandFilter || undefined,
     status: statusFilter || undefined
   })
+  const exportPlannings = useExportComexPlannings()
+
+  const filtered = useMemo(() => {
+    const fromTs = dateFrom ? dayjs(dateFrom).startOf('day').valueOf() : null
+    const toTs = dateTo ? dayjs(dateTo).endOf('day').valueOf() : null
+    return plannings.filter((p) => {
+      if (riskFilter && p.risk_status !== riskFilter) return false
+      if (supplierFilter && p.supplier_id !== supplierFilter) return false
+      if (planningTypeFilter && p.planning_type !== planningTypeFilter) return false
+      if (fromTs && (!p.target_commercial_availability_date || p.target_commercial_availability_date < fromTs)) return false
+      if (toTs && (!p.target_commercial_availability_date || p.target_commercial_availability_date > toTs)) return false
+      return true
+    })
+  }, [plannings, riskFilter, supplierFilter, planningTypeFilter, dateFrom, dateTo])
 
   const sorted = useMemo(
-    () => [...plannings].sort((a, b) => {
+    () => [...filtered].sort((a, b) => {
       const order = { late: 0, at_risk: 1, tight: 2, on_time: 3 }
       return order[a.risk_status] - order[b.risk_status]
     }),
-    [plannings]
+    [filtered]
   )
+
+  const hasFilters = !!(brandFilter || statusFilter || riskFilter || supplierFilter || planningTypeFilter || dateFrom || dateTo)
+  const clearFilters = () => {
+    setBrandFilter('')
+    setStatusFilter('')
+    setRiskFilter('')
+    setSupplierFilter('')
+    setPlanningTypeFilter('')
+    setDateFrom('')
+    setDateTo('')
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -314,14 +359,39 @@ export default function ComexPlannings() {
             <p className="text-xs text-slate-400">Planificación de fechas de pedido por marca y cobertura</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors"
-        >
-          <Plus size={16} />
-          Nueva programación
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportPlannings.mutate(sorted)}
+            disabled={exportPlannings.isPending || sorted.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            <Download size={16} />
+            Exportar
+          </button>
+          <button
+            onClick={() => navigate('/comex/plannings/reports')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+          >
+            <Sparkles size={16} />
+            Reportes IA
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors"
+          >
+            <Plus size={16} />
+            Nueva programación
+          </button>
+        </div>
       </div>
+
+      {/* Resumen + alertas */}
+      {!isLoading && plannings.length > 0 && (
+        <>
+          <PlanningSummaryPanel plannings={plannings} />
+          <PlanningAlertsPanel plannings={plannings} />
+        </>
+      )}
 
       {/* Filters */}
       <div className="flex items-center gap-3">
@@ -345,26 +415,86 @@ export default function ComexPlannings() {
             <option key={s} value={s}>{PLANNING_STATUS_LABELS[s]}</option>
           ))}
         </select>
-        {(brandFilter || statusFilter) && (
+        <select
+          value={riskFilter}
+          onChange={(e) => setRiskFilter(e.target.value as PlanningRiskStatus | '')}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+        >
+          <option value="">Todos los riesgos</option>
+          {PLANNING_RISK_STATUSES.map((r) => (
+            <option key={r} value={r}>{PLANNING_RISK_LABELS[r]}</option>
+          ))}
+        </select>
+        <select
+          value={supplierFilter}
+          onChange={(e) => setSupplierFilter(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+        >
+          <option value="">Todos los proveedores</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        <select
+          value={planningTypeFilter}
+          onChange={(e) => setPlanningTypeFilter(e.target.value as PlanningType | '')}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+        >
+          <option value="">Todos los tipos</option>
+          {PLANNING_TYPES.map((t) => (
+            <option key={t} value={t}>{PLANNING_TYPE_LABELS[t]}</option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="Disponibilidad desde"
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="Disponibilidad hasta"
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+        />
+        {hasFilters && (
           <button
-            onClick={() => { setBrandFilter(''); setStatusFilter('') }}
+            onClick={clearFilters}
             className="text-xs text-slate-400 hover:text-white"
           >
             Limpiar filtros
           </button>
         )}
+
+        <div className="ml-auto flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
+          {VIEW_TABS.map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              onClick={() => setView(value)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                view === value ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              )}
+            >
+              <Icon size={13} />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Table */}
+      {/* Content */}
       {isLoading ? (
         <div className="text-center py-12 text-slate-500 text-sm">Cargando...</div>
       ) : sorted.length === 0 ? (
         <div className="text-center py-16">
           <CalendarClock size={40} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-medium">
-            {brandFilter || statusFilter ? 'Sin resultados' : 'Sin programaciones aún'}
+            {hasFilters ? 'Sin resultados' : 'Sin programaciones aún'}
           </p>
-          {!brandFilter && !statusFilter && (
+          {!hasFilters && (
             <p className="text-slate-500 text-sm mt-1">
               Hacé clic en{' '}
               <button onClick={() => setShowCreate(true)} className="text-cyan-400 hover:underline">
@@ -374,6 +504,10 @@ export default function ComexPlannings() {
             </p>
           )}
         </div>
+      ) : view === 'calendar' ? (
+        <ComexPlanningCalendar plannings={sorted} />
+      ) : view === 'timeline' ? (
+        <ComexPlanningTimeline plannings={sorted} />
       ) : (
         <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-x-auto">
           <table className="w-full text-left">
