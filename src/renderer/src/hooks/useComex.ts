@@ -10,7 +10,9 @@ import type {
   ComexFreightOperatorContact, CreateComexFreightOperatorContactInput,
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
-  ComexProforma, CreateComexProformaInput
+  ComexProforma, CreateComexProformaInput,
+  ComexBrand, CreateComexBrandInput,
+  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone
 } from '@shared/types'
 
 // ── Suppliers ─────────────────────────────────────────────────────────────────
@@ -55,6 +57,119 @@ export function useComexSupplier(id: string | null) {
     queryKey: ['comex-supplier', id],
     queryFn: () => window.api.comex.suppliers.get(id!),
     enabled: !!id
+  })
+}
+
+// ── Brands (Programación Pedidos) ──────────────────────────────────────────────
+
+export function useComexBrands() {
+  return useQuery({
+    queryKey: ['comex-brands'],
+    queryFn: () => window.api.comex.brands.list()
+  })
+}
+
+export function useComexBrand(id: string | null) {
+  return useQuery({
+    queryKey: ['comex-brand', id],
+    queryFn: () => window.api.comex.brands.get(id!),
+    enabled: !!id
+  })
+}
+
+export function useCreateComexBrand() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateComexBrandInput) => window.api.comex.brands.create(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comex-brands'] }) }
+  })
+}
+
+export function useUpdateComexBrand() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ComexBrand> }) =>
+      window.api.comex.brands.update(id, data),
+    onSuccess: (_r, { id }) => {
+      qc.invalidateQueries({ queryKey: ['comex-brands'] })
+      qc.invalidateQueries({ queryKey: ['comex-brand', id] })
+    }
+  })
+}
+
+export function useDeleteComexBrand() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.brands.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comex-brands'] }) }
+  })
+}
+
+// ── Programaciones de pedido (Programación Pedidos) ─────────────────────────────
+
+export function useComexPlannings(filters?: { brandId?: string; status?: string }) {
+  return useQuery({
+    queryKey: ['comex-plannings', filters],
+    queryFn: () => window.api.comex.plannings.list(filters)
+  })
+}
+
+export function useComexPlanning(id: string | null) {
+  return useQuery({
+    queryKey: ['comex-planning', id],
+    queryFn: () => window.api.comex.plannings.get(id!),
+    enabled: !!id
+  })
+}
+
+export function useCreateComexPlanning() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateImportOrderPlanningInput) => window.api.comex.plannings.create(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comex-plannings'] }) }
+  })
+}
+
+export function useUpdateComexPlanning() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ImportOrderPlanning> }) =>
+      window.api.comex.plannings.update(id, data),
+    onSuccess: (_r, { id }) => {
+      qc.invalidateQueries({ queryKey: ['comex-plannings'] })
+      qc.invalidateQueries({ queryKey: ['comex-planning', id] })
+    }
+  })
+}
+
+export function useDeleteComexPlanning() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.plannings.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comex-plannings'] }) }
+  })
+}
+
+export function useRecalculateComexPlanning() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.plannings.recalculate(id),
+    onSuccess: (_r, id) => {
+      qc.invalidateQueries({ queryKey: ['comex-plannings'] })
+      qc.invalidateQueries({ queryKey: ['comex-planning', id] })
+    }
+  })
+}
+
+export function useUpdatePlanningMilestone() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; planningId: string; data: Partial<ImportOrderPlanningMilestone> }) =>
+      window.api.comex.planningMilestones.update(id, data),
+    onSuccess: (_r, { planningId }) => {
+      qc.invalidateQueries({ queryKey: ['comex-planning', planningId] })
+      qc.invalidateQueries({ queryKey: ['comex-plannings'] })
+    }
   })
 }
 

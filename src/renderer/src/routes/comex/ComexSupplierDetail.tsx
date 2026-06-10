@@ -221,7 +221,7 @@ function EChips({
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
 function Section({ icon: Icon, title, action, children }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: React.ElementType
   title: string
   action?: React.ReactNode
   children: React.ReactNode
@@ -742,8 +742,29 @@ export default function ComexSupplierDetail() {
       {/* ── Logística operativa ──────────────────────────────────────────────── */}
       <Section icon={Anchor} title="Logística operativa">
         <FieldGrid>
-          <ENum label="Lead time (días)" value={supplier.lead_time_days} onSave={(v) => save({ lead_time_days: v })} placeholder="—" />
+          <ENum label="Lead time total (días)" value={supplier.lead_time_days} onSave={(v) => save({ lead_time_days: v })} placeholder="—" />
+          <ENum label="MOQ (cantidad mínima)" value={supplier.moq} onSave={(v) => save({ moq: v })} placeholder="—" />
         </FieldGrid>
+      </Section>
+
+      {/* ── Programación Pedidos: desglose de lead time ──────────────────────── */}
+      <Section icon={Clock} title="Desglose de lead time (Programación Pedidos)">
+        <FieldGrid>
+          <ENum label="Producción (días)"        value={supplier.production_days}    onSave={(v) => save({ production_days: v })}    placeholder="—" />
+          <ENum label="Preparación (días)"       value={supplier.preparation_days}   onSave={(v) => save({ preparation_days: v })}   placeholder="—" />
+          <ENum label="Tránsito (días)"          value={supplier.transit_days}       onSave={(v) => save({ transit_days: v })}       placeholder="—" />
+          <ENum label="Aduana (días)"            value={supplier.customs_days}       onSave={(v) => save({ customs_days: v })}       placeholder="—" />
+          <ENum label="Entrega local (días)"     value={supplier.local_delivery_days} onSave={(v) => save({ local_delivery_days: v })} placeholder="—" />
+        </FieldGrid>
+        <div className="mt-4">
+          <EText
+            label="Notas de confiabilidad"
+            value={supplier.reliability_notes}
+            onSave={(v) => save({ reliability_notes: v })}
+            placeholder="Historial de cumplimiento, demoras frecuentes, etc."
+            multiline
+          />
+        </div>
       </Section>
 
       {/* ── Contactos ────────────────────────────────────────────────────────── */}

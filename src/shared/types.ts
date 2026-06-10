@@ -910,6 +910,15 @@ export interface ComexSupplier {
   incoterms_preferred: string
   port_of_origin: string  // Puertos de embarque (pipe-separated, ej. "Ningbo|Shanghai")
   lead_time_days: number | null
+  // Desglose de lead time (Programación Pedidos)
+  production_days: number | null
+  preparation_days: number | null
+  transit_days: number | null
+  customs_days: number | null
+  local_delivery_days: number | null
+  moq: number | null                       // cantidad mínima de compra
+  non_operational_periods_json: string     // JSON: [{ "start": "...", "end": "...", "label": "..." }]
+  reliability_notes: string
   // Pickup
   pickup_address: string  // Dirección de retiro de mercadería
   // Legacy (mantenidos por compatibilidad)
@@ -1825,3 +1834,214 @@ export const DEFAULT_FINANCE_CATEGORIES: Omit<FinanceCategory, 'id' | 'created_a
   { name: 'Varios',              icon: '📦', color: '#64748b', is_default: 1 },
   { name: 'Refacciones hogar',   icon: '🔨', color: '#f59e0b', is_default: 1 },
 ]
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── Programación Pedidos (Comex) ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Marcas ─────────────────────────────────────────────────────────────────────
+
+export interface ComexBrand {
+  id: string
+  name: string
+  category: string
+  primary_supplier_id: string | null
+  demand_annual: number | null
+  demand_monthly_json: string   // JSON: { "1": 120, "2": 95, ... } (mes -> unidades)
+  current_stock: number | null
+  safety_stock: number | null
+  purchase_frequency_days: number | null
+  notes: string
+  logo_stored_name: string | null
+  created_at: number
+  updated_at: number
+  // relacional
+  primary_supplier?: ComexSupplier
+}
+
+export type CreateComexBrandInput = Omit<ComexBrand, 'id' | 'created_at' | 'updated_at' | 'primary_supplier' | 'logo_stored_name'>
+
+// ── Programaciones de pedido ──────────────────────────────────────────────────
+
+export const PLANNING_TYPES = ['single', 'recurring', 'annual', 'demand_based'] as const
+export type PlanningType = typeof PLANNING_TYPES[number]
+
+export const PLANNING_TYPE_LABELS: Record<PlanningType, string> = {
+  single:        'Pedido único',
+  recurring:     'Pedidos recurrentes',
+  annual:        'Planificación anual',
+  demand_based:  'Reposición por demanda',
+}
+
+export const PLANNING_STATUSES = [
+  'draft', 'analysis', 'ai_recommended', 'pending_approval',
+  'approved', 'order_placed', 'rescheduled', 'cancelled', 'completed'
+] as const
+export type PlanningStatus = typeof PLANNING_STATUSES[number]
+
+export const PLANNING_STATUS_LABELS: Record<PlanningStatus, string> = {
+  draft:            'Borrador',
+  analysis:         'En análisis',
+  ai_recommended:   'Recomendada por IA',
+  pending_approval: 'Pendiente de aprobación',
+  approved:         'Aprobada',
+  order_placed:     'Pedido activado',
+  rescheduled:      'Reprogramada',
+  cancelled:        'Cancelada',
+  completed:        'Completada',
+}
+
+export const PLANNING_RISK_STATUSES = ['on_time', 'tight', 'at_risk', 'late'] as const
+export type PlanningRiskStatus = typeof PLANNING_RISK_STATUSES[number]
+
+export const PLANNING_RISK_LABELS: Record<PlanningRiskStatus, string> = {
+  on_time: 'A tiempo',
+  tight:   'Justa',
+  at_risk: 'En riesgo',
+  late:    'Tarde',
+}
+
+export const PLANNING_RISK_COLORS: Record<PlanningRiskStatus, string> = {
+  on_time: '#22c55e',
+  tight:   '#eab308',
+  at_risk: '#f97316',
+  late:    '#ef4444',
+}
+
+export const PLANNING_PRIORITIES = ['high', 'medium', 'low'] as const
+export type PlanningPriority = typeof PLANNING_PRIORITIES[number]
+
+export const PLANNING_PRIORITY_LABELS: Record<PlanningPriority, string> = {
+  high:   'Alta',
+  medium: 'Media',
+  low:    'Baja',
+}
+
+export interface ImportOrderPlanning {
+  id: string
+  brand_id: string
+  supplier_id: string | null
+  country: string
+  responsible_user_id: string
+  planning_type: PlanningType
+  status: PlanningStatus
+  risk_status: PlanningRiskStatus
+  priority: PlanningPriority
+
+  target_coverage_start_date: number | null
+  target_coverage_end_date: number | null
+  target_commercial_availability_date: number | null
+  recommended_order_date: number | null
+  approval_deadline_date: number | null
+  estimated_reception_date: number | null
+
+  demand_annual_estimated: number | null
+  demand_monthly_estimated: number | null
+  demand_for_period: number | null
+  current_stock: number | null
+  safety_stock: number | null
+  desired_coverage_months: number | null
+
+  internal_approval_days: number
+  supplier_preparation_days: number
+  production_days: number
+  inspection_days: number
+  shipping_days: number
+  customs_days: number
+  local_delivery_days: number
+  safety_days: number
+  total_lead_time_days: number
+
+  ai_recommendation_summary: string | null
+  ai_risk_explanation: string | null
+  notes: string
+  linked_import_id: string | null
+
+  created_at: number
+  updated_at: number
+
+  // relacional
+  brand?: ComexBrand
+  supplier?: ComexSupplier
+  milestones?: ImportOrderPlanningMilestone[]
+}
+
+export type CreateImportOrderPlanningInput = Omit<ImportOrderPlanning,
+  'id' | 'created_at' | 'updated_at' | 'brand' | 'supplier' | 'milestones'
+>
+
+// ── Hitos ──────────────────────────────────────────────────────────────────────
+
+export const PLANNING_MILESTONE_TYPES = [
+  'internal_analysis', 'approval', 'supplier_order', 'preparation', 'production',
+  'inspection', 'shipping', 'arrival', 'customs', 'reception', 'commercial_availability'
+] as const
+export type PlanningMilestoneType = typeof PLANNING_MILESTONE_TYPES[number]
+
+export const PLANNING_MILESTONE_LABELS: Record<PlanningMilestoneType, string> = {
+  internal_analysis:        'Análisis interno',
+  approval:                  'Aprobación',
+  supplier_order:            'Pedido al proveedor',
+  preparation:               'Preparación',
+  production:                'Producción',
+  inspection:                'Inspección',
+  shipping:                  'Embarque',
+  arrival:                   'Arribo',
+  customs:                   'Nacionalización',
+  reception:                 'Recepción',
+  commercial_availability:   'Disponibilidad comercial',
+}
+
+export const PLANNING_MILESTONE_STATUSES = ['pending', 'in_progress', 'done', 'delayed'] as const
+export type PlanningMilestoneStatus = typeof PLANNING_MILESTONE_STATUSES[number]
+
+export interface ImportOrderPlanningMilestone {
+  id: string
+  planning_id: string
+  milestone_type: PlanningMilestoneType
+  estimated_date: number | null
+  calculated_date: number | null
+  real_date: number | null
+  status: PlanningMilestoneStatus
+  notes: string
+  sort_order: number
+  created_at: number
+  updated_at: number
+}
+
+export type CreateImportOrderPlanningMilestoneInput = Omit<ImportOrderPlanningMilestone, 'id' | 'created_at' | 'updated_at'>
+
+// ── Reportes IA ───────────────────────────────────────────────────────────────
+
+export const PLANNING_AI_REPORT_TYPES = [
+  'monthly_orders_to_activate', 'brands_at_risk', 'coverage_by_brand',
+  'supplier_delays', 'demand_coverage', 'recommended_orders_by_period', 'critical_alerts'
+] as const
+export type PlanningAIReportType = typeof PLANNING_AI_REPORT_TYPES[number]
+
+export const PLANNING_AI_REPORT_TYPE_LABELS: Record<PlanningAIReportType, string> = {
+  monthly_orders_to_activate:    'Pedidos a activar este mes',
+  brands_at_risk:                'Marcas en riesgo',
+  coverage_by_brand:              'Cobertura por marca',
+  supplier_delays:                'Proveedores con mayor demora',
+  demand_coverage:                 'Demanda cubierta vs. pendiente',
+  recommended_orders_by_period:   'Pedidos recomendados por período',
+  critical_alerts:                 'Alertas críticas',
+}
+
+export interface ImportOrderPlanningAIReport {
+  id: string
+  report_type: PlanningAIReportType
+  brand_id: string | null
+  supplier_id: string | null
+  period_start_date: number | null
+  period_end_date: number | null
+  summary: string
+  findings: string
+  recommendations: string
+  risks: string
+  generated_by: string
+  created_at: number
+}
+
+export type CreateImportOrderPlanningAIReportInput = Omit<ImportOrderPlanningAIReport, 'id' | 'created_at'>

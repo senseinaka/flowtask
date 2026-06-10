@@ -22,7 +22,10 @@ import {
   listGestores, getGestor, createGestor, updateGestor, deleteGestor,
   createGestorContact, updateGestorContact, deleteGestorContact,
   listDespachantes, createDespachante, updateDespachante, deleteDespachante,
-  createDespachanteContact, updateDespachanteContact, deleteDespachanteContact
+  createDespachanteContact, updateDespachanteContact, deleteDespachanteContact,
+  listBrands, getBrand, createBrand, updateBrand, deleteBrand,
+  listPlannings, getPlanning, createPlanning, updatePlanning, deletePlanning, recalculatePlanning,
+  updateMilestone
 } from '../database/queries/comex'
 import { driveService } from '../services/drive.service'
 import { getAttachmentsDir } from '../database/db'
@@ -40,7 +43,9 @@ import type {
   CreateComexQuoteInput, CreateComexPaymentInput,
   UpsertComexCustomsInput, CreateComexCostInput,
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
-  CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput
+  CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
+  ComexBrand, CreateComexBrandInput,
+  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone
 } from '@shared/types'
 
 // ── Subcarpetas Drive por defecto para cada importación ───────────────────────
@@ -167,6 +172,24 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:suppliers:create', (_e, input: CreateComexSupplierInput) => createSupplier(input))
   ipcMain.handle('comex:suppliers:update', (_e, id: string, data: Partial<ComexSupplier>) => updateSupplier(id, data))
   ipcMain.handle('comex:suppliers:delete', (_e, id)    => deleteSupplier(id))
+
+  // ── Marcas (Programación Pedidos) ─────────────────────────────────────────────
+  ipcMain.handle('comex:brands:list',   ()                                     => listBrands())
+  ipcMain.handle('comex:brands:get',    (_e, id: string)                       => getBrand(id))
+  ipcMain.handle('comex:brands:create', (_e, input: CreateComexBrandInput)     => createBrand(input))
+  ipcMain.handle('comex:brands:update', (_e, id: string, data: Partial<ComexBrand>) => updateBrand(id, data))
+  ipcMain.handle('comex:brands:delete', (_e, id: string)                       => deleteBrand(id))
+
+  // ── Programaciones de pedido (Programación Pedidos) ───────────────────────────
+  ipcMain.handle('comex:plannings:list',       (_e, filters?: { brandId?: string; status?: string }) => listPlannings(filters))
+  ipcMain.handle('comex:plannings:get',        (_e, id: string)                            => getPlanning(id))
+  ipcMain.handle('comex:plannings:create',     (_e, input: CreateImportOrderPlanningInput) => createPlanning(input))
+  ipcMain.handle('comex:plannings:update',     (_e, id: string, data: Partial<ImportOrderPlanning>) => updatePlanning(id, data))
+  ipcMain.handle('comex:plannings:delete',     (_e, id: string)                            => deletePlanning(id))
+  ipcMain.handle('comex:plannings:recalculate',(_e, id: string)                            => recalculatePlanning(id))
+
+  // ── Hitos de programación ──────────────────────────────────────────────────────
+  ipcMain.handle('comex:planningMilestones:update', (_e, id: string, data: Partial<ImportOrderPlanningMilestone>) => updateMilestone(id, data))
 
   // ── Imports ──────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:imports:list',   (_e, status?: string) => listImports(status))

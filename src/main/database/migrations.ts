@@ -1777,6 +1777,143 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         insertConcept.run(uuidv4(), categoryIds[concept.cat], accountId, concept.name, now, now)
       }
     }
+  },
+  {
+    version: 60,
+    up: (db) => {
+      // "Programación Pedidos" — planificador de fechas de pedidos de importación
+      // dentro de Comex. "Marca" pasa a ser una entidad propia (comex_brands),
+      // separada del proveedor (hoy `comex_suppliers.brand` es solo texto libre),
+      // porque la marca tiene su propia demanda/estacionalidad/stock, mientras
+      // que el proveedor aporta los tiempos logísticos. Cada marca puede tener
+      // un proveedor "principal" precargado, pero la programación permite elegir
+      // cualquier proveedor.
+      const newSupplierCols = [
+        "ALTER TABLE comex_suppliers ADD COLUMN production_days INTEGER",
+        "ALTER TABLE comex_suppliers ADD COLUMN preparation_days INTEGER",
+        "ALTER TABLE comex_suppliers ADD COLUMN transit_days INTEGER",
+        "ALTER TABLE comex_suppliers ADD COLUMN customs_days INTEGER",
+        "ALTER TABLE comex_suppliers ADD COLUMN local_delivery_days INTEGER",
+        "ALTER TABLE comex_suppliers ADD COLUMN moq INTEGER",
+        "ALTER TABLE comex_suppliers ADD COLUMN non_operational_periods_json TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE comex_suppliers ADD COLUMN reliability_notes TEXT NOT NULL DEFAULT ''",
+      ]
+      for (const sql of newSupplierCols) {
+        try { db.exec(sql) } catch { /* column may already exist */ }
+      }
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS comex_brands (
+          id                       TEXT PRIMARY KEY,
+          name                     TEXT NOT NULL,
+          category                 TEXT NOT NULL DEFAULT '',
+          primary_supplier_id      TEXT REFERENCES comex_suppliers(id) ON DELETE SET NULL,
+          demand_annual            INTEGER,
+          demand_monthly_json      TEXT NOT NULL DEFAULT '{}',
+          current_stock            INTEGER,
+          safety_stock             INTEGER,
+          purchase_frequency_days  INTEGER,
+          notes                    TEXT NOT NULL DEFAULT '',
+          logo_stored_name         TEXT,
+          created_at               INTEGER NOT NULL,
+          updated_at               INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_comex_brands_supplier ON comex_brands(primary_supplier_id);
+
+        CREATE TABLE IF NOT EXISTS import_order_plannings (
+          id                                    TEXT PRIMARY KEY,
+          brand_id                              TEXT NOT NULL REFERENCES comex_brands(id) ON DELETE CASCADE,
+          supplier_id                           TEXT REFERENCES comex_suppliers(id) ON DELETE SET NULL,
+          country                               TEXT NOT NULL DEFAULT '',
+          responsible_user_id                   TEXT NOT NULL DEFAULT '',
+          planning_type                         TEXT NOT NULL DEFAULT 'single',
+          status                                TEXT NOT NULL DEFAULT 'draft',
+          risk_status                           TEXT NOT NULL DEFAULT 'on_time',
+          priority                              TEXT NOT NULL DEFAULT 'medium',
+          target_coverage_start_date            INTEGER,
+          target_coverage_end_date              INTEGER,
+          target_commercial_availability_date   INTEGER,
+          recommended_order_date                INTEGER,
+          approval_deadline_date                INTEGER,
+          estimated_reception_date              INTEGER,
+          demand_annual_estimated               INTEGER,
+          demand_monthly_estimated              INTEGER,
+          demand_for_period                     INTEGER,
+          current_stock                         INTEGER,
+          safety_stock                          INTEGER,
+          desired_coverage_months               REAL,
+          internal_approval_days                INTEGER NOT NULL DEFAULT 0,
+          supplier_preparation_days             INTEGER NOT NULL DEFAULT 0,
+          production_days                       INTEGER NOT NULL DEFAULT 0,
+          inspection_days                       INTEGER NOT NULL DEFAULT 0,
+          shipping_days                         INTEGER NOT NULL DEFAULT 0,
+          customs_days                          INTEGER NOT NULL DEFAULT 0,
+          local_delivery_days                   INTEGER NOT NULL DEFAULT 0,
+          safety_days                           INTEGER NOT NULL DEFAULT 0,
+          total_lead_time_days                  INTEGER NOT NULL DEFAULT 0,
+          ai_recommendation_summary             TEXT,
+          ai_risk_explanation                   TEXT,
+          notes                                 TEXT NOT NULL DEFAULT '',
+          linked_import_id                      TEXT REFERENCES comex_imports(id) ON DELETE SET NULL,
+          created_at                            INTEGER NOT NULL,
+          updated_at                            INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_order_plannings_brand    ON import_order_plannings(brand_id);
+        CREATE INDEX IF NOT EXISTS idx_import_order_plannings_supplier ON import_order_plannings(supplier_id);
+        CREATE INDEX IF NOT EXISTS idx_import_order_plannings_status   ON import_order_plannings(status);
+
+        CREATE TABLE IF NOT EXISTS import_order_planning_milestones (
+          id              TEXT PRIMARY KEY,
+          planning_id     TEXT NOT NULL REFERENCES import_order_plannings(id) ON DELETE CASCADE,
+          milestone_type  TEXT NOT NULL,
+          estimated_date  INTEGER,
+          calculated_date INTEGER,
+          real_date       INTEGER,
+          status          TEXT NOT NULL DEFAULT 'pending',
+          notes           TEXT NOT NULL DEFAULT '',
+          sort_order      INTEGER NOT NULL DEFAULT 0,
+          created_at      INTEGER NOT NULL,
+          updated_at      INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_order_planning_milestones_planning
+          ON import_order_planning_milestones(planning_id);
+
+        CREATE TABLE IF NOT EXISTS import_order_planning_ai_reports (
+          id                TEXT PRIMARY KEY,
+          report_type       TEXT NOT NULL,
+          brand_id          TEXT REFERENCES comex_brands(id) ON DELETE CASCADE,
+          supplier_id       TEXT REFERENCES comex_suppliers(id) ON DELETE SET NULL,
+          period_start_date INTEGER,
+          period_end_date   INTEGER,
+          summary           TEXT NOT NULL DEFAULT '',
+          findings          TEXT NOT NULL DEFAULT '',
+          recommendations   TEXT NOT NULL DEFAULT '',
+          risks             TEXT NOT NULL DEFAULT '',
+          generated_by      TEXT NOT NULL DEFAULT 'ai',
+          created_at        INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_order_planning_ai_reports_brand
+          ON import_order_planning_ai_reports(brand_id);
+      `)
+
+      // ── Seed: una marca por cada proveedor que ya tenga `brand` cargado ────
+      const { v4: uuidv4 } = require('uuid')
+      const now = Date.now()
+      const suppliersWithBrand = db.prepare(
+        `SELECT id, brand FROM comex_suppliers WHERE brand IS NOT NULL AND TRIM(brand) != ''`
+      ).all() as { id: string; brand: string }[]
+      const insertBrand = db.prepare(`
+        INSERT INTO comex_brands (id, name, category, primary_supplier_id, demand_monthly_json, notes, created_at, updated_at)
+        VALUES (?, ?, '', ?, '{}', '', ?, ?)
+      `)
+      for (const s of suppliersWithBrand) {
+        insertBrand.run(uuidv4(), s.brand, s.id, now, now)
+      }
+    }
   }
 ]
 

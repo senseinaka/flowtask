@@ -36,8 +36,10 @@ export function createSupplier(input: CreateComexSupplierInput): ComexSupplier {
        contact_name, contact_email, contact_phone,
        brand, website, wechat, product_categories, payment_terms,
        incoterms_preferred, port_of_origin, lead_time_days,
+       production_days, preparation_days, transit_days, customs_days, local_delivery_days,
+       moq, non_operational_periods_json, reliability_notes,
        pickup_address, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     input.name,
@@ -58,6 +60,14 @@ export function createSupplier(input: CreateComexSupplierInput): ComexSupplier {
     (input as Partial<ComexSupplier>).incoterms_preferred ?? '',
     (input as Partial<ComexSupplier>).port_of_origin ?? '',
     (input as Partial<ComexSupplier>).lead_time_days ?? null,
+    (input as Partial<ComexSupplier>).production_days ?? null,
+    (input as Partial<ComexSupplier>).preparation_days ?? null,
+    (input as Partial<ComexSupplier>).transit_days ?? null,
+    (input as Partial<ComexSupplier>).customs_days ?? null,
+    (input as Partial<ComexSupplier>).local_delivery_days ?? null,
+    (input as Partial<ComexSupplier>).moq ?? null,
+    (input as Partial<ComexSupplier>).non_operational_periods_json ?? '[]',
+    (input as Partial<ComexSupplier>).reliability_notes ?? '',
     (input as Partial<ComexSupplier>).pickup_address ?? '',
     input.notes ?? '',
     now, now
@@ -72,6 +82,8 @@ export function updateSupplier(id: string, data: Partial<ComexSupplier>): ComexS
     'contact_name','contact_email','contact_phone',
     'brand','website','wechat','product_categories','payment_terms',
     'incoterms_preferred','port_of_origin','lead_time_days',
+    'production_days','preparation_days','transit_days','customs_days','local_delivery_days',
+    'moq','non_operational_periods_json','reliability_notes',
     'pickup_address','notes','logo_stored_name'
   ]
   const sets = ['updated_at = ?']
@@ -1030,4 +1042,246 @@ export function updateDespachanteContact(id: string, data: Partial<ComexDespacha
 
 export function deleteDespachanteContact(id: string): void {
   getDb().prepare('DELETE FROM comex_despachante_contacts WHERE id = ?').run(id)
+}
+
+// ─── Marcas (Programación Pedidos) ─────────────────────────────────────────────
+
+import type { ComexBrand, CreateComexBrandInput } from '@shared/types'
+
+function hydrateBrand(row: Record<string, unknown> | null): ComexBrand | null {
+  if (!row) return null
+  const brand = row as unknown as ComexBrand
+  if (brand.primary_supplier_id) {
+    brand.primary_supplier = getSupplier(brand.primary_supplier_id) ?? undefined
+  }
+  return brand
+}
+
+export function listBrands(): ComexBrand[] {
+  const db = getDb()
+  const rows = db.prepare('SELECT * FROM comex_brands ORDER BY name ASC').all() as Record<string, unknown>[]
+  return rows.map((r) => hydrateBrand(r)!) as ComexBrand[]
+}
+
+export function getBrand(id: string): ComexBrand | null {
+  const db = getDb()
+  const row = db.prepare('SELECT * FROM comex_brands WHERE id = ?').get(id) as Record<string, unknown> | null
+  return hydrateBrand(row)
+}
+
+export function createBrand(input: CreateComexBrandInput): ComexBrand {
+  const db = getDb()
+  const id = randomUUID()
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO comex_brands
+      (id, name, category, primary_supplier_id, demand_annual, demand_monthly_json,
+       current_stock, safety_stock, purchase_frequency_days, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    input.name,
+    input.category ?? '',
+    input.primary_supplier_id ?? null,
+    input.demand_annual ?? null,
+    input.demand_monthly_json ?? '{}',
+    input.current_stock ?? null,
+    input.safety_stock ?? null,
+    input.purchase_frequency_days ?? null,
+    input.notes ?? '',
+    now, now
+  )
+  return getBrand(id)!
+}
+
+export function updateBrand(id: string, data: Partial<ComexBrand>): ComexBrand | null {
+  const db = getDb()
+  const allowed = [
+    'name','category','primary_supplier_id','demand_annual','demand_monthly_json',
+    'current_stock','safety_stock','purchase_frequency_days','notes','logo_stored_name'
+  ]
+  const sets = ['updated_at = ?']
+  const vals: unknown[] = [Date.now()]
+  for (const key of allowed) {
+    if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
+  }
+  vals.push(id)
+  db.prepare(`UPDATE comex_brands SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  return getBrand(id)
+}
+
+export function deleteBrand(id: string): void {
+  getDb().prepare('DELETE FROM comex_brands WHERE id = ?').run(id)
+}
+
+// ─── Programaciones de pedido (Programación Pedidos) ──────────────────────────
+
+import type {
+  ImportOrderPlanning, CreateImportOrderPlanningInput,
+  ImportOrderPlanningMilestone
+} from '@shared/types'
+import { calculatePlanning, buildMilestoneRecords } from '../../services/order-planning.service'
+
+const PLANNING_COLUMNS = [
+  'brand_id', 'supplier_id', 'country', 'responsible_user_id',
+  'planning_type', 'status', 'risk_status', 'priority',
+  'target_coverage_start_date', 'target_coverage_end_date', 'target_commercial_availability_date',
+  'recommended_order_date', 'approval_deadline_date', 'estimated_reception_date',
+  'demand_annual_estimated', 'demand_monthly_estimated', 'demand_for_period',
+  'current_stock', 'safety_stock', 'desired_coverage_months',
+  'internal_approval_days', 'supplier_preparation_days', 'production_days', 'inspection_days',
+  'shipping_days', 'customs_days', 'local_delivery_days', 'safety_days', 'total_lead_time_days',
+  'ai_recommendation_summary', 'ai_risk_explanation', 'notes', 'linked_import_id'
+] as const
+
+function hydratePlanning(row: Record<string, unknown> | null): ImportOrderPlanning | null {
+  if (!row) return null
+  const planning = row as unknown as ImportOrderPlanning
+  planning.brand = getBrand(planning.brand_id) ?? undefined
+  if (planning.supplier_id) {
+    planning.supplier = getSupplier(planning.supplier_id) ?? undefined
+  }
+  planning.milestones = listMilestones(planning.id)
+  return planning
+}
+
+export function listPlannings(filters?: { brandId?: string; status?: string }): ImportOrderPlanning[] {
+  const db = getDb()
+  let sql = 'SELECT * FROM import_order_plannings'
+  const conditions: string[] = []
+  const params: unknown[] = []
+  if (filters?.brandId) { conditions.push('brand_id = ?'); params.push(filters.brandId) }
+  if (filters?.status) { conditions.push('status = ?'); params.push(filters.status) }
+  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
+  sql += ' ORDER BY target_commercial_availability_date ASC, created_at DESC'
+  const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+  return rows.map((r) => hydratePlanning(r)!) as ImportOrderPlanning[]
+}
+
+export function getPlanning(id: string): ImportOrderPlanning | null {
+  const db = getDb()
+  const row = db.prepare('SELECT * FROM import_order_plannings WHERE id = ?').get(id) as Record<string, unknown> | null
+  return hydratePlanning(row)
+}
+
+export function createPlanning(input: CreateImportOrderPlanningInput): ImportOrderPlanning {
+  const db = getDb()
+  const id = randomUUID()
+  const now = Date.now()
+
+  const brand = getBrand(input.brand_id)
+  const result = calculatePlanning({ ...input, id, created_at: now, updated_at: now } as ImportOrderPlanning, brand)
+
+  const merged: ImportOrderPlanning = {
+    ...input,
+    id, created_at: now, updated_at: now,
+    recommended_order_date: result.recommended_order_date,
+    approval_deadline_date: result.approval_deadline_date,
+    estimated_reception_date: result.estimated_reception_date,
+    total_lead_time_days: result.total_lead_time_days,
+    risk_status: result.risk_status,
+    demand_for_period: result.demand_for_period,
+    desired_coverage_months: result.desired_coverage_months,
+  }
+
+  const placeholders = PLANNING_COLUMNS.map(() => '?').join(', ')
+  db.prepare(`
+    INSERT INTO import_order_plannings (id, ${PLANNING_COLUMNS.join(', ')}, created_at, updated_at)
+    VALUES (?, ${placeholders}, ?, ?)
+  `).run(
+    id,
+    ...PLANNING_COLUMNS.map((col) => (merged as unknown as Record<string, unknown>)[col] ?? null),
+    now, now
+  )
+
+  if (result.milestoneDates) {
+    const milestoneRecords = buildMilestoneRecords(id, result.milestoneDates)
+    const insertMilestone = db.prepare(`
+      INSERT INTO import_order_planning_milestones
+        (id, planning_id, milestone_type, estimated_date, calculated_date, real_date, status, notes, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const m of milestoneRecords) {
+      insertMilestone.run(
+        randomUUID(), m.planning_id, m.milestone_type,
+        m.estimated_date, m.calculated_date, m.real_date,
+        m.status, m.notes, m.sort_order, now, now
+      )
+    }
+  }
+
+  return getPlanning(id)!
+}
+
+export function updatePlanning(id: string, data: Partial<ImportOrderPlanning>): ImportOrderPlanning | null {
+  const db = getDb()
+  const sets = ['updated_at = ?']
+  const vals: unknown[] = [Date.now()]
+  for (const key of PLANNING_COLUMNS) {
+    if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
+  }
+  vals.push(id)
+  db.prepare(`UPDATE import_order_plannings SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  return recalculatePlanning(id)
+}
+
+export function deletePlanning(id: string): void {
+  getDb().prepare('DELETE FROM import_order_plannings WHERE id = ?').run(id)
+}
+
+/** Recalcula fechas, riesgo, demanda y `calculated_date` de los hitos a partir del estado actual. */
+export function recalculatePlanning(id: string): ImportOrderPlanning | null {
+  const db = getDb()
+  const planning = getPlanning(id)
+  if (!planning) return null
+
+  const brand = planning.brand ?? null
+  const result = calculatePlanning(planning, brand)
+
+  db.prepare(`
+    UPDATE import_order_plannings SET
+      recommended_order_date = ?, approval_deadline_date = ?, estimated_reception_date = ?,
+      total_lead_time_days = ?, risk_status = ?, demand_for_period = ?, desired_coverage_months = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    result.recommended_order_date, result.approval_deadline_date, result.estimated_reception_date,
+    result.total_lead_time_days, result.risk_status, result.demand_for_period, result.desired_coverage_months,
+    Date.now(), id
+  )
+
+  if (result.milestoneDates) {
+    const updateMilestoneDate = db.prepare(
+      'UPDATE import_order_planning_milestones SET calculated_date = ?, updated_at = ? WHERE planning_id = ? AND milestone_type = ?'
+    )
+    const now = Date.now()
+    for (const [type, date] of Object.entries(result.milestoneDates)) {
+      updateMilestoneDate.run(date, now, id, type)
+    }
+  }
+
+  return getPlanning(id)
+}
+
+// ─── Hitos de programación ─────────────────────────────────────────────────────
+
+export function listMilestones(planningId: string): ImportOrderPlanningMilestone[] {
+  const db = getDb()
+  const rows = db.prepare(
+    'SELECT * FROM import_order_planning_milestones WHERE planning_id = ? ORDER BY sort_order ASC'
+  ).all(planningId) as Record<string, unknown>[]
+  return rows as unknown as ImportOrderPlanningMilestone[]
+}
+
+export function updateMilestone(id: string, data: Partial<ImportOrderPlanningMilestone>): ImportOrderPlanningMilestone | null {
+  const db = getDb()
+  const allowed = ['real_date', 'status', 'notes']
+  const sets = ['updated_at = ?']
+  const vals: unknown[] = [Date.now()]
+  for (const key of allowed) {
+    if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
+  }
+  vals.push(id)
+  db.prepare(`UPDATE import_order_planning_milestones SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  return db.prepare('SELECT * FROM import_order_planning_milestones WHERE id = ?').get(id) as ImportOrderPlanningMilestone | null
 }

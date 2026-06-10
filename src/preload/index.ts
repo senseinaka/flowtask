@@ -17,6 +17,8 @@ import type {
   ComexLogisticsQuote, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact,
+  ComexBrand, CreateComexBrandInput,
+  ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone,
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
   CreateComexQuoteInput, CreateComexPaymentInput,
@@ -189,6 +191,24 @@ const api = {
       delete:      (id: string):                                Promise<void>                 => ipcRenderer.invoke('comex:suppliers:delete', id),
       uploadLogo:  (id: string, filePath: string):              Promise<string>               => ipcRenderer.invoke('comex:suppliers:uploadLogo', id, filePath),
       deleteLogo:  (id: string):                                Promise<void>                 => ipcRenderer.invoke('comex:suppliers:deleteLogo', id)
+    },
+    brands: {
+      list:   ():                                       Promise<ComexBrand[]>      => ipcRenderer.invoke('comex:brands:list'),
+      get:    (id: string):                             Promise<ComexBrand | null> => ipcRenderer.invoke('comex:brands:get', id),
+      create: (input: CreateComexBrandInput):           Promise<ComexBrand>        => ipcRenderer.invoke('comex:brands:create', input),
+      update: (id: string, data: Partial<ComexBrand>): Promise<ComexBrand | null> => ipcRenderer.invoke('comex:brands:update', id, data),
+      delete: (id: string):                             Promise<void>              => ipcRenderer.invoke('comex:brands:delete', id)
+    },
+    plannings: {
+      list:        (filters?: { brandId?: string; status?: string }): Promise<ImportOrderPlanning[]>      => ipcRenderer.invoke('comex:plannings:list', filters),
+      get:         (id: string):                                       Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:get', id),
+      create:      (input: CreateImportOrderPlanningInput):            Promise<ImportOrderPlanning>        => ipcRenderer.invoke('comex:plannings:create', input),
+      update:      (id: string, data: Partial<ImportOrderPlanning>):   Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:update', id, data),
+      delete:      (id: string):                                       Promise<void>                       => ipcRenderer.invoke('comex:plannings:delete', id),
+      recalculate: (id: string):                                       Promise<ImportOrderPlanning | null> => ipcRenderer.invoke('comex:plannings:recalculate', id)
+    },
+    planningMilestones: {
+      update: (id: string, data: Partial<ImportOrderPlanningMilestone>): Promise<ImportOrderPlanningMilestone | null> => ipcRenderer.invoke('comex:planningMilestones:update', id, data)
     },
     supplierContacts: {
       list:   (supplierId: string):                                      Promise<ComexSupplierContact[]> => ipcRenderer.invoke('comex:supplier-contacts:list', supplierId),

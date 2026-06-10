@@ -3,7 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
-  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet
+  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet, Tag,
+  CalendarClock
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { useUIStore } from '../../store/ui.store'
@@ -27,6 +28,8 @@ const comexSubItems = [
   { to: '/comex',            icon: LayoutDashboard, label: 'Dashboard',    exact: true },
   { to: '/comex/imports',    icon: Package,          label: 'Importaciones' },
   { to: '/comex/suppliers',  icon: Building2,        label: 'Proveedores'   },
+  { to: '/comex/brands',     icon: Tag,              label: 'Marcas'        },
+  { to: '/comex/plannings',  icon: CalendarClock,    label: 'Programación Pedidos' },
   { to: '/comex/operators',    icon: Truck,          label: 'Operadores'    },
   { to: '/comex/gestores',    icon: ShieldCheck,    label: 'Gestores INAL' },
   { to: '/comex/despachantes',icon: Briefcase,      label: 'Despachantes'  },
