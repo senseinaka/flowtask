@@ -242,6 +242,22 @@ export default function Sidebar() {
           </NavLink>
         </div>
 
+        {/* ── Finanzas Empresa ──────────────────────────────────────────── */}
+        <div className="pt-1">
+          <NavLink
+            to="/company-finance"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+              )
+            }
+          >
+            <Building2 size={16} />
+            Finanzas Empresa
+          </NavLink>
+        </div>
+
         {/* ── Configuración ─────────────────────────────────────────────── */}
         <div className="pt-1">
           <NavLink

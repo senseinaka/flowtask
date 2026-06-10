@@ -25,6 +25,7 @@ import { registerBackupIpc } from './ipc/backup.ipc'
 import { registerExpiryIpc } from './ipc/expiry.ipc'
 import { registerSettingsIpc } from './ipc/settings.ipc'
 import { registerFinanceIpc } from './ipc/finance.ipc'
+import { registerCompanyFinanceIpc } from './ipc/company-finance.ipc'
 import { driveService } from './services/drive.service'
 import { localBackupService } from './services/local-backup.service'
 import { schedulerService } from './services/scheduler.service'
@@ -98,6 +99,7 @@ app.whenReady().then(() => {
   registerExpiryIpc()
   registerSettingsIpc()
   registerFinanceIpc()
+  registerCompanyFinanceIpc()
 
   // ── Backup automático cada 6 horas ────────────────────────────────────────
   const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000  // 6 horas

@@ -646,6 +646,107 @@ const api = {
       change:  (currentPin: string, newPin: string): Promise<boolean>              => ipcRenderer.invoke('finance:security:change', currentPin, newPin),
     }
   },
+  companyFinance: {
+    accounts: {
+      list:   (): Promise<FinanceAccount[]>                                                => ipcRenderer.invoke('companyFinance:accounts:list'),
+      create: (data: CreateFinanceAccountInput): Promise<FinanceAccount>                   => ipcRenderer.invoke('companyFinance:accounts:create', data),
+      update: (id: string, data: Partial<CreateFinanceAccountInput>): Promise<FinanceAccount> => ipcRenderer.invoke('companyFinance:accounts:update', id, data),
+      delete: (id: string): Promise<void>                                                  => ipcRenderer.invoke('companyFinance:accounts:delete', id),
+    },
+    categories: {
+      list:   (): Promise<FinanceCategory[]>                                                => ipcRenderer.invoke('companyFinance:categories:list'),
+      create: (data: CreateFinanceCategoryInput): Promise<FinanceCategory>                  => ipcRenderer.invoke('companyFinance:categories:create', data),
+      update: (id: string, data: Partial<CreateFinanceCategoryInput>): Promise<FinanceCategory> => ipcRenderer.invoke('companyFinance:categories:update', id, data),
+      delete: (id: string): Promise<void>                                                   => ipcRenderer.invoke('companyFinance:categories:delete', id),
+    },
+    paymentMethods: {
+      list:   (): Promise<FinancePaymentMethodEntity[]>                                                => ipcRenderer.invoke('companyFinance:paymentMethods:list'),
+      create: (data: CreateFinancePaymentMethodInput): Promise<FinancePaymentMethodEntity>             => ipcRenderer.invoke('companyFinance:paymentMethods:create', data),
+      update: (id: string, data: Partial<CreateFinancePaymentMethodInput>): Promise<FinancePaymentMethodEntity> => ipcRenderer.invoke('companyFinance:paymentMethods:update', id, data),
+      delete: (id: string): Promise<void>                                                              => ipcRenderer.invoke('companyFinance:paymentMethods:delete', id),
+    },
+    concepts: {
+      list:   (opts?: { activeOnly?: boolean }): Promise<FinanceConcept[]>                  => ipcRenderer.invoke('companyFinance:concepts:list', opts),
+      get:    (id: string): Promise<FinanceConcept | null>                                  => ipcRenderer.invoke('companyFinance:concepts:get', id),
+      create: (data: CreateFinanceConceptInput): Promise<FinanceConcept>                    => ipcRenderer.invoke('companyFinance:concepts:create', data),
+      update: (id: string, data: Partial<CreateFinanceConceptInput> & { is_active?: number }): Promise<FinanceConcept> =>
+        ipcRenderer.invoke('companyFinance:concepts:update', id, data),
+      delete: (id: string): Promise<void>                                                   => ipcRenderer.invoke('companyFinance:concepts:delete', id),
+    },
+    movements: {
+      list:   (month: number, year: number): Promise<FinanceMovement[]>                     => ipcRenderer.invoke('companyFinance:movements:list', month, year),
+      listUpcoming: (): Promise<FinanceMovement[]>                                          => ipcRenderer.invoke('companyFinance:movements:listUpcoming'),
+      get:    (id: string): Promise<FinanceMovement | null>                                 => ipcRenderer.invoke('companyFinance:movements:get', id),
+      create: (data: CreateFinanceMovementInput): Promise<FinanceMovement>                  => ipcRenderer.invoke('companyFinance:movements:create', data),
+      update: (id: string, data: Partial<CreateFinanceMovementInput>): Promise<FinanceMovement> =>
+        ipcRenderer.invoke('companyFinance:movements:update', id, data),
+      quickUpdate: (id: string, data: {
+        amount_actual?: number | null
+        status?:        FinanceMovementStatus
+        payment_date?:  number | null
+        due_date?:      number | null
+        notes?:         string
+      }): Promise<FinanceMovement> => ipcRenderer.invoke('companyFinance:movements:quickUpdate', id, data),
+      delete:           (id: string): Promise<void>                                         => ipcRenderer.invoke('companyFinance:movements:delete', id),
+      generateForMonth: (month: number, year: number): Promise<FinanceMovement[]>           => ipcRenderer.invoke('companyFinance:movements:generateForMonth', month, year),
+      generateFromPreviousMonth: (month: number, year: number): Promise<FinanceMovement[]>  => ipcRenderer.invoke('companyFinance:movements:generateFromPreviousMonth', month, year),
+    },
+    // Registro de cargas — conceptos multi-carga (Opción C): sub-ledger de
+    // entradas que se suman dentro de un único movimiento mensual (p. ej.
+    // "Nafta" con 3 cargas en el mes en vez de "Nafta 1/2/3").
+    movementEntries: {
+      list:   (movementId: string): Promise<FinanceMovementEntry[]>                          => ipcRenderer.invoke('companyFinance:movementEntries:list', movementId),
+      add:    (data: CreateFinanceMovementEntryInput): Promise<FinanceMovementEntry>          => ipcRenderer.invoke('companyFinance:movementEntries:add', data),
+      update: (id: string, data: UpdateFinanceMovementEntryInput): Promise<FinanceMovementEntry> =>
+        ipcRenderer.invoke('companyFinance:movementEntries:update', id, data),
+      remove: (id: string): Promise<void>                                                    => ipcRenderer.invoke('companyFinance:movementEntries:remove', id),
+    },
+    summary: {
+      get: (month: number, year: number): Promise<FinanceMonthSummary> => ipcRenderer.invoke('companyFinance:summary:get', month, year),
+    },
+    insights: {
+      get:              (month: number, year: number): Promise<FinanceMonthInsight | null> => ipcRenderer.invoke('companyFinance:insights:get', month, year),
+      saveNotes:        (month: number, year: number, notes: string): Promise<FinanceMonthInsight>   => ipcRenderer.invoke('companyFinance:insights:saveNotes', month, year, notes),
+      generateAnalysis: (month: number, year: number): Promise<string>                               => ipcRenderer.invoke('companyFinance:insights:generateAnalysis', month, year),
+      saveAnalysis:     (month: number, year: number, analysis: string): Promise<FinanceMonthInsight> => ipcRenderer.invoke('companyFinance:insights:saveAnalysis', month, year, analysis),
+    },
+    analytics: {
+      categoryBreakdown: (month: number, year: number): Promise<FinanceCategoryBreakdownItem[]> =>
+        ipcRenderer.invoke('companyFinance:analytics:categoryBreakdown', month, year),
+      history: (month: number, year: number, monthsBack: number): Promise<FinanceHistoryEntry[]> =>
+        ipcRenderer.invoke('companyFinance:analytics:history', month, year, monthsBack),
+      topConcepts: (month: number, year: number, limit?: number): Promise<FinanceRankingConcept[]> =>
+        ipcRenderer.invoke('companyFinance:analytics:topConcepts', month, year, limit),
+      topIncreases: (month: number, year: number, limit?: number): Promise<FinanceRankingIncrease[]> =>
+        ipcRenderer.invoke('companyFinance:analytics:topIncreases', month, year, limit),
+    },
+    // Fase 5 — Importación / Exportación / Seguridad
+    import: {
+      selectFile: (month: number, year: number): Promise<FinanceImportPreviewResult | null> =>
+        ipcRenderer.invoke('companyFinance:import:selectFile', month, year),
+      confirm: (items: FinanceImportConfirmItem[], month: number, year: number): Promise<FinanceImportResult> =>
+        ipcRenderer.invoke('companyFinance:import:confirm', items, month, year),
+      // Modo "pegar datos": misma previsualización que `selectFile`, pero a partir
+      // de texto pegado a mano que la IA interpreta y normaliza primero.
+      parseText: (rawText: string, month: number, year: number): Promise<FinanceImportPreviewResult> =>
+        ipcRenderer.invoke('companyFinance:import:parseText', rawText, month, year),
+    },
+    export: {
+      movements: (month: number, year: number, format: 'xlsx' | 'csv'): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('companyFinance:export:movements', month, year, format),
+      selection: (movements: FinanceMovement[], format: 'xlsx' | 'csv'): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('companyFinance:export:selection', movements, format),
+      summaryPdf: (month: number, year: number): Promise<{ filePath: string } | null> =>
+        ipcRenderer.invoke('companyFinance:export:summaryPdf', month, year),
+    },
+    security: {
+      status:  (): Promise<FinanceSecurityStatus>                                  => ipcRenderer.invoke('companyFinance:security:status'),
+      setup:   (pin: string): Promise<FinanceSecurityStatus>                       => ipcRenderer.invoke('companyFinance:security:setup', pin),
+      verify:  (pin: string): Promise<boolean>                                     => ipcRenderer.invoke('companyFinance:security:verify', pin),
+      disable: (currentPin: string): Promise<boolean>                              => ipcRenderer.invoke('companyFinance:security:disable', currentPin),
+      change:  (currentPin: string, newPin: string): Promise<boolean>              => ipcRenderer.invoke('companyFinance:security:change', currentPin, newPin),
+    }
+  },
 
   on: (
     channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'backup:local:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts',

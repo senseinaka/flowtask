@@ -1459,6 +1459,324 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         );
       `)
     }
+  },
+  {
+    version: 59,
+    up: (db) => {
+      // Finanzas Empresa — módulo completamente separado de Finanzas Personales,
+      // mismo esquema que finance_* (ya consolidado con recurrence_month y
+      // tracks_multiple_entries desde el inicio, sin necesidad de migraciones
+      // incrementales) pero en tablas company_finance_* propias, para llevar
+      // los gastos de Naka Outdoors sin mezclarlos con los personales.
+      const now = Date.now()
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS company_finance_accounts (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '💰',
+          color       TEXT NOT NULL DEFAULT '#10b981',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS company_finance_categories (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '📁',
+          color       TEXT NOT NULL DEFAULT '#6366f1',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS company_finance_payment_methods (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          icon        TEXT NOT NULL DEFAULT '💳',
+          color       TEXT NOT NULL DEFAULT '#64748b',
+          is_default  INTEGER NOT NULL DEFAULT 0,
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS company_finance_concepts (
+          id                       TEXT PRIMARY KEY,
+          category_id              TEXT NOT NULL REFERENCES company_finance_categories(id) ON DELETE CASCADE,
+          account_id               TEXT NOT NULL REFERENCES company_finance_accounts(id) ON DELETE CASCADE,
+          name                     TEXT NOT NULL,
+          default_amount           REAL NOT NULL DEFAULT 0,
+          expense_type             TEXT NOT NULL DEFAULT 'fixed',
+          payment_method           TEXT NOT NULL DEFAULT 'transfer',
+          recurrence               TEXT NOT NULL DEFAULT 'monthly',
+          recurrence_month         INTEGER,
+          tracks_multiple_entries  INTEGER NOT NULL DEFAULT 0,
+          is_active                INTEGER NOT NULL DEFAULT 1,
+          notes                    TEXT NOT NULL DEFAULT '',
+          created_at               INTEGER NOT NULL,
+          updated_at               INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS company_finance_movements (
+          id                TEXT PRIMARY KEY,
+          concept_id        TEXT NOT NULL REFERENCES company_finance_concepts(id) ON DELETE CASCADE,
+          month             INTEGER NOT NULL,
+          year              INTEGER NOT NULL,
+          amount_estimated  REAL NOT NULL DEFAULT 0,
+          amount_actual     REAL,
+          status            TEXT NOT NULL DEFAULT 'pending',
+          payment_method    TEXT NOT NULL DEFAULT 'transfer',
+          payment_date      INTEGER,
+          due_date          INTEGER,
+          notes             TEXT NOT NULL DEFAULT '',
+          created_at        INTEGER NOT NULL,
+          updated_at        INTEGER NOT NULL,
+          UNIQUE(concept_id, month, year)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_company_finance_movements_period ON company_finance_movements(year, month);
+
+        CREATE TABLE IF NOT EXISTS company_finance_movement_entries (
+          id           TEXT PRIMARY KEY,
+          movement_id  TEXT NOT NULL REFERENCES company_finance_movements(id) ON DELETE CASCADE,
+          amount       REAL NOT NULL,
+          entry_date   INTEGER,
+          note         TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_company_finance_movement_entries_movement
+          ON company_finance_movement_entries(movement_id);
+
+        CREATE TABLE IF NOT EXISTS company_finance_month_insights (
+          id              TEXT PRIMARY KEY,
+          month           INTEGER NOT NULL,
+          year            INTEGER NOT NULL,
+          notes           TEXT NOT NULL DEFAULT '',
+          ai_analysis     TEXT,
+          ai_generated_at INTEGER,
+          created_at      INTEGER NOT NULL,
+          updated_at      INTEGER NOT NULL,
+          UNIQUE(month, year)
+        );
+      `)
+
+      const { v4: uuidv4 } = require('uuid')
+
+      // ── Métodos de pago (mismos ids que finance_payment_methods) ──────────
+      const methodsData = [
+        { id: 'cash',        name: 'Efectivo',           icon: '💵', color: '#22c55e' },
+        { id: 'transfer',    name: 'Transferencia',      icon: '🏦', color: '#3b82f6' },
+        { id: 'debit_auto',  name: 'Débito automático',  icon: '🔄', color: '#8b5cf6' },
+        { id: 'debit_card',  name: 'Tarjeta de débito',  icon: '💳', color: '#06b6d4' },
+        { id: 'credit_card', name: 'Tarjeta de crédito', icon: '💳', color: '#ef4444' },
+        { id: 'other',       name: 'Otro',               icon: '🔖', color: '#64748b' },
+      ]
+      const insertMethod = db.prepare(`
+        INSERT INTO company_finance_payment_methods (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `)
+      for (const m of methodsData) {
+        insertMethod.run(m.id, m.name, m.icon, m.color, now, now)
+      }
+
+      // ── Cuenta por defecto ──────────────────────────────────────────────────
+      const accountId = uuidv4()
+      db.prepare(`
+        INSERT INTO company_finance_accounts (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `).run(accountId, 'Cuenta Empresa', '🏢', '#10b981', now, now)
+
+      // ── Categorías ────────────────────────────────────────────────────────
+      const categoriesData = [
+        { key: 'alquileres',      name: 'Alquileres',                              icon: '🏢', color: '#3b82f6' },
+        { key: 'abl',             name: 'Impuestos inmobiliarios (ABL)',           icon: '🏛️', color: '#f59e0b' },
+        { key: 'expensas',        name: 'Expensas (X28)',                          icon: '🏘️', color: '#06b6d4' },
+        { key: 'internet',        name: 'Servicios - Internet/Telefonía',          icon: '📡', color: '#8b5cf6' },
+        { key: 'electricidad',    name: 'Servicios - Electricidad',                icon: '💡', color: '#eab308' },
+        { key: 'agua',            name: 'Servicios - Agua',                        icon: '💧', color: '#0ea5e9' },
+        { key: 'gas',             name: 'Servicios - Gas',                         icon: '🔥', color: '#f97316' },
+        { key: 'seguros',         name: 'Seguros y patentes',                      icon: '🛡️', color: '#10b981' },
+        { key: 'hosting',         name: 'Hosting y software',                      icon: '💻', color: '#6366f1' },
+        { key: 'marketing',       name: 'Publicidad y marketing',                  icon: '📣', color: '#ec4899' },
+        { key: 'honorarios',      name: 'Honorarios profesionales',                icon: '👔', color: '#64748b' },
+        { key: 'impuestos',       name: 'Impuestos y cargas fiscales',             icon: '🧾', color: '#ef4444' },
+        { key: 'sueldos',         name: 'Sueldos y honorarios de personal',        icon: '👥', color: '#14b8a6' },
+        { key: 'cargas_sociales', name: 'Cargas sociales y sindicales',            icon: '🤝', color: '#a855f7' },
+        { key: 'insumos',         name: 'Insumos y papelería',                     icon: '📎', color: '#84cc16' },
+        { key: 'it_servicios',    name: 'Servicios informáticos / tecnología',     icon: '🖥️', color: '#0891b2' },
+      ]
+      const insertCategory = db.prepare(`
+        INSERT INTO company_finance_categories (id, name, icon, color, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `)
+      const categoryIds: Record<string, string> = {}
+      for (const cat of categoriesData) {
+        const id = uuidv4()
+        categoryIds[cat.key] = id
+        insertCategory.run(id, cat.name, cat.icon, cat.color, now, now)
+      }
+
+      // ── Conceptos (gastos recurrentes mensuales de la empresa) ─────────────
+      const conceptsData = [
+        // Alquileres
+        { name: 'Alquiler Local Gral Paz',                   cat: 'alquileres' },
+        { name: 'Alquiler Oficinas Arias',                   cat: 'alquileres' },
+        { name: 'Alquiler Oficinas Arcos',                   cat: 'alquileres' },
+        // Impuestos inmobiliarios (ABL)
+        { name: 'ABL Arias',                                 cat: 'abl' },
+        { name: 'ABL Cuba',                                  cat: 'abl' },
+        { name: 'ABL Arcos - Gral Paz 750',                  cat: 'abl' },
+        { name: 'ABL Gral Paz UF1',                          cat: 'abl' },
+        { name: 'ABL Gral Paz UF2',                          cat: 'abl' },
+        { name: 'ABL Gral Paz UF3',                          cat: 'abl' },
+        { name: 'ABL Gral Paz UF4',                          cat: 'abl' },
+        // Expensas (X28)
+        { name: 'X28 Gral Paz 898 - Contrato 10143316',      cat: 'expensas' },
+        { name: 'X28 Arias 2421 - Contrato 10158891',        cat: 'expensas' },
+        { name: 'X28 Gral Paz 750 - Contrato 10164220',      cat: 'expensas' },
+        { name: 'X28 Cuba Contrato 10165936',                cat: 'expensas' },
+        // Servicios - Internet/Telefonía
+        { name: 'Telecentro Arias',                          cat: 'internet' },
+        { name: 'Telecom Cuba',                              cat: 'internet' },
+        { name: 'Telecom Gral Paz',                          cat: 'internet' },
+        { name: 'Movistar Gral Paz',                         cat: 'internet' },
+        // Servicios - Electricidad
+        { name: 'Edenor Arias',                              cat: 'electricidad' },
+        { name: 'Edenor Gral Paz 898',                       cat: 'electricidad' },
+        { name: 'Edenor Gral Paz 750',                       cat: 'electricidad' },
+        { name: 'Edenor Cuba',                               cat: 'electricidad' },
+        // Servicios - Agua
+        { name: 'Aysa Arias',                                cat: 'agua' },
+        { name: 'Aysa Gral Paz 898',                         cat: 'agua' },
+        { name: 'Aysa Gral Paz 750',                         cat: 'agua' },
+        { name: 'Aysa Cuba',                                 cat: 'agua' },
+        // Servicios - Gas
+        { name: 'Metrogas Arias',                            cat: 'gas' },
+        { name: 'Metrogas Cuba',                             cat: 'gas' },
+        { name: 'Metrogas Gral Paz 750',                     cat: 'gas' },
+        { name: 'Metrogas Arcos',                            cat: 'gas' },
+        // Seguros y patentes
+        { name: 'Seguro Sura integral de comercio',          cat: 'seguros' },
+        { name: 'Seguro ATM Trimoto',                        cat: 'seguros' },
+        { name: 'Patente Trimoto',                           cat: 'seguros' },
+        // Hosting y software
+        { name: 'Hosting Mesi',                              cat: 'hosting' },
+        { name: 'Hosting NatureHike',                        cat: 'hosting' },
+        { name: 'Hosting Aonijie',                           cat: 'hosting' },
+        { name: 'Sendingblue',                               cat: 'hosting' },
+        { name: 'Dominio Nakaoutdoors.com',                  cat: 'hosting' },
+        // Publicidad y marketing
+        { name: 'Publicidad Vertical',                       cat: 'marketing' },
+        { name: 'Publicidad Vía Pública',                    cat: 'marketing' },
+        { name: 'Publicidad Envialosimple',                  cat: 'marketing' },
+        { name: 'Publicidad Facebook',                       cat: 'marketing' },
+        { name: 'Google Adwords',                            cat: 'marketing' },
+        // Honorarios profesionales
+        { name: 'Contador',                                  cat: 'honorarios' },
+        { name: 'Sociedades Outdoor y Green',                cat: 'honorarios' },
+        { name: 'Honorarios estudio por extras',             cat: 'honorarios' },
+        { name: 'Honorarios Abogado',                        cat: 'honorarios' },
+        { name: 'Honorarios Cecilia obra',                   cat: 'honorarios' },
+        { name: 'Honorarios Carballeiro estudio',            cat: 'honorarios' },
+        { name: 'Honorarios ATL comex',                      cat: 'honorarios' },
+        { name: 'Honorarios Agus Diseño marca',              cat: 'honorarios' },
+        // Impuestos y cargas fiscales
+        { name: 'Galicia Mant. SRL 1',                       cat: 'impuestos' },
+        { name: 'Galicia Mant. SRL 2',                       cat: 'impuestos' },
+        { name: 'IVA SRL',                                   cat: 'impuestos' },
+        { name: 'Iva Diego Nakamura',                        cat: 'impuestos' },
+        { name: 'IIBB SRL',                                  cat: 'impuestos' },
+        { name: 'IIBB Diego Nakamura',                       cat: 'impuestos' },
+        { name: 'Autónomos Diego Nakamura',                  cat: 'impuestos' },
+        { name: 'Ganancias pers saldo',                      cat: 'impuestos' },
+        { name: 'Ganancias pers Anticipo 5/5',               cat: 'impuestos' },
+        { name: 'Bienes personales (Diego/Ana)',             cat: 'impuestos' },
+        { name: 'Bienes pers Anticipo',                      cat: 'impuestos' },
+        { name: 'Bienes sociedad 899A',                      cat: 'impuestos' },
+        { name: 'Ganancias Sociedades',                      cat: 'impuestos' },
+        { name: 'Pago balance',                              cat: 'impuestos' },
+        { name: 'Pago ganancias y bienes personales',        cat: 'impuestos' },
+        { name: 'Sicore',                                    cat: 'impuestos' },
+        // Sueldos y honorarios de personal
+        { name: 'Sueldo Naka',                               cat: 'sueldos' },
+        { name: 'Sueldo Hernán Perez Erramouspe',            cat: 'sueldos' },
+        { name: 'Sueldo Gabriela Rolón',                     cat: 'sueldos' },
+        { name: 'Sueldo Juan Manuel Siris',                  cat: 'sueldos' },
+        { name: 'Sueldo Karla Palacio Monsalve',             cat: 'sueldos' },
+        { name: 'Sueldo Ramiro Furcenko',                    cat: 'sueldos' },
+        { name: 'Sueldo Graciela Ledesma',                   cat: 'sueldos' },
+        { name: 'Sueldo Gonzalo Vieta',                      cat: 'sueldos' },
+        { name: 'Sueldo Reyes Caraccio Joaquin',             cat: 'sueldos' },
+        { name: 'Sueldo Fernando David Tornielli',           cat: 'sueldos' },
+        { name: 'Sueldo Matías Rosales',                     cat: 'sueldos' },
+        { name: 'Sueldo Elena Noemi Ledesma',                cat: 'sueldos' },
+        { name: 'Sueldo Braian Benitez Formeliano',          cat: 'sueldos' },
+        { name: 'Sueldo Ezquerra Fernando Joaquin',          cat: 'sueldos' },
+        { name: 'Sueldo Roman Leandro Facundo',              cat: 'sueldos' },
+        { name: 'Sueldo Catalina Ariana Lucero',             cat: 'sueldos' },
+        { name: 'Sueldo Oscar Lovarvo',                      cat: 'sueldos' },
+        { name: 'Sueldo Andrea Basualdo Williams',           cat: 'sueldos' },
+        { name: 'Sueldo Ezequiel Alberto Di Fabio',          cat: 'sueldos' },
+        { name: 'Sueldo Franco Ivan Caccetta',               cat: 'sueldos' },
+        { name: 'Sueldo Leonor Marin',                       cat: 'sueldos' },
+        { name: 'Sueldo Tomás Navarro Santiago',             cat: 'sueldos' },
+        { name: 'Sueldo Ruben Vivas Angel',                  cat: 'sueldos' },
+        { name: 'Sueldo Mercedez Figueredo',                 cat: 'sueldos' },
+        { name: 'Sueldo Martina Lucero',                     cat: 'sueldos' },
+        { name: 'Sueldo Emanuel Alejandro Ríos',             cat: 'sueldos' },
+        { name: 'Sueldo Mercedes Dibernardi',                cat: 'sueldos' },
+        { name: 'Sueldo Jimenez Ghione Nicolás',             cat: 'sueldos' },
+        { name: 'Sueldo Ariana Ayelen Salas Llorente',       cat: 'sueldos' },
+        { name: 'Sueldo Patricio Nahuel Martyniuk',          cat: 'sueldos' },
+        { name: 'Sueldo Esteban Firbeda Szuhi',              cat: 'sueldos' },
+        { name: 'Sueldo Malena Martinez',                    cat: 'sueldos' },
+        { name: 'Sueldo Fernanda María Escobar',             cat: 'sueldos' },
+        { name: 'Sueldo Juan Cruz Gonzalez Furrer',          cat: 'sueldos' },
+        { name: 'Sueldo Cristiam Daniel Muñoz Albornoz',     cat: 'sueldos' },
+        { name: 'Sueldo Sofía Jara',                         cat: 'sueldos' },
+        { name: 'Sueldo Alexandra Bercovich',                cat: 'sueldos' },
+        { name: 'Sueldo Cruz Lautaro Alexis',                cat: 'sueldos' },
+        { name: 'Sueldo Martín Tro Gamboa',                  cat: 'sueldos' },
+        { name: 'Sueldo Lucía Rodriguez',                    cat: 'sueldos' },
+        { name: 'Sueldo Joaquín García',                     cat: 'sueldos' },
+        { name: 'Sueldo José Peralta Dalla Fontana',         cat: 'sueldos' },
+        { name: 'Sueldo Gabriel Fernando Delucia',           cat: 'sueldos' },
+        { name: 'Sueldo Agustina Ayelen Gomez',              cat: 'sueldos' },
+        { name: 'Sueldo Mariela Cecilia Perona',             cat: 'sueldos' },
+        // Cargas sociales y sindicales
+        { name: 'Cargas Sociales',                           cat: 'cargas_sociales' },
+        { name: 'Sindicato de Comercio SEC',                 cat: 'cargas_sociales' },
+        { name: 'Faecys',                                    cat: 'cargas_sociales' },
+        { name: 'OSECAC',                                    cat: 'cargas_sociales' },
+        { name: 'Bonos suma fija',                           cat: 'cargas_sociales' },
+        // Insumos y papelería
+        { name: 'Papelera',                                  cat: 'insumos' },
+        { name: 'Librería',                                  cat: 'insumos' },
+        { name: 'Bolsas papel',                              cat: 'insumos' },
+        { name: 'Cintas embalaje',                           cat: 'insumos' },
+        // Servicios informáticos / tecnología
+        { name: 'Nubix integración API',                     cat: 'it_servicios' },
+        { name: 'Nubix Martín programación',                 cat: 'it_servicios' },
+        { name: 'Nubix campañas digitales',                  cat: 'it_servicios' },
+        { name: 'Servicio Nubix abono NH',                   cat: 'it_servicios' },
+        { name: 'Servicio Nubix abono Aonijie',              cat: 'it_servicios' },
+        { name: 'Flexxus soft',                              cat: 'it_servicios' },
+        { name: 'Flexxus servicio atención',                 cat: 'it_servicios' },
+        { name: 'Flexxus otros API',                         cat: 'it_servicios' },
+        { name: 'Mantenimiento informático Prodrive',        cat: 'it_servicios' },
+        { name: 'Extras Prodrive/Flexxus',                   cat: 'it_servicios' },
+      ]
+      const insertConcept = db.prepare(`
+        INSERT INTO company_finance_concepts
+          (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, tracks_multiple_entries, is_active, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 0, 'fixed', 'transfer', 'monthly', NULL, 0, 1, '', ?, ?)
+      `)
+      for (const concept of conceptsData) {
+        insertConcept.run(uuidv4(), categoryIds[concept.cat], accountId, concept.name, now, now)
+      }
+    }
   }
 ]
 

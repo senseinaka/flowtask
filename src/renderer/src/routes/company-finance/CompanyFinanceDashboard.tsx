@@ -18,24 +18,27 @@ import {
   Sparkles, ClipboardPaste, FilePlus2, CreditCard
 } from 'lucide-react'
 import {
-  useFinanceMovements, useUpcomingFinanceMovements, useFinanceMonthSummary,
-  useFinanceMonthInsight, useSaveFinanceMonthNotes, useGenerateFinanceMonthAnalysis, useSaveFinanceMonthAnalysis,
-  useFinanceConcepts, useFinanceCategories, useFinanceAccounts, useFinancePaymentMethods,
-  useCreateFinanceMovement, useUpdateFinanceMovement, useQuickUpdateFinanceMovement, useDeleteFinanceMovement,
-  useGenerateMovementsForMonth, useGenerateMovementsFromPreviousMonth,
-  useCreateFinanceConcept, useUpdateFinanceConcept, useDeleteFinanceConcept,
-  useCreateFinanceCategory, useUpdateFinanceCategory, useDeleteFinanceCategory,
-  useCreateFinancePaymentMethod, useUpdateFinancePaymentMethod, useDeleteFinancePaymentMethod, getPaymentMethodLabel,
-  useMovementEntries, useAddMovementEntry, useUpdateMovementEntry, useRemoveMovementEntry,
-  useFinanceCategoryBreakdown, useFinanceHistory, useFinanceTopConcepts, useFinanceTopIncreases,
+  useCompanyFinanceMovements, useUpcomingCompanyFinanceMovements, useCompanyFinanceMonthSummary,
+  useCompanyFinanceMonthInsight, useSaveCompanyFinanceMonthNotes, useGenerateCompanyFinanceMonthAnalysis, useSaveCompanyFinanceMonthAnalysis,
+  useCompanyFinanceConcepts, useCompanyFinanceCategories, useCompanyFinanceAccounts, useCompanyFinancePaymentMethods,
+  useCreateCompanyFinanceMovement, useUpdateCompanyFinanceMovement, useQuickUpdateCompanyFinanceMovement, useDeleteCompanyFinanceMovement,
+  useGenerateCompanyFinanceMovementsForMonth, useGenerateCompanyFinanceMovementsFromPreviousMonth,
+  useCreateCompanyFinanceConcept, useUpdateCompanyFinanceConcept, useDeleteCompanyFinanceConcept,
+  useCreateCompanyFinanceCategory, useUpdateCompanyFinanceCategory, useDeleteCompanyFinanceCategory,
+  useCreateCompanyFinancePaymentMethod, useUpdateCompanyFinancePaymentMethod, useDeleteCompanyFinancePaymentMethod,
+  useCompanyMovementEntries, useAddCompanyMovementEntry, useUpdateCompanyMovementEntry, useRemoveCompanyMovementEntry,
+  useCompanyFinanceCategoryBreakdown, useCompanyFinanceHistory, useCompanyFinanceTopConcepts, useCompanyFinanceTopIncreases,
+  useCompanyFinanceImportSelectFile, useCompanyFinanceImportParseText, useConfirmCompanyFinanceImport,
+  useExportCompanyFinanceMovements, useExportCompanyFinanceMovementsSelection, useExportCompanyFinanceSummaryPdf,
+  useCompanyFinanceSecurityStatus, useSetupCompanyFinancePin, useVerifyCompanyFinancePin, useDisableCompanyFinancePin, useChangeCompanyFinancePin
+} from '../../hooks/useCompanyFinance'
+import {
+  getPaymentMethodLabel,
   getDiffColor, formatCurrency, formatFinanceDate, getMonthLabel, getMonthName, MONTH_OPTIONS,
   getEffectiveAmount, formatSignedPercent,
   getMovementUrgency, getDueLabel, groupMovementsByUrgency, getFinanceAlerts,
   getDisplayStatus, getNextStatusOnClick,
   FINANCE_URGENCY_ORDER, FINANCE_URGENCY_LABELS, FINANCE_URGENCY_COLORS, FINANCE_HISTORY_MONTHS,
-  useFinanceImportSelectFile, useFinanceImportParseText, useConfirmFinanceImport,
-  useExportFinanceMovements, useExportFinanceMovementsSelection, useExportFinanceSummaryPdf,
-  useFinanceSecurityStatus, useSetupFinancePin, useVerifyFinancePin, useDisableFinancePin, useChangeFinancePin,
   type FinanceMovementUrgency, type FinanceAlert, type FinanceAlertKind, type FinanceAlertSeverity
 } from '../../hooks/useFinance'
 import type {
@@ -368,14 +371,14 @@ function MonthPickerDropdown({
 //
 // Campo de texto libre para que el usuario anote POR QUÉ varió el gasto este
 // mes (ej: "pagué el seguro del auto en una cuota") — se persiste por mes/año
-// (finance_month_insights) y queda visible al volver a entrar. A diferencia de
+// (company_finance_month_insights) y queda visible al volver a entrar. A diferencia de
 // EditableNotes (click-to-edit puntual sobre una fila), acá el texto puede ser
 // largo, así que es un <textarea> con botón "Guardar" explícito — el usuario
 // decide cuándo confirmar el cambio, no se guarda en cada tecla.
 
 function MonthNotesPanel({ period }: { period: { month: number; year: number } }) {
-  const { data: insight, isLoading } = useFinanceMonthInsight(period.month, period.year)
-  const saveNotes = useSaveFinanceMonthNotes()
+  const { data: insight, isLoading } = useCompanyFinanceMonthInsight(period.month, period.year)
+  const saveNotes = useSaveCompanyFinanceMonthNotes()
 
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -433,15 +436,15 @@ function MonthNotesPanel({ period }: { period: { month: number; year: number } }
 //
 // Genera (a pedido) un análisis comparativo del mes actual contra el anterior
 // usando IA — y lo muestra como BORRADOR hasta que el usuario hace click en
-// "Guardar": recién ahí se persiste (finance_month_insights.ai_analysis) y
+// "Guardar": recién ahí se persiste (company_finance_month_insights.ai_analysis) y
 // queda visible al volver a entrar al mes, tal cual pidió Diego ("que queden
 // guardadas si le doy guardar y visibles"). No es un chat efímero: una vez
 // guardado, reemplaza al análisis anterior de ESE mes (un análisis por mes/año).
 
 function MonthAIComparator({ period }: { period: { month: number; year: number } }) {
-  const { data: insight } = useFinanceMonthInsight(period.month, period.year)
-  const generate     = useGenerateFinanceMonthAnalysis()
-  const saveAnalysis = useSaveFinanceMonthAnalysis()
+  const { data: insight } = useCompanyFinanceMonthInsight(period.month, period.year)
+  const generate     = useGenerateCompanyFinanceMonthAnalysis()
+  const saveAnalysis = useSaveCompanyFinanceMonthAnalysis()
 
   // Borrador recién generado, todavía sin guardar — se descarta al cambiar de mes.
   const [draftAnalysis, setDraftAnalysis] = useState<string | null>(null)
@@ -617,13 +620,13 @@ function EditableStatus({ movement, onSave }: { movement: FinanceMovement; onSav
  * al hacer click, y se guarda y cierra apenas se elige una opción (sin
  * necesidad de blur/Enter).
  *
- * Las opciones salen de la lista dinámica `useFinancePaymentMethods` (incluye
+ * Las opciones salen de la lista dinámica `useCompanyFinancePaymentMethods` (incluye
  * los métodos personalizados que el usuario haya creado vía "Métodos de pago"),
  * con fallback al mapa estático de los 6 "de fábrica" mientras carga.
  */
 function EditablePaymentMethod({ value, onSave }: { value: FinancePaymentMethod; onSave: (v: FinancePaymentMethod) => void }) {
   const [editing, setEditing] = useState(false)
-  const { data: methods } = useFinancePaymentMethods()
+  const { data: methods } = useCompanyFinancePaymentMethods()
   const options = methods?.length
     ? methods
     : (Object.keys(FINANCE_PAYMENT_METHOD_LABELS) as string[]).map(id => ({ id, name: FINANCE_PAYMENT_METHOD_LABELS[id] }))
@@ -2078,7 +2081,7 @@ function BulkActionsBar({
   onClear: () => void
 }) {
   const [exportOpen, setExportOpen] = useState(false)
-  const exportSelection = useExportFinanceMovementsSelection()
+  const exportSelection = useExportCompanyFinanceMovementsSelection()
   const count = selected.length
   const pendingCount = selected.filter(m => m.status !== 'paid').length
 
@@ -2187,22 +2190,22 @@ function periodKey(period: { month: number; year: number }): string {
 }
 
 function hasExportedThisPeriod(period: { month: number; year: number }): boolean {
-  try { return !!localStorage.getItem(`finance:lastExport:${periodKey(period)}`) }
+  try { return !!localStorage.getItem(`companyFinance:lastExport:${periodKey(period)}`) }
   catch { return true }   // si localStorage no está disponible, no insistir
 }
 
 function markExportedThisPeriod(period: { month: number; year: number }): void {
-  try { localStorage.setItem(`finance:lastExport:${periodKey(period)}`, String(Date.now())) }
+  try { localStorage.setItem(`companyFinance:lastExport:${periodKey(period)}`, String(Date.now())) }
   catch { /* localStorage no disponible — no es crítico, simplemente no se recuerda */ }
 }
 
 function isReminderDismissed(period: { month: number; year: number }): boolean {
-  try { return !!localStorage.getItem(`finance:exportReminder:dismissed:${periodKey(period)}`) }
+  try { return !!localStorage.getItem(`companyFinance:exportReminder:dismissed:${periodKey(period)}`) }
   catch { return false }
 }
 
 function dismissReminder(period: { month: number; year: number }): void {
-  try { localStorage.setItem(`finance:exportReminder:dismissed:${periodKey(period)}`, '1') }
+  try { localStorage.setItem(`companyFinance:exportReminder:dismissed:${periodKey(period)}`, '1') }
   catch { /* idem */ }
 }
 
@@ -2212,7 +2215,7 @@ function ExportReminderBanner({
   period: { month: number; year: number }
   onDismiss: () => void
 }) {
-  const exportMovements = useExportFinanceMovements()
+  const exportMovements = useExportCompanyFinanceMovements()
 
   const handleExport = async () => {
     const res = await exportMovements.mutateAsync({ month: period.month, year: period.year, format: 'xlsx' })
@@ -2389,7 +2392,7 @@ function UpcomingPaymentsView({
   onQuickUpdate: (id: string, data: { status?: FinanceMovementStatus; payment_date?: number | null; due_date?: number | null }) => void
   onEdit: (m: FinanceMovement) => void
 }) {
-  const { data: movements = [], isLoading } = useUpcomingFinanceMovements()
+  const { data: movements = [], isLoading } = useUpcomingCompanyFinanceMovements()
   const groups = useMemo(() => groupMovementsByUrgency(movements), [movements])
 
   if (isLoading) {
@@ -2538,9 +2541,9 @@ function MovementForm({ movement, concepts, period, onClose }: {
   onClose:  () => void
 }) {
   const isEdit = !!movement
-  const create = useCreateFinanceMovement()
-  const update = useUpdateFinanceMovement()
-  const { data: paymentMethods = [] } = useFinancePaymentMethods()
+  const create = useCreateCompanyFinanceMovement()
+  const update = useUpdateCompanyFinanceMovement()
+  const { data: paymentMethods = [] } = useCompanyFinancePaymentMethods()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -2551,7 +2554,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
   // derivan en vivo del registro de cargas — no del snapshot `movement` con el
   // que se abrió el modal (que queda desactualizado en cuanto se agrega una carga).
   const tracksEntries = isEdit && firstConcept?.tracks_multiple_entries === 1
-  const { data: liveEntries = [] } = useMovementEntries(tracksEntries ? movement!.id : null)
+  const { data: liveEntries = [] } = useCompanyMovementEntries(tracksEntries ? movement!.id : null)
   const liveTotal = useMemo(
     () => liveEntries.reduce((sum, e) => sum + e.amount, 0),
     [liveEntries]
@@ -2775,9 +2778,9 @@ function MovementEntriesLedger({ movementId, entries }: {
   movementId: string
   entries:    FinanceMovementEntry[]
 }) {
-  const add    = useAddMovementEntry()
-  const update = useUpdateMovementEntry()
-  const remove = useRemoveMovementEntry()
+  const add    = useAddCompanyMovementEntry()
+  const update = useUpdateCompanyMovementEntry()
+  const remove = useRemoveCompanyMovementEntry()
 
   const todayStr = dayjs().format('YYYY-MM-DD')
   const [draft, setDraft] = useState({ amount: '', entry_date: todayStr, note: '' })
@@ -2956,8 +2959,8 @@ function MovementEntriesLedger({ movementId, entries }: {
 // tipeó coincide. No hay límite de intentos: es un freno para miradas casuales
 // en un equipo compartido, no una caja fuerte.
 
-function FinanceLockScreen({ onUnlock }: { onUnlock: () => void }) {
-  const verify = useVerifyFinancePin()
+function CompanyFinanceLockScreen({ onUnlock }: { onUnlock: () => void }) {
+  const verify = useVerifyCompanyFinancePin()
   const [pin, setPin] = useState('')
   const [showPin, setShowPin] = useState(false)
   const [error, setError] = useState(false)
@@ -2977,7 +2980,7 @@ function FinanceLockScreen({ onUnlock }: { onUnlock: () => void }) {
           <Lock size={24} className="text-emerald-400" />
         </div>
         <div>
-          <h1 className="text-base font-bold text-white">Finanzas Personales bloqueadas</h1>
+          <h1 className="text-base font-bold text-white">Finanzas Empresa bloqueadas</h1>
           <p className="text-xs text-slate-500 mt-1">Ingresá tu PIN para acceder a esta sección.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -3025,10 +3028,10 @@ function FinanceLockScreen({ onUnlock }: { onUnlock: () => void }) {
 // ── Modal: gestionar bloqueo por PIN ──────────────────────────────────────────
 
 function SecurityManager({ onClose }: { onClose: () => void }) {
-  const { data: status } = useFinanceSecurityStatus()
-  const setup   = useSetupFinancePin()
-  const disable = useDisableFinancePin()
-  const change  = useChangeFinancePin()
+  const { data: status } = useCompanyFinanceSecurityStatus()
+  const setup   = useSetupCompanyFinancePin()
+  const disable = useDisableCompanyFinancePin()
+  const change  = useChangeCompanyFinancePin()
 
   const [mode, setMode] = useState<'setup' | 'change' | 'disable' | null>(null)
   const [currentPin, setCurrentPin] = useState('')
@@ -3116,7 +3119,7 @@ function SecurityManager({ onClose }: { onClose: () => void }) {
               </p>
               <p className="text-slate-500 mt-0.5">
                 {enabled
-                  ? 'Vas a necesitar el PIN cada vez que entres a Finanzas Personales.'
+                  ? 'Vas a necesitar el PIN cada vez que entres a Finanzas Empresa.'
                   : 'Cualquiera con acceso a esta computadora puede ver tus datos financieros sin restricción.'}
               </p>
             </div>
@@ -3187,7 +3190,7 @@ function SecurityManager({ onClose }: { onClose: () => void }) {
           {enabled && mode === 'disable' && (
             <div className="space-y-2.5">
               <p className="text-xs text-amber-300 bg-amber-950/20 border border-amber-700/40 rounded-lg px-3 py-2">
-                Vas a poder entrar a Finanzas Personales sin pedir PIN. Podés volver a activarlo cuando quieras.
+                Vas a poder entrar a Finanzas Empresa sin pedir PIN. Podés volver a activarlo cuando quieras.
               </p>
               {pinInput(currentPin, setCurrentPin, 'PIN actual', true)}
               <div className="flex items-center gap-2 pt-1">
@@ -3223,8 +3226,8 @@ const EXPORT_PROGRESS_LABELS: Record<'xlsx' | 'csv' | 'pdf', string> = {
 
 function ExportMenu({ period }: { period: { month: number; year: number } }) {
   const [open, setOpen] = useState(false)
-  const exportMovements = useExportFinanceMovements()
-  const exportPdf       = useExportFinanceSummaryPdf()
+  const exportMovements = useExportCompanyFinanceMovements()
+  const exportPdf       = useExportCompanyFinanceSummaryPdf()
   const busy = exportMovements.isPending || exportPdf.isPending
 
   const pendingKind: 'xlsx' | 'csv' | 'pdf' | null =
@@ -3327,12 +3330,12 @@ function ImportManager({
   concepts: FinanceConcept[]
   onClose: () => void
 }) {
-  const selectFile    = useFinanceImportSelectFile()
-  const parseText     = useFinanceImportParseText()
-  const confirmImport = useConfirmFinanceImport()
-  const createConcept = useCreateFinanceConcept()
-  const { data: categories = [] } = useFinanceCategories()
-  const { data: accounts   = [] } = useFinanceAccounts()
+  const selectFile    = useCompanyFinanceImportSelectFile()
+  const parseText     = useCompanyFinanceImportParseText()
+  const confirmImport = useConfirmCompanyFinanceImport()
+  const createConcept = useCreateCompanyFinanceConcept()
+  const { data: categories = [] } = useCompanyFinanceCategories()
+  const { data: accounts   = [] } = useCompanyFinanceAccounts()
 
   // Dos orígenes posibles: archivo (Excel/CSV, parseo rígido por encabezados) o
   // texto pegado (la IA lo interpreta) — ambos terminan en la MISMA previsualización
@@ -3793,13 +3796,13 @@ function ImportManager({
 // ── Modal: gestionar conceptos ────────────────────────────────────────────────
 
 function ConceptsManager({ onClose }: { onClose: () => void }) {
-  const { data: concepts   = [], isLoading } = useFinanceConcepts()
-  const { data: categories = [] } = useFinanceCategories()
-  const { data: accounts   = [] } = useFinanceAccounts()
-  const { data: paymentMethods = [] } = useFinancePaymentMethods()
-  const create = useCreateFinanceConcept()
-  const update = useUpdateFinanceConcept()
-  const remove = useDeleteFinanceConcept()
+  const { data: concepts   = [], isLoading } = useCompanyFinanceConcepts()
+  const { data: categories = [] } = useCompanyFinanceCategories()
+  const { data: accounts   = [] } = useCompanyFinanceAccounts()
+  const { data: paymentMethods = [] } = useCompanyFinancePaymentMethods()
+  const create = useCreateCompanyFinanceConcept()
+  const update = useUpdateCompanyFinanceConcept()
+  const remove = useDeleteCompanyFinanceConcept()
 
   const [showNew, setShowNew] = useState(false)
   const [draft, setDraft] = useState<CreateFinanceConceptInput>({
@@ -4190,21 +4193,21 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
  * Gestión de categorías (Fase 6 — submenú "Categorías"). Mismo patrón visual y de
  * interacción que ConceptsManager: modal con lista + alta rápida + edición inline.
  *
- * ⚠️ Punto delicado: `finance_categories` tiene `ON DELETE CASCADE` hacia
- * `finance_concepts`, que a su vez cascadea hacia `finance_movements` — borrar una
+ * ⚠️ Punto delicado: `company_finance_categories` tiene `ON DELETE CASCADE` hacia
+ * `company_finance_concepts`, que a su vez cascadea hacia `company_finance_movements` — borrar una
  * categoría borra silenciosamente TODOS sus conceptos y TODOS los movimientos de
  * esos conceptos (de cualquier mes/año), no solo del período actual. Por eso acá
- * se calcula la cantidad de conceptos asociados (vía useFinanceConcepts, sin pedir
+ * se calcula la cantidad de conceptos asociados (vía useCompanyFinanceConcepts, sin pedir
  * nada nuevo al main process) y se arma una advertencia explícita y disuasiva
  * antes de confirmar — a diferencia del borrado de un concepto individual, donde
  * el alcance es mucho más acotado.
  */
 function CategoriesManager({ onClose }: { onClose: () => void }) {
-  const { data: categories = [], isLoading } = useFinanceCategories()
-  const { data: concepts   = [] } = useFinanceConcepts()
-  const create = useCreateFinanceCategory()
-  const update = useUpdateFinanceCategory()
-  const remove = useDeleteFinanceCategory()
+  const { data: categories = [], isLoading } = useCompanyFinanceCategories()
+  const { data: concepts   = [] } = useCompanyFinanceConcepts()
+  const create = useCreateCompanyFinanceCategory()
+  const update = useUpdateCompanyFinanceCategory()
+  const remove = useDeleteCompanyFinanceCategory()
 
   const [showNew, setShowNew] = useState(false)
   const [draft, setDraft] = useState<CreateFinanceCategoryInput>({ name: '', icon: '🏷️', color: '#6366f1' })
@@ -4368,11 +4371,11 @@ function CategoriesManager({ onClose }: { onClose: () => void }) {
  * (referencias huérfanas, no pérdida de datos).
  */
 function PaymentMethodsManager({ onClose }: { onClose: () => void }) {
-  const { data: methods  = [], isLoading } = useFinancePaymentMethods()
-  const { data: concepts = [] } = useFinanceConcepts()
-  const create = useCreateFinancePaymentMethod()
-  const update = useUpdateFinancePaymentMethod()
-  const remove = useDeleteFinancePaymentMethod()
+  const { data: methods  = [], isLoading } = useCompanyFinancePaymentMethods()
+  const { data: concepts = [] } = useCompanyFinanceConcepts()
+  const create = useCreateCompanyFinancePaymentMethod()
+  const update = useUpdateCompanyFinancePaymentMethod()
+  const remove = useDeleteCompanyFinancePaymentMethod()
 
   const [showNew, setShowNew] = useState(false)
   const [draft, setDraft] = useState<CreateFinancePaymentMethodInput>({ name: '', icon: '💳', color: '#64748b' })
@@ -4527,7 +4530,7 @@ function PaymentMethodsManager({ onClose }: { onClose: () => void }) {
 // ── Visualización (Fase 3): gráficos, vista por categoría y vista histórica ──
 //
 // Todos los datos llegan ya agregados desde el proceso principal (computados al
-// vuelo — ver getFinanceCategoryBreakdown / getFinanceHistory / getFinanceTop*),
+// vuelo — ver getCompanyFinanceCategoryBreakdown / getCompanyFinanceHistory / getCompanyFinanceTop*),
 // así que acá solo nos ocupamos de graficarlos con recharts y estilarlos
 // consistentemente con el resto del módulo (tema emerald + slate oscuro).
 
@@ -4699,7 +4702,7 @@ function SpendingEvolutionChart({ history }: { history: FinanceHistoryEntry[] })
     <ResponsiveContainer width="100%" height={236}>
       <ComposedChart data={chartData} margin={{ top: 4, right: 12, bottom: 4, left: 4 }}>
         <defs>
-          <linearGradient id="financeEvolutionFill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="companyFinanceEvolutionFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%"  stopColor="#10b981" stopOpacity={0.32} />
             <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
           </linearGradient>
@@ -4710,7 +4713,7 @@ function SpendingEvolutionChart({ history }: { history: FinanceHistoryEntry[] })
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#475569', strokeDasharray: '3 3' }} />
         <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
         <Area type="monotone" dataKey="Real" name="Real" stroke="#10b981" strokeWidth={2}
-              fill="url(#financeEvolutionFill)" dot={{ r: 3, fill: '#10b981', strokeWidth: 0 }} />
+              fill="url(#companyFinanceEvolutionFill)" dot={{ r: 3, fill: '#10b981', strokeWidth: 0 }} />
         <Line type="monotone" dataKey="Estimado" name="Estimado" stroke="#64748b" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
       </ComposedChart>
     </ResponsiveContainer>
@@ -5106,24 +5109,24 @@ function HistoryView({ history, isLoading, range, onRangeChange, onSelectMonth, 
 
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
-export default function FinanceDashboard() {
+export default function CompanyFinanceDashboard() {
   const [period, setPeriod] = useState(() => {
     const d = new Date()
     return { month: d.getMonth() + 1, year: d.getFullYear() }
   })
 
-  const { data: movements = [], isLoading: loadingMovements } = useFinanceMovements(period.month, period.year)
-  const { data: summary,        isLoading: loadingSummary }   = useFinanceMonthSummary(period.month, period.year)
-  const { data: concepts  = [] } = useFinanceConcepts({ activeOnly: true })
-  const { data: categories = [] } = useFinanceCategories()
-  const { data: accounts   = [] } = useFinanceAccounts()
-  const { data: paymentMethods = [] } = useFinancePaymentMethods()
-  const { data: upcoming   = [] } = useUpcomingFinanceMovements()
+  const { data: movements = [], isLoading: loadingMovements } = useCompanyFinanceMovements(period.month, period.year)
+  const { data: summary,        isLoading: loadingSummary }   = useCompanyFinanceMonthSummary(period.month, period.year)
+  const { data: concepts  = [] } = useCompanyFinanceConcepts({ activeOnly: true })
+  const { data: categories = [] } = useCompanyFinanceCategories()
+  const { data: accounts   = [] } = useCompanyFinanceAccounts()
+  const { data: paymentMethods = [] } = useCompanyFinancePaymentMethods()
+  const { data: upcoming   = [] } = useUpcomingCompanyFinanceMovements()
 
   // Bloqueo por PIN (Fase 5): se consulta una sola vez al entrar; "unlocked" vive
   // solo en este componente, así que cambiar de mes/pestaña no vuelve a pedirlo,
   // pero salir del módulo y reentrar sí (es justamente lo que se busca).
-  const { data: securityStatus } = useFinanceSecurityStatus()
+  const { data: securityStatus } = useCompanyFinanceSecurityStatus()
   const [unlocked, setUnlocked] = useState(false)
   const locked = !!securityStatus?.enabled && !unlocked
 
@@ -5147,16 +5150,16 @@ export default function FinanceDashboard() {
 
   // Datos para Visualización (Fase 3): desglose por categoría, historial y rankings —
   // todos computados al vuelo en el proceso principal a partir de los movimientos.
-  const { data: breakdown = [], isLoading: loadingBreakdown } = useFinanceCategoryBreakdown(period.month, period.year)
-  const { data: history   = [], isLoading: loadingHistory }   = useFinanceHistory(period.month, period.year, historyRange)
-  const { data: topConcepts  = [] } = useFinanceTopConcepts(period.month, period.year)
-  const { data: topIncreases = [] } = useFinanceTopIncreases(period.month, period.year)
+  const { data: breakdown = [], isLoading: loadingBreakdown } = useCompanyFinanceCategoryBreakdown(period.month, period.year)
+  const { data: history   = [], isLoading: loadingHistory }   = useCompanyFinanceHistory(period.month, period.year, historyRange)
+  const { data: topConcepts  = [] } = useCompanyFinanceTopConcepts(period.month, period.year)
+  const { data: topIncreases = [] } = useCompanyFinanceTopIncreases(period.month, period.year)
 
-  const quickUpdate     = useQuickUpdateFinanceMovement()
-  const createMovement  = useCreateFinanceMovement()
-  const deleteMov       = useDeleteFinanceMovement()
-  const generateMov     = useGenerateMovementsForMonth()
-  const generateFromPrev = useGenerateMovementsFromPreviousMonth()
+  const quickUpdate     = useQuickUpdateCompanyFinanceMovement()
+  const createMovement  = useCreateCompanyFinanceMovement()
+  const deleteMov       = useDeleteCompanyFinanceMovement()
+  const generateMov     = useGenerateCompanyFinanceMovementsForMonth()
+  const generateFromPrev = useGenerateCompanyFinanceMovementsFromPreviousMonth()
 
   const alerts = useMemo(() => getFinanceAlerts({ upcoming, summary }), [upcoming, summary])
 
@@ -5276,7 +5279,7 @@ export default function FinanceDashboard() {
   }
 
   if (locked) {
-    return <FinanceLockScreen onUnlock={() => setUnlocked(true)} />
+    return <CompanyFinanceLockScreen onUnlock={() => setUnlocked(true)} />
   }
 
   return (
@@ -5289,7 +5292,7 @@ export default function FinanceDashboard() {
               <Wallet size={18} className="text-emerald-400" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-white">Finanzas Personales</h1>
+              <h1 className="text-base font-bold text-white">Finanzas Empresa</h1>
               <p className="text-[11px] text-slate-500">{movements.length} movimientos · {concepts.length} conceptos activos</p>
             </div>
           </div>
