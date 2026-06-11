@@ -21,7 +21,7 @@ export function registerQuestionsIpc(): void {
       const delegated = getDelegatedTask(input.task_id)
       taskTitle = delegated?.title ?? 'Sin título'
     } else {
-      const task = getTask(input.task_id)
+      const task = await getTask(input.task_id)
       taskTitle = task?.title ?? 'Sin título'
     }
 

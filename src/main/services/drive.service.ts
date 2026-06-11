@@ -135,8 +135,8 @@ class DriveService {
       const backup = {
         version: 1,
         exported_at: new Date().toISOString(),
-        tasks: exportAllTasks(),
-        projects: exportAllProjects(),
+        tasks: await exportAllTasks(),
+        projects: await exportAllProjects(),
         attachments: exportAllAttachments(),
         reminders: exportAllReminders()
       }

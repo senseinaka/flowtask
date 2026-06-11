@@ -1,10 +1,13 @@
-﻿import { randomUUID } from 'crypto'
-import { getDb } from '../db'
+import { randomUUID } from 'crypto'
+import { getPowerSyncDb } from '../powersync'
 import type { Task, TaskFilters, CreateTaskInput, TaskStatus, Priority } from '@shared/types'
 import { logStatusChange } from './task-log'
+import { getDb } from '../db'
 
-export function listTasks(filters: TaskFilters = {}): Task[] {
-  const db = getDb()
+const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+
+export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
+  const db = getPowerSyncDb()
   const conditions: string[] = []
   const params: unknown[] = []
 
@@ -31,62 +34,62 @@ export function listTasks(filters: TaskFilters = {}): Task[] {
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
-  const rows = db
-    .prepare(
-      `SELECT t.*, p.name as project_name, p.color as project_color
-       FROM tasks t
-       LEFT JOIN projects p ON p.id = t.project_id
-       ${where}
-       ORDER BY t.priority ASC, t.due_date ASC NULLS LAST, t.created_at DESC`
-    )
-    .all(...params) as Record<string, unknown>[]
+  const rows = await db.getAll<Record<string, unknown>>(
+    `SELECT t.*, p.name as project_name, p.color as project_color
+     FROM tasks t
+     LEFT JOIN projects p ON p.id = t.project_id
+     ${where}
+     ORDER BY t.priority ASC, (t.due_date IS NULL), t.due_date ASC, t.created_at DESC`,
+    params
+  )
 
   return rows.map(mapRow)
 }
 
-export function getTask(id: string): Task | null {
-  const db = getDb()
-  const row = db
-    .prepare(
-      `SELECT t.*, p.name as project_name, p.color as project_color
-       FROM tasks t
-       LEFT JOIN projects p ON p.id = t.project_id
-       WHERE t.id = ?`
-    )
-    .get(id) as Record<string, unknown> | undefined
+export async function getTask(id: string): Promise<Task | null> {
+  const db = getPowerSyncDb()
+  const row = await db.getOptional<Record<string, unknown>>(
+    `SELECT t.*, p.name as project_name, p.color as project_color
+     FROM tasks t
+     LEFT JOIN projects p ON p.id = t.project_id
+     WHERE t.id = ?`,
+    [id]
+  )
 
   return row ? mapRow(row) : null
 }
 
-export function createTask(input: CreateTaskInput): Task {
-  const db = getDb()
+export async function createTask(input: CreateTaskInput): Promise<Task> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
 
   const initialStatus = input.status ?? 'pending'
 
-  db.prepare(
-    `INSERT INTO tasks (id, project_id, title, description, status, priority, due_date, due_time, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    id,
-    input.project_id ?? null,
-    input.title,
-    input.description ?? '',
-    initialStatus,
-    input.priority ?? 3,
-    input.due_date ?? null,
-    input.due_time ?? null,
-    now,
-    now
+  await db.execute(
+    `INSERT INTO tasks (id, project_id, title, description, status, priority, due_date, due_time, created_at, updated_at, workspace_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      input.project_id ?? null,
+      input.title,
+      input.description ?? '',
+      initialStatus,
+      input.priority ?? 3,
+      input.due_date ?? null,
+      input.due_time ?? null,
+      now,
+      now,
+      WORKSPACE_ID
+    ]
   )
 
   logStatusChange(id, 'personal', null, initialStatus)
-  return getTask(id)!
+  return (await getTask(id))!
 }
 
-export function updateTask(id: string, data: Partial<Task>): Task | null {
-  const db = getDb()
+export async function updateTask(id: string, data: Partial<Task>): Promise<Task | null> {
+  const db = getPowerSyncDb()
   const allowed = [
     'title',
     'description',
@@ -113,7 +116,7 @@ export function updateTask(id: string, data: Partial<Task>): Task | null {
   if (updates.length === 0) return getTask(id)
 
   // Capture current status before update (for log)
-  const currentRow = db.prepare('SELECT status FROM tasks WHERE id = ?').get(id) as { status: string } | undefined
+  const currentRow = await db.getOptional<{ status: string }>('SELECT status FROM tasks WHERE id = ?', [id])
   const prevStatus = currentRow?.status ?? null
 
   // Auto-set completed_at when marking done
@@ -129,7 +132,7 @@ export function updateTask(id: string, data: Partial<Task>): Task | null {
   params.push(Date.now())
   params.push(id)
 
-  db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+  await db.execute(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, params)
 
   // Log status transition if status changed
   if (data.status && data.status !== prevStatus) {
@@ -139,56 +142,62 @@ export function updateTask(id: string, data: Partial<Task>): Task | null {
   return getTask(id)
 }
 
-export function deleteTask(id: string): void {
-  getDb().prepare('DELETE FROM tasks WHERE id = ?').run(id)
+export async function deleteTask(id: string): Promise<void> {
+  const db = getPowerSyncDb()
+  // attachments y reminders ya no tienen FK CASCADE a tasks(id) (migración v63),
+  // así que el borrado en cascada se hace a mano acá. Viven en flowtask.db.
+  const flowtaskDb = getDb()
+  flowtaskDb.prepare('DELETE FROM attachments WHERE task_id = ?').run(id)
+  flowtaskDb.prepare('DELETE FROM reminders WHERE task_id = ?').run(id)
+
+  await db.execute('DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_id = ?', [id, id])
+  await db.execute('DELETE FROM tasks WHERE id = ?', [id])
 }
 
-export function addDependency(taskId: string, dependsOnId: string): void {
-  const db = getDb()
+export async function addDependency(taskId: string, dependsOnId: string): Promise<void> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(
-    'INSERT OR IGNORE INTO task_dependencies (id, task_id, depends_on_id, created_at) VALUES (?, ?, ?, ?)'
-  ).run(id, taskId, dependsOnId, now)
+  await db.execute(
+    'INSERT OR IGNORE INTO task_dependencies (id, task_id, depends_on_id, created_at, workspace_id) VALUES (?, ?, ?, ?, ?)',
+    [id, taskId, dependsOnId, now, WORKSPACE_ID]
+  )
 }
 
-export function removeDependency(taskId: string, dependsOnId: string): void {
-  getDb()
-    .prepare('DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_id = ?')
-    .run(taskId, dependsOnId)
+export async function removeDependency(taskId: string, dependsOnId: string): Promise<void> {
+  const db = getPowerSyncDb()
+  await db.execute('DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_id = ?', [taskId, dependsOnId])
 }
 
-export function getDependencies(taskId: string): Task[] {
-  const db = getDb()
-  const rows = db
-    .prepare(
-      `SELECT t.*, p.name as project_name, p.color as project_color
-       FROM task_dependencies td
-       JOIN tasks t ON t.id = td.depends_on_id
-       LEFT JOIN projects p ON p.id = t.project_id
-       WHERE td.task_id = ?`
-    )
-    .all(taskId) as Record<string, unknown>[]
+export async function getDependencies(taskId: string): Promise<Task[]> {
+  const db = getPowerSyncDb()
+  const rows = await db.getAll<Record<string, unknown>>(
+    `SELECT t.*, p.name as project_name, p.color as project_color
+     FROM task_dependencies td
+     JOIN tasks t ON t.id = td.depends_on_id
+     LEFT JOIN projects p ON p.id = t.project_id
+     WHERE td.task_id = ?`,
+    [taskId]
+  )
 
   return rows.map(mapRow)
 }
 
-export function getBlockedBy(taskId: string): Task[] {
-  const db = getDb()
-  const rows = db
-    .prepare(
-      `SELECT t.*, p.name as project_name, p.color as project_color
-       FROM task_dependencies td
-       JOIN tasks t ON t.id = td.task_id
-       LEFT JOIN projects p ON p.id = t.project_id
-       WHERE td.depends_on_id = ?`
-    )
-    .all(taskId) as Record<string, unknown>[]
+export async function getBlockedBy(taskId: string): Promise<Task[]> {
+  const db = getPowerSyncDb()
+  const rows = await db.getAll<Record<string, unknown>>(
+    `SELECT t.*, p.name as project_name, p.color as project_color
+     FROM task_dependencies td
+     JOIN tasks t ON t.id = td.task_id
+     LEFT JOIN projects p ON p.id = t.project_id
+     WHERE td.depends_on_id = ?`,
+    [taskId]
+  )
 
   return rows.map(mapRow)
 }
 
-export function exportAllTasks(): Task[] {
+export async function exportAllTasks(): Promise<Task[]> {
   return listTasks()
 }
 
@@ -221,4 +230,3 @@ function mapRow(row: Record<string, unknown>): Task {
 
   return task
 }
-

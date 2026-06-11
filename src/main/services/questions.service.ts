@@ -68,13 +68,13 @@ export function parseReply(text: string, optionCount: number, options: QuestionO
 
 // ─── Action executor ──────────────────────────────────────────────────────────
 
-function applyAction(option: QuestionOption, question: TaskQuestion): string | null {
+async function applyAction(option: QuestionOption, question: TaskQuestion): Promise<string | null> {
   if (option.action === 'set_status' && option.action_value) {
     if (question.task_type === 'delegated') {
       updateDelegatedTask(question.task_id, { status: option.action_value as DelegatedStatus })
       return `Estado → ${DELEGATED_STATUS_LABELS[option.action_value as DelegatedStatus] ?? option.action_value}`
     } else {
-      updateTask(question.task_id, { status: option.action_value as TaskStatus })
+      await updateTask(question.task_id, { status: option.action_value as TaskStatus })
       return `Estado → ${STATUS_LABELS[option.action_value as TaskStatus]}`
     }
   }
@@ -172,7 +172,7 @@ class QuestionsService {
     console.log(`[Questions] Opción elegida: "${option.label}" acción: ${option.action}`)
 
     // Apply action to task (uses task_type stored in the question)
-    const actionTaken = applyAction(option, matched)
+    const actionTaken = await applyAction(option, matched)
     console.log(`[Questions] Acción aplicada: ${actionTaken}`)
 
     // Mark question answered in DB
@@ -187,7 +187,7 @@ class QuestionsService {
     // Get task title for the push notification (personal or delegated)
     const taskTitle = matched.task_type === 'delegated'
       ? (getDelegatedTask(matched.task_id)?.title ?? '')
-      : (getTask(matched.task_id)?.title ?? '')
+      : ((await getTask(matched.task_id))?.title ?? '')
 
     // Push event to renderer (toast + query invalidation)
     console.log(`[Questions] Push al renderer: question:answered, pushFn=${!!this.pushFn}`)

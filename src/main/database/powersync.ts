@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { getDb } from './db'
 import { PowerSyncDatabase } from '@powersync/node'
 import {
   Schema,
@@ -62,7 +63,13 @@ export const AppSchema = new Schema({
  * Solo para desarrollo (Fase 0) - el token de desarrollo expira a las 12hs.
  */
 function readEnvLocal(): Record<string, string> {
-  const envPath = path.join(app.getAppPath(), '.env.local')
+  // En desarrollo, app.getAppPath() apunta a la raíz del proyecto (donde
+  // vive .env.local). En la versión empaquetada, app.getAppPath() apunta
+  // dentro de app.asar (solo lectura), así que buscamos .env.local al lado
+  // del ejecutable instalado para poder configurarlo por máquina sin
+  // recompilar.
+  const baseDir = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
+  const envPath = path.join(baseDir, '.env.local')
   const env: Record<string, string> = {}
   if (!fs.existsSync(envPath)) return env
 
@@ -150,8 +157,64 @@ export function getPowerSyncDb(): PowerSyncDatabase {
 }
 
 /**
+ * Fase 1 (sync multi-dispositivo): copia única de los datos existentes de
+ * projects/tasks/task_dependencies desde flowtask.db hacia powersync.db, para
+ * que PowerSync los suba a Supabase. Es idempotente: si powersync.db ya tiene
+ * proyectos o tareas, no hace nada.
+ */
+async function migrateLegacyTaskData(psDb: PowerSyncDatabase): Promise<void> {
+  const counts = await psDb.get<{ projects: number; tasks: number }>(
+    `SELECT (SELECT COUNT(*) FROM projects) as projects, (SELECT COUNT(*) FROM tasks) as tasks`
+  )
+  if (counts.projects > 0 || counts.tasks > 0) return
+
+  const flowDb = getDb()
+  const projects = flowDb.prepare('SELECT * FROM projects').all() as Record<string, unknown>[]
+  const tasks = flowDb.prepare('SELECT * FROM tasks').all() as Record<string, unknown>[]
+  const deps = flowDb.prepare('SELECT * FROM task_dependencies').all() as Record<string, unknown>[]
+
+  if (projects.length === 0 && tasks.length === 0) return
+
+  console.log(
+    `[PowerSync] Migrando datos existentes: ${projects.length} proyectos, ${tasks.length} tareas, ${deps.length} dependencias`
+  )
+
+  for (const p of projects) {
+    await psDb.execute(
+      `INSERT OR IGNORE INTO projects (id, name, color, created_at, updated_at, workspace_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [p.id, p.name, p.color, p.created_at, p.updated_at, p.workspace_id]
+    )
+  }
+
+  for (const t of tasks) {
+    await psDb.execute(
+      `INSERT OR IGNORE INTO tasks
+         (id, project_id, title, description, status, priority, due_date, due_time, completed_at, created_at, updated_at, synced_at, drive_file_id, workspace_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        t.id, t.project_id, t.title, t.description, t.status, t.priority,
+        t.due_date, t.due_time, t.completed_at, t.created_at, t.updated_at,
+        t.synced_at, t.drive_file_id, t.workspace_id
+      ]
+    )
+  }
+
+  for (const d of deps) {
+    await psDb.execute(
+      `INSERT OR IGNORE INTO task_dependencies (id, task_id, depends_on_id, created_at, workspace_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      [d.id, d.task_id, d.depends_on_id, d.created_at, d.workspace_id]
+    )
+  }
+
+  console.log('[PowerSync] Migración de datos existentes completada')
+}
+
+/**
  * Conecta la instancia de PowerSync al backend, en paralelo a better-sqlite3.
- * No afecta las queries existentes (Fase 0).
+ * Antes de conectar, copia los datos existentes de tasks/projects/task_dependencies
+ * (Fase 1) si todavía no se hizo.
  */
 export async function connectPowerSync(): Promise<void> {
   const env = readEnvLocal()
@@ -164,6 +227,7 @@ export async function connectPowerSync(): Promise<void> {
   }
 
   const db = getPowerSyncDb()
+  await migrateLegacyTaskData(db)
   await db.connect(new DevTokenConnector(endpoint, token))
   console.log('[PowerSync] Conectado a', endpoint)
 }

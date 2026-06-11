@@ -1,31 +1,36 @@
-﻿import { randomUUID } from 'crypto'
-import { getDb } from '../db'
+import { randomUUID } from 'crypto'
+import { getPowerSyncDb } from '../powersync'
 import type { Project } from '@shared/types'
 
-export function listProjects(): Project[] {
-  return getDb().prepare('SELECT * FROM projects ORDER BY name ASC').all() as Project[]
+const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+
+export async function listProjects(): Promise<Project[]> {
+  const db = getPowerSyncDb()
+  return db.getAll<Project>('SELECT * FROM projects ORDER BY name ASC')
 }
 
-export function getProject(id: string): Project | null {
-  return (getDb().prepare('SELECT * FROM projects WHERE id = ?').get(id) as Project) ?? null
+export async function getProject(id: string): Promise<Project | null> {
+  const db = getPowerSyncDb()
+  const row = await db.getOptional<Project>('SELECT * FROM projects WHERE id = ?', [id])
+  return row ?? null
 }
 
-export function createProject(name: string, color = '#6366f1'): Project {
-  const db = getDb()
+export async function createProject(name: string, color = '#6366f1'): Promise<Project> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare('INSERT INTO projects (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-    id,
-    name,
-    color,
-    now,
-    now
+  await db.execute(
+    'INSERT INTO projects (id, name, color, created_at, updated_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, name, color, now, now, WORKSPACE_ID]
   )
-  return getProject(id)!
+  return (await getProject(id))!
 }
 
-export function updateProject(id: string, data: Partial<Pick<Project, 'name' | 'color'>>): Project | null {
-  const db = getDb()
+export async function updateProject(
+  id: string,
+  data: Partial<Pick<Project, 'name' | 'color'>>
+): Promise<Project | null> {
+  const db = getPowerSyncDb()
   const updates: string[] = []
   const params: unknown[] = []
 
@@ -35,15 +40,15 @@ export function updateProject(id: string, data: Partial<Pick<Project, 'name' | '
 
   updates.push('updated_at = ?')
   params.push(Date.now(), id)
-  db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+  await db.execute(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, params)
   return getProject(id)
 }
 
-export function deleteProject(id: string): void {
-  getDb().prepare('DELETE FROM projects WHERE id = ?').run(id)
+export async function deleteProject(id: string): Promise<void> {
+  const db = getPowerSyncDb()
+  await db.execute('DELETE FROM projects WHERE id = ?', [id])
 }
 
-export function exportAllProjects(): Project[] {
+export async function exportAllProjects(): Promise<Project[]> {
   return listProjects()
 }
-

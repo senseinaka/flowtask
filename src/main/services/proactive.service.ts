@@ -39,7 +39,7 @@ let _intervalId: ReturnType<typeof setInterval> | null = null
 
 // ── Context builder ───────────────────────────────────────────────────────────
 
-function buildAnalysisContext(): string {
+async function buildAnalysisContext(): Promise<string> {
   const today  = new Date()
   const fDate  = (ts: number | null | undefined) =>
     ts ? new Date(ts).toLocaleDateString('es-AR') : 'N/D'
@@ -69,7 +69,7 @@ function buildAnalysisContext(): string {
     : null
 
   // ── Tareas personales ──────────────────────────────────────────────────────
-  const tasks      = listTasks()
+  const tasks      = await listTasks()
   const pendTasks  = tasks.filter(t => t.status !== 'done')
   const overdueTasks = pendTasks.filter(t => t.due_date && t.due_date < now)
   const todayTasks   = pendTasks.filter(t => {
@@ -171,7 +171,7 @@ export async function runProactiveAnalysis(): Promise<ProactiveAlert[]> {
 
   try {
     const client  = new Anthropic({ apiKey: config.apiKey })
-    const context = buildAnalysisContext()
+    const context = await buildAnalysisContext()
 
     const response = await client.messages.create({
       model:      config.models?.['dashboard_chat'] ?? 'claude-haiku-4-5',

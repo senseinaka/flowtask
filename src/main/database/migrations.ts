@@ -1996,6 +1996,66 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       const now = Date.now()
       db.exec(`ALTER TABLE task_dependencies ADD COLUMN updated_at INTEGER NOT NULL DEFAULT ${now}`)
     }
+  },
+  {
+    version: 63,
+    up: (db) => {
+      // Fase 1 (sync multi-dispositivo): se quita la FK a tasks(id) en
+      // attachments y reminders. Cuando tasks pase a vivir en la base
+      // separada que gestiona PowerSync, esa FK rompería la creación de
+      // adjuntos/recordatorios para tareas nuevas (con foreign_keys = ON).
+      // El borrado en cascada pasa a hacerse a mano en deleteTask().
+      const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+      db.exec(`
+        CREATE TABLE attachments_v2 (
+          id            TEXT PRIMARY KEY,
+          task_id       TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          stored_name   TEXT NOT NULL,
+          mime_type     TEXT NOT NULL,
+          size_bytes    INTEGER NOT NULL,
+          drive_file_id TEXT,
+          synced_at     INTEGER,
+          created_at    INTEGER NOT NULL,
+          workspace_id  TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'
+        );
+
+        INSERT INTO attachments_v2
+          (id, task_id, original_name, stored_name, mime_type, size_bytes, drive_file_id, synced_at, created_at, workspace_id)
+        SELECT
+          id, task_id, original_name, stored_name, mime_type, size_bytes, drive_file_id, synced_at, created_at, workspace_id
+        FROM attachments;
+
+        DROP TABLE attachments;
+        ALTER TABLE attachments_v2 RENAME TO attachments;
+
+        CREATE INDEX IF NOT EXISTS idx_attach_task_id ON attachments(task_id);
+
+        CREATE TABLE reminders_v2 (
+          id           TEXT PRIMARY KEY,
+          task_id      TEXT NOT NULL,
+          remind_at    INTEGER NOT NULL,
+          phone_number TEXT NOT NULL,
+          message      TEXT NOT NULL,
+          sent         INTEGER NOT NULL DEFAULT 0,
+          sent_at      INTEGER,
+          created_at   INTEGER NOT NULL,
+          workspace_id TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'
+        );
+
+        INSERT INTO reminders_v2
+          (id, task_id, remind_at, phone_number, message, sent, sent_at, created_at, workspace_id)
+        SELECT
+          id, task_id, remind_at, phone_number, message, sent, sent_at, created_at, workspace_id
+        FROM reminders;
+
+        DROP TABLE reminders;
+        ALTER TABLE reminders_v2 RENAME TO reminders;
+
+        CREATE INDEX IF NOT EXISTS idx_reminders_remind_at ON reminders(remind_at);
+        CREATE INDEX IF NOT EXISTS idx_reminders_sent      ON reminders(sent);
+      `)
+    }
   }
 ]
 

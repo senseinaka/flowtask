@@ -237,7 +237,7 @@ async function executeTool(
         const { title, priority, due_date, due_time, description } = input as {
           title: string; priority?: number; due_date?: string; due_time?: string; description?: string
         }
-        const task = createTask({
+        const task = await createTask({
           title,
           priority:    ((priority ?? 3) as Priority),
           due_date:    due_date ? new Date(due_date).getTime() : null,
@@ -254,10 +254,10 @@ async function executeTool(
 
       case 'update_task_status': {
         const { task_title, status } = input as { task_title: string; status: TaskStatus }
-        const all   = listTasks()
+        const all   = await listTasks()
         const match = all.find(t => t.title.toLowerCase().includes(task_title.toLowerCase()))
         if (!match) return { success: false, message: `No encontré ninguna tarea que coincida con "${task_title}". Verificá el nombre.` }
-        updateTask(match.id, { status })
+        await updateTask(match.id, { status })
         onDataChange(['tasks'])
         const statusLabel: Record<string, string> = {
           pending: 'Pendiente', in_progress: 'En progreso', blocked: 'Bloqueado', done: 'Hecho'
@@ -337,7 +337,7 @@ async function executeTool(
 
 // ── Contexto del sistema ──────────────────────────────────────────────────────
 
-function buildSystemContext(): string {
+async function buildSystemContext(): Promise<string> {
   const today   = new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const imports = listImports()
   const active  = imports.filter(i => i.status !== 'delivered')
@@ -429,7 +429,7 @@ function buildSystemContext(): string {
   ].join('\n')
 
   // ── Tareas personales ──────────────────────────────────────────────────────
-  const allTasks  = listTasks()
+  const allTasks  = await listTasks()
   const pendTasks = allTasks.filter(t => t.status !== 'done')
   const doneTasks = allTasks.filter(t => t.status === 'done')
   const now = Date.now()
@@ -547,7 +547,7 @@ export async function sendChatMessage(
     apiMessages.push({ role: 'user', content: userMessage })
   }
 
-  const systemPrompt = buildSystemContext()
+  const systemPrompt = await buildSystemContext()
   let fullText = ''
 
   // ── Tool Use loop ────────────────────────────────────────────────────────
