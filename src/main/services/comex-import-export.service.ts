@@ -7,7 +7,7 @@
 // formatea/escribe como planilla Excel o documento PDF.
 
 import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
+import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import dayjs from 'dayjs'
 import fs from 'fs'
@@ -39,7 +39,7 @@ export function buildImportExportTitle(detail: ComexImportFullDetail): string {
 
 /** Reemplaza caracteres no válidos en nombres de archivo de Windows/macOS/Linux por '-' */
 export function sanitizeFileName(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, '-').trim()
+  return name.replace(/:/g, '').replace(/[\\/*?"<>|]/g, '-').replace(/\s+/g, ' ').trim()
 }
 
 // ── Excel ──────────────────────────────────────────────────────────────────
