@@ -1914,6 +1914,79 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         insertBrand.run(uuidv4(), s.brand, s.id, now, now)
       }
     }
+  },
+  {
+    version: 61,
+    up: (db) => {
+      // Preparación para sync multi-dispositivo (PowerSync + Supabase):
+      // se agrega workspace_id a todas las tablas sincronizables, con un
+      // valor fijo (un solo workspace) hasta que se implemente multi-usuario.
+      const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+      const TABLES = [
+        'projects',
+        'tasks',
+        'task_dependencies',
+        'attachments',
+        'reminders',
+        'contacts',
+        'delegated_tasks',
+        'message_templates',
+        'scheduled_messages',
+        'task_questions',
+        'comex_suppliers',
+        'comex_imports',
+        'comex_import_items',
+        'comex_documents',
+        'comex_logistics_quotes',
+        'comex_payments',
+        'comex_import_customs',
+        'comex_import_costs',
+        'comex_supplier_contacts',
+        'comex_supplier_bank_accounts',
+        'comex_freight_operators',
+        'task_status_log',
+        'delegated_reminders',
+        'delegated_attachments',
+        'comex_inal_certs',
+        'comex_freight_operator_contacts',
+        'comex_import_tributos',
+        'comex_import_extra_costs',
+        'comex_proformas',
+        'ai_chat_messages',
+        'ai_prompt_overrides',
+        'comex_gestores',
+        'comex_gestor_contacts',
+        'comex_despachantes',
+        'comex_despachante_contacts',
+        'whatsapp_groups',
+        'whatsapp_templates',
+        'expiry_categories',
+        'expiry_items',
+        'expiry_alerts',
+        'finance_accounts',
+        'finance_categories',
+        'finance_concepts',
+        'finance_movements',
+        'finance_movement_entries',
+        'finance_payment_methods',
+        'finance_month_insights',
+        'company_finance_accounts',
+        'company_finance_categories',
+        'company_finance_payment_methods',
+        'company_finance_concepts',
+        'company_finance_movements',
+        'company_finance_movement_entries',
+        'company_finance_month_insights',
+        'comex_brands',
+        'import_order_plannings',
+        'import_order_planning_milestones',
+        'import_order_planning_ai_reports'
+      ]
+
+      for (const table of TABLES) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'`)
+      }
+    }
   }
 ]
 

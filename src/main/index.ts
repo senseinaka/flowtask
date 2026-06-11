@@ -7,6 +7,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { getDb } from './database/db'
 import { runMigrations } from './database/migrations'
+import { connectPowerSync } from './database/powersync'
 import { registerTaskIpc } from './ipc/tasks.ipc'
 import { registerProjectIpc } from './ipc/projects.ipc'
 import { registerAttachmentIpc } from './ipc/attachments.ipc'
@@ -79,6 +80,11 @@ app.whenReady().then(() => {
   // Init DB
   const db = getDb()
   runMigrations(db)
+
+  // Fase 0: conexión PowerSync en paralelo (no afecta queries existentes todavía)
+  connectPowerSync().catch((err) => {
+    console.error('[PowerSync] Error al conectar:', err)
+  })
 
   // Register IPC
   registerTaskIpc()
