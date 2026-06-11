@@ -294,8 +294,23 @@ export function registerComexIpc(): void {
       filters: [{ name: 'Excel', extensions: ['xlsx'] }]
     })
     if (result.canceled || !result.filePath) return null
-    writeImportExcel(result.filePath, detail)
-    shell.showItemInFolder(result.filePath)
+    try {
+      writeImportExcel(result.filePath, detail)
+    } catch (err) {
+      console.error('[Comex export] Error generando Excel:', err)
+      dialog.showErrorBox('Error al exportar', `No se pudo generar el archivo Excel.\n${(err as Error).message}`)
+      return null
+    }
+
+    const choice = await dialog.showMessageBox(win, {
+      type: 'info',
+      buttons: ['Abrir archivo', 'Cerrar'],
+      defaultId: 0,
+      title: 'Exportación completa',
+      message: `Se generó "${path.basename(result.filePath)}". ¿Querés abrirlo?`
+    })
+    if (choice.response === 0) shell.openPath(result.filePath)
+    else shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
   })
 
@@ -310,8 +325,23 @@ export function registerComexIpc(): void {
       filters: [{ name: 'PDF', extensions: ['pdf'] }]
     })
     if (result.canceled || !result.filePath) return null
-    writeImportPdf(result.filePath, detail)
-    shell.showItemInFolder(result.filePath)
+    try {
+      writeImportPdf(result.filePath, detail)
+    } catch (err) {
+      console.error('[Comex export] Error generando PDF:', err)
+      dialog.showErrorBox('Error al exportar', `No se pudo generar el archivo PDF.\n${(err as Error).message}`)
+      return null
+    }
+
+    const choice = await dialog.showMessageBox(win, {
+      type: 'info',
+      buttons: ['Abrir archivo', 'Cerrar'],
+      defaultId: 0,
+      title: 'Exportación completa',
+      message: `Se generó "${path.basename(result.filePath)}". ¿Querés abrirlo?`
+    })
+    if (choice.response === 0) shell.openPath(result.filePath)
+    else shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
   })
 
