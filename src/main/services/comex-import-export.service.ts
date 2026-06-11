@@ -8,7 +8,9 @@
 
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import autoTableImport from 'jspdf-autotable'
+
+const autoTable = (autoTableImport as unknown as { default?: typeof autoTableImport }).default ?? autoTableImport
 import dayjs from 'dayjs'
 import fs from 'fs'
 import {
