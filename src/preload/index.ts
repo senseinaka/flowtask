@@ -241,7 +241,9 @@ const api = {
       get:    (id: string):                             Promise<ComexImport | null>   => ipcRenderer.invoke('comex:imports:get', id),
       create: (input: CreateComexImportInput):          Promise<ComexImport>          => ipcRenderer.invoke('comex:imports:create', input),
       update: (id: string, data: Partial<ComexImport>): Promise<ComexImport | null>  => ipcRenderer.invoke('comex:imports:update', id, data),
-      delete: (id: string):                             Promise<void>                 => ipcRenderer.invoke('comex:imports:delete', id)
+      delete: (id: string):                             Promise<void>                 => ipcRenderer.invoke('comex:imports:delete', id),
+      exportXlsx: (id: string): Promise<{ filePath: string } | null> => ipcRenderer.invoke('comex:imports:exportXlsx', id),
+      exportPdf:  (id: string): Promise<{ filePath: string } | null> => ipcRenderer.invoke('comex:imports:exportPdf', id)
     },
     items: {
       list:   (importId: string):                       Promise<ComexImportItem[]>    => ipcRenderer.invoke('comex:items:list', importId),

@@ -245,6 +245,26 @@ export function deleteImport(id: string): void {
   getDb().prepare('DELETE FROM comex_imports WHERE id = ?').run(id)
 }
 
+export function getImportFullDetail(id: string): {
+  import: ComexImport
+  items: ComexImportItem[]
+  documents: ComexDocument[]
+  quotes: ComexLogisticsQuote[]
+  customs: ComexCustoms | null
+  costs: ComexCostItem[]
+} | null {
+  const imp = getImport(id)
+  if (!imp) return null
+  return {
+    import: imp,
+    items: listItems(id),
+    documents: listDocuments(id),
+    quotes: listQuotes(id),
+    customs: getCustoms(id),
+    costs: listCosts(id)
+  }
+}
+
 // ─── Import Items ─────────────────────────────────────────────────────────────
 
 export function listItems(importId: string): ComexImportItem[] {

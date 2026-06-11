@@ -6,7 +6,7 @@ import {
   FileText, DollarSign, Ship, ChevronDown, Edit2,
   FolderOpen, Loader2, Mail, Copy, Upload, CloudOff, Cloud, AlertCircle, ExternalLink, Paperclip,
   ShieldCheck, Shield, ClipboardList, CheckCircle2, Clock, ChevronRight, Bot, Sparkles,
-  ChevronsDown, ChevronsUp, Landmark
+  ChevronsDown, ChevronsUp, Landmark, FileSpreadsheet, FileDown
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
@@ -6004,6 +6004,22 @@ export default function ComexImportDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [driveLoading, setDriveLoading] = useState(false)
   const [driveError, setDriveError] = useState<string | null>(null)
+  const [exportingXlsx, setExportingXlsx] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
+
+  const handleExportXlsx = async () => {
+    if (!id) return
+    setExportingXlsx(true)
+    try { await window.api.comex.imports.exportXlsx(id) }
+    finally { setExportingXlsx(false) }
+  }
+
+  const handleExportPdf = async () => {
+    if (!id) return
+    setExportingPdf(true)
+    try { await window.api.comex.imports.exportPdf(id) }
+    finally { setExportingPdf(false) }
+  }
 
   // Refrescar cuando Drive crea las carpetas automáticamente
   useEffect(() => {
@@ -6190,6 +6206,26 @@ export default function ComexImportDetail() {
 
         {/* Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Export buttons */}
+          <button
+            onClick={handleExportPdf}
+            disabled={exportingPdf}
+            title="Exportar a PDF"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+          >
+            {exportingPdf ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+            PDF
+          </button>
+          <button
+            onClick={handleExportXlsx}
+            disabled={exportingXlsx}
+            title="Exportar a Excel"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+          >
+            {exportingXlsx ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
+            Excel
+          </button>
+
           {/* Drive folder button */}
           <div className="flex flex-col items-end gap-1">
             <button

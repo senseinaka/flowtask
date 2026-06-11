@@ -4,7 +4,7 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import {
   listSuppliers, getSupplier, createSupplier, updateSupplier, deleteSupplier,
-  listImports, getImport, createImport, updateImport, deleteImport,
+  listImports, getImport, createImport, updateImport, deleteImport, getImportFullDetail,
   listItems, createItem, deleteItem,
   listDocuments, getDocument, createDocument, updateDocument, deleteDocument,
   listQuotes, createQuote, updateQuote, deleteQuote,
@@ -31,6 +31,7 @@ import {
 import { generatePlanningRecommendation, generatePlanningAIReport } from '../services/planning-ai.service'
 import type { GeneratePlanningAIReportInput } from '../services/planning-ai.service'
 import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/comex-planning-io.service'
+import { writeImportExcel, writeImportPdf, buildImportExportTitle, sanitizeFileName } from '../services/comex-import-export.service'
 import { driveService } from '../services/drive.service'
 import { getAttachmentsDir } from '../database/db'
 import type {
@@ -280,6 +281,39 @@ export function registerComexIpc(): void {
   })
   ipcMain.handle('comex:imports:update', (_e, id: string, data: Partial<ComexImport>) => updateImport(id, data))
   ipcMain.handle('comex:imports:delete', (_e, id)              => deleteImport(id))
+
+  // ── Exportación de una importación ────────────────────────────────────────
+  ipcMain.handle('comex:imports:exportXlsx', async (e, importId: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const detail = getImportFullDetail(importId)
+    if (!detail) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Exportar importación',
+      defaultPath: `${sanitizeFileName(buildImportExportTitle(detail))}.xlsx`,
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    writeImportExcel(result.filePath, detail)
+    shell.showItemInFolder(result.filePath)
+    return { filePath: result.filePath }
+  })
+
+  ipcMain.handle('comex:imports:exportPdf', async (e, importId: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const detail = getImportFullDetail(importId)
+    if (!detail) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Exportar importación',
+      defaultPath: `${sanitizeFileName(buildImportExportTitle(detail))}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    writeImportPdf(result.filePath, detail)
+    shell.showItemInFolder(result.filePath)
+    return { filePath: result.filePath }
+  })
 
   // ── Items ────────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:items:list',   (_e, importId)                  => listItems(importId))

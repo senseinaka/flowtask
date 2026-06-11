@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import crypto from 'crypto'
 import { getDb } from './db'
 import { PowerSyncDatabase } from '@powersync/node'
 import {
@@ -59,8 +60,8 @@ export const AppSchema = new Schema({
 })
 
 /**
- * Lee POWERSYNC_URL y POWERSYNC_DEV_TOKEN de .env.local en la raíz del proyecto.
- * Solo para desarrollo (Fase 0) - el token de desarrollo expira a las 12hs.
+ * Lee la configuración de PowerSync/Supabase de .env.local en la raíz del proyecto
+ * (en desarrollo) o junto al ejecutable instalado (en producción).
  */
 function readEnvLocal(): Record<string, string> {
   // En desarrollo, app.getAppPath() apunta a la raíz del proyecto (donde
@@ -75,20 +76,47 @@ function readEnvLocal(): Record<string, string> {
 
   const content = fs.readFileSync(envPath, 'utf-8')
   for (const line of content.split('\n')) {
-    const m = line.match(/^([A-Z_]+)=(.*)$/)
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
     if (m) env[m[1]] = m[2].trim()
   }
   return env
 }
 
-class DevTokenConnector implements PowerSyncBackendConnector {
-  constructor(
-    private endpoint: string,
-    private token: string
-  ) {}
+function base64url(input: Buffer): string {
+  return input.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/**
+ * Firma un JWT de corta duración (RS256) para autenticar contra PowerSync,
+ * usando la clave privada propia (POWERSYNC_JWT_PRIVATE_KEY_B64). La clave
+ * pública correspondiente está configurada como JWKS estático en la
+ * instancia de PowerSync. Se genera un token nuevo en cada conexión, así que
+ * no hay que regenerarlo manualmente cada 12hs.
+ */
+function signPowerSyncJwt(env: Record<string, string>, endpoint: string): string {
+  const privateKeyPem = Buffer.from(env.POWERSYNC_JWT_PRIVATE_KEY_B64, 'base64').toString('utf-8')
+  const kid = env.POWERSYNC_JWT_KID
+  const privateKey = crypto.createPrivateKey(privateKeyPem)
+
+  const now = Math.floor(Date.now() / 1000)
+  const header = { alg: 'RS256', typ: 'JWT', kid }
+  const payload = { sub: 'summit-app', aud: endpoint, iat: now, exp: now + 3600 }
+
+  const headerB64 = base64url(Buffer.from(JSON.stringify(header)))
+  const payloadB64 = base64url(Buffer.from(JSON.stringify(payload)))
+  const signingInput = `${headerB64}.${payloadB64}`
+  const signature = crypto.sign('RSA-SHA256', Buffer.from(signingInput), privateKey)
+
+  return `${signingInput}.${base64url(signature)}`
+}
+
+class ProductionTokenConnector implements PowerSyncBackendConnector {
+  constructor(private endpoint: string) {}
 
   async fetchCredentials() {
-    return { endpoint: this.endpoint, token: this.token }
+    const env = readEnvLocal()
+    const token = signPowerSyncJwt(env, this.endpoint)
+    return { endpoint: this.endpoint, token }
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
@@ -219,15 +247,16 @@ async function migrateLegacyTaskData(psDb: PowerSyncDatabase): Promise<void> {
 export async function connectPowerSync(): Promise<void> {
   const env = readEnvLocal()
   const endpoint = env.POWERSYNC_URL
-  const token = env.POWERSYNC_DEV_TOKEN
 
-  if (!endpoint || !token) {
-    console.warn('[PowerSync] POWERSYNC_URL o POWERSYNC_DEV_TOKEN no configurados, omitiendo conexión')
+  if (!endpoint || !env.POWERSYNC_JWT_PRIVATE_KEY_B64 || !env.POWERSYNC_JWT_KID) {
+    console.warn(
+      '[PowerSync] POWERSYNC_URL, POWERSYNC_JWT_PRIVATE_KEY_B64 o POWERSYNC_JWT_KID no configurados, omitiendo conexión'
+    )
     return
   }
 
   const db = getPowerSyncDb()
   await migrateLegacyTaskData(db)
-  await db.connect(new DevTokenConnector(endpoint, token))
+  await db.connect(new ProductionTokenConnector(endpoint))
   console.log('[PowerSync] Conectado a', endpoint)
 }
