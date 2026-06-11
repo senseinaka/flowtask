@@ -6,6 +6,7 @@ import {
   Schema,
   Table,
   column,
+  UpdateType,
   type AbstractPowerSyncDatabase,
   type PowerSyncBackendConnector
 } from '@powersync/common'
@@ -84,9 +85,46 @@ class DevTokenConnector implements PowerSyncBackendConnector {
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
-    // Fase 0: las queries todavía no pasan por PowerSync, no hay nada que subir.
     const transaction = await database.getNextCrudTransaction()
     if (!transaction) return
+
+    const env = readEnvLocal()
+    const baseUrl = `${env.SUPABASE_URL}/rest/v1`
+    const headers = {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json'
+    }
+
+    for (const op of transaction.crud) {
+      const url = `${baseUrl}/${op.table}?id=eq.${op.id}`
+      let res: Response
+
+      switch (op.op) {
+        case UpdateType.PUT:
+          res = await fetch(`${baseUrl}/${op.table}`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify({ ...op.opData, id: op.id })
+          })
+          break
+        case UpdateType.PATCH:
+          res = await fetch(url, {
+            method: 'PATCH',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify(op.opData)
+          })
+          break
+        case UpdateType.DELETE:
+          res = await fetch(url, { method: 'DELETE', headers: { ...headers, Prefer: 'return=minimal' } })
+          break
+      }
+
+      if (!res.ok) {
+        throw new Error(`[PowerSync] ${op.op} ${op.table}/${op.id} -> ${res.status} ${await res.text()}`)
+      }
+    }
+
     await transaction.complete()
   }
 }

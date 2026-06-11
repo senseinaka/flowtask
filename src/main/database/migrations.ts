@@ -1987,6 +1987,15 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         db.exec(`ALTER TABLE ${table} ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'`)
       }
     }
+  },
+  {
+    version: 62,
+    up: (db) => {
+      // Fase 1 (sync multi-dispositivo): task_dependencies necesita updated_at
+      // para la estrategia de resolución de conflictos last-write-wins.
+      const now = Date.now()
+      db.exec(`ALTER TABLE task_dependencies ADD COLUMN updated_at INTEGER NOT NULL DEFAULT ${now}`)
+    }
   }
 ]
 
