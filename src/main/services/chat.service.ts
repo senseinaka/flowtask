@@ -128,7 +128,7 @@ const STATUS_LABELS: Record<string, string> = {
 const CHAT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'create_task',
-    description: 'Crea una nueva tarea personal en FlowTask. Usá este tool cuando el usuario pida crear, anotar o recordar una tarea propia.',
+    description: 'Crea una nueva tarea personal en Summit. Usá este tool cuando el usuario pida crear, anotar o recordar una tarea propia.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -482,7 +482,7 @@ function buildSystemContext(): string {
     delegLines.length > 0 ? delegLines.join('\n') : '  (ninguna)',
   ].join('\n')
 
-  return `Sos el asistente interno de FlowTask para Diego (NAKA OUTDOORS CO. S.R.L., Argentina).
+  return `Sos el asistente interno de Summit para Diego (NAKA OUTDOORS CO. S.R.L., Argentina).
 Empresa importadora de equipamiento outdoor. Hoy es ${today}.
 Rol: segundo cerebro de Diego. Tenés visibilidad completa y podés ejecutar acciones usando los tools disponibles.
 

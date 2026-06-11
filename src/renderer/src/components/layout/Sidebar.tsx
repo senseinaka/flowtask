@@ -126,7 +126,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-5 flex items-center gap-2 border-b border-slate-700">
         <CheckSquare size={20} className="text-indigo-400" />
-        <span className="font-bold text-lg tracking-tight">FlowTask</span>
+        <span className="font-bold text-lg tracking-tight">Summit</span>
       </div>
 
       {/* Nav */}

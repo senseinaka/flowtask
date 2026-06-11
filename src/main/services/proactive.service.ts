@@ -1,7 +1,7 @@
 /**
  * Servicio de alertas proactivas — Fase 5 del Asistente IA
  *
- * Analiza los datos de FlowTask cada N horas y genera alertas automáticas
+ * Analiza los datos de Summit cada N horas y genera alertas automáticas
  * sobre urgencias, anomalías y oportunidades sin que el usuario pregunte.
  *
  * Arquitectura:

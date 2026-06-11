@@ -1363,7 +1363,7 @@ export async function dashboardChat(params: {
   const client = getClient()
 
   const systemPrompt = `Sos el asistente de comercio exterior de una empresa argentina importadora.
-Tenés acceso a los datos del sistema FlowTask (importaciones, costos, pagos, proveedores, operadores).
+Tenés acceso a los datos del sistema Summit (importaciones, costos, pagos, proveedores, operadores).
 
 DATOS DEL SISTEMA:
 ${JSON.stringify(params.contextData, null, 2).slice(0, 80_000)}

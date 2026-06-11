@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
 
-import type { FlowTaskAPI } from '../../preload/index'
+import type { SummitAPI } from '../../preload/index'
 
 declare global {
   interface Window {
-    api: FlowTaskAPI
+    api: SummitAPI
   }
 }

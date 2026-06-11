@@ -796,4 +796,4 @@ const api = {
 
 contextBridge.exposeInMainWorld('api', api)
 
-export type FlowTaskAPI = typeof api
+export type SummitAPI = typeof api

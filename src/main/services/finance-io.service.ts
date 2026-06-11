@@ -221,7 +221,7 @@ export function writeFinanceSummaryPdf(filePath: string, data: FinancePdfSummary
   doc.text(`Resumen financiero — ${monthLabel}`, 14, 18)
   doc.setFontSize(9)
   doc.setTextColor(120)
-  doc.text(`Generado el ${dayjs().format('DD/MM/YYYY HH:mm')} · FlowTask / Finanzas Personales`, 14, 24)
+  doc.text(`Generado el ${dayjs().format('DD/MM/YYYY HH:mm')} · Summit / Finanzas Personales`, 14, 24)
 
   autoTable(doc, {
     startY: 30,

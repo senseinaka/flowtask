@@ -205,7 +205,7 @@ export default function ChatPanel({ isOpen, onClose }: Props) {
             <Bot size={15} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white leading-none">Asistente FlowTask</p>
+            <p className="text-sm font-semibold text-white leading-none">Asistente Summit</p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <p className="text-[10px] text-violet-300">Claude · Tu segundo cerebro</p>
               {/* Indicador de memoria */}
