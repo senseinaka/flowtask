@@ -1,14 +1,16 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { MessageCircleQuestion, X, Bot } from 'lucide-react'
+import { MessageCircleQuestion, X, Bot, Loader2, ShieldOff } from 'lucide-react'
 import Sidebar from './components/layout/Sidebar'
-import TopBar from './components/layout/TopBar'
 import TaskFormModal from './components/tasks/TaskFormModal'
 import TaskDetail from './components/tasks/TaskDetail'
 import DelegatedTaskDetail from './components/tasks/DelegatedTaskDetail'
 import ChatPanel from './components/chat/ChatPanel'
+import Login from './routes/Login'
 import { useUIStore } from './store/ui.store'
+import { usePermissions } from './hooks/usePermissions'
+import type { AuthSession } from '@shared/types'
 
 interface Toast {
   id: number
@@ -26,6 +28,16 @@ export default function App() {
     expandedDelegatedTaskId, closeExpandedDelegatedTask,
     setSelectedTask
   } = useUIStore()
+
+  // Fase 6.4: sesión de Supabase Auth — `undefined` = todavía cargando,
+  // `null` = sin sesión (mostrar Login), objeto = autenticado.
+  const [session, setSession] = useState<AuthSession | null | undefined>(undefined)
+
+  useEffect(() => {
+    window.api.auth.getSession().then(setSession)
+    window.api.on('auth:sessionChanged', (data) => setSession(data as AuthSession | null))
+    return () => window.api.off('auth:sessionChanged')
+  }, [])
 
   // Close personal expanded modal with ESC
   useEffect(() => {
@@ -78,13 +90,28 @@ export default function App() {
     return () => window.api.off('chat:proactiveAlerts')
   }, [])
 
+  // Fase 6.4: gating de la app — sin sesión válida, mostrar Login en vez
+  // del layout normal.
+  if (session === undefined) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-slate-100">
+        <Loader2 size={24} className="animate-spin text-slate-500" />
+      </div>
+    )
+  }
+
+  if (session === null) {
+    return <Login onSuccess={setSession} />
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-900 text-slate-100">
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0">
-        <TopBar />
         <main className="flex flex-col flex-1 overflow-hidden">
-          <Outlet />
+          <RouteGuard>
+            <Outlet />
+          </RouteGuard>
         </main>
       </div>
       {isTaskFormOpen && <TaskFormModal />}
@@ -182,4 +209,29 @@ export default function App() {
       )}
     </div>
   )
+}
+
+// Fase 6.5: bloquea rutas a las que el usuario no tiene acceso de lectura.
+function RouteGuard({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  const { canReadPath, isLoading } = usePermissions()
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 size={24} className="animate-spin text-slate-500" />
+      </div>
+    )
+  }
+
+  if (!canReadPath(location.pathname)) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-slate-400">
+        <ShieldOff size={32} className="text-slate-500" />
+        <p className="text-sm">No tenés permiso para acceder a esta sección.</p>
+      </div>
+    )
+  }
+
+  return <>{children}</>
 }

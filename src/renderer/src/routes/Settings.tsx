@@ -3,30 +3,69 @@ import {
   Cloud, MessageCircle, RefreshCw, Check, AlertCircle, AlertTriangle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
   Database, Download, Sparkles, User, Phone, Mail, FileText,
-  HardDrive, FolderOpen, FolderCog, Clock, ArchiveRestore, RotateCcw
+  HardDrive, FolderOpen, FolderCog, Clock, ArchiveRestore, RotateCcw, Info
 } from 'lucide-react'
 import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus, LocalBackupEntry } from '@shared/types'
+import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus, LocalBackupEntry, UpdateCheckResult } from '@shared/types'
 import {
   CLAUDE_MODELS, AI_OPERATIONS, AI_OPERATION_LABELS,
   AI_OPERATION_DEFAULT_MODELS
 } from '@shared/types'
+import PermissionsAdmin from '../components/settings/PermissionsAdmin'
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/useProjects'
 import { useAIConfigured, useAIModels, useSaveAIApiKey, useSaveAIModels } from '../hooks/useAI'
 import { usePersonalContact, useSavePersonalContact } from '../hooks/useSettings'
 import { cn } from '../components/ui/utils'
+import { ADMIN_USER_ID } from '@shared/modules'
 
 const PROJECT_COLORS = [
   '#6366f1', '#3b82f6', '#10b981', '#f59e0b',
   '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'
 ]
 
+const SETTINGS_TABS = [
+  { key: 'general',   label: 'General' },
+  { key: 'sync',      label: 'Sincronización' },
+  { key: 'ia',        label: 'Inteligencia Artificial' },
+  { key: 'permisos',  label: 'Permisos', adminOnly: true }
+] as const
+
+type SettingsTab = typeof SETTINGS_TABS[number]['key']
+
 export default function Settings() {
   const qc = useQueryClient()
   const { data: projects } = useProjects()
   const createProject = useCreateProject()
   const deleteProject = useDeleteProject()
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
+
+  const { data: session } = useQuery({
+    queryKey: ['auth', 'session'],
+    queryFn: () => window.api.auth.getSession()
+  })
+  const isAdmin = session?.userId === ADMIN_USER_ID
+
+  // Versión de la app + chequeo de actualizaciones
+  const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
+
+  useEffect(() => {
+    window.api.app.getVersion().then(setAppVersion)
+  }, [])
+
+  const handleCheckForUpdates = async () => {
+    setUpdateChecking(true)
+    setUpdateResult(null)
+    try {
+      const result = await window.api.app.checkForUpdates()
+      setUpdateResult(result)
+    } finally {
+      setUpdateChecking(false)
+    }
+  }
 
   // Google Drive credentials
   const [clientId, setClientId] = useState('')
@@ -382,6 +421,26 @@ export default function Settings() {
     <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 max-w-2xl">
       <h1 className="text-xl font-bold">Configuración</h1>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-700 -mt-2">
+        {SETTINGS_TABS.filter((tab) => !tab.adminOnly || isAdmin).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              'px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+              activeTab === tab.key
+                ? 'border-indigo-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'general' && (
+      <>
       {/* Mis datos personales */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
         <div className="flex items-center gap-2">
@@ -449,7 +508,11 @@ export default function Settings() {
           </button>
         </div>
       </section>
+      </>
+      )}
 
+      {activeTab === 'sync' && (
+      <>
       {/* Google Drive */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">
         <div className="flex items-center gap-2">
@@ -1183,6 +1246,40 @@ export default function Settings() {
             <p className="text-sm text-slate-500">Sin proyectos creados todavía.</p>
           )}
         </div>
+      </section>
+
+      {/* Administración de permisos (solo admin) */}
+      <PermissionsAdmin />
+
+      {/* Acerca de / Actualizaciones */}
+      <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Info size={18} className="text-sky-400" />
+          <h2 className="font-semibold">Acerca de Summit</h2>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-400">
+            Versión instalada: <span className="text-slate-200 font-mono">{appVersion ?? '...'}</span>
+          </p>
+          <button
+            onClick={handleCheckForUpdates}
+            disabled={updateChecking}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sm rounded-lg transition-colors"
+          >
+            {updateChecking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Buscar actualizaciones
+          </button>
+        </div>
+
+        {updateResult && (
+          <p className="text-xs text-slate-500">
+            {updateResult.status === 'dev' && 'No se pueden buscar actualizaciones en modo desarrollo.'}
+            {updateResult.status === 'not-available' && 'Ya tenés la última versión instalada.'}
+            {updateResult.status === 'available' && `Hay una nueva versión disponible (v${updateResult.latestVersion}). Se abrió un diálogo para descargarla.`}
+            {updateResult.status === 'error' && `Error al buscar actualizaciones: ${updateResult.message}`}
+          </p>
+        )}
       </section>
     </div>
   )

@@ -7,6 +7,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "build:win": "npm run build && electron-builder --win",
+    "release": "npm run build && electron-builder --win --publish always",
     "postinstall": "electron-builder install-app-deps",
     "preview": "electron-vite preview"
   },
@@ -30,6 +31,12 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "senseinaka",
+      "repo": "flowtask",
+      "releaseType": "release"
     }
   },
   "keywords": [],
@@ -62,6 +69,7 @@
     "axios": "^1.7.0",
     "better-sqlite3": "^12.10.0",
     "dayjs": "^1.11.13",
+    "electron-updater": "^6.8.9",
     "googleapis": "^144.0.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

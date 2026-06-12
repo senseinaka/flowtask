@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Search, X } from 'lucide-react'
+import { Search, X, Plus } from 'lucide-react'
 import type { Task, TaskStatus, Priority } from '@shared/types'
 import { STATUS_LABELS, PRIORITY_LABELS } from '@shared/types'
 import { useTasks, useUpdateTask } from '../hooks/useTasks'
@@ -129,7 +129,7 @@ export default function Kanban() {
   const { data: tasks } = useTasks()
   const { data: projects = [] } = useProjects()
   const updateTask = useUpdateTask()
-  const { selectedTaskId } = useUIStore()
+  const { selectedTaskId, openCreateForm } = useUIStore()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
 
   // Filtros locales
@@ -262,6 +262,14 @@ export default function Kanban() {
         <span className="ml-auto text-xs text-slate-600">
           {filtered.length} tarea{filtered.length !== 1 ? 's' : ''}
         </span>
+
+        <button
+          onClick={openCreateForm}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
+        >
+          <Plus size={14} />
+          Nueva tarea
+        </button>
       </div>
 
       {/* ── Kanban + panel de detalle ────────────────────────────────────── */}

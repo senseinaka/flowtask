@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { randomUUID } from 'crypto'
 
 const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }> = [
   {
@@ -2055,6 +2056,47 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         CREATE INDEX IF NOT EXISTS idx_reminders_remind_at ON reminders(remind_at);
         CREATE INDEX IF NOT EXISTS idx_reminders_sent      ON reminders(sent);
       `)
+    }
+  },
+  {
+    version: 64,
+    up: (db) => {
+      // Fase 6 (auth + permisos): tabla de permisos por usuario/módulo,
+      // sincronizada vía PowerSync para que cada dispositivo conozca los
+      // permisos del usuario logueado. submodule_key NULL = permiso a
+      // nivel de módulo completo. level: 'none' | 'read' | 'write'.
+      const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+      const DIEGO_USER_ID = 'ac2b1796-0571-43d2-b645-c72ba939824f'
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_permissions (
+          id            TEXT PRIMARY KEY,
+          user_id       TEXT NOT NULL,
+          module_key    TEXT NOT NULL,
+          submodule_key TEXT,
+          level         TEXT NOT NULL DEFAULT 'none',
+          created_at    INTEGER NOT NULL,
+          updated_at    INTEGER NOT NULL,
+          workspace_id  TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
+      `)
+
+      // Seed: Diego (admin) tiene acceso total (lectura y edición) a todos
+      // los módulos de nivel superior.
+      const MODULE_KEYS = [
+        'tasks', 'contacts', 'team', 'messages', 'comex',
+        'expiry', 'finance', 'company_finance', 'settings'
+      ]
+      const now = Date.now()
+      const insert = db.prepare(`
+        INSERT INTO user_permissions (id, user_id, module_key, submodule_key, level, created_at, updated_at, workspace_id)
+        VALUES (?, ?, ?, NULL, 'write', ?, ?, ?)
+      `)
+      for (const moduleKey of MODULE_KEYS) {
+        insert.run(randomUUID(), DIEGO_USER_ID, moduleKey, now, now, WORKSPACE_ID)
+      }
     }
   }
 ]

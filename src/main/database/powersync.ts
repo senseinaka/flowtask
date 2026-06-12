@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
 import { getDb } from './db'
+import { getSession } from '../services/auth.service'
 import { PowerSyncDatabase } from '@powersync/node'
 import {
   Schema,
@@ -10,8 +11,10 @@ import {
   column,
   UpdateType,
   type AbstractPowerSyncDatabase,
-  type PowerSyncBackendConnector
+  type PowerSyncBackendConnector,
+  type SyncStatus
 } from '@powersync/common'
+import type { PowerSyncStatusInfo } from '@shared/types'
 
 const projects = new Table(
   {
@@ -53,17 +56,31 @@ const task_dependencies = new Table(
   { indexes: { workspace: ['workspace_id'] } }
 )
 
+const user_permissions = new Table(
+  {
+    user_id: column.text,
+    module_key: column.text,
+    submodule_key: column.text,
+    level: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { user: ['user_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
-  task_dependencies
+  task_dependencies,
+  user_permissions
 })
 
 /**
  * Lee la configuración de PowerSync/Supabase de .env.local en la raíz del proyecto
  * (en desarrollo) o junto al ejecutable instalado (en producción).
  */
-function readEnvLocal(): Record<string, string> {
+export function readEnvLocal(): Record<string, string> {
   // En desarrollo, app.getAppPath() apunta a la raíz del proyecto (donde
   // vive .env.local). En la versión empaquetada, app.getAppPath() apunta
   // dentro de app.asar (solo lectura), así que buscamos .env.local al lado
@@ -93,14 +110,14 @@ function base64url(input: Buffer): string {
  * instancia de PowerSync. Se genera un token nuevo en cada conexión, así que
  * no hay que regenerarlo manualmente cada 12hs.
  */
-function signPowerSyncJwt(env: Record<string, string>, endpoint: string): string {
+function signPowerSyncJwt(env: Record<string, string>, endpoint: string, sub: string): string {
   const privateKeyPem = Buffer.from(env.POWERSYNC_JWT_PRIVATE_KEY_B64, 'base64').toString('utf-8')
   const kid = env.POWERSYNC_JWT_KID
   const privateKey = crypto.createPrivateKey(privateKeyPem)
 
   const now = Math.floor(Date.now() / 1000)
   const header = { alg: 'RS256', typ: 'JWT', kid }
-  const payload = { sub: 'summit-app', aud: endpoint, iat: now, exp: now + 3600 }
+  const payload = { sub, aud: endpoint, iat: now, exp: now + 3600 }
 
   const headerB64 = base64url(Buffer.from(JSON.stringify(header)))
   const payloadB64 = base64url(Buffer.from(JSON.stringify(payload)))
@@ -115,7 +132,9 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
 
   async fetchCredentials() {
     const env = readEnvLocal()
-    const token = signPowerSyncJwt(env, this.endpoint)
+    const session = await getSession()
+    if (!session) throw new Error('[PowerSync] Sin sesión de usuario autenticado')
+    const token = signPowerSyncJwt(env, this.endpoint, session.userId)
     return { endpoint: this.endpoint, token }
   }
 
@@ -240,9 +259,40 @@ async function migrateLegacyTaskData(psDb: PowerSyncDatabase): Promise<void> {
 }
 
 /**
+ * Fase 6 (auth + permisos): copia única de los permisos seedeados en
+ * flowtask.db hacia powersync.db, para que PowerSync los suba a Supabase.
+ * Idempotente: si powersync.db ya tiene filas en user_permissions, no hace
+ * nada.
+ */
+async function migrateUserPermissions(psDb: PowerSyncDatabase): Promise<void> {
+  const { count } = await psDb.get<{ count: number }>(
+    `SELECT COUNT(*) as count FROM user_permissions`
+  )
+  if (count > 0) return
+
+  const flowDb = getDb()
+  const rows = flowDb.prepare('SELECT * FROM user_permissions').all() as Record<string, unknown>[]
+  if (rows.length === 0) return
+
+  console.log(`[PowerSync] Migrando ${rows.length} permisos de usuario existentes`)
+
+  for (const r of rows) {
+    await psDb.execute(
+      `INSERT OR IGNORE INTO user_permissions (id, user_id, module_key, submodule_key, level, created_at, updated_at, workspace_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [r.id, r.user_id, r.module_key, r.submodule_key, r.level, r.created_at, r.updated_at, r.workspace_id]
+    )
+  }
+}
+
+/**
  * Conecta la instancia de PowerSync al backend, en paralelo a better-sqlite3.
  * Antes de conectar, copia los datos existentes de tasks/projects/task_dependencies
- * (Fase 1) si todavía no se hizo.
+ * (Fase 1) y de user_permissions (Fase 6) si todavía no se hizo.
+ *
+ * Requiere una sesión de Supabase Auth activa (Fase 6.3): sin sesión, no
+ * conecta (igual que cuando faltan las env vars). Se vuelve a llamar tras un
+ * login exitoso.
  */
 export async function connectPowerSync(): Promise<void> {
   const env = readEnvLocal()
@@ -255,8 +305,66 @@ export async function connectPowerSync(): Promise<void> {
     return
   }
 
+  const session = await getSession()
+  if (!session) {
+    console.warn('[PowerSync] Sin sesión de usuario autenticado, omitiendo conexión')
+    return
+  }
+
   const db = getPowerSyncDb()
   await migrateLegacyTaskData(db)
+  await migrateUserPermissions(db)
   await db.connect(new ProductionTokenConnector(endpoint))
-  console.log('[PowerSync] Conectado a', endpoint)
+  console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
+}
+
+/** Desconecta PowerSync (p. ej. al cerrar sesión). */
+export async function disconnectPowerSync(): Promise<void> {
+  if (!_psDb) return
+  await _psDb.disconnect()
+}
+
+function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
+  const dataFlow = status.dataFlowStatus
+  return {
+    connected: status.connected,
+    connecting: status.connecting,
+    uploading: !!dataFlow.uploading,
+    downloading: !!dataFlow.downloading,
+    lastSyncedAt: status.lastSyncedAt ? status.lastSyncedAt.getTime() : null,
+    hasError: !!(dataFlow.uploadError || dataFlow.downloadError)
+  }
+}
+
+/**
+ * Devuelve el estado actual de sincronización, para exponerlo vía IPC al
+ * abrir la app (antes de que llegue el primer evento de `statusChanged`).
+ */
+export function getPowerSyncStatus(): PowerSyncStatusInfo | null {
+  if (!_psDb) return null
+  return serializeStatus(_psDb.currentStatus)
+}
+
+/**
+ * Registra listeners de PowerSync para avisar al renderer (vía `sendToRenderer`)
+ * cuando cambia el estado de conexión/sync (`powersync:status`) o cuando se
+ * actualizan datos de tasks/projects/task_dependencies por sync remoto o
+ * escritura local (`powersync:dataChanged`).
+ */
+export function registerSyncListeners(sendToRenderer: (channel: string, data: unknown) => void): void {
+  const db = getPowerSyncDb()
+
+  db.registerListener({
+    statusChanged: (status) => sendToRenderer('powersync:status', serializeStatus(status))
+  })
+
+  db.onChangeWithCallback(
+    {
+      onChange: async () => {
+        sendToRenderer('powersync:dataChanged', null)
+      },
+      onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
+    },
+    { tables: ['projects', 'tasks', 'task_dependencies'], throttleMs: 1000 }
+  )
 }

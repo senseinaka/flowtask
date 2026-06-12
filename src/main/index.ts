@@ -7,7 +7,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { getDb } from './database/db'
 import { runMigrations } from './database/migrations'
-import { connectPowerSync } from './database/powersync'
+import { connectPowerSync, registerSyncListeners } from './database/powersync'
 import { registerTaskIpc } from './ipc/tasks.ipc'
 import { registerProjectIpc } from './ipc/projects.ipc'
 import { registerAttachmentIpc } from './ipc/attachments.ipc'
@@ -27,6 +27,12 @@ import { registerExpiryIpc } from './ipc/expiry.ipc'
 import { registerSettingsIpc } from './ipc/settings.ipc'
 import { registerFinanceIpc } from './ipc/finance.ipc'
 import { registerCompanyFinanceIpc } from './ipc/company-finance.ipc'
+import { registerPowerSyncIpc } from './ipc/powersync.ipc'
+import { registerAppIpc } from './ipc/app.ipc'
+import { registerAuthIpc } from './ipc/auth.ipc'
+import { registerPermissionsIpc } from './ipc/permissions.ipc'
+import { installIpcPermissionGuard } from './services/permissions.service'
+import { initUpdater } from './services/updater.service'
 import { driveService } from './services/drive.service'
 import { localBackupService } from './services/local-backup.service'
 import { schedulerService } from './services/scheduler.service'
@@ -82,9 +88,16 @@ app.whenReady().then(() => {
   runMigrations(db)
 
   // Fase 0: conexión PowerSync en paralelo (no afecta queries existentes todavía)
-  connectPowerSync().catch((err) => {
-    console.error('[PowerSync] Error al conectar:', err)
-  })
+  connectPowerSync()
+    .then(() => {
+      registerSyncListeners((channel, data) => mainWindow?.webContents.send(channel, data))
+    })
+    .catch((err) => {
+      console.error('[PowerSync] Error al conectar:', err)
+    })
+
+  // Fase 6.5: guard de permisos — debe instalarse antes de registrar el resto de IPC
+  installIpcPermissionGuard()
 
   // Register IPC
   registerTaskIpc()
@@ -106,6 +119,10 @@ app.whenReady().then(() => {
   registerSettingsIpc()
   registerFinanceIpc()
   registerCompanyFinanceIpc()
+  registerPowerSyncIpc()
+  registerAppIpc()
+  registerAuthIpc(getMainWindow)
+  registerPermissionsIpc()
 
   // ── Backup automático cada 6 horas ────────────────────────────────────────
   const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000  // 6 horas
@@ -151,6 +168,9 @@ app.whenReady().then(() => {
   startPolling()
 
   createWindow()
+
+  // ── Auto-actualización (electron-updater + GitHub Releases) ──────────────
+  if (mainWindow) initUpdater(mainWindow)
 
   // ── Verificar conexión Drive al iniciar (5 seg después para que cargue la UI) ──
   setTimeout(async () => {

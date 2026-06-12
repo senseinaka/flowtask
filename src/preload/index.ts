@@ -11,7 +11,7 @@ import type {
   MessageStatus, MessageRecurrence,
   TaskQuestion, CreateTaskQuestionInput,
   TaskFilters, CreateTaskInput, CreateReminderInput,
-  SyncResult, SyncStatus,
+  SyncResult, SyncStatus, PowerSyncStatusInfo, UpdateCheckResult,
   TaskStatusLogEntry, TaskType,
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert,
   ComexLogisticsQuote, ComexPayment, ComexCustoms, ComexCostItem,
@@ -37,8 +37,11 @@ import type {
   CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
   FinanceMovementStatus,
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
-  FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus
+  FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus,
+  AuthSession, AuthLoginResult,
+  UserPermission
 } from '@shared/types'
+import type { PermissionLevel } from '@shared/modules'
 
 const api = {
   tasks: {
@@ -784,8 +787,30 @@ const api = {
     }
   },
 
+  powersync: {
+    getStatus: (): Promise<PowerSyncStatusInfo | null> => ipcRenderer.invoke('powersync:getStatus')
+  },
+
+  auth: {
+    login:      (email: string, password: string): Promise<AuthLoginResult> => ipcRenderer.invoke('auth:login', email, password),
+    logout:     (): Promise<void>                                            => ipcRenderer.invoke('auth:logout'),
+    getSession: (): Promise<AuthSession | null>                              => ipcRenderer.invoke('auth:getSession')
+  },
+
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
+    checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('app:checkForUpdates')
+  },
+
+  permissions: {
+    listMine: (): Promise<UserPermission[]> => ipcRenderer.invoke('permissions:listMine'),
+    listAll: (): Promise<UserPermission[]> => ipcRenderer.invoke('permissions:listAll'),
+    setLevel: (input: { user_id: string; module_key: string; submodule_key?: string | null; level: PermissionLevel }): Promise<UserPermission> =>
+      ipcRenderer.invoke('permissions:setLevel', input)
+  },
+
   on: (
-    channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'backup:local:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts',
+    channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'backup:local:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts' | 'powersync:status' | 'powersync:dataChanged' | 'auth:sessionChanged',
     callback: (data: unknown) => void
   ) => {
     ipcRenderer.on(channel, (_event, data) => callback(data))

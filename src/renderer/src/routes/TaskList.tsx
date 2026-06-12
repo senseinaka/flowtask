@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { Filter, X } from 'lucide-react'
+import { Filter, X, Search, Plus } from 'lucide-react'
 import { useTasks } from '../hooks/useTasks'
 import { useUIStore } from '../store/ui.store'
 import TaskCard from '../components/tasks/TaskCard'
@@ -17,7 +17,8 @@ const MAX_WIDTH = 720
 export default function TaskList() {
   const {
     filters, toggleStatusFilter, togglePriorityFilter, clearFilters,
-    selectedTaskId, detailPanelWidth, setDetailPanelWidth
+    selectedTaskId, detailPanelWidth, setDetailPanelWidth,
+    searchQuery, setSearch, openCreateForm
   } = useUIStore()
   const { data: tasks, isLoading } = useTasks(filters)
 
@@ -83,6 +84,25 @@ export default function TaskList() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Filter bar */}
         <div className="px-4 py-2.5 bg-slate-850 border-b border-slate-700 flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Buscar tareas..."
+              value={searchQuery}
+              onChange={(e) => setSearch(e.target.value)}
+              className="bg-slate-700 border border-slate-600 rounded px-2 pl-8 pr-7 py-1 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-44"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
           <Filter size={13} className="text-slate-500 flex-shrink-0" />
           <span className="text-xs text-slate-500 mr-1">Estado:</span>
           {STATUSES.map((s) => (
@@ -117,11 +137,19 @@ export default function TaskList() {
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
             >
               <X size={12} /> Limpiar
             </button>
           )}
+
+          <button
+            onClick={openCreateForm}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <Plus size={14} />
+            Nueva tarea
+          </button>
         </div>
 
         {/* Task list body */}

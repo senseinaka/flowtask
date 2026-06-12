@@ -299,6 +299,49 @@ export interface SyncStatus {
   isSyncing: boolean
 }
 
+export interface PowerSyncStatusInfo {
+  connected: boolean
+  connecting: boolean
+  uploading: boolean
+  downloading: boolean
+  lastSyncedAt: number | null
+  hasError: boolean
+}
+
+export interface UpdateCheckResult {
+  status: 'dev' | 'available' | 'not-available' | 'error'
+  currentVersion: string
+  latestVersion?: string
+  message?: string
+}
+
+// ── Fase 6: Autenticación (Supabase Auth) ───────────────────────────────────
+
+export interface AuthSession {
+  userId: string
+  email: string
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+}
+
+export interface AuthLoginResult {
+  ok: boolean
+  session?: AuthSession
+  error?: string
+}
+
+export interface UserPermission {
+  id: string
+  user_id: string
+  module_key: string
+  submodule_key: string | null
+  level: 'none' | 'read' | 'write'
+  created_at: number
+  updated_at: number
+  workspace_id: string
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   1: 'Crítico',
   2: 'Alto',

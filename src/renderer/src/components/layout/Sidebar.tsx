@@ -7,10 +7,12 @@ import {
   CalendarClock
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
+import { usePermissions } from '../../hooks/usePermissions'
 import { useUIStore } from '../../store/ui.store'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { SyncStatus } from '@shared/types'
 import { cn } from '../ui/utils'
+import SyncStatusBadge from './SyncStatusBadge'
 
 // ── Sub-item lists ─────────────────────────────────────────────────────────────
 
@@ -25,15 +27,15 @@ const teamSubItems = [
 ]
 
 const comexSubItems = [
-  { to: '/comex',            icon: LayoutDashboard, label: 'Dashboard',    exact: true },
-  { to: '/comex/imports',    icon: Package,          label: 'Importaciones' },
-  { to: '/comex/suppliers',  icon: Building2,        label: 'Proveedores'   },
-  { to: '/comex/brands',     icon: Tag,              label: 'Marcas'        },
-  { to: '/comex/plannings',  icon: CalendarClock,    label: 'Programación Pedidos' },
-  { to: '/comex/operators',    icon: Truck,          label: 'Operadores'    },
-  { to: '/comex/gestores',    icon: ShieldCheck,    label: 'Gestores INAL' },
-  { to: '/comex/despachantes',icon: Briefcase,      label: 'Despachantes'  },
-  { to: '/comex/logistics',  icon: Ship,             label: 'Logística'     }
+  { to: '/comex',            icon: LayoutDashboard, label: 'Dashboard',    exact: true, subKey: 'dashboard' },
+  { to: '/comex/imports',    icon: Package,          label: 'Importaciones', subKey: 'imports' },
+  { to: '/comex/suppliers',  icon: Building2,        label: 'Proveedores',   subKey: 'suppliers' },
+  { to: '/comex/brands',     icon: Tag,              label: 'Marcas',        subKey: 'brands' },
+  { to: '/comex/plannings',  icon: CalendarClock,    label: 'Programación Pedidos', subKey: 'plannings' },
+  { to: '/comex/operators',    icon: Truck,          label: 'Operadores',    subKey: 'operators' },
+  { to: '/comex/gestores',    icon: ShieldCheck,    label: 'Gestores INAL',  subKey: 'gestores' },
+  { to: '/comex/despachantes',icon: Briefcase,      label: 'Despachantes',   subKey: 'despachantes' },
+  { to: '/comex/logistics',  icon: Ship,             label: 'Logística',     subKey: 'logistics' }
 ]
 
 // ── Reusable collapsible section ──────────────────────────────────────────────
@@ -101,11 +103,14 @@ function CollapsibleSection({
 export default function Sidebar() {
   const { data: projects } = useProjects()
   const { filters, setFilter } = useUIStore()
+  const { canRead } = usePermissions()
   const location = useLocation()
 
   const isOnTasks  = location.pathname === '/tasks' || location.pathname === '/kanban'
   const isOnTeam   = location.pathname.startsWith('/team')
   const isOnComex  = location.pathname.startsWith('/comex')
+
+  const visibleComexSubItems = comexSubItems.filter((item) => canRead('comex', item.subKey))
 
   const [tasksOpen, setTasksOpen] = useState(isOnTasks)
   const [teamOpen,  setTeamOpen]  = useState(isOnTeam)
@@ -133,138 +138,28 @@ export default function Sidebar() {
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
 
         {/* ── Tareas personales ─────────────────────────────────────────── */}
-        <CollapsibleSection
-          icon={LayoutList}
-          label="Tareas personales"
-          isActive={isOnTasks}
-          open={tasksOpen}
-          onToggle={() => setTasksOpen((v) => !v)}
-          subItems={tasksSubItems}
-          activeColor={{
-            bg:        'bg-indigo-900/30',
-            text:      'text-indigo-300',
-            iconColor: 'text-indigo-400',
-            border:    'border-indigo-800',
-            subActive: 'bg-indigo-700/40 text-indigo-200'
-          }}
-        />
-
-        {/* ── Contactos ─────────────────────────────────────────────────── */}
-        <NavLink
-          to="/contacts"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-              isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-            )
-          }
-        >
-          <UserCircle2 size={16} />
-          Contactos
-        </NavLink>
-
-        {/* ── Tareas asignadas ──────────────────────────────────────────── */}
-        <CollapsibleSection
-          icon={Users}
-          label="Tareas asignadas"
-          isActive={isOnTeam}
-          open={teamOpen}
-          onToggle={() => setTeamOpen((v) => !v)}
-          subItems={teamSubItems}
-          activeColor={{
-            bg:        'bg-violet-900/30',
-            text:      'text-violet-300',
-            iconColor: 'text-violet-400',
-            border:    'border-violet-800',
-            subActive: 'bg-violet-700/40 text-violet-200'
-          }}
-        />
-
-        {/* ── Mensajes ──────────────────────────────────────────────────── */}
-        <NavLink
-          to="/messages"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-              isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-            )
-          }
-        >
-          <Send size={16} />
-          Mensajes
-        </NavLink>
-
-        {/* ── Comex ─────────────────────────────────────────────────────── */}
-        <div className="pt-1">
+        {canRead('tasks') && (
           <CollapsibleSection
-            icon={Globe2}
-            label="Comex"
-            isActive={isOnComex}
-            open={comexOpen}
-            onToggle={() => setComexOpen((v) => !v)}
-            subItems={comexSubItems}
+            icon={LayoutList}
+            label="Tareas personales"
+            isActive={isOnTasks}
+            open={tasksOpen}
+            onToggle={() => setTasksOpen((v) => !v)}
+            subItems={tasksSubItems}
             activeColor={{
-              bg:        'bg-cyan-900/30',
-              text:      'text-cyan-300',
-              iconColor: 'text-cyan-400',
-              border:    'border-slate-700',
-              subActive: 'bg-cyan-700/40 text-cyan-200'
+              bg:        'bg-indigo-900/30',
+              text:      'text-indigo-300',
+              iconColor: 'text-indigo-400',
+              border:    'border-indigo-800',
+              subActive: 'bg-indigo-700/40 text-indigo-200'
             }}
           />
-        </div>
+        )}
 
-        {/* ── Vencimientos ──────────────────────────────────────────────── */}
-        <div className="pt-1">
+        {/* ── Contactos ─────────────────────────────────────────────────── */}
+        {canRead('contacts') && (
           <NavLink
-            to="/expiry"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                isActive ? 'bg-amber-900/40 text-amber-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-              )
-            }
-          >
-            <Clock size={16} />
-            Vencimientos
-          </NavLink>
-        </div>
-
-        {/* ── Finanzas Personales ───────────────────────────────────────── */}
-        <div className="pt-1">
-          <NavLink
-            to="/finance"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-              )
-            }
-          >
-            <Wallet size={16} />
-            Finanzas
-          </NavLink>
-        </div>
-
-        {/* ── Finanzas Empresa ──────────────────────────────────────────── */}
-        <div className="pt-1">
-          <NavLink
-            to="/company-finance"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-              )
-            }
-          >
-            <Building2 size={16} />
-            Finanzas Empresa
-          </NavLink>
-        </div>
-
-        {/* ── Configuración ─────────────────────────────────────────────── */}
-        <div className="pt-1">
-          <NavLink
-            to="/settings"
+            to="/contacts"
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
@@ -272,10 +167,138 @@ export default function Sidebar() {
               )
             }
           >
-            <Settings size={16} />
-            Configuración
+            <UserCircle2 size={16} />
+            Contactos
           </NavLink>
-        </div>
+        )}
+
+        {/* ── Tareas asignadas ──────────────────────────────────────────── */}
+        {canRead('team') && (
+          <CollapsibleSection
+            icon={Users}
+            label="Tareas asignadas"
+            isActive={isOnTeam}
+            open={teamOpen}
+            onToggle={() => setTeamOpen((v) => !v)}
+            subItems={teamSubItems}
+            activeColor={{
+              bg:        'bg-violet-900/30',
+              text:      'text-violet-300',
+              iconColor: 'text-violet-400',
+              border:    'border-violet-800',
+              subActive: 'bg-violet-700/40 text-violet-200'
+            }}
+          />
+        )}
+
+        {/* ── Mensajes ──────────────────────────────────────────────────── */}
+        {canRead('messages') && (
+          <NavLink
+            to="/messages"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+              )
+            }
+          >
+            <Send size={16} />
+            Mensajes
+          </NavLink>
+        )}
+
+        {/* ── Comex ─────────────────────────────────────────────────────── */}
+        {visibleComexSubItems.length > 0 && (
+          <div className="pt-1">
+            <CollapsibleSection
+              icon={Globe2}
+              label="Comex"
+              isActive={isOnComex}
+              open={comexOpen}
+              onToggle={() => setComexOpen((v) => !v)}
+              subItems={visibleComexSubItems}
+              activeColor={{
+                bg:        'bg-cyan-900/30',
+                text:      'text-cyan-300',
+                iconColor: 'text-cyan-400',
+                border:    'border-slate-700',
+                subActive: 'bg-cyan-700/40 text-cyan-200'
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── Vencimientos ──────────────────────────────────────────────── */}
+        {canRead('expiry') && (
+          <div className="pt-1">
+            <NavLink
+              to="/expiry"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-amber-900/40 text-amber-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Clock size={16} />
+              Vencimientos
+            </NavLink>
+          </div>
+        )}
+
+        {/* ── Finanzas Personales ───────────────────────────────────────── */}
+        {canRead('finance') && (
+          <div className="pt-1">
+            <NavLink
+              to="/finance"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Wallet size={16} />
+              Finanzas
+            </NavLink>
+          </div>
+        )}
+
+        {/* ── Finanzas Empresa ──────────────────────────────────────────── */}
+        {canRead('company_finance') && (
+          <div className="pt-1">
+            <NavLink
+              to="/company-finance"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Building2 size={16} />
+              Finanzas Empresa
+            </NavLink>
+          </div>
+        )}
+
+        {/* ── Configuración ─────────────────────────────────────────────── */}
+        {canRead('settings') && (
+          <div className="pt-1">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Settings size={16} />
+              Configuración
+            </NavLink>
+          </div>
+        )}
 
         {/* ── Proyectos ─────────────────────────────────────────────────── */}
         {projects && projects.length > 0 && (
@@ -310,7 +333,8 @@ export default function Sidebar() {
       </nav>
 
       {/* Sync */}
-      <div className="p-3 border-t border-slate-700">
+      <div className="p-3 border-t border-slate-700 space-y-2">
+        <SyncStatusBadge />
         <button
           onClick={() => syncMutation.mutate()}
           disabled={syncMutation.isPending || !syncStatus?.isAuthenticated}
