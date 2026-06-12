@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { getDb } from '../db'
+import { getPowerSyncDb } from '../powersync'
 import type {
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement,
   FinanceMovementEntry, CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
@@ -13,29 +13,37 @@ import type {
 } from '@shared/types'
 import type { ParsedImportRow } from '../../services/finance-io.service'
 
+const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+
+/** Contexto mínimo compartido por PowerSyncDatabase y por Transaction (writeTransaction). */
+type SqlCtx = {
+  execute: (sql: string, params?: unknown[]) => Promise<unknown>
+  get: <T>(sql: string, params?: unknown[]) => Promise<T>
+}
+
 // ── Accounts ──────────────────────────────────────────────────────────────────
 
-export function listFinanceAccounts(): FinanceAccount[] {
-  return getDb().prepare(`
+export async function listFinanceAccounts(): Promise<FinanceAccount[]> {
+  return getPowerSyncDb().getAll<FinanceAccount>(`
     SELECT * FROM finance_accounts ORDER BY is_default DESC, name ASC
-  `).all() as FinanceAccount[]
+  `)
 }
 
-export function createFinanceAccount(data: CreateFinanceAccountInput): FinanceAccount {
-  const db  = getDb()
+export async function createFinanceAccount(data: CreateFinanceAccountInput): Promise<FinanceAccount> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO finance_accounts (id, name, icon, color, is_default, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 0, ?, ?)
-  `).run(id, data.name, data.icon ?? '💰', data.color ?? '#10b981', now, now)
-  return db.prepare('SELECT * FROM finance_accounts WHERE id = ?').get(id) as FinanceAccount
+  await db.execute(`
+    INSERT INTO finance_accounts (id, name, icon, color, is_default, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+  `, [id, data.name, data.icon ?? '💰', data.color ?? '#10b981', now, now, WORKSPACE_ID])
+  return (await db.getOptional<FinanceAccount>('SELECT * FROM finance_accounts WHERE id = ?', [id]))!
 }
 
-export function updateFinanceAccount(
+export async function updateFinanceAccount(
   id: string, data: Partial<CreateFinanceAccountInput>
-): FinanceAccount {
-  const db  = getDb()
+): Promise<FinanceAccount> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
   const sets: string[] = []
   const vals: unknown[] = []
@@ -43,37 +51,37 @@ export function updateFinanceAccount(
   if (data.icon  !== undefined) { sets.push('icon = ?');  vals.push(data.icon)  }
   if (data.color !== undefined) { sets.push('color = ?'); vals.push(data.color) }
   sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-  db.prepare(`UPDATE finance_accounts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM finance_accounts WHERE id = ?').get(id) as FinanceAccount
+  await db.execute(`UPDATE finance_accounts SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await db.getOptional<FinanceAccount>('SELECT * FROM finance_accounts WHERE id = ?', [id]))!
 }
 
-export function deleteFinanceAccount(id: string): void {
-  getDb().prepare('DELETE FROM finance_accounts WHERE id = ?').run(id)
+export async function deleteFinanceAccount(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM finance_accounts WHERE id = ?', [id])
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
-export function listFinanceCategories(): FinanceCategory[] {
-  return getDb().prepare(`
+export async function listFinanceCategories(): Promise<FinanceCategory[]> {
+  return getPowerSyncDb().getAll<FinanceCategory>(`
     SELECT * FROM finance_categories ORDER BY is_default DESC, name ASC
-  `).all() as FinanceCategory[]
+  `)
 }
 
-export function createFinanceCategory(data: CreateFinanceCategoryInput): FinanceCategory {
-  const db  = getDb()
+export async function createFinanceCategory(data: CreateFinanceCategoryInput): Promise<FinanceCategory> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO finance_categories (id, name, icon, color, is_default, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 0, ?, ?)
-  `).run(id, data.name, data.icon ?? '📁', data.color ?? '#6366f1', now, now)
-  return db.prepare('SELECT * FROM finance_categories WHERE id = ?').get(id) as FinanceCategory
+  await db.execute(`
+    INSERT INTO finance_categories (id, name, icon, color, is_default, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+  `, [id, data.name, data.icon ?? '📁', data.color ?? '#6366f1', now, now, WORKSPACE_ID])
+  return (await db.getOptional<FinanceCategory>('SELECT * FROM finance_categories WHERE id = ?', [id]))!
 }
 
-export function updateFinanceCategory(
+export async function updateFinanceCategory(
   id: string, data: Partial<CreateFinanceCategoryInput>
-): FinanceCategory {
-  const db  = getDb()
+): Promise<FinanceCategory> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
   const sets: string[] = []
   const vals: unknown[] = []
@@ -81,39 +89,39 @@ export function updateFinanceCategory(
   if (data.icon  !== undefined) { sets.push('icon = ?');  vals.push(data.icon)  }
   if (data.color !== undefined) { sets.push('color = ?'); vals.push(data.color) }
   sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-  db.prepare(`UPDATE finance_categories SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM finance_categories WHERE id = ?').get(id) as FinanceCategory
+  await db.execute(`UPDATE finance_categories SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await db.getOptional<FinanceCategory>('SELECT * FROM finance_categories WHERE id = ?', [id]))!
 }
 
-export function deleteFinanceCategory(id: string): void {
-  getDb().prepare('DELETE FROM finance_categories WHERE id = ?').run(id)
+export async function deleteFinanceCategory(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM finance_categories WHERE id = ?', [id])
 }
 
 // ── Payment methods ───────────────────────────────────────────────────────────
 // Mismo patrón CRUD que cuentas/categorías — entidad gestionable que respalda
 // los ids de texto libre guardados en `payment_method` (concepts y movements).
 
-export function listFinancePaymentMethods(): FinancePaymentMethodEntity[] {
-  return getDb().prepare(`
+export async function listFinancePaymentMethods(): Promise<FinancePaymentMethodEntity[]> {
+  return getPowerSyncDb().getAll<FinancePaymentMethodEntity>(`
     SELECT * FROM finance_payment_methods ORDER BY is_default DESC, name ASC
-  `).all() as FinancePaymentMethodEntity[]
+  `)
 }
 
-export function createFinancePaymentMethod(data: CreateFinancePaymentMethodInput): FinancePaymentMethodEntity {
-  const db  = getDb()
+export async function createFinancePaymentMethod(data: CreateFinancePaymentMethodInput): Promise<FinancePaymentMethodEntity> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO finance_payment_methods (id, name, icon, color, is_default, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 0, ?, ?)
-  `).run(id, data.name, data.icon ?? '💳', data.color ?? '#64748b', now, now)
-  return db.prepare('SELECT * FROM finance_payment_methods WHERE id = ?').get(id) as FinancePaymentMethodEntity
+  await db.execute(`
+    INSERT INTO finance_payment_methods (id, name, icon, color, is_default, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+  `, [id, data.name, data.icon ?? '💳', data.color ?? '#64748b', now, now, WORKSPACE_ID])
+  return (await db.getOptional<FinancePaymentMethodEntity>('SELECT * FROM finance_payment_methods WHERE id = ?', [id]))!
 }
 
-export function updateFinancePaymentMethod(
+export async function updateFinancePaymentMethod(
   id: string, data: Partial<CreateFinancePaymentMethodInput>
-): FinancePaymentMethodEntity {
-  const db  = getDb()
+): Promise<FinancePaymentMethodEntity> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
   const sets: string[] = []
   const vals: unknown[] = []
@@ -121,12 +129,12 @@ export function updateFinancePaymentMethod(
   if (data.icon  !== undefined) { sets.push('icon = ?');  vals.push(data.icon)  }
   if (data.color !== undefined) { sets.push('color = ?'); vals.push(data.color) }
   sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-  db.prepare(`UPDATE finance_payment_methods SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM finance_payment_methods WHERE id = ?').get(id) as FinancePaymentMethodEntity
+  await db.execute(`UPDATE finance_payment_methods SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await db.getOptional<FinancePaymentMethodEntity>('SELECT * FROM finance_payment_methods WHERE id = ?', [id]))!
 }
 
-export function deleteFinancePaymentMethod(id: string): void {
-  getDb().prepare('DELETE FROM finance_payment_methods WHERE id = ?').run(id)
+export async function deleteFinancePaymentMethod(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM finance_payment_methods WHERE id = ?', [id])
 }
 
 // ── Concepts ──────────────────────────────────────────────────────────────────
@@ -163,28 +171,28 @@ const CONCEPT_SELECT = `
   LEFT JOIN finance_accounts   acc ON acc.id = co.account_id
 `
 
-export function listFinanceConcepts(opts?: { activeOnly?: boolean }): FinanceConcept[] {
-  const db = getDb()
+export async function listFinanceConcepts(opts?: { activeOnly?: boolean }): Promise<FinanceConcept[]> {
+  const db = getPowerSyncDb()
   const where = opts?.activeOnly ? 'WHERE co.is_active = 1' : ''
-  const rows = db.prepare(`${CONCEPT_SELECT} ${where} ORDER BY co.name ASC`).all() as ConceptRow[]
+  const rows = await db.getAll<ConceptRow>(`${CONCEPT_SELECT} ${where} ORDER BY co.name ASC`)
   return rows.map(hydrateConcept)
 }
 
-export function getFinanceConcept(id: string): FinanceConcept | null {
-  const db = getDb()
-  const r = db.prepare(`${CONCEPT_SELECT} WHERE co.id = ?`).get(id) as ConceptRow | undefined
+export async function getFinanceConcept(id: string): Promise<FinanceConcept | null> {
+  const db = getPowerSyncDb()
+  const r = await db.getOptional<ConceptRow>(`${CONCEPT_SELECT} WHERE co.id = ?`, [id])
   return r ? hydrateConcept(r) : null
 }
 
-export function createFinanceConcept(data: CreateFinanceConceptInput): FinanceConcept {
-  const db  = getDb()
+export async function createFinanceConcept(data: CreateFinanceConceptInput): Promise<FinanceConcept> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO finance_concepts
-      (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, tracks_multiple_entries, is_active, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-  `).run(
+      (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, tracks_multiple_entries, is_active, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+  `, [
     id, data.category_id, data.account_id, data.name,
     data.default_amount ?? 0,
     data.expense_type ?? 'fixed',
@@ -192,15 +200,15 @@ export function createFinanceConcept(data: CreateFinanceConceptInput): FinanceCo
     data.recurrence ?? 'monthly',
     data.recurrence_month ?? null,
     data.tracks_multiple_entries ?? 0,
-    data.notes ?? '', now, now
-  )
-  return getFinanceConcept(id)!
+    data.notes ?? '', now, now, WORKSPACE_ID
+  ])
+  return (await getFinanceConcept(id))!
 }
 
-export function updateFinanceConcept(
+export async function updateFinanceConcept(
   id: string, data: Partial<CreateFinanceConceptInput> & { is_active?: number }
-): FinanceConcept {
-  const db  = getDb()
+): Promise<FinanceConcept> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
   const allowed = ['category_id', 'account_id', 'name', 'default_amount',
                    'expense_type', 'payment_method', 'recurrence', 'recurrence_month',
@@ -214,12 +222,12 @@ export function updateFinanceConcept(
     }
   }
   sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-  db.prepare(`UPDATE finance_concepts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return getFinanceConcept(id)!
+  await db.execute(`UPDATE finance_concepts SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await getFinanceConcept(id))!
 }
 
-export function deleteFinanceConcept(id: string): void {
-  getDb().prepare('DELETE FROM finance_concepts WHERE id = ?').run(id)
+export async function deleteFinanceConcept(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM finance_concepts WHERE id = ?', [id])
 }
 
 // ── Movements ─────────────────────────────────────────────────────────────────
@@ -276,15 +284,15 @@ const MOVEMENT_BASE_SELECT = `
   LEFT JOIN finance_accounts   acc ON acc.id = c.account_id
 `
 
-export function listFinanceMovements(month: number, year: number): FinanceMovement[] {
-  const db = getDb()
-  const rows = db.prepare(`
+export async function listFinanceMovements(month: number, year: number): Promise<FinanceMovement[]> {
+  const db = getPowerSyncDb()
+  const rows = await db.getAll<MovementRow>(`
     ${MOVEMENT_BASE_SELECT}
     WHERE m.month = ? AND m.year = ?
     ORDER BY cat.name ASC, c.name ASC
-  `).all(month, year) as MovementRow[]
+  `, [month, year])
   const movements = rows.map(hydrateMovement)
-  attachPreviousMonthAmounts(db, movements, month, year)
+  await attachPreviousMonthAmounts(db, movements, month, year)
   return movements
 }
 
@@ -295,15 +303,16 @@ export function listFinanceMovements(month: number, year: number): FinanceMoveme
  * tabla muestra "—"). Es lo que alimenta la columna "Mes anterior" — pensada
  * para comparar de un vistazo "cuánto pagué la última vez" vs. lo de este mes.
  */
-function attachPreviousMonthAmounts(
-  db: ReturnType<typeof getDb>, movements: FinanceMovement[], month: number, year: number
-): void {
+async function attachPreviousMonthAmounts(
+  db: { getAll: <T>(sql: string, params?: unknown[]) => Promise<T[]> },
+  movements: FinanceMovement[], month: number, year: number
+): Promise<void> {
   if (!movements.length) return
   const prevDate = new Date(year, month - 2, 1)
-  const rows = db.prepare(`
+  const rows = await db.getAll<{ concept_id: string; amount_actual: number }>(`
     SELECT concept_id, amount_actual FROM finance_movements
     WHERE month = ? AND year = ? AND amount_actual IS NOT NULL
-  `).all(prevDate.getMonth() + 1, prevDate.getFullYear()) as { concept_id: string; amount_actual: number }[]
+  `, [prevDate.getMonth() + 1, prevDate.getFullYear()])
   const byConceptId = new Map(rows.map(r => [r.concept_id, r.amount_actual]))
   for (const m of movements) {
     m.previous_month_amount = byConceptId.get(m.concept_id) ?? null
@@ -315,31 +324,31 @@ function attachPreviousMonthAmounts(
  * vencimiento cargada, sin importar el período. Se agrupan por urgencia en el cliente
  * (computado al vuelo, igual que con los vencimientos — ver getMovementUrgency).
  */
-export function listUpcomingFinanceMovements(): FinanceMovement[] {
-  const db = getDb()
-  const rows = db.prepare(`
+export async function listUpcomingFinanceMovements(): Promise<FinanceMovement[]> {
+  const db = getPowerSyncDb()
+  const rows = await db.getAll<MovementRow>(`
     ${MOVEMENT_BASE_SELECT}
     WHERE m.status != 'paid' AND m.due_date IS NOT NULL
     ORDER BY m.due_date ASC
-  `).all() as MovementRow[]
+  `)
   return rows.map(hydrateMovement)
 }
 
-export function getFinanceMovement(id: string): FinanceMovement | null {
-  const db = getDb()
-  const r = db.prepare(`${MOVEMENT_BASE_SELECT} WHERE m.id = ?`).get(id) as MovementRow | undefined
+export async function getFinanceMovement(id: string): Promise<FinanceMovement | null> {
+  const db = getPowerSyncDb()
+  const r = await db.getOptional<MovementRow>(`${MOVEMENT_BASE_SELECT} WHERE m.id = ?`, [id])
   return r ? hydrateMovement(r) : null
 }
 
-export function createFinanceMovement(data: CreateFinanceMovementInput): FinanceMovement {
-  const db  = getDb()
+export async function createFinanceMovement(data: CreateFinanceMovementInput): Promise<FinanceMovement> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO finance_movements
-      (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+      (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, data.concept_id, data.month, data.year,
     data.amount_estimated ?? 0,
     data.amount_actual ?? null,
@@ -347,15 +356,15 @@ export function createFinanceMovement(data: CreateFinanceMovementInput): Finance
     data.payment_method ?? 'transfer',
     data.payment_date ?? null,
     data.due_date ?? null,
-    data.notes ?? '', now, now
-  )
-  return getFinanceMovement(id)!
+    data.notes ?? '', now, now, WORKSPACE_ID
+  ])
+  return (await getFinanceMovement(id))!
 }
 
-export function updateFinanceMovement(
+export async function updateFinanceMovement(
   id: string, data: Partial<CreateFinanceMovementInput>
-): FinanceMovement {
-  const db  = getDb()
+): Promise<FinanceMovement> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
   const allowed = ['concept_id', 'month', 'year', 'amount_estimated', 'amount_actual',
                    'status', 'payment_method', 'payment_date', 'due_date', 'notes'] as const
@@ -368,23 +377,23 @@ export function updateFinanceMovement(
     }
   }
   sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-  db.prepare(`UPDATE finance_movements SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return getFinanceMovement(id)!
+  await db.execute(`UPDATE finance_movements SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await getFinanceMovement(id))!
 }
 
 /** Edición rápida desde la tabla principal: monto real, estado, fechas y notas. */
-export function quickUpdateFinanceMovement(id: string, data: {
+export async function quickUpdateFinanceMovement(id: string, data: {
   amount_actual?: number | null
   status?:        FinanceMovementStatus
   payment_date?:  number | null
   due_date?:      number | null
   notes?:         string
-}): FinanceMovement {
+}): Promise<FinanceMovement> {
   return updateFinanceMovement(id, data)
 }
 
-export function deleteFinanceMovement(id: string): void {
-  getDb().prepare('DELETE FROM finance_movements WHERE id = ?').run(id)
+export async function deleteFinanceMovement(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM finance_movements WHERE id = ?', [id])
 }
 
 // ── Registro de cargas — conceptos multi-carga (Opción C) ────────────────────
@@ -397,83 +406,80 @@ export function deleteFinanceMovement(id: string): void {
 // vencimiento), apenas hay al menos una carga el movimiento pasa a "Pagado"
 // solo; si se borran todas, vuelve a "Pendiente" con monto vacío.
 
-export function listMovementEntries(movementId: string): FinanceMovementEntry[] {
-  return getDb().prepare(`
+export async function listMovementEntries(movementId: string): Promise<FinanceMovementEntry[]> {
+  return getPowerSyncDb().getAll<FinanceMovementEntry>(`
     SELECT * FROM finance_movement_entries
     WHERE movement_id = ?
     ORDER BY COALESCE(entry_date, created_at) ASC, created_at ASC
-  `).all(movementId) as FinanceMovementEntry[]
+  `, [movementId])
 }
 
 /** Recalcula amount_actual / status / payment_date del movimiento padre a partir de la suma de sus cargas. */
-function recalcMovementFromEntries(db: ReturnType<typeof getDb>, movementId: string): void {
+async function recalcMovementFromEntries(db: SqlCtx, movementId: string): Promise<void> {
   const now = Date.now()
-  const agg = db.prepare(`
+  const agg = await db.get<{ total: number; n: number; lastDate: number | null }>(`
     SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n,
            MAX(COALESCE(entry_date, created_at)) AS lastDate
     FROM finance_movement_entries
     WHERE movement_id = ?
-  `).get(movementId) as { total: number; n: number; lastDate: number | null }
+  `, [movementId])
 
   if (agg.n > 0) {
-    db.prepare(`
+    await db.execute(`
       UPDATE finance_movements
       SET amount_actual = ?, status = 'paid', payment_date = ?, updated_at = ?
       WHERE id = ?
-    `).run(agg.total, agg.lastDate, now, movementId)
+    `, [agg.total, agg.lastDate, now, movementId])
   } else {
-    db.prepare(`
+    await db.execute(`
       UPDATE finance_movements
       SET amount_actual = NULL, status = 'pending', payment_date = NULL, updated_at = ?
       WHERE id = ?
-    `).run(now, movementId)
+    `, [now, movementId])
   }
 }
 
-export function addMovementEntry(data: CreateFinanceMovementEntryInput): FinanceMovementEntry {
-  const db  = getDb()
+export async function addMovementEntry(data: CreateFinanceMovementEntryInput): Promise<FinanceMovementEntry> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
-  const run = db.transaction(() => {
-    db.prepare(`
-      INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, data.movement_id, data.amount, data.entry_date ?? now, data.note ?? '', now, now)
-    recalcMovementFromEntries(db, data.movement_id)
+  await db.writeTransaction(async (tx) => {
+    await tx.execute(`
+      INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, data.movement_id, data.amount, data.entry_date ?? now, data.note ?? '', now, now, WORKSPACE_ID])
+    await recalcMovementFromEntries(tx, data.movement_id)
   })
-  run()
-  return db.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
+  return (await db.getOptional<FinanceMovementEntry>('SELECT * FROM finance_movement_entries WHERE id = ?', [id]))!
 }
 
-export function updateMovementEntry(id: string, data: UpdateFinanceMovementEntryInput): FinanceMovementEntry {
-  const db  = getDb()
+export async function updateMovementEntry(id: string, data: UpdateFinanceMovementEntryInput): Promise<FinanceMovementEntry> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
-  const existing = db.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry | undefined
+  const existing = await db.getOptional<FinanceMovementEntry>('SELECT * FROM finance_movement_entries WHERE id = ?', [id])
   if (!existing) throw new Error('La carga que intentás editar ya no existe.')
 
-  const run = db.transaction(() => {
+  await db.writeTransaction(async (tx) => {
     const sets: string[] = []
     const vals: unknown[] = []
     if (data.amount !== undefined)     { sets.push('amount = ?');     vals.push(data.amount) }
     if (data.entry_date !== undefined) { sets.push('entry_date = ?'); vals.push(data.entry_date) }
     if (data.note !== undefined)       { sets.push('note = ?');       vals.push(data.note) }
     sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-    db.prepare(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-    recalcMovementFromEntries(db, existing.movement_id)
+    await tx.execute(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`, vals)
+    await recalcMovementFromEntries(tx, existing.movement_id)
   })
-  run()
-  return db.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
+  return (await db.getOptional<FinanceMovementEntry>('SELECT * FROM finance_movement_entries WHERE id = ?', [id]))!
 }
 
-export function removeMovementEntry(id: string): void {
-  const db = getDb()
-  const existing = db.prepare('SELECT movement_id FROM finance_movement_entries WHERE id = ?').get(id) as { movement_id: string } | undefined
+export async function removeMovementEntry(id: string): Promise<void> {
+  const db = getPowerSyncDb()
+  const existing = await db.getOptional<{ movement_id: string }>('SELECT movement_id FROM finance_movement_entries WHERE id = ?', [id])
   if (!existing) return
-  const run = db.transaction(() => {
-    db.prepare('DELETE FROM finance_movement_entries WHERE id = ?').run(id)
-    recalcMovementFromEntries(db, existing.movement_id)
+  await db.writeTransaction(async (tx) => {
+    await tx.execute('DELETE FROM finance_movement_entries WHERE id = ?', [id])
+    await recalcMovementFromEntries(tx, existing.movement_id)
   })
-  run()
 }
 
 // ── Generación de movimientos / "crear nuevo mes" (Fase 4) ───────────────────
@@ -490,14 +496,16 @@ export function removeMovementEntry(id: string): void {
 //    CUALQUIER movimiento suyo, sin importar el período (antes este chequeo
 //    miraba únicamente el período pedido y por eso conceptos "puntuales" como
 //    "Uniformes" o "Pintura" se regeneraban mes a mes)
-function shouldGenerateMovement(db: ReturnType<typeof getDb>, concept: FinanceConcept, month: number): boolean {
+async function shouldGenerateMovement(db: SqlCtx, concept: FinanceConcept, month: number): Promise<boolean> {
   switch (concept.recurrence) {
     case 'annual': {
       const targetMonth = concept.recurrence_month ?? (new Date(concept.created_at).getMonth() + 1)
       return month === targetMonth
     }
     case 'one_time': {
-      const already = db.prepare('SELECT 1 FROM finance_movements WHERE concept_id = ? LIMIT 1').get(concept.id)
+      const already = await db.get<{ found: number } | null>(
+        "SELECT 1 as found FROM finance_movements WHERE concept_id = ? LIMIT 1", [concept.id]
+      ).catch(() => null)
       return !already
     }
     case 'monthly':
@@ -519,31 +527,25 @@ function shouldGenerateMovement(db: ReturnType<typeof getDb>, concept: FinanceCo
  *                 variables (servicios, tarjetas) con cifras más realistas que
  *                 la fija del concepto
  */
-function generateMovements(month: number, year: number, estimateSource: 'default' | 'previous'): FinanceMovement[] {
-  const db = getDb()
+async function generateMovements(month: number, year: number, estimateSource: 'default' | 'previous'): Promise<FinanceMovement[]> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
-  const concepts = listFinanceConcepts({ activeOnly: true })
-  const existing = new Set(
-    (db.prepare('SELECT concept_id FROM finance_movements WHERE month = ? AND year = ?').all(month, year) as { concept_id: string }[])
-      .map(r => r.concept_id)
+  const concepts = await listFinanceConcepts({ activeOnly: true })
+  const existingRows = await db.getAll<{ concept_id: string }>(
+    'SELECT concept_id FROM finance_movements WHERE month = ? AND year = ?', [month, year]
   )
+  const existing = new Set(existingRows.map(r => r.concept_id))
 
   let prevByConceptId: Map<string, FinanceMovement> | null = null
   if (estimateSource === 'previous') {
     const prevDate = new Date(year, month - 2, 1)
-    const prevMovements = listFinanceMovements(prevDate.getMonth() + 1, prevDate.getFullYear())
+    const prevMovements = await listFinanceMovements(prevDate.getMonth() + 1, prevDate.getFullYear())
     prevByConceptId = new Map(prevMovements.map(m => [m.concept_id, m]))
   }
 
-  const insert = db.prepare(`
-    INSERT INTO finance_movements
-      (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, '', ?, ?)
-  `)
-
   for (const concept of concepts) {
     if (existing.has(concept.id)) continue
-    if (!shouldGenerateMovement(db, concept, month)) continue
+    if (!(await shouldGenerateMovement(db, concept, month))) continue
 
     let amountEstimated = concept.default_amount
     if (prevByConceptId) {
@@ -558,7 +560,11 @@ function generateMovements(month: number, year: number, estimateSource: 'default
     // (ver request: "por default, un movimiento nuevo no debe tener vencimiento").
     const initialStatus = initialStatusForConcept(concept)
 
-    insert.run(randomUUID(), concept.id, month, year, amountEstimated, initialStatus, concept.payment_method, now, now)
+    await db.execute(`
+      INSERT INTO finance_movements
+        (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at, workspace_id)
+      VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, '', ?, ?, ?)
+    `, [randomUUID(), concept.id, month, year, amountEstimated, initialStatus, concept.payment_method, now, now, WORKSPACE_ID])
   }
   return listFinanceMovements(month, year)
 }
@@ -586,7 +592,7 @@ function initialStatusForConcept(concept: FinanceConcept): FinanceMovementStatus
  * activo (omite los que ya existan, y respeta la recurrencia de cada uno).
  * Es la opción "desde cero" de crear un nuevo mes.
  */
-export function generateMovementsForMonth(month: number, year: number): FinanceMovement[] {
+export async function generateMovementsForMonth(month: number, year: number): Promise<FinanceMovement[]> {
   return generateMovements(month, year, 'default')
 }
 
@@ -597,7 +603,7 @@ export function generateMovementsForMonth(month: number, year: number): FinanceM
  * opción "Crear nuevo mes desde mes anterior": sirve para arrancar el mes con
  * proyecciones más ajustadas a la realidad reciente en gastos variables.
  */
-export function generateMovementsFromPreviousMonth(month: number, year: number): FinanceMovement[] {
+export async function generateMovementsFromPreviousMonth(month: number, year: number): Promise<FinanceMovement[]> {
   return generateMovements(month, year, 'previous')
 }
 
@@ -607,8 +613,8 @@ function sumActual(movements: FinanceMovement[]): number {
   return movements.reduce((acc, m) => acc + (m.amount_actual ?? m.amount_estimated), 0)
 }
 
-export function getFinanceMonthSummary(month: number, year: number): FinanceMonthSummary {
-  const movements = listFinanceMovements(month, year)
+export async function getFinanceMonthSummary(month: number, year: number): Promise<FinanceMonthSummary> {
+  const movements = await listFinanceMovements(month, year)
 
   const totalEstimated = movements.reduce((acc, m) => acc + m.amount_estimated, 0)
   const totalActual    = sumActual(movements)
@@ -620,7 +626,7 @@ export function getFinanceMonthSummary(month: number, year: number): FinanceMont
   const prevDate  = new Date(year, month - 2, 1)
   const prevMonth = prevDate.getMonth() + 1
   const prevYear  = prevDate.getFullYear()
-  const prevMovements = listFinanceMovements(prevMonth, prevYear)
+  const prevMovements = await listFinanceMovements(prevMonth, prevYear)
   const prevMonthTotalActual = prevMovements.length ? sumActual(prevMovements) : null
 
   const diffAmount  = prevMonthTotalActual !== null ? totalActual - prevMonthTotalActual : null
@@ -678,22 +684,22 @@ export function getFinanceMonthSummary(month: number, year: number): FinanceMont
 // ON CONFLICT, sin necesidad de un SELECT previo para decidir INSERT vs UPDATE.
 
 /** Devuelve las notas/análisis guardados para el mes, o null si todavía no se guardó nada. */
-export function getFinanceMonthInsight(month: number, year: number): FinanceMonthInsight | null {
-  return (getDb()
-    .prepare('SELECT * FROM finance_month_insights WHERE month = ? AND year = ?')
-    .get(month, year) as FinanceMonthInsight | undefined) ?? null
+export async function getFinanceMonthInsight(month: number, year: number): Promise<FinanceMonthInsight | null> {
+  return getPowerSyncDb().getOptional<FinanceMonthInsight>(
+    'SELECT * FROM finance_month_insights WHERE month = ? AND year = ?', [month, year]
+  )
 }
 
 /** Guarda (crea o actualiza) las notas del usuario para el mes — no toca el análisis de IA si ya existe uno. */
-export function saveFinanceMonthNotes(month: number, year: number, notes: string): FinanceMonthInsight {
-  const db  = getDb()
+export async function saveFinanceMonthNotes(month: number, year: number, notes: string): Promise<FinanceMonthInsight> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)
+  await db.execute(`
+    INSERT INTO finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)
     ON CONFLICT(month, year) DO UPDATE SET notes = excluded.notes, updated_at = excluded.updated_at
-  `).run(randomUUID(), month, year, notes, now, now)
-  return getFinanceMonthInsight(month, year) as FinanceMonthInsight
+  `, [randomUUID(), month, year, notes, now, now, WORKSPACE_ID])
+  return (await getFinanceMonthInsight(month, year))!
 }
 
 /**
@@ -703,15 +709,15 @@ export function saveFinanceMonthNotes(month: number, year: number, notes: string
  * así el usuario puede revisar la conclusión antes de decidir conservarla.
  * No toca `notes` si ya existe una fila para el mes.
  */
-export function saveFinanceMonthAIAnalysis(month: number, year: number, analysis: string): FinanceMonthInsight {
-  const db  = getDb()
+export async function saveFinanceMonthAIAnalysis(month: number, year: number, analysis: string): Promise<FinanceMonthInsight> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at)
-    VALUES (?, ?, ?, '', ?, ?, ?, ?)
+  await db.execute(`
+    INSERT INTO finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
     ON CONFLICT(month, year) DO UPDATE SET ai_analysis = excluded.ai_analysis, ai_generated_at = excluded.ai_generated_at, updated_at = excluded.updated_at
-  `).run(randomUUID(), month, year, analysis, now, now, now)
-  return getFinanceMonthInsight(month, year) as FinanceMonthInsight
+  `, [randomUUID(), month, year, analysis, now, now, now, WORKSPACE_ID])
+  return (await getFinanceMonthInsight(month, year))!
 }
 
 // ── Visualización / análisis (Fase 3) ─────────────────────────────────────────
@@ -720,8 +726,8 @@ export function saveFinanceMonthAIAnalysis(month: number, year: number, analysis
 // listFinanceMovements, sin guardar nada derivado — así nunca queda desactualizado.
 
 /** Desglose del gasto del mes por categoría: totales, % del total y top 5 conceptos de cada una. */
-export function getFinanceCategoryBreakdown(month: number, year: number): FinanceCategoryBreakdownItem[] {
-  const movements   = listFinanceMovements(month, year)
+export async function getFinanceCategoryBreakdown(month: number, year: number): Promise<FinanceCategoryBreakdownItem[]> {
+  const movements   = await listFinanceMovements(month, year)
   const totalActual = sumActual(movements)
 
   type Bucket = {
@@ -773,7 +779,7 @@ export function getFinanceCategoryBreakdown(month: number, year: number): Financ
  * en orden cronológico ascendente. `diffPercent` compara cada mes contra el calendario
  * inmediatamente anterior (igual criterio que prevMonthTotalActual en el resumen mensual).
  */
-export function getFinanceHistory(month: number, year: number, monthsBack: number): FinanceHistoryEntry[] {
+export async function getFinanceHistory(month: number, year: number, monthsBack: number): Promise<FinanceHistoryEntry[]> {
   const entries: FinanceHistoryEntry[] = []
   let prevMovements: FinanceMovement[] | null = null
 
@@ -781,7 +787,7 @@ export function getFinanceHistory(month: number, year: number, monthsBack: numbe
     const d = new Date(year, month - 1 - i, 1)
     const m = d.getMonth() + 1
     const y = d.getFullYear()
-    const movements = listFinanceMovements(m, y)
+    const movements = await listFinanceMovements(m, y)
 
     const totalEstimated = movements.reduce((acc, mv) => acc + mv.amount_estimated, 0)
     const totalActual    = sumActual(movements)
@@ -804,8 +810,8 @@ export function getFinanceHistory(month: number, year: number, monthsBack: numbe
 }
 
 /** Ranking "Top conceptos": los gastos individuales más altos del mes (por defecto, los 8 primeros). */
-export function getFinanceTopConcepts(month: number, year: number, limit = 8): FinanceRankingConcept[] {
-  const movements   = listFinanceMovements(month, year)
+export async function getFinanceTopConcepts(month: number, year: number, limit = 8): Promise<FinanceRankingConcept[]> {
+  const movements   = await listFinanceMovements(month, year)
   const totalActual = sumActual(movements)
 
   return movements
@@ -829,11 +835,11 @@ export function getFinanceTopConcepts(month: number, year: number, limit = 8): F
  * Ranking "Mayores aumentos": conceptos cuyo monto subió más (en valor absoluto) respecto
  * al mes calendario anterior. Solo incluye conceptos presentes en ambos períodos.
  */
-export function getFinanceTopIncreases(month: number, year: number, limit = 8): FinanceRankingIncrease[] {
-  const movements = listFinanceMovements(month, year)
+export async function getFinanceTopIncreases(month: number, year: number, limit = 8): Promise<FinanceRankingIncrease[]> {
+  const movements = await listFinanceMovements(month, year)
 
   const prevDate = new Date(year, month - 2, 1)
-  const prevMovements = listFinanceMovements(prevDate.getMonth() + 1, prevDate.getFullYear())
+  const prevMovements = await listFinanceMovements(prevDate.getMonth() + 1, prevDate.getFullYear())
   if (!prevMovements.length) return []
 
   const prevByConceptId = new Map(prevMovements.map(m => [m.concept_id, m.amount_actual ?? m.amount_estimated]))
@@ -874,16 +880,16 @@ function normalizeConceptName(s: string): string {
  * como duplicado cualquier fila cuyo concepto ya tenga un movimiento cargado
  * en (month, year) — el usuario decide en la UI si sobreescribirlo o saltarlo.
  */
-export function buildFinanceImportPreview(
+export async function buildFinanceImportPreview(
   rows: ParsedImportRow[], month: number, year: number, fileName: string
-): FinanceImportPreviewResult {
-  const db = getDb()
-  const concepts = listFinanceConcepts({ activeOnly: true })
+): Promise<FinanceImportPreviewResult> {
+  const db = getPowerSyncDb()
+  const concepts = await listFinanceConcepts({ activeOnly: true })
   const byExactName = new Map(concepts.map(c => [normalizeConceptName(c.name), c]))
 
-  const existingRows = db.prepare(
-    'SELECT id, concept_id FROM finance_movements WHERE month = ? AND year = ?'
-  ).all(month, year) as { id: string; concept_id: string }[]
+  const existingRows = await db.getAll<{ id: string; concept_id: string }>(
+    'SELECT id, concept_id FROM finance_movements WHERE month = ? AND year = ?', [month, year]
+  )
   const existingByConceptId = new Map(existingRows.map(r => [r.concept_id, r.id]))
 
   const items: FinanceImportPreviewItem[] = rows.map((row, idx) => {
@@ -927,30 +933,12 @@ export function buildFinanceImportPreview(
  * no exista (caso borde: se borró entre el preview y la confirmación) se
  * cuentan como salteadas en vez de romper la importación completa.
  */
-export function confirmFinanceImport(
+export async function confirmFinanceImport(
   items: FinanceImportConfirmItem[], month: number, year: number
-): FinanceImportResult {
-  const db  = getDb()
+): Promise<FinanceImportResult> {
+  const db  = getPowerSyncDb()
   const now = Date.now()
-  const conceptsById = new Map(listFinanceConcepts().map(c => [c.id, c]))
-
-  const insert = db.prepare(`
-    INSERT INTO finance_movements
-      (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
-  `)
-  const update = db.prepare(`
-    UPDATE finance_movements
-    SET amount_actual = ?, status = ?, payment_date = ?, notes = ?, updated_at = ?
-    WHERE id = ?
-  `)
-  const findExisting = db.prepare(
-    'SELECT id FROM finance_movements WHERE concept_id = ? AND month = ? AND year = ?'
-  )
-  const insertEntry = db.prepare(`
-    INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
+  const conceptsById = new Map((await listFinanceConcepts()).map(c => [c.id, c]))
 
   let imported = 0, updated = 0, skipped = 0
 
@@ -958,17 +946,17 @@ export function confirmFinanceImport(
   // movimiento por (concepto, período) que acumula una sub-lista de entradas
   // — pero el archivo/texto importado puede traer VARIAS filas para el mismo
   // concepto (ej. dos compras de supermercado distintas en el mismo mes). Sin
-  // este mapeo, la salvaguarda de abajo (`findExisting`) detectaba el
-  // movimiento recién insertado por la primera fila y descartaba todas las
-  // siguientes como "ya existe" — el bug reportado: "toma una sola carga".
-  // Acá, en cambio, cada fila adicional para el mismo concepto se agrega como
-  // una entrada más al MISMO movimiento, y `recalcMovementFromEntries` se
-  // encarga de recalcular `amount_actual`/`status`/`payment_date` como la
-  // suma — el mismo mecanismo que usa el registro manual de cargas.
+  // este mapeo, la salvaguarda de abajo detectaba el movimiento recién
+  // insertado por la primera fila y descartaba todas las siguientes como "ya
+  // existe" — el bug reportado: "toma una sola carga". Acá, en cambio, cada
+  // fila adicional para el mismo concepto se agrega como una entrada más al
+  // MISMO movimiento, y `recalcMovementFromEntries` se encarga de recalcular
+  // `amount_actual`/`status`/`payment_date` como la suma — el mismo
+  // mecanismo que usa el registro manual de cargas.
   const movementIdByConceptId = new Map<string, string>()
 
-  const run = db.transaction((list: FinanceImportConfirmItem[]) => {
-    for (const item of list) {
+  await db.writeTransaction(async (tx) => {
+    for (const item of items) {
       const concept = conceptsById.get(item.conceptId)
       if (!concept) { skipped++; continue }
 
@@ -978,29 +966,40 @@ export function confirmFinanceImport(
         // para este concepto en esta misma corrida, o (c) el que ya existía
         // en la DB para este período. Si no hay ninguno, se crea uno nuevo
         // "vacío" (sin monto real todavía — lo define la suma de cargas).
-        let movementId = item.overwriteMovementId
-          ?? movementIdByConceptId.get(item.conceptId)
-          ?? (findExisting.get(item.conceptId, month, year) as { id: string } | undefined)?.id
-          ?? null
+        let movementId = item.overwriteMovementId ?? movementIdByConceptId.get(item.conceptId) ?? null
+        if (!movementId) {
+          const existingForPeriod = await tx.getOptional<{ id: string }>(
+            'SELECT id FROM finance_movements WHERE concept_id = ? AND month = ? AND year = ?',
+            [item.conceptId, month, year]
+          )
+          movementId = existingForPeriod?.id ?? null
+        }
 
         if (!movementId) {
           movementId = randomUUID()
-          insert.run(
-            movementId, item.conceptId, month, year,
-            concept.default_amount, null, initialStatusForConcept(concept), concept.payment_method,
-            null, '', now, now
-          )
+          await tx.execute(`
+            INSERT INTO finance_movements
+              (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at, workspace_id)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, '', ?, ?, ?)
+          `, [movementId, item.conceptId, month, year, concept.default_amount, initialStatusForConcept(concept), concept.payment_method, now, now, WORKSPACE_ID])
         }
         movementIdByConceptId.set(item.conceptId, movementId)
 
-        insertEntry.run(randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now)
-        recalcMovementFromEntries(db, movementId)
+        await tx.execute(`
+          INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID])
+        await recalcMovementFromEntries(tx, movementId)
         imported++
         continue
       }
 
       if (item.overwriteMovementId) {
-        update.run(item.amount, item.status, item.paymentDate, item.notes, now, item.overwriteMovementId)
+        await tx.execute(`
+          UPDATE finance_movements
+          SET amount_actual = ?, status = ?, payment_date = ?, notes = ?, updated_at = ?
+          WHERE id = ?
+        `, [item.amount, item.status, item.paymentDate, item.notes, now, item.overwriteMovementId])
         updated++
         continue
       }
@@ -1009,18 +1008,20 @@ export function confirmFinanceImport(
       // (p.ej. el usuario reasignó manualmente el concepto en el preview a uno
       // que sí ya tiene movimiento este período), nunca insertar — chocaría con
       // el UNIQUE(concept_id, month, year) y abortaría toda la transacción.
-      const already = findExisting.get(item.conceptId, month, year) as { id: string } | undefined
+      const already = await tx.getOptional<{ id: string }>(
+        'SELECT id FROM finance_movements WHERE concept_id = ? AND month = ? AND year = ?',
+        [item.conceptId, month, year]
+      )
       if (already) { skipped++; continue }
 
-      insert.run(
-        randomUUID(), item.conceptId, month, year,
-        item.amount, item.amount, item.status, concept.payment_method,
-        item.paymentDate, item.notes, now, now
-      )
+      await tx.execute(`
+        INSERT INTO finance_movements
+          (id, concept_id, month, year, amount_estimated, amount_actual, status, payment_method, payment_date, due_date, notes, created_at, updated_at, workspace_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+      `, [randomUUID(), item.conceptId, month, year, item.amount, item.amount, item.status, concept.payment_method, item.paymentDate, item.notes, now, now, WORKSPACE_ID])
       imported++
     }
   })
-  run(items)
 
   return { imported, updated, skipped }
 }

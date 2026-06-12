@@ -69,11 +69,127 @@ const user_permissions = new Table(
   { indexes: { user: ['user_id'] } }
 )
 
+// ── Fase 3 (sync multi-dispositivo): Finanzas personales y de empresa ──────
+// Mismo shape para finance_* y company_finance_* (14 tablas).
+
+const financeAccountLikeColumns = {
+  name: column.text,
+  icon: column.text,
+  color: column.text,
+  is_default: column.integer,
+  created_at: column.integer,
+  updated_at: column.integer,
+  workspace_id: column.text
+}
+
+const finance_accounts = new Table(financeAccountLikeColumns, { indexes: { workspace: ['workspace_id'] } })
+const finance_categories = new Table(financeAccountLikeColumns, { indexes: { workspace: ['workspace_id'] } })
+const finance_payment_methods = new Table(financeAccountLikeColumns, { indexes: { workspace: ['workspace_id'] } })
+const company_finance_accounts = new Table(financeAccountLikeColumns, { indexes: { workspace: ['workspace_id'] } })
+const company_finance_categories = new Table(financeAccountLikeColumns, { indexes: { workspace: ['workspace_id'] } })
+const company_finance_payment_methods = new Table(financeAccountLikeColumns, { indexes: { workspace: ['workspace_id'] } })
+
+const financeConceptColumns = {
+  category_id: column.text,
+  account_id: column.text,
+  name: column.text,
+  default_amount: column.real,
+  expense_type: column.text,
+  payment_method: column.text,
+  recurrence: column.text,
+  recurrence_month: column.integer,
+  tracks_multiple_entries: column.integer,
+  is_active: column.integer,
+  notes: column.text,
+  created_at: column.integer,
+  updated_at: column.integer,
+  workspace_id: column.text
+}
+
+const finance_concepts = new Table(financeConceptColumns, {
+  indexes: { workspace: ['workspace_id'], category: ['category_id'], account: ['account_id'] }
+})
+const company_finance_concepts = new Table(financeConceptColumns, {
+  indexes: { workspace: ['workspace_id'], category: ['category_id'], account: ['account_id'] }
+})
+
+const financeMovementColumns = {
+  concept_id: column.text,
+  month: column.integer,
+  year: column.integer,
+  amount_estimated: column.real,
+  amount_actual: column.real,
+  status: column.text,
+  payment_method: column.text,
+  payment_date: column.integer,
+  due_date: column.integer,
+  notes: column.text,
+  created_at: column.integer,
+  updated_at: column.integer,
+  workspace_id: column.text
+}
+
+const finance_movements = new Table(financeMovementColumns, {
+  indexes: { workspace: ['workspace_id'], concept: ['concept_id'], period: ['year', 'month'] }
+})
+const company_finance_movements = new Table(financeMovementColumns, {
+  indexes: { workspace: ['workspace_id'], concept: ['concept_id'], period: ['year', 'month'] }
+})
+
+const financeMovementEntryColumns = {
+  movement_id: column.text,
+  amount: column.real,
+  entry_date: column.integer,
+  note: column.text,
+  created_at: column.integer,
+  updated_at: column.integer,
+  workspace_id: column.text
+}
+
+const finance_movement_entries = new Table(financeMovementEntryColumns, {
+  indexes: { workspace: ['workspace_id'], movement: ['movement_id'] }
+})
+const company_finance_movement_entries = new Table(financeMovementEntryColumns, {
+  indexes: { workspace: ['workspace_id'], movement: ['movement_id'] }
+})
+
+const financeMonthInsightColumns = {
+  month: column.integer,
+  year: column.integer,
+  notes: column.text,
+  ai_analysis: column.text,
+  ai_generated_at: column.integer,
+  created_at: column.integer,
+  updated_at: column.integer,
+  workspace_id: column.text
+}
+
+const finance_month_insights = new Table(financeMonthInsightColumns, {
+  indexes: { workspace: ['workspace_id'], period: ['year', 'month'] }
+})
+const company_finance_month_insights = new Table(financeMonthInsightColumns, {
+  indexes: { workspace: ['workspace_id'], period: ['year', 'month'] }
+})
+
 export const AppSchema = new Schema({
   projects,
   tasks,
   task_dependencies,
-  user_permissions
+  user_permissions,
+  finance_accounts,
+  finance_categories,
+  finance_payment_methods,
+  finance_concepts,
+  finance_movements,
+  finance_movement_entries,
+  finance_month_insights,
+  company_finance_accounts,
+  company_finance_categories,
+  company_finance_payment_methods,
+  company_finance_concepts,
+  company_finance_movements,
+  company_finance_movement_entries,
+  company_finance_month_insights
 })
 
 /**
@@ -286,9 +402,56 @@ async function migrateUserPermissions(psDb: PowerSyncDatabase): Promise<void> {
 }
 
 /**
+ * Fase 3 (sync multi-dispositivo): copia única de los datos existentes de las
+ * 14 tablas de Finanzas Personales y Finanzas Empresa desde flowtask.db hacia
+ * powersync.db. Idempotente por tabla: si una tabla ya tiene filas en
+ * powersync.db, se omite (puede haber pasado por una conexión anterior o por
+ * sync remoto si ya hay otro dispositivo).
+ */
+const FINANCE_TABLES = [
+  'finance_accounts',
+  'finance_categories',
+  'finance_payment_methods',
+  'finance_concepts',
+  'finance_movements',
+  'finance_movement_entries',
+  'finance_month_insights',
+  'company_finance_accounts',
+  'company_finance_categories',
+  'company_finance_payment_methods',
+  'company_finance_concepts',
+  'company_finance_movements',
+  'company_finance_movement_entries',
+  'company_finance_month_insights'
+]
+
+async function migrateLegacyFinanceData(psDb: PowerSyncDatabase): Promise<void> {
+  const flowDb = getDb()
+
+  for (const table of FINANCE_TABLES) {
+    const { count } = await psDb.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${table}`)
+    if (count > 0) continue
+
+    const rows = flowDb.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]
+    if (rows.length === 0) continue
+
+    console.log(`[PowerSync] Migrando ${rows.length} filas de ${table}`)
+
+    const columns = Object.keys(rows[0])
+    const placeholders = columns.map(() => '?').join(', ')
+    const sql = `INSERT OR IGNORE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
+
+    for (const row of rows) {
+      await psDb.execute(sql, columns.map((c) => row[c]))
+    }
+  }
+}
+
+/**
  * Conecta la instancia de PowerSync al backend, en paralelo a better-sqlite3.
  * Antes de conectar, copia los datos existentes de tasks/projects/task_dependencies
- * (Fase 1) y de user_permissions (Fase 6) si todavía no se hizo.
+ * (Fase 1), de user_permissions (Fase 6) y de Finanzas/Finanzas Empresa
+ * (Fase 3) si todavía no se hizo.
  *
  * Requiere una sesión de Supabase Auth activa (Fase 6.3): sin sesión, no
  * conecta (igual que cuando faltan las env vars). Se vuelve a llamar tras un
@@ -314,6 +477,7 @@ export async function connectPowerSync(): Promise<void> {
   const db = getPowerSyncDb()
   await migrateLegacyTaskData(db)
   await migrateUserPermissions(db)
+  await migrateLegacyFinanceData(db)
   await db.connect(new ProductionTokenConnector(endpoint))
   console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
 }
@@ -365,6 +529,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES], throttleMs: 1000 }
   )
 }
