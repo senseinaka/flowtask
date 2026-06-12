@@ -25,10 +25,10 @@ const PROJECT_COLORS = [
 ]
 
 const SETTINGS_TABS = [
-  { key: 'general',   label: 'General' },
-  { key: 'sync',      label: 'Sincronización' },
-  { key: 'ia',        label: 'Inteligencia Artificial' },
-  { key: 'permisos',  label: 'Permisos', adminOnly: true }
+  { key: 'general',   label: 'General',                  adminOnly: false },
+  { key: 'sync',      label: 'Sincronización',           adminOnly: false },
+  { key: 'ia',        label: 'Inteligencia Artificial',  adminOnly: false },
+  { key: 'permisos',  label: 'Permisos',                  adminOnly: true }
 ] as const
 
 type SettingsTab = typeof SETTINGS_TABS[number]['key']
@@ -1069,6 +1069,11 @@ export default function Settings() {
         </div>
       </section>
 
+      </>
+      )}
+
+      {activeTab === 'ia' && (
+      <>
       {/* IA / Claude */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">
         <div className="flex items-center gap-2">
@@ -1195,6 +1200,11 @@ export default function Settings() {
         </div>
       </section>
 
+      </>
+      )}
+
+      {activeTab === 'general' && (
+      <>
       {/* Projects */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5">
         <h2 className="font-semibold mb-4">Proyectos</h2>
@@ -1248,9 +1258,18 @@ export default function Settings() {
         </div>
       </section>
 
+      </>
+      )}
+
+      {activeTab === 'permisos' && (
+      <>
       {/* Administración de permisos (solo admin) */}
       <PermissionsAdmin />
+      </>
+      )}
 
+      {activeTab === 'general' && (
+      <>
       {/* Acerca de / Actualizaciones */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
         <div className="flex items-center gap-2">
@@ -1281,6 +1300,8 @@ export default function Settings() {
           </p>
         )}
       </section>
+      </>
+      )}
     </div>
   )
 }
