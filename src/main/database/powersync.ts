@@ -490,6 +490,10 @@ export async function disconnectPowerSync(): Promise<void> {
 
 function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
   const dataFlow = status.dataFlowStatus
+  if (dataFlow.uploadError || dataFlow.downloadError) {
+    console.error('[PowerSync] uploadError:', dataFlow.uploadError)
+    console.error('[PowerSync] downloadError:', dataFlow.downloadError)
+  }
   return {
     connected: status.connected,
     connecting: status.connecting,
