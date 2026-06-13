@@ -3,7 +3,7 @@ import {
   Cloud, MessageCircle, RefreshCw, Check, AlertCircle, AlertTriangle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
   Database, Download, Sparkles, User, Phone, Mail, FileText,
-  HardDrive, FolderOpen, FolderCog, Clock, ArchiveRestore, RotateCcw, Info
+  HardDrive, FolderOpen, FolderCog, Clock, ArchiveRestore, RotateCcw, Info, LogOut
 } from 'lucide-react'
 import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -1299,6 +1299,23 @@ export default function Settings() {
             {updateResult.status === 'error' && `Error al buscar actualizaciones: ${updateResult.message}`}
           </p>
         )}
+
+        <div className="flex items-center justify-between pt-2 border-t border-slate-700">
+          <p className="text-sm text-slate-400">
+            Cerrar completamente la aplicación.
+          </p>
+          <button
+            onClick={() => {
+              if (confirm('¿Salir de Summit? Se va a cerrar la aplicación por completo.')) {
+                window.api.app.quit()
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/40 hover:bg-red-900/60 text-red-300 text-sm rounded-lg transition-colors"
+          >
+            <LogOut size={14} />
+            Salir de Summit
+          </button>
+        </div>
       </section>
       </>
       )}

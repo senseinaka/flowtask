@@ -799,7 +799,8 @@ const api = {
 
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
-    checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('app:checkForUpdates')
+    checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('app:checkForUpdates'),
+    quit: (): Promise<void> => ipcRenderer.invoke('app:quit')
   },
 
   permissions: {
