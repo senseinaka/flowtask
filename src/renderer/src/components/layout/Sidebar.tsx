@@ -4,7 +4,7 @@ import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet, Tag,
-  CalendarClock
+  CalendarClock, LogOut
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -355,6 +355,17 @@ export default function Sidebar() {
             {new Date(syncStatus.lastSync).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
           </p>
         )}
+        <button
+          onClick={() => {
+            if (confirm('¿Salir de Summit? Se va a cerrar la aplicación por completo.')) {
+              window.api.app.quit()
+            }
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
+        >
+          <LogOut size={14} />
+          <span>Salir</span>
+        </button>
       </div>
     </aside>
   )
