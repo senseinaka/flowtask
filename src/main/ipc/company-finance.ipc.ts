@@ -36,99 +36,99 @@ const MONTH_NAMES_ES = [
  * `finance-io.service` es un servicio "de I/O puro" que no toca la DB, así que
  * no puede resolver los nombres de métodos de pago dinámicos por su cuenta —
  * se le pasa este mapa armado acá (id → nombre), construido desde la tabla
- * gestionable `finance_payment_methods` para reflejar también los métodos
+ * gestionable `company_finance_payment_methods` para reflejar también los métodos
  * personalizados que el usuario haya creado.
  */
-function buildPaymentMethodLabels(): Record<string, string> {
+async function buildPaymentMethodLabels(): Promise<Record<string, string>> {
   const map: Record<string, string> = {}
-  for (const m of listCompanyFinancePaymentMethods()) map[m.id] = m.name
+  for (const m of await listCompanyFinancePaymentMethods()) map[m.id] = m.name
   return map
 }
 
 export function registerCompanyFinanceIpc(): void {
 
   // ── Accounts ────────────────────────────────────────────────────────────────
-  ipcMain.handle('companyFinance:accounts:list', () => listCompanyFinanceAccounts())
+  ipcMain.handle('companyFinance:accounts:list', async () => listCompanyFinanceAccounts())
 
-  ipcMain.handle('companyFinance:accounts:create', (_e, data: CreateFinanceAccountInput) =>
+  ipcMain.handle('companyFinance:accounts:create', async (_e, data: CreateFinanceAccountInput) =>
     createCompanyFinanceAccount(data)
   )
 
-  ipcMain.handle('companyFinance:accounts:update', (_e, id: string, data: Partial<CreateFinanceAccountInput>) =>
+  ipcMain.handle('companyFinance:accounts:update', async (_e, id: string, data: Partial<CreateFinanceAccountInput>) =>
     updateCompanyFinanceAccount(id, data)
   )
 
-  ipcMain.handle('companyFinance:accounts:delete', (_e, id: string) =>
+  ipcMain.handle('companyFinance:accounts:delete', async (_e, id: string) =>
     deleteCompanyFinanceAccount(id)
   )
 
   // ── Categories ──────────────────────────────────────────────────────────────
-  ipcMain.handle('companyFinance:categories:list', () => listCompanyFinanceCategories())
+  ipcMain.handle('companyFinance:categories:list', async () => listCompanyFinanceCategories())
 
-  ipcMain.handle('companyFinance:categories:create', (_e, data: CreateFinanceCategoryInput) =>
+  ipcMain.handle('companyFinance:categories:create', async (_e, data: CreateFinanceCategoryInput) =>
     createCompanyFinanceCategory(data)
   )
 
-  ipcMain.handle('companyFinance:categories:update', (_e, id: string, data: Partial<CreateFinanceCategoryInput>) =>
+  ipcMain.handle('companyFinance:categories:update', async (_e, id: string, data: Partial<CreateFinanceCategoryInput>) =>
     updateCompanyFinanceCategory(id, data)
   )
 
-  ipcMain.handle('companyFinance:categories:delete', (_e, id: string) =>
+  ipcMain.handle('companyFinance:categories:delete', async (_e, id: string) =>
     deleteCompanyFinanceCategory(id)
   )
 
   // ── Payment methods ─────────────────────────────────────────────────────────
-  ipcMain.handle('companyFinance:paymentMethods:list', () => listCompanyFinancePaymentMethods())
+  ipcMain.handle('companyFinance:paymentMethods:list', async () => listCompanyFinancePaymentMethods())
 
-  ipcMain.handle('companyFinance:paymentMethods:create', (_e, data: CreateFinancePaymentMethodInput) =>
+  ipcMain.handle('companyFinance:paymentMethods:create', async (_e, data: CreateFinancePaymentMethodInput) =>
     createCompanyFinancePaymentMethod(data)
   )
 
-  ipcMain.handle('companyFinance:paymentMethods:update', (_e, id: string, data: Partial<CreateFinancePaymentMethodInput>) =>
+  ipcMain.handle('companyFinance:paymentMethods:update', async (_e, id: string, data: Partial<CreateFinancePaymentMethodInput>) =>
     updateCompanyFinancePaymentMethod(id, data)
   )
 
-  ipcMain.handle('companyFinance:paymentMethods:delete', (_e, id: string) =>
+  ipcMain.handle('companyFinance:paymentMethods:delete', async (_e, id: string) =>
     deleteCompanyFinancePaymentMethod(id)
   )
 
   // ── Concepts ────────────────────────────────────────────────────────────────
-  ipcMain.handle('companyFinance:concepts:list', (_e, opts?: { activeOnly?: boolean }) =>
+  ipcMain.handle('companyFinance:concepts:list', async (_e, opts?: { activeOnly?: boolean }) =>
     listCompanyFinanceConcepts(opts)
   )
 
-  ipcMain.handle('companyFinance:concepts:get', (_e, id: string) => getCompanyFinanceConcept(id))
+  ipcMain.handle('companyFinance:concepts:get', async (_e, id: string) => getCompanyFinanceConcept(id))
 
-  ipcMain.handle('companyFinance:concepts:create', (_e, data: CreateFinanceConceptInput) =>
+  ipcMain.handle('companyFinance:concepts:create', async (_e, data: CreateFinanceConceptInput) =>
     createCompanyFinanceConcept(data)
   )
 
-  ipcMain.handle('companyFinance:concepts:update', (_e, id: string, data: Partial<CreateFinanceConceptInput> & { is_active?: number }) =>
+  ipcMain.handle('companyFinance:concepts:update', async (_e, id: string, data: Partial<CreateFinanceConceptInput> & { is_active?: number }) =>
     updateCompanyFinanceConcept(id, data)
   )
 
-  ipcMain.handle('companyFinance:concepts:delete', (_e, id: string) =>
+  ipcMain.handle('companyFinance:concepts:delete', async (_e, id: string) =>
     deleteCompanyFinanceConcept(id)
   )
 
   // ── Movements ───────────────────────────────────────────────────────────────
-  ipcMain.handle('companyFinance:movements:list', (_e, month: number, year: number) =>
+  ipcMain.handle('companyFinance:movements:list', async (_e, month: number, year: number) =>
     listCompanyFinanceMovements(month, year)
   )
 
-  ipcMain.handle('companyFinance:movements:listUpcoming', () => listUpcomingCompanyFinanceMovements())
+  ipcMain.handle('companyFinance:movements:listUpcoming', async () => listUpcomingCompanyFinanceMovements())
 
-  ipcMain.handle('companyFinance:movements:get', (_e, id: string) => getCompanyFinanceMovement(id))
+  ipcMain.handle('companyFinance:movements:get', async (_e, id: string) => getCompanyFinanceMovement(id))
 
-  ipcMain.handle('companyFinance:movements:create', (_e, data: CreateFinanceMovementInput) =>
+  ipcMain.handle('companyFinance:movements:create', async (_e, data: CreateFinanceMovementInput) =>
     createCompanyFinanceMovement(data)
   )
 
-  ipcMain.handle('companyFinance:movements:update', (_e, id: string, data: Partial<CreateFinanceMovementInput>) =>
+  ipcMain.handle('companyFinance:movements:update', async (_e, id: string, data: Partial<CreateFinanceMovementInput>) =>
     updateCompanyFinanceMovement(id, data)
   )
 
-  ipcMain.handle('companyFinance:movements:quickUpdate', (_e, id: string, data: {
+  ipcMain.handle('companyFinance:movements:quickUpdate', async (_e, id: string, data: {
     amount_actual?: number | null
     status?:        FinanceMovementStatus
     payment_date?:  number | null
@@ -136,38 +136,38 @@ export function registerCompanyFinanceIpc(): void {
     notes?:         string
   }) => quickUpdateCompanyFinanceMovement(id, data))
 
-  ipcMain.handle('companyFinance:movements:delete', (_e, id: string) =>
+  ipcMain.handle('companyFinance:movements:delete', async (_e, id: string) =>
     deleteCompanyFinanceMovement(id)
   )
 
-  ipcMain.handle('companyFinance:movements:generateForMonth', (_e, month: number, year: number) =>
+  ipcMain.handle('companyFinance:movements:generateForMonth', async (_e, month: number, year: number) =>
     generateMovementsForMonth(month, year)
   )
 
-  ipcMain.handle('companyFinance:movements:generateFromPreviousMonth', (_e, month: number, year: number) =>
+  ipcMain.handle('companyFinance:movements:generateFromPreviousMonth', async (_e, month: number, year: number) =>
     generateMovementsFromPreviousMonth(month, year)
   )
 
   // ── Registro de cargas — conceptos multi-carga (Opción C) ──────────────────
 
-  ipcMain.handle('companyFinance:movementEntries:list', (_e, movementId: string) =>
+  ipcMain.handle('companyFinance:movementEntries:list', async (_e, movementId: string) =>
     listMovementEntries(movementId)
   )
 
-  ipcMain.handle('companyFinance:movementEntries:add', (_e, data: CreateFinanceMovementEntryInput) =>
+  ipcMain.handle('companyFinance:movementEntries:add', async (_e, data: CreateFinanceMovementEntryInput) =>
     addMovementEntry(data)
   )
 
-  ipcMain.handle('companyFinance:movementEntries:update', (_e, id: string, data: UpdateFinanceMovementEntryInput) =>
+  ipcMain.handle('companyFinance:movementEntries:update', async (_e, id: string, data: UpdateFinanceMovementEntryInput) =>
     updateMovementEntry(id, data)
   )
 
-  ipcMain.handle('companyFinance:movementEntries:remove', (_e, id: string) =>
+  ipcMain.handle('companyFinance:movementEntries:remove', async (_e, id: string) =>
     removeMovementEntry(id)
   )
 
   // ── Resumen / dashboard ─────────────────────────────────────────────────────
-  ipcMain.handle('companyFinance:summary:get', (_e, month: number, year: number) =>
+  ipcMain.handle('companyFinance:summary:get', async (_e, month: number, year: number) =>
     getCompanyFinanceMonthSummary(month, year)
   )
 
@@ -179,44 +179,44 @@ export function registerCompanyFinanceIpc(): void {
   // conclusiones que queden guardadas (y visibles después) recién al hacer click
   // en "Guardar", no automáticamente.
 
-  ipcMain.handle('companyFinance:insights:get', (_e, month: number, year: number) =>
+  ipcMain.handle('companyFinance:insights:get', async (_e, month: number, year: number) =>
     getCompanyFinanceMonthInsight(month, year)
   )
 
-  ipcMain.handle('companyFinance:insights:saveNotes', (_e, month: number, year: number, notes: string) =>
+  ipcMain.handle('companyFinance:insights:saveNotes', async (_e, month: number, year: number, notes: string) =>
     saveCompanyFinanceMonthNotes(month, year, notes)
   )
 
   ipcMain.handle('companyFinance:insights:generateAnalysis', async (_e, month: number, year: number) => {
-    const insight = getCompanyFinanceMonthInsight(month, year)
+    const insight = await getCompanyFinanceMonthInsight(month, year)
     return compareFinanceMonths({
       month, year,
-      summary:      getCompanyFinanceMonthSummary(month, year),
-      breakdown:    getCompanyFinanceCategoryBreakdown(month, year),
-      topConcepts:  getCompanyFinanceTopConcepts(month, year),
-      topIncreases: getCompanyFinanceTopIncreases(month, year),
+      summary:      await getCompanyFinanceMonthSummary(month, year),
+      breakdown:    await getCompanyFinanceCategoryBreakdown(month, year),
+      topConcepts:  await getCompanyFinanceTopConcepts(month, year),
+      topIncreases: await getCompanyFinanceTopIncreases(month, year),
       userNotes:    insight?.notes
     })
   })
 
-  ipcMain.handle('companyFinance:insights:saveAnalysis', (_e, month: number, year: number, analysis: string) =>
+  ipcMain.handle('companyFinance:insights:saveAnalysis', async (_e, month: number, year: number, analysis: string) =>
     saveCompanyFinanceMonthAIAnalysis(month, year, analysis)
   )
 
   // ── Visualización / análisis (Fase 3) ───────────────────────────────────────
-  ipcMain.handle('companyFinance:analytics:categoryBreakdown', (_e, month: number, year: number) =>
+  ipcMain.handle('companyFinance:analytics:categoryBreakdown', async (_e, month: number, year: number) =>
     getCompanyFinanceCategoryBreakdown(month, year)
   )
 
-  ipcMain.handle('companyFinance:analytics:history', (_e, month: number, year: number, monthsBack: number) =>
+  ipcMain.handle('companyFinance:analytics:history', async (_e, month: number, year: number, monthsBack: number) =>
     getCompanyFinanceHistory(month, year, monthsBack)
   )
 
-  ipcMain.handle('companyFinance:analytics:topConcepts', (_e, month: number, year: number, limit?: number) =>
+  ipcMain.handle('companyFinance:analytics:topConcepts', async (_e, month: number, year: number, limit?: number) =>
     getCompanyFinanceTopConcepts(month, year, limit)
   )
 
-  ipcMain.handle('companyFinance:analytics:topIncreases', (_e, month: number, year: number, limit?: number) =>
+  ipcMain.handle('companyFinance:analytics:topIncreases', async (_e, month: number, year: number, limit?: number) =>
     getCompanyFinanceTopIncreases(month, year, limit)
   )
 
@@ -245,7 +245,7 @@ export function registerCompanyFinanceIpc(): void {
     return buildCompanyFinanceImportPreview(rows, month, year, path.basename(filePath))
   })
 
-  ipcMain.handle('companyFinance:import:confirm', (_e, items: FinanceImportConfirmItem[], month: number, year: number) =>
+  ipcMain.handle('companyFinance:import:confirm', async (_e, items: FinanceImportConfirmItem[], month: number, year: number) =>
     confirmCompanyFinanceImport(items, month, year)
   )
 
@@ -274,8 +274,8 @@ export function registerCompanyFinanceIpc(): void {
     })
     if (result.canceled || !result.filePath) return null
 
-    const movements = listCompanyFinanceMovements(month, year)
-    writeFinanceMovementsFile(result.filePath, format, movements, buildPaymentMethodLabels())
+    const movements = await listCompanyFinanceMovements(month, year)
+    writeFinanceMovementsFile(result.filePath, format, movements, await buildPaymentMethodLabels())
     shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
   })
@@ -297,7 +297,7 @@ export function registerCompanyFinanceIpc(): void {
     })
     if (result.canceled || !result.filePath) return null
 
-    writeFinanceMovementsFile(result.filePath, format, movements, buildPaymentMethodLabels())
+    writeFinanceMovementsFile(result.filePath, format, movements, await buildPaymentMethodLabels())
     shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
   })
@@ -313,9 +313,9 @@ export function registerCompanyFinanceIpc(): void {
     })
     if (result.canceled || !result.filePath) return null
 
-    const summary   = getCompanyFinanceMonthSummary(month, year)
-    const breakdown = getCompanyFinanceCategoryBreakdown(month, year)
-    const movements = listCompanyFinanceMovements(month, year)
+    const summary   = await getCompanyFinanceMonthSummary(month, year)
+    const breakdown = await getCompanyFinanceCategoryBreakdown(month, year)
+    const movements = await listCompanyFinanceMovements(month, year)
     writeFinanceSummaryPdf(result.filePath, { month, year, summary, breakdown, movements })
     shell.showItemInFolder(result.filePath)
     return { filePath: result.filePath }
@@ -326,13 +326,13 @@ export function registerCompanyFinanceIpc(): void {
   // Persistencia local (ConfigStore), no en la DB sincronizable — ver
   // finance-security.service para el detalle de hashing (scrypt + salt).
 
-  ipcMain.handle('companyFinance:security:status', () => getCompanyFinanceSecurityStatus())
+  ipcMain.handle('companyFinance:security:status', async () => getCompanyFinanceSecurityStatus())
 
-  ipcMain.handle('companyFinance:security:setup', (_e, pin: string) => setCompanyFinancePin(pin))
+  ipcMain.handle('companyFinance:security:setup', async (_e, pin: string) => setCompanyFinancePin(pin))
 
-  ipcMain.handle('companyFinance:security:verify', (_e, pin: string) => verifyCompanyFinancePin(pin))
+  ipcMain.handle('companyFinance:security:verify', async (_e, pin: string) => verifyCompanyFinancePin(pin))
 
-  ipcMain.handle('companyFinance:security:disable', (_e, currentPin: string) => disableCompanyFinancePin(currentPin))
+  ipcMain.handle('companyFinance:security:disable', async (_e, currentPin: string) => disableCompanyFinancePin(currentPin))
 
-  ipcMain.handle('companyFinance:security:change', (_e, currentPin: string, newPin: string) => changeCompanyFinancePin(currentPin, newPin))
+  ipcMain.handle('companyFinance:security:change', async (_e, currentPin: string, newPin: string) => changeCompanyFinancePin(currentPin, newPin))
 }
