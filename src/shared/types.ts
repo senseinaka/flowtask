@@ -315,6 +315,13 @@ export interface UpdateCheckResult {
   message?: string
 }
 
+export interface UpdateDownloadProgress {
+  percent: number
+  transferredBytes: number
+  totalBytes: number
+  bytesPerSecond: number
+}
+
 // ── Fase 6: Autenticación (Supabase Auth) ───────────────────────────────────
 
 export interface AuthSession {

@@ -11,7 +11,7 @@ import type {
   MessageStatus, MessageRecurrence,
   TaskQuestion, CreateTaskQuestionInput,
   TaskFilters, CreateTaskInput, CreateReminderInput,
-  SyncResult, SyncStatus, PowerSyncStatusInfo, UpdateCheckResult,
+  SyncResult, SyncStatus, PowerSyncStatusInfo, UpdateCheckResult, UpdateDownloadProgress,
   TaskStatusLogEntry, TaskType,
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert,
   ComexLogisticsQuote, ComexPayment, ComexCustoms, ComexCostItem,
@@ -800,7 +800,24 @@ const api = {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
     checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('app:checkForUpdates'),
-    quit: (): Promise<void> => ipcRenderer.invoke('app:quit')
+    downloadUpdate: (): Promise<void> => ipcRenderer.invoke('app:downloadUpdate'),
+    installUpdate: (): Promise<void> => ipcRenderer.invoke('app:installUpdate'),
+    quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
+    onUpdateProgress: (callback: (progress: UpdateDownloadProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: UpdateDownloadProgress): void => callback(progress)
+      ipcRenderer.on('updater:progress', listener)
+      return () => ipcRenderer.removeListener('updater:progress', listener)
+    },
+    onUpdateDownloaded: (callback: (version: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, version: string): void => callback(version)
+      ipcRenderer.on('updater:downloaded', listener)
+      return () => ipcRenderer.removeListener('updater:downloaded', listener)
+    },
+    onUpdateError: (callback: (message: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, message: string): void => callback(message)
+      ipcRenderer.on('updater:error', listener)
+      return () => ipcRenderer.removeListener('updater:error', listener)
+    }
   },
 
   permissions: {

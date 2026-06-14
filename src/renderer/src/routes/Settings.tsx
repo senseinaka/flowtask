@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import PromptEditor from '../components/prompts/PromptEditor'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus, LocalBackupEntry, UpdateCheckResult } from '@shared/types'
+import type { SyncStatus, AIOperation, ClaudeModelId, BackupStatus, LocalBackupStatus, LocalBackupEntry, UpdateCheckResult, UpdateDownloadProgress } from '@shared/types'
 import {
   CLAUDE_MODELS, AI_OPERATIONS, AI_OPERATION_LABELS,
   AI_OPERATION_DEFAULT_MODELS
@@ -51,14 +51,40 @@ export default function Settings() {
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
+  const [updateDownloading, setUpdateDownloading] = useState(false)
+  const [updateProgress, setUpdateProgress] = useState<UpdateDownloadProgress | null>(null)
+  const [updateDownloaded, setUpdateDownloaded] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.app.getVersion().then(setAppVersion)
   }, [])
 
+  useEffect(() => {
+    const unsubProgress = window.api.app.onUpdateProgress((progress) => {
+      setUpdateProgress(progress)
+    })
+    const unsubDownloaded = window.api.app.onUpdateDownloaded(() => {
+      setUpdateDownloading(false)
+      setUpdateDownloaded(true)
+    })
+    const unsubError = window.api.app.onUpdateError((message) => {
+      setUpdateDownloading(false)
+      setUpdateError(message)
+    })
+    return () => {
+      unsubProgress()
+      unsubDownloaded()
+      unsubError()
+    }
+  }, [])
+
   const handleCheckForUpdates = async () => {
     setUpdateChecking(true)
     setUpdateResult(null)
+    setUpdateError(null)
+    setUpdateDownloaded(false)
+    setUpdateProgress(null)
     try {
       const result = await window.api.app.checkForUpdates()
       setUpdateResult(result)
@@ -66,6 +92,24 @@ export default function Settings() {
       setUpdateChecking(false)
     }
   }
+
+  const handleDownloadUpdate = async () => {
+    setUpdateError(null)
+    setUpdateDownloading(true)
+    setUpdateProgress(null)
+    try {
+      await window.api.app.downloadUpdate()
+    } catch (err) {
+      setUpdateDownloading(false)
+      setUpdateError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleInstallUpdate = () => {
+    window.api.app.installUpdate()
+  }
+
+  const formatBytes = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
   // Google Drive credentials
   const [clientId, setClientId] = useState('')
@@ -1295,9 +1339,52 @@ export default function Settings() {
           <p className="text-xs text-slate-500">
             {updateResult.status === 'dev' && 'No se pueden buscar actualizaciones en modo desarrollo.'}
             {updateResult.status === 'not-available' && 'Ya tenés la última versión instalada.'}
-            {updateResult.status === 'available' && `Hay una nueva versión disponible (v${updateResult.latestVersion}). Se abrió un diálogo para descargarla.`}
+            {updateResult.status === 'available' && !updateDownloading && !updateDownloaded && `Hay una nueva versión disponible (v${updateResult.latestVersion}).`}
             {updateResult.status === 'error' && `Error al buscar actualizaciones: ${updateResult.message}`}
           </p>
+        )}
+
+        {updateResult?.status === 'available' && !updateDownloading && !updateDownloaded && (
+          <button
+            onClick={handleDownloadUpdate}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-sm rounded-lg transition-colors"
+          >
+            <Download size={14} />
+            Descargar actualización (v{updateResult.latestVersion})
+          </button>
+        )}
+
+        {updateDownloading && (
+          <div className="space-y-1.5">
+            <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 transition-all duration-300"
+                style={{ width: `${updateProgress?.percent ?? 0}%` }}
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              {updateProgress
+                ? `Descargando... ${updateProgress.percent.toFixed(0)}% (${formatBytes(updateProgress.transferredBytes)} / ${formatBytes(updateProgress.totalBytes)} — ${formatBytes(updateProgress.bytesPerSecond)}/s)`
+                : 'Descargando...'}
+            </p>
+          </div>
+        )}
+
+        {updateDownloaded && (
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-emerald-400">La actualización se descargó correctamente.</p>
+            <button
+              onClick={handleInstallUpdate}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-sm rounded-lg transition-colors"
+            >
+              <RefreshCw size={14} />
+              Reiniciar e instalar
+            </button>
+          </div>
+        )}
+
+        {updateError && (
+          <p className="text-xs text-red-400">Error al descargar la actualización: {updateError}</p>
         )}
       </section>
       </>

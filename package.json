@@ -1,6 +1,6 @@
 {
   "name": "flowtask",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sistema de productividad personal con Kanban, recordatorios WhatsApp y sync Google Drive",
   "main": "out/main/index.js",
   "scripts": {

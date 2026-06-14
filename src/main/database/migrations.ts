@@ -2098,6 +2098,37 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         insert.run(randomUUID(), DIEGO_USER_ID, moduleKey, now, now, WORKSPACE_ID)
       }
     }
+  },
+  {
+    version: 65,
+    up: (db) => {
+      // Fase 4 (sync multi-dispositivo, Comex): se agrega updated_at a las
+      // tablas de Comex que todavía no lo tenían, necesario para la
+      // estrategia de resolución de conflictos last-write-wins. El valor
+      // inicial se toma de created_at cuando existe.
+      const now = Date.now()
+      const TABLES = [
+        'comex_import_items',
+        'comex_documents',
+        'comex_logistics_quotes',
+        'comex_payments',
+        'comex_import_costs',
+        'comex_supplier_contacts',
+        'comex_supplier_bank_accounts',
+        'comex_inal_certs',
+        'comex_freight_operator_contacts',
+        'comex_import_tributos',
+        'comex_import_extra_costs',
+        'comex_proformas',
+        'comex_gestor_contacts',
+        'comex_despachante_contacts',
+        'import_order_planning_ai_reports'
+      ]
+      for (const table of TABLES) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN updated_at INTEGER NOT NULL DEFAULT ${now}`)
+        db.exec(`UPDATE ${table} SET updated_at = created_at`)
+      }
+    }
   }
 ]
 

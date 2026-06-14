@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import type { UpdateCheckResult } from '@shared/types'
+import type { UpdateCheckResult, UpdateDownloadProgress } from '@shared/types'
 
 let mainWindowRef: BrowserWindow | null = null
 
@@ -60,12 +60,40 @@ export function initUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('update-available', (info) => promptDownload(info.version))
-  autoUpdater.on('update-downloaded', (info) => promptInstall(info.version))
-  autoUpdater.on('error', (err) => console.error('[Updater] Error:', err))
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindowRef?.webContents.send('updater:downloaded', info.version)
+    promptInstall(info.version)
+  })
+  autoUpdater.on('error', (err) => {
+    console.error('[Updater] Error:', err)
+    mainWindowRef?.webContents.send('updater:error', err.message)
+  })
+  autoUpdater.on('download-progress', (progress) => {
+    const data: UpdateDownloadProgress = {
+      percent: progress.percent,
+      transferredBytes: progress.transferred,
+      totalBytes: progress.total,
+      bytesPerSecond: progress.bytesPerSecond
+    }
+    mainWindowRef?.webContents.send('updater:progress', data)
+  })
 
   autoUpdater.checkForUpdates().catch((err) => {
     console.error('[Updater] Error al chequear actualizaciones:', err)
   })
+}
+
+/**
+ * Descarga la actualización ya detectada (disparado desde la UI de
+ * Configuración). El progreso se reporta via el evento 'updater:progress'.
+ */
+export async function downloadUpdate(): Promise<void> {
+  await autoUpdater.downloadUpdate()
+}
+
+/** Reinicia la app e instala la actualización ya descargada. */
+export function installUpdate(): void {
+  setImmediate(() => autoUpdater.quitAndInstall())
 }
 
 /**
