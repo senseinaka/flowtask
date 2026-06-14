@@ -248,3 +248,28 @@ begin
     );
   end loop;
 end $$;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- Permisos para service_role (usado por PowerSync para subir cambios)
+--
+-- Las tablas nuevas se crean bajo pg_database_owner y no heredan los
+-- privilegios que service_role ya tiene sobre las tablas existentes
+-- (finance_*, projects, tasks, etc.). Sin este GRANT, PowerSync recibe
+-- 403 "permission denied" al subir cambios.
+-- ════════════════════════════════════════════════════════════════════════
+
+do $$
+declare
+  t text;
+  tables text[] := array[
+    'comex_suppliers', 'comex_supplier_contacts', 'comex_supplier_bank_accounts',
+    'comex_freight_operators', 'comex_freight_operator_contacts',
+    'comex_gestores', 'comex_gestor_contacts',
+    'comex_despachantes', 'comex_despachante_contacts',
+    'comex_brands'
+  ];
+begin
+  foreach t in array tables loop
+    execute format('grant select, insert, update, delete on public.%I to service_role', t);
+  end loop;
+end $$;
