@@ -22,11 +22,18 @@ export default function SyncStatusBadge() {
   let icon = <Cloud size={14} />
   let label = `Sincronizado · ${formatLastSync(status.lastSyncedAt)}`
   let className = 'text-emerald-400'
+  let title = 'Estado de sincronización con la nube'
 
-  if (status.hasError) {
+  if (status.configError) {
+    icon = <AlertTriangle size={14} />
+    label = 'Sync no configurado'
+    className = 'text-amber-400'
+    title = status.configError
+  } else if (status.hasError) {
     icon = <AlertTriangle size={14} />
     label = 'Error de sincronización'
     className = 'text-amber-400'
+    title = status.lastErrorMessage ?? title
   } else if (syncing) {
     icon = <RefreshCw size={14} className="animate-spin" />
     label = status.connecting ? 'Conectando...' : 'Sincronizando...'
@@ -35,12 +42,13 @@ export default function SyncStatusBadge() {
     icon = <CloudOff size={14} />
     label = `Sin conexión · ${formatLastSync(status.lastSyncedAt)}`
     className = 'text-slate-500'
+    title = status.lastErrorMessage ?? title
   }
 
   return (
     <div
       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 ${className}`}
-      title="Estado de sincronización con la nube"
+      title={title}
     >
       {icon}
       <span>{label}</span>

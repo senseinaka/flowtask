@@ -374,6 +374,398 @@ const comex_brands = new Table(
   { indexes: { workspace: ['workspace_id'], supplier: ['primary_supplier_id'] } }
 )
 
+const comex_imports = new Table(
+  {
+    title: column.text,
+    supplier_id: column.text,
+    status: column.text,
+    incoterm: column.text,
+    origin_country: column.text,
+    currency: column.text,
+    estimated_value: column.real,
+    actual_value: column.real,
+    order_date: column.integer,
+    payment_date: column.integer,
+    ship_date: column.integer,
+    arrival_date: column.integer,
+    actual_ship_date: column.integer,
+    actual_arrival_date: column.integer,
+    tracking_number: column.text,
+    customs_agent: column.text,
+    drive_folder_id: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    origin_port: column.text,
+    eta_2: column.integer,
+    eta_3: column.integer,
+    eta_4: column.integer,
+    inal_required: column.integer,
+    inal_lc_status: column.text,
+    inal_lc_task_scheduled: column.integer,
+    inal_lc_cert_folder_id: column.text,
+    inal_lc_task_id: column.text,
+    despacho_folder_id: column.text,
+    despacho_stored_name: column.text,
+    despacho_original_name: column.text,
+    despacho_drive_file_id: column.text,
+    despacho_drive_status: column.text,
+    tc_eur_ars: column.real,
+    cost_pct: column.real,
+    proformas_folder_id: column.text,
+    facturas_folder_id: column.text,
+    freight_operator_id: column.text,
+    despachante: column.text,
+    forwarder_ref_mail: column.text,
+    bl_number: column.text,
+    bl_folder_id: column.text,
+    bl_stored_name: column.text,
+    bl_original_name: column.text,
+    bl_drive_file_id: column.text,
+    bl_drive_status: column.text,
+    bl_extracted_json: column.text,
+    inal_drive_folder_id: column.text,
+    inal_pl_ok: column.integer,
+    inal_pl_stored_name: column.text,
+    inal_pl_original_name: column.text,
+    inal_pl_drive_file_id: column.text,
+    inal_pl_drive_status: column.text,
+    inal_xls_ok: column.integer,
+    inal_xls_stored_name: column.text,
+    inal_xls_original_name: column.text,
+    inal_xls_drive_file_id: column.text,
+    inal_xls_drive_status: column.text,
+    inal_factura_stored_name: column.text,
+    inal_factura_original_name: column.text,
+    inal_factura_drive_file_id: column.text,
+    inal_factura_drive_status: column.text,
+    inal_bl_stored_name: column.text,
+    inal_bl_original_name: column.text,
+    inal_bl_drive_file_id: column.text,
+    inal_bl_drive_status: column.text,
+    gestor_id: column.text,
+    aviso_arribo_date: column.integer,
+    traslado_deposito_date: column.integer,
+    oficializacion_import_date: column.integer,
+    carga_deposito_date: column.integer,
+    carga_deposito_time: column.text,
+    pl_folder_id: column.text,
+    pl_stored_name: column.text,
+    pl_original_name: column.text,
+    pl_drive_file_id: column.text,
+    pl_drive_status: column.text,
+    pl_extracted_json: column.text,
+    carga_armada_date: column.integer,
+    esperando_embarcar_date: column.integer,
+    workspace_id: column.text
+  },
+  {
+    indexes: {
+      workspace: ['workspace_id'],
+      supplier: ['supplier_id'],
+      freight_operator: ['freight_operator_id'],
+      gestor: ['gestor_id']
+    }
+  }
+)
+
+const comex_import_items = new Table(
+  {
+    import_id: column.text,
+    description: column.text,
+    hs_code: column.text,
+    quantity: column.real,
+    unit: column.text,
+    unit_price: column.real,
+    currency: column.text,
+    created_at: column.integer,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_documents = new Table(
+  {
+    import_id: column.text,
+    type: column.text,
+    name: column.text,
+    drive_file_id: column.text,
+    status: column.text,
+    notes: column.text,
+    received_at: column.integer,
+    created_at: column.integer,
+    local_stored_name: column.text,
+    size_bytes: column.integer,
+    mime_type: column.text,
+    drive_status: column.text,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_logistics_quotes = new Table(
+  {
+    import_id: column.text,
+    operator_name: column.text,
+    contact: column.text,
+    quote_amount: column.real,
+    currency: column.text,
+    services_included: column.text,
+    valid_until: column.integer,
+    status: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    operator_id: column.text,
+    cargo_type: column.text,
+    rfq_sent_at: column.integer,
+    rfq_email_text: column.text,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'], operator: ['operator_id'] } }
+)
+
+const comex_payments = new Table(
+  {
+    import_id: column.text,
+    amount: column.real,
+    currency: column.text,
+    exchange_rate: column.real,
+    payment_date: column.integer,
+    method: column.text,
+    bank: column.text,
+    reference: column.text,
+    status: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_import_customs = new Table(
+  {
+    import_id: column.text,
+    fob_currency: column.text,
+    fob_invoice: column.real,
+    fob_declared: column.real,
+    dolar_aduana: column.real,
+    dolar_naviera: column.real,
+    paridad_usd_eur: column.real,
+    despacho_number: column.text,
+    despachante: column.text,
+    oficializacion_date: column.integer,
+    sepaimpo_vencimiento: column.integer,
+    bl_number: column.text,
+    naviera_ref: column.text,
+    carrier: column.text,
+    etd: column.integer,
+    peso_bruto_kg: column.real,
+    volumen_m3: column.real,
+    cant_pallets: column.integer,
+    mulc_date: column.integer,
+    fecha_pago_banco: column.integer,
+    cierre_banco_date: column.integer,
+    listas_despachante_date: column.integer,
+    listas_oscar_andrea_date: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    canal: column.text,
+    cant_bultos: column.integer,
+    cant_cartons: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_import_costs = new Table(
+  {
+    import_id: column.text,
+    category: column.text,
+    concept: column.text,
+    amount_pesos: column.real,
+    amount_usd: column.real,
+    sort_order: column.integer,
+    created_at: column.integer,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_inal_certs = new Table(
+  {
+    import_id: column.text,
+    original_name: column.text,
+    local_stored_name: column.text,
+    size_bytes: column.integer,
+    mime_type: column.text,
+    drive_file_id: column.text,
+    drive_status: column.text,
+    created_at: column.integer,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_import_tributos = new Table(
+  {
+    import_id: column.text,
+    codigo: column.text,
+    concepto: column.text,
+    porcentaje: column.real,
+    importe_usd: column.real,
+    sort_order: column.integer,
+    created_at: column.integer,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_import_extra_costs = new Table(
+  {
+    import_id: column.text,
+    categoria: column.text,
+    concepto: column.text,
+    proveedor: column.text,
+    nro_factura: column.text,
+    fecha_factura: column.integer,
+    importe: column.real,
+    moneda: column.text,
+    stored_name: column.text,
+    original_name: column.text,
+    drive_file_id: column.text,
+    drive_folder_id: column.text,
+    drive_status: column.text,
+    sort_order: column.integer,
+    created_at: column.integer,
+    cae: column.text,
+    referencia_despacho: column.text,
+    importe_iva: column.real,
+    importe_total: column.real,
+    items_json: column.text,
+    tipo_cambio: column.real,
+    bl_referencia: column.text,
+    importe_ars: column.real,
+    percepciones: column.real,
+    fecha_ingreso: column.text,
+    fecha_egreso: column.text,
+    nro_contenedor: column.text,
+    canal_deposito: column.text,
+    percepcion_caba: column.real,
+    percepcion_bsas: column.real,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_proformas = new Table(
+  {
+    import_id: column.text,
+    numero: column.integer,
+    fecha_proforma: column.text,
+    importe: column.real,
+    moneda: column.text,
+    nro_proforma: column.text,
+    descripcion: column.text,
+    incluir_en_total: column.integer,
+    stored_name: column.text,
+    original_name: column.text,
+    drive_file_id: column.text,
+    drive_folder_id: column.text,
+    drive_status: column.text,
+    created_at: column.integer,
+    tipo: column.text,
+    workspace_id: column.text,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const import_order_plannings = new Table(
+  {
+    brand_id: column.text,
+    supplier_id: column.text,
+    country: column.text,
+    responsible_user_id: column.text,
+    planning_type: column.text,
+    status: column.text,
+    risk_status: column.text,
+    priority: column.text,
+    target_coverage_start_date: column.integer,
+    target_coverage_end_date: column.integer,
+    target_commercial_availability_date: column.integer,
+    recommended_order_date: column.integer,
+    approval_deadline_date: column.integer,
+    estimated_reception_date: column.integer,
+    demand_annual_estimated: column.integer,
+    demand_monthly_estimated: column.integer,
+    demand_for_period: column.integer,
+    current_stock: column.integer,
+    safety_stock: column.integer,
+    desired_coverage_months: column.real,
+    internal_approval_days: column.integer,
+    supplier_preparation_days: column.integer,
+    production_days: column.integer,
+    inspection_days: column.integer,
+    shipping_days: column.integer,
+    customs_days: column.integer,
+    local_delivery_days: column.integer,
+    safety_days: column.integer,
+    total_lead_time_days: column.integer,
+    ai_recommendation_summary: column.text,
+    ai_risk_explanation: column.text,
+    notes: column.text,
+    linked_import_id: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], brand: ['brand_id'], supplier: ['supplier_id'], status: ['status'] } }
+)
+
+const import_order_planning_milestones = new Table(
+  {
+    planning_id: column.text,
+    milestone_type: column.text,
+    estimated_date: column.integer,
+    calculated_date: column.integer,
+    real_date: column.integer,
+    status: column.text,
+    notes: column.text,
+    sort_order: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], planning: ['planning_id'] } }
+)
+
+const import_order_planning_ai_reports = new Table(
+  {
+    report_type: column.text,
+    brand_id: column.text,
+    supplier_id: column.text,
+    period_start_date: column.integer,
+    period_end_date: column.integer,
+    summary: column.text,
+    findings: column.text,
+    recommendations: column.text,
+    risks: column.text,
+    generated_by: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], brand: ['brand_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -402,7 +794,21 @@ export const AppSchema = new Schema({
   comex_gestor_contacts,
   comex_despachantes,
   comex_despachante_contacts,
-  comex_brands
+  comex_brands,
+  comex_imports,
+  comex_import_items,
+  comex_documents,
+  comex_logistics_quotes,
+  comex_payments,
+  comex_import_customs,
+  comex_import_costs,
+  comex_inal_certs,
+  comex_import_tributos,
+  comex_import_extra_costs,
+  comex_proformas,
+  import_order_plannings,
+  import_order_planning_milestones,
+  import_order_planning_ai_reports
 })
 
 /**
@@ -511,6 +917,18 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
     await transaction.complete()
   }
 }
+
+/**
+ * Motivo por el que la conexión a PowerSync ni siquiera se intentó (config
+ * faltante en .env.local, o sin sesión de usuario autenticado). Se expone vía
+ * `getPowerSyncStatus()` para que la UI pueda mostrar un diagnóstico claro
+ * (p. ej. "Falta .env.local") en lugar de quedarse en "Sin conexión" sin más
+ * explicación.
+ */
+let _configError: string | null = null
+
+/** Texto del último error de subida/descarga de PowerSync, para diagnóstico en la UI. */
+let _lastErrorMessage: string | null = null
 
 let _psDb: PowerSyncDatabase | null = null
 
@@ -666,6 +1084,46 @@ async function migrateLegacyComexMaestrosData(psDb: PowerSyncDatabase): Promise<
 }
 
 /**
+ * Fase 4.2 (sync multi-dispositivo): copia única de los datos existentes de
+ * las 11 tablas de "importaciones" de Comex (imports y sus tablas
+ * relacionadas: items, documentos, cotizaciones logísticas, pagos, aduana,
+ * costos, certificados INAL, tributos, costos extra, proformas) desde
+ * flowtask.db hacia powersync.db.
+ */
+const COMEX_IMPORTS_TABLES = [
+  'comex_imports',
+  'comex_import_items',
+  'comex_documents',
+  'comex_logistics_quotes',
+  'comex_payments',
+  'comex_import_customs',
+  'comex_import_costs',
+  'comex_inal_certs',
+  'comex_import_tributos',
+  'comex_import_extra_costs',
+  'comex_proformas'
+]
+
+async function migrateLegacyComexImportsData(psDb: PowerSyncDatabase): Promise<void> {
+  await migrateLegacyTableData(psDb, COMEX_IMPORTS_TABLES)
+}
+
+/**
+ * Fase 4.3 (sync multi-dispositivo): copia única de los datos existentes de
+ * las 3 tablas de "Programación de Pedidos" (plannings, hitos y reportes IA)
+ * desde flowtask.db hacia powersync.db.
+ */
+const COMEX_PLANNINGS_TABLES = [
+  'import_order_plannings',
+  'import_order_planning_milestones',
+  'import_order_planning_ai_reports'
+]
+
+async function migrateLegacyComexPlanningsData(psDb: PowerSyncDatabase): Promise<void> {
+  await migrateLegacyTableData(psDb, COMEX_PLANNINGS_TABLES)
+}
+
+/**
  * Copia única (idempotente por tabla) de los datos existentes de
  * flowtask.db hacia powersync.db, para que PowerSync los suba a Supabase.
  * Si una tabla ya tiene filas en powersync.db, se omite (puede haber pasado
@@ -694,6 +1152,64 @@ async function migrateLegacyTableData(psDb: PowerSyncDatabase, tables: string[])
 }
 
 /**
+ * Fase 4.2.6 (fix recurrente): algunas filas viejas de comex_import_extra_costs
+ * tienen el string literal "null" en columnas double precision
+ * (percepcion_caba, percepcion_bsas, importe_iva) en lugar de un número, lo
+ * que provoca un error 22P02 de Postgres al subir el cambio a Supabase y
+ * bloquea toda la cola de sync. Esto corrige el dato de origen en
+ * flowtask.db, el espejo local en powersync.db (vía la vista de PowerSync,
+ * lo que además encola la operación correcta) y, si quedó una operación
+ * pendiente en ps_crud con el valor "null", la corrige in-place para
+ * desbloquear la cola.
+ */
+const NULL_DOUBLE_FIXES: Record<string, string[]> = {
+  '9744eb8d-d707-423b-acf1-71f7a15d3a3c': ['percepcion_caba'],
+  'df2d2a49-fdbe-44f6-b73f-fa21b3acc1c1': ['percepcion_bsas'],
+  'b6a789b0-7388-46ba-8f28-d6e6781439fc': ['importe_iva', 'percepcion_caba', 'percepcion_bsas']
+}
+
+async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void> {
+  const flowDb = getDb()
+
+  for (const [id, cols] of Object.entries(NULL_DOUBLE_FIXES)) {
+    for (const col of cols) {
+      flowDb
+        .prepare(`UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ? AND ${col} = 'null'`)
+        .run(id)
+      await psDb.execute(
+        `UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ? AND ${col} = 'null'`,
+        [id]
+      )
+    }
+  }
+
+  const crudRows = await psDb.getAll<{ id: number; data: string }>('SELECT id, data FROM ps_crud')
+  for (const row of crudRows) {
+    const parsed = JSON.parse(row.data) as {
+      type?: string
+      id?: string
+      data?: Record<string, unknown>
+    }
+    if (parsed.type !== 'comex_import_extra_costs' || !parsed.id || !parsed.data) continue
+
+    const cols = NULL_DOUBLE_FIXES[parsed.id]
+    if (!cols) continue
+
+    let changed = false
+    for (const col of cols) {
+      if (parsed.data[col] === 'null') {
+        parsed.data[col] = 0
+        changed = true
+      }
+    }
+    if (changed) {
+      await psDb.execute('UPDATE ps_crud SET data = ? WHERE id = ?', [JSON.stringify(parsed), row.id])
+      console.log('[PowerSync] Corregido ps_crud pendiente para comex_import_extra_costs', parsed.id)
+    }
+  }
+}
+
+/**
  * Conecta la instancia de PowerSync al backend, en paralelo a better-sqlite3.
  * Antes de conectar, copia los datos existentes de tasks/projects/task_dependencies
  * (Fase 1), de user_permissions (Fase 6) y de Finanzas/Finanzas Empresa
@@ -708,23 +1224,29 @@ export async function connectPowerSync(): Promise<void> {
   const endpoint = env.POWERSYNC_URL
 
   if (!endpoint || !env.POWERSYNC_JWT_PRIVATE_KEY_B64 || !env.POWERSYNC_JWT_KID) {
-    console.warn(
-      '[PowerSync] POWERSYNC_URL, POWERSYNC_JWT_PRIVATE_KEY_B64 o POWERSYNC_JWT_KID no configurados, omitiendo conexión'
-    )
+    _configError =
+      'Falta configurar .env.local (POWERSYNC_URL, POWERSYNC_JWT_PRIVATE_KEY_B64, POWERSYNC_JWT_KID)'
+    console.warn(`[PowerSync] ${_configError}, omitiendo conexión`)
     return
   }
 
   const session = await getSession()
   if (!session) {
-    console.warn('[PowerSync] Sin sesión de usuario autenticado, omitiendo conexión')
+    _configError = 'Sin sesión de usuario autenticado'
+    console.warn(`[PowerSync] ${_configError}, omitiendo conexión`)
     return
   }
+
+  _configError = null
 
   const db = getPowerSyncDb()
   await migrateLegacyTaskData(db)
   await migrateUserPermissions(db)
   await migrateLegacyFinanceData(db)
   await migrateLegacyComexMaestrosData(db)
+  await migrateLegacyComexImportsData(db)
+  await migrateLegacyComexPlanningsData(db)
+  await fixLegacyNullDoubleStrings(db)
   await db.connect(new ProductionTokenConnector(endpoint))
   console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
 }
@@ -735,11 +1257,18 @@ export async function disconnectPowerSync(): Promise<void> {
   await _psDb.disconnect()
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  return String(err)
+}
+
 function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
   const dataFlow = status.dataFlowStatus
-  if (dataFlow.uploadError || dataFlow.downloadError) {
+  const error = dataFlow.uploadError ?? dataFlow.downloadError
+  if (error) {
     console.error('[PowerSync] uploadError:', dataFlow.uploadError)
     console.error('[PowerSync] downloadError:', dataFlow.downloadError)
+    _lastErrorMessage = errorMessage(error)
   }
   return {
     connected: status.connected,
@@ -747,7 +1276,9 @@ function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
     uploading: !!dataFlow.uploading,
     downloading: !!dataFlow.downloading,
     lastSyncedAt: status.lastSyncedAt ? status.lastSyncedAt.getTime() : null,
-    hasError: !!(dataFlow.uploadError || dataFlow.downloadError)
+    hasError: !!error,
+    configError: _configError,
+    lastErrorMessage: _lastErrorMessage
   }
 }
 
@@ -756,7 +1287,18 @@ function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
  * abrir la app (antes de que llegue el primer evento de `statusChanged`).
  */
 export function getPowerSyncStatus(): PowerSyncStatusInfo | null {
-  if (!_psDb) return null
+  if (!_psDb) {
+    return {
+      connected: false,
+      connecting: false,
+      uploading: false,
+      downloading: false,
+      lastSyncedAt: null,
+      hasError: false,
+      configError: _configError,
+      lastErrorMessage: _lastErrorMessage
+    }
+  }
   return serializeStatus(_psDb.currentStatus)
 }
 
@@ -780,6 +1322,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES], throttleMs: 1000 }
   )
 }

@@ -306,6 +306,10 @@ export interface PowerSyncStatusInfo {
   downloading: boolean
   lastSyncedAt: number | null
   hasError: boolean
+  /** Motivo por el que ni siquiera se intentó conectar (config faltante, sin sesión), o null si no aplica. */
+  configError: string | null
+  /** Texto del último error de subida/descarga, o null si no hubo. */
+  lastErrorMessage: string | null
 }
 
 export interface UpdateCheckResult {

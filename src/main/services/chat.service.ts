@@ -292,10 +292,10 @@ async function executeTool(
 
       case 'update_import_status': {
         const { import_title, status } = input as { import_title: string; status: ImportStatus }
-        const all   = listImports()
+        const all   = await listImports()
         const match = all.find(i => i.title.toLowerCase().includes(import_title.toLowerCase()))
         if (!match) return { success: false, message: `No encontré importación con "${import_title}".` }
-        updateImport(match.id, { status })
+        await updateImport(match.id, { status })
         onDataChange(['comex-imports'])
         return {
           success: true,
@@ -306,10 +306,10 @@ async function executeTool(
 
       case 'add_import_note': {
         const { import_title, note } = input as { import_title: string; note: string }
-        const all   = listImports()
+        const all   = await listImports()
         const match = all.find(i => i.title.toLowerCase().includes(import_title.toLowerCase()))
         if (!match) return { success: false, message: `No encontré importación con "${import_title}".` }
-        updateImport(match.id, { notes: note })
+        await updateImport(match.id, { notes: note })
         onDataChange(['comex-imports'])
         return { success: true, message: `Nota guardada en "${match.title}".` }
       }
@@ -339,7 +339,7 @@ async function executeTool(
 
 async function buildSystemContext(): Promise<string> {
   const today   = new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  const imports = listImports()
+  const imports = await listImports()
   const active  = imports.filter(i => i.status !== 'delivered')
   const delivered = imports.filter(i => i.status === 'delivered')
 
@@ -349,7 +349,7 @@ async function buildSystemContext(): Promise<string> {
     ? (withCost.reduce((s, i) => s + (i.cost_pct ?? 0), 0) / withCost.length) : null
 
   // ── Importaciones activas — detalle completo ───────────────────────────────
-  const activeDetails = active.map(imp => {
+  const activeDetails = (await Promise.all(active.map(async imp => {
     const val     = imp.actual_value ?? imp.estimated_value
     const valType = imp.actual_value != null ? 'factura' : 'estimado'
     const eta     = imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date
@@ -372,7 +372,7 @@ async function buildSystemContext(): Promise<string> {
     if (imp.tracking_number) lines.push(`  Tracking: ${imp.tracking_number}`)
     if (imp.inal_required)   lines.push(`  INAL: Requerido | LC: ${imp.inal_lc_status ?? 'pendiente'}`)
 
-    const customs = getCustoms(imp.id)
+    const customs = await getCustoms(imp.id)
     if (customs) {
       if (customs.despacho_number) lines.push(`  Nro despacho: ${customs.despacho_number}`)
       if (customs.canal)           lines.push(`  Canal: ${customs.canal}`)
@@ -381,13 +381,13 @@ async function buildSystemContext(): Promise<string> {
       if (customs.fob_declared)    lines.push(`  FOB declarado: ${customs.fob_currency ?? 'USD'} ${fNum(customs.fob_declared)}`)
     }
 
-    const tributos = listTributos(imp.id)
+    const tributos = await listTributos(imp.id)
     if (tributos.length > 0) {
       const totalTrib = tributos.reduce((s, t) => s + (t.importe_usd ?? 0), 0)
       lines.push(`  Tributos (total USD ${fNum(totalTrib)}): ${tributos.map(t => `${t.concepto} ${fNum(t.importe_usd, 0)}`).join(' | ')}`)
     }
 
-    const extras = listExtraCosts(imp.id).filter(e => (e.importe ?? 0) > 0)
+    const extras = (await listExtraCosts(imp.id)).filter(e => (e.importe ?? 0) > 0)
     if (extras.length > 0) {
       lines.push(`  Costos extra: ${extras.map(e => `${e.concepto} ${e.moneda ?? 'ARS'} ${fNum(e.importe_ars ?? e.importe, 0)}`).join(' | ')}`)
     }
@@ -399,13 +399,13 @@ async function buildSystemContext(): Promise<string> {
       }
     }
 
-    const proformas = listProformas(imp.id, 'proforma')
+    const proformas = await listProformas(imp.id, 'proforma')
     if (proformas.length > 0) lines.push(`  Proformas: ${proformas.map(p => `P${p.numero} ${p.moneda} ${fNum(p.importe)}`).join(', ')}`)
 
-    const facturas = listProformas(imp.id, 'factura')
+    const facturas = await listProformas(imp.id, 'factura')
     if (facturas.length > 0) lines.push(`  Facturas: ${facturas.map(f => `F${f.numero} ${f.moneda} ${fNum(f.importe)}`).join(', ')}`)
 
-    const payments = listPayments(imp.id)
+    const payments = await listPayments(imp.id)
     if (payments.length > 0) {
       const paid = payments.filter(p => p.status === 'completed').reduce((s, p) => s + p.amount, 0)
       const pend = payments.filter(p => p.status !== 'completed').reduce((s, p) => s + p.amount, 0)
@@ -414,7 +414,7 @@ async function buildSystemContext(): Promise<string> {
 
     if (imp.notes) lines.push(`  Notas: ${imp.notes.slice(0, 200)}`)
     return lines.join('\n')
-  }).join('\n\n')
+  }))).join('\n\n')
 
   // ── Entregadas (resumen compacto) ──────────────────────────────────────────
   const deliveredSummary = delivered.length === 0 ? '' : [

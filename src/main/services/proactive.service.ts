@@ -46,7 +46,7 @@ async function buildAnalysisContext(): Promise<string> {
   const now    = today.getTime()
 
   // ── Importaciones ──────────────────────────────────────────────────────────
-  const imports = listImports()
+  const imports = await listImports()
   const active  = imports.filter(i => i.status !== 'delivered')
 
   const importLines = active.map(i => {

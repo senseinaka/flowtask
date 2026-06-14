@@ -35,7 +35,7 @@ import { writeImportExcel, writeImportPdf, buildImportExportTitle, sanitizeFileN
 import { driveService } from '../services/drive.service'
 import { getAttachmentsDir } from '../database/db'
 import type {
-  ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
+  ComexSupplier, ComexImport, ComexDocument,
   ComexLogisticsQuote, ComexPayment, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
@@ -69,53 +69,53 @@ async function setupImportDriveFolders(
   importTitle: string
 ): Promise<{ folderId: string; url: string }> {
   const result = await driveService.createImportFolder(importTitle)
-  updateImport(importId, { drive_folder_id: result.folderId })
+  await updateImport(importId, { drive_folder_id: result.folderId })
 
-  const costs = listExtraCosts(importId)
+  const costs = await listExtraCosts(importId)
 
   // Subcarpetas de facturas
   for (const [categoria, folderName] of Object.entries(COST_SUBFOLDERS)) {
     const cost = costs.find(c => c.categoria === categoria)
     if (cost && !cost.drive_folder_id) {
       const subId = await driveService.createSubfolder(folderName, result.folderId)
-      updateExtraCost(cost.id, { drive_folder_id: subId })
+      await updateExtraCost(cost.id, { drive_folder_id: subId })
     }
   }
 
   // Subcarpeta "BL - Bill of Lading"
-  const impBL = getImport(importId)
+  const impBL = await getImport(importId)
   if (impBL && !impBL.bl_folder_id) {
     const blId = await driveService.createSubfolder('BL - Bill of Lading', result.folderId)
-    updateImport(importId, { bl_folder_id: blId })
+    await updateImport(importId, { bl_folder_id: blId })
   }
   // Subcarpeta "INAL"
-  const impINAL = getImport(importId)
+  const impINAL = await getImport(importId)
   if (impINAL && !impINAL.inal_drive_folder_id) {
     const inalId = await driveService.createSubfolder('INAL', result.folderId)
-    updateImport(importId, { inal_drive_folder_id: inalId })
+    await updateImport(importId, { inal_drive_folder_id: inalId })
   }
   // Subcarpeta "Despacho"
-  const imp = getImport(importId)
+  const imp = await getImport(importId)
   if (imp && !imp.despacho_folder_id) {
     const despachoId = await driveService.createSubfolder('Despacho', result.folderId)
-    updateImport(importId, { despacho_folder_id: despachoId })
+    await updateImport(importId, { despacho_folder_id: despachoId })
   }
   // Subcarpetas de proformas y facturas
-  const imp2 = getImport(importId)
+  const imp2 = await getImport(importId)
   if (imp2 && !imp2.proformas_folder_id) {
     const proformasId = await driveService.createSubfolder('Proformas', result.folderId)
-    updateImport(importId, { proformas_folder_id: proformasId })
+    await updateImport(importId, { proformas_folder_id: proformasId })
   }
-  const imp3 = getImport(importId)
+  const imp3 = await getImport(importId)
   if (imp3 && !imp3.facturas_folder_id) {
     const facturasId = await driveService.createSubfolder('Facturas comerciales', result.folderId)
-    updateImport(importId, { facturas_folder_id: facturasId })
+    await updateImport(importId, { facturas_folder_id: facturasId })
   }
   // Subcarpeta "PL - Packing List"
-  const imp4 = getImport(importId)
+  const imp4 = await getImport(importId)
   if (imp4 && !imp4.pl_folder_id) {
     const plId = await driveService.createSubfolder('PL - Packing List', result.folderId)
-    updateImport(importId, { pl_folder_id: plId })
+    await updateImport(importId, { pl_folder_id: plId })
   }
 
   return result
@@ -130,10 +130,10 @@ async function _uploadProformaToDrive(
   fileName:    string,
   ext:         string
 ): Promise<void> {
-  const imp = getImport(importId)
+  const imp = await getImport(importId)
   if (!imp?.drive_folder_id) throw new Error('Sin carpeta Drive en la importación')
 
-  const pf = getProforma(proformaId)
+  const pf = await getProforma(proformaId)
   if (!pf) throw new Error('Proforma no encontrada')
 
   const isFactura = pf.tipo === 'factura'
@@ -144,7 +144,7 @@ async function _uploadProformaToDrive(
     const parentName  = isFactura ? 'Facturas comerciales' : 'Proformas'
     parentFolderId    = await driveService.createSubfolder(parentName, imp.drive_folder_id)
     const updateField = isFactura ? { facturas_folder_id: parentFolderId } : { proformas_folder_id: parentFolderId }
-    updateImport(importId, updateField)
+    await updateImport(importId, updateField)
   }
 
   // 2. Subcarpeta sin fecha: "Proforma N" o "Factura N" (se renombrará después de extraer la fecha)
@@ -156,12 +156,12 @@ async function _uploadProformaToDrive(
   const mimeType    = getMimeType(ext)
   const driveFileId = await driveService.uploadFileToFolder(localPath, subId, fileName, mimeType)
 
-  updateProforma(proformaId, { drive_file_id: driveFileId, drive_folder_id: subId, drive_status: 'synced' })
+  await updateProforma(proformaId, { drive_file_id: driveFileId, drive_folder_id: subId, drive_status: 'synced' })
 }
 
 /** Renombra la carpeta Drive de una proforma/factura agregando la fecha una vez conocida */
 async function _renameDriveFolder(proformaId: string): Promise<void> {
-  const pf = getProforma(proformaId)
+  const pf = await getProforma(proformaId)
   if (!pf?.drive_folder_id || !pf.fecha_proforma) return
   try {
     const [y, m, d] = pf.fecha_proforma.split('-')
@@ -257,9 +257,9 @@ export function registerComexIpc(): void {
   // ── Imports ──────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:imports:list',   (_e, status?: string) => listImports(status))
   ipcMain.handle('comex:imports:get',    (_e, id)              => getImport(id))
-  ipcMain.handle('comex:imports:create', (_e, input: CreateComexImportInput) => {
-    const imp = createImport(input)
-    createDefaultExtraCosts(imp.id)
+  ipcMain.handle('comex:imports:create', async (_e, input: CreateComexImportInput) => {
+    const imp = await createImport(input)
+    await createDefaultExtraCosts(imp.id)
 
     // Crear carpetas Drive en background si el usuario está autenticado
     if (driveService.isAuthenticated()) {
@@ -286,7 +286,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:imports:exportXlsx', async (e, importId: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win) return null
-    const detail = getImportFullDetail(importId)
+    const detail = await getImportFullDetail(importId)
     if (!detail) return null
     const result = await dialog.showSaveDialog(win, {
       title: 'Exportar importación',
@@ -317,7 +317,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:imports:exportPdf', async (e, importId: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win) return null
-    const detail = getImportFullDetail(importId)
+    const detail = await getImportFullDetail(importId)
     if (!detail) return null
     const result = await dialog.showSaveDialog(win, {
       title: 'Exportar importación',
@@ -354,13 +354,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:documents:list',   (_e, importId)                      => listDocuments(importId))
   ipcMain.handle('comex:documents:create', (_e, input: CreateComexDocumentInput) => createDocument(input))
   ipcMain.handle('comex:documents:update', (_e, id: string, data: Partial<ComexDocument>) => updateDocument(id, data))
-  ipcMain.handle('comex:documents:delete', (_e, id: string) => {
-    const doc = getDocument(id)
+  ipcMain.handle('comex:documents:delete', async (_e, id: string) => {
+    const doc = await getDocument(id)
     if (doc?.local_stored_name) {
       const fp = path.join(getAttachmentsDir(), doc.local_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    deleteDocument(id)
+    await deleteDocument(id)
   })
 
   // Pick a file from disk (returns path or null)
@@ -378,8 +378,8 @@ export function registerComexIpc(): void {
   })
 
   // Open a document's local file
-  ipcMain.handle('comex:documents:open', (_e, id: string) => {
-    const doc = getDocument(id)
+  ipcMain.handle('comex:documents:open', async (_e, id: string) => {
+    const doc = await getDocument(id)
     if (!doc?.local_stored_name) return
     const fp = path.join(getAttachmentsDir(), doc.local_stored_name)
     if (fs.existsSync(fp)) shell.openPath(fp)
@@ -398,14 +398,14 @@ export function registerComexIpc(): void {
       const originalName = path.basename(filePath)
 
       // Remove old local file if exists
-      const existing = getDocument(docId)
+      const existing = await getDocument(docId)
       if (existing?.local_stored_name) {
         const oldPath = path.join(getAttachmentsDir(), existing.local_stored_name)
         try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath) } catch { /* ignore */ }
       }
 
       // Update with local info first
-      updateDocument(docId, {
+      await updateDocument(docId, {
         name: originalName,
         local_stored_name: storedName,
         size_bytes: stats.size,
@@ -416,22 +416,22 @@ export function registerComexIpc(): void {
 
       // Drive upload if authenticated
       if (driveService.isAuthenticated()) {
-        updateDocument(docId, { drive_status: 'uploading' })
+        await updateDocument(docId, { drive_status: 'uploading' })
         try {
           let targetFolderId = folderId
           if (!targetFolderId) {
             const { folderId: newId } = await driveService.createImportFolder(importTitle)
             targetFolderId = newId
-            updateImport(importId, { drive_folder_id: targetFolderId })
+            await updateImport(importId, { drive_folder_id: targetFolderId })
           }
           const driveFileId = await driveService.uploadFileToFolder(destPath, targetFolderId, originalName, mimeType)
-          updateDocument(docId, { drive_file_id: driveFileId, drive_status: 'synced' })
+          await updateDocument(docId, { drive_file_id: driveFileId, drive_status: 'synced' })
         } catch {
-          updateDocument(docId, { drive_status: 'error' })
+          await updateDocument(docId, { drive_status: 'error' })
         }
       }
 
-      return getDocument(docId)
+      return await getDocument(docId)
     }
   )
 
@@ -447,7 +447,7 @@ export function registerComexIpc(): void {
       const mimeType    = getMimeType(ext)
       const originalName = path.basename(filePath)
 
-      const doc = createDocument({
+      const doc = await createDocument({
         import_id: importId,
         type: 'other',
         name: originalName,
@@ -463,22 +463,22 @@ export function registerComexIpc(): void {
 
       // Drive upload if authenticated
       if (driveService.isAuthenticated()) {
-        updateDocument(doc.id, { drive_status: 'uploading' })
+        await updateDocument(doc.id, { drive_status: 'uploading' })
         try {
           let targetFolderId = folderId
           if (!targetFolderId) {
             const { folderId: newId } = await driveService.createImportFolder(importTitle)
             targetFolderId = newId
-            updateImport(importId, { drive_folder_id: targetFolderId })
+            await updateImport(importId, { drive_folder_id: targetFolderId })
           }
           const driveFileId = await driveService.uploadFileToFolder(destPath, targetFolderId, originalName, mimeType)
-          updateDocument(doc.id, { drive_file_id: driveFileId, drive_status: 'synced' })
+          await updateDocument(doc.id, { drive_file_id: driveFileId, drive_status: 'synced' })
         } catch {
-          updateDocument(doc.id, { drive_status: 'error' })
+          await updateDocument(doc.id, { drive_status: 'error' })
         }
       }
 
-      return getDocument(doc.id)
+      return await getDocument(doc.id)
     }
   )
 
@@ -633,20 +633,20 @@ export function registerComexIpc(): void {
     return result.canceled ? [] : result.filePaths
   })
 
-  ipcMain.handle('comex:inal:certs:delete', (_e, id: string) => {
-    const cert = getInalCert(id)
+  ipcMain.handle('comex:inal:certs:delete', async (_e, id: string) => {
+    const cert = await getInalCert(id)
     if (cert?.local_stored_name) {
       const fp = path.join(getAttachmentsDir(), cert.local_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    deleteInalCert(id)
+    await deleteInalCert(id)
   })
 
   ipcMain.handle('comex:inal:certs:upload', async (
     _e,
     filePath: string,
     importId: string,
-    importTitle: string,
+    _importTitle: string,
     importFolderId: string | null,
     certFolderId: string | null
   ) => {
@@ -659,7 +659,7 @@ export function registerComexIpc(): void {
     const mimeType = getMimeType(ext)
     const originalName = path.basename(filePath)
 
-    const cert = createInalCert(importId, originalName, {
+    const cert = await createInalCert(importId, originalName, {
       local_stored_name: storedName,
       size_bytes: stats.size,
       mime_type: mimeType
@@ -676,24 +676,24 @@ export function registerComexIpc(): void {
           if (importFolderId) {
             folderId = await driveService.createSubfolder('Certificados INAL', importFolderId)
             // Persist the cert folder ID on the import
-            updateImport(importId, { inal_lc_cert_folder_id: folderId })
+            await updateImport(importId, { inal_lc_cert_folder_id: folderId })
           }
         }
 
         if (folderId) {
-          updateInalCert(cert.id, { drive_status: 'uploading' })
+          await updateInalCert(cert.id, { drive_status: 'uploading' })
           const driveFileId = await driveService.uploadFileToFolder(dest, folderId, originalName, mimeType)
-          updateInalCert(cert.id, { drive_file_id: driveFileId, drive_status: 'synced' })
+          await updateInalCert(cert.id, { drive_file_id: driveFileId, drive_status: 'synced' })
         }
       }
     } catch (err) {
-      updateInalCert(cert.id, { drive_status: 'error' })
+      await updateInalCert(cert.id, { drive_status: 'error' })
       console.error('[INAL] Drive upload error:', err)
     }
 
     // Return fresh record
-    const fresh = listInalCerts(importId).find((c) => c.id === cert.id) ?? cert
-    return { cert: fresh, import: getImport(importId) }
+    const fresh = (await listInalCerts(importId)).find((c) => c.id === cert.id) ?? cert
+    return { cert: fresh, import: await getImport(importId) }
   })
 
   // ── Tributos del despacho ─────────────────────────────────────────────────
@@ -722,9 +722,9 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:proformas:upload', async (_e, proformaId: string, filePath: string) => {
-    const pf  = getProforma(proformaId)
+    const pf  = await getProforma(proformaId)
     if (!pf) throw new Error('Proforma no encontrada')
-    const imp = getImport(pf.import_id)
+    const imp = await getImport(pf.import_id)
 
     const ext          = path.extname(filePath)
     const originalName = path.basename(filePath)
@@ -738,45 +738,45 @@ export function registerComexIpc(): void {
     }
 
     fs.copyFileSync(filePath, dest)
-    updateProforma(proformaId, { stored_name: storedName, original_name: originalName, drive_status: 'none' })
+    await updateProforma(proformaId, { stored_name: storedName, original_name: originalName, drive_status: 'none' })
 
     // Drive: subir sincrónicamente para que el status final llegue al renderer
     if (imp?.drive_folder_id && driveService.isAuthenticated()) {
-      updateProforma(proformaId, { drive_status: 'uploading' })
+      await updateProforma(proformaId, { drive_status: 'uploading' })
       try {
         await _uploadProformaToDrive(pf.import_id, proformaId, dest, originalName, ext)
       } catch (err) {
-        updateProforma(proformaId, { drive_status: 'error' })
+        await updateProforma(proformaId, { drive_status: 'error' })
         console.error('[Proforma] Drive error:', (err as Error).message)
       }
     }
 
-    return getProforma(proformaId)
+    return await getProforma(proformaId)
   })
 
   // Reintentar subida a Drive de una proforma que ya tiene archivo local
   ipcMain.handle('comex:proformas:syncDrive', async (_e, proformaId: string) => {
-    const pf = getProforma(proformaId)
+    const pf = await getProforma(proformaId)
     if (!pf?.stored_name || !pf.original_name) throw new Error('Proforma sin archivo local')
     const dest = path.join(getAttachmentsDir(), pf.stored_name)
     if (!fs.existsSync(dest)) throw new Error('Archivo no encontrado en disco')
-    const imp = getImport(pf.import_id)
+    const imp = await getImport(pf.import_id)
     if (!imp?.drive_folder_id) throw new Error('La importación no tiene carpeta Drive. Creala primero.')
     if (!driveService.isAuthenticated()) throw new Error('Google Drive no está conectado')
 
-    updateProforma(proformaId, { drive_status: 'uploading' })
+    await updateProforma(proformaId, { drive_status: 'uploading' })
     try {
       const ext = path.extname(pf.stored_name)
       await _uploadProformaToDrive(pf.import_id, proformaId, dest, pf.original_name, ext)
-      return getProforma(proformaId)
+      return await getProforma(proformaId)
     } catch (err) {
-      updateProforma(proformaId, { drive_status: 'error' })
+      await updateProforma(proformaId, { drive_status: 'error' })
       throw err
     }
   })
 
-  ipcMain.handle('comex:proformas:open', (_e, proformaId: string) => {
-    const pf = getProforma(proformaId)
+  ipcMain.handle('comex:proformas:open', async (_e, proformaId: string) => {
+    const pf = await getProforma(proformaId)
     if (!pf?.stored_name) throw new Error('Sin archivo adjunto')
     shell.openPath(path.join(getAttachmentsDir(), pf.stored_name))
   })
@@ -802,9 +802,9 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:extra-costs:uploadInvoice', async (_e, costId: string, filePath: string) => {
-    const cost = getExtraCost(costId)
+    const cost = await getExtraCost(costId)
     if (!cost) throw new Error('Registro de costo no encontrado')
-    const imp = getImport(cost.import_id)
+    const imp = await getImport(cost.import_id)
 
     const ext = path.extname(filePath)
     const originalName = path.basename(filePath)
@@ -818,11 +818,11 @@ export function registerComexIpc(): void {
     }
 
     fs.copyFileSync(filePath, dest)
-    updateExtraCost(costId, { stored_name: storedName, original_name: originalName, drive_status: 'none' })
+    await updateExtraCost(costId, { stored_name: storedName, original_name: originalName, drive_status: 'none' })
 
     // Drive upload si hay carpeta de importación
     if (imp?.drive_folder_id && driveService.isAuthenticated()) {
-      updateExtraCost(costId, { drive_status: 'uploading' })
+      await updateExtraCost(costId, { drive_status: 'uploading' })
       try {
         const costosFolderId = await driveService.createSubfolder('Facturas servicios', imp.drive_folder_id)
         const { EXTRA_COST_CATEGORY_LABELS } = await import('@shared/types')
@@ -830,18 +830,18 @@ export function registerComexIpc(): void {
         const catFolderId = await driveService.createSubfolder(catLabel, costosFolderId)
         const mimeType = getMimeType(ext)
         const fileId = await driveService.uploadFileToFolder(dest, catFolderId, originalName, mimeType)
-        updateExtraCost(costId, { drive_file_id: fileId, drive_folder_id: catFolderId, drive_status: 'synced' })
+        await updateExtraCost(costId, { drive_file_id: fileId, drive_folder_id: catFolderId, drive_status: 'synced' })
       } catch (err) {
-        updateExtraCost(costId, { drive_status: 'error' })
+        await updateExtraCost(costId, { drive_status: 'error' })
         console.error('[ExtraCost] Drive upload error:', err)
       }
     }
 
-    return getExtraCost(costId)
+    return await getExtraCost(costId)
   })
 
-  ipcMain.handle('comex:extra-costs:openFile', (_e, costId: string) => {
-    const cost = getExtraCost(costId)
+  ipcMain.handle('comex:extra-costs:openFile', async (_e, costId: string) => {
+    const cost = await getExtraCost(costId)
     if (!cost?.stored_name) throw new Error('Sin archivo adjunto')
     shell.openPath(path.join(getAttachmentsDir(), cost.stored_name))
   })
@@ -859,7 +859,7 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:despacho:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
 
     // 1. Copiar archivo localmente
@@ -877,7 +877,7 @@ export function registerComexIpc(): void {
     fs.copyFileSync(filePath, dest)
 
     // 2. Guardar en DB (solo local por ahora)
-    updateImport(importId, {
+    await updateImport(importId, {
       despacho_stored_name:   storedName,
       despacho_original_name: originalName,
       despacho_drive_status:  'none',
@@ -886,51 +886,51 @@ export function registerComexIpc(): void {
 
     // 3. Subir a Drive si está autenticado y hay carpeta de importación
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { despacho_drive_status: 'uploading' })
+      await updateImport(importId, { despacho_drive_status: 'uploading' })
       try {
         // Crear/obtener subcarpeta "Despacho" dentro de la carpeta de la importación
         let despachoFolderId = imp.despacho_folder_id
         if (!despachoFolderId) {
           despachoFolderId = await driveService.createSubfolder('Despacho', imp.drive_folder_id)
-          updateImport(importId, { despacho_folder_id: despachoFolderId })
+          await updateImport(importId, { despacho_folder_id: despachoFolderId })
         }
 
         const mimeType = getMimeType(ext)
         const driveFileId = await driveService.uploadFileToFolder(dest, despachoFolderId, originalName, mimeType)
-        updateImport(importId, {
+        await updateImport(importId, {
           despacho_drive_file_id: driveFileId,
           despacho_drive_status:  'synced'
         })
       } catch (err) {
-        updateImport(importId, { despacho_drive_status: 'error' })
+        await updateImport(importId, { despacho_drive_status: 'error' })
         console.error('[Despacho] Drive upload error:', err)
       }
     }
 
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:despacho:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:despacho:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.despacho_stored_name) throw new Error('Sin archivo de despacho')
     const fp = path.join(getAttachmentsDir(), imp.despacho_stored_name)
     shell.openPath(fp)
   })
 
-  ipcMain.handle('comex:despacho:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:despacho:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.despacho_stored_name) {
       const fp = path.join(getAttachmentsDir(), imp.despacho_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    updateImport(importId, {
+    await updateImport(importId, {
       despacho_stored_name:   null,
       despacho_original_name: null,
       despacho_drive_file_id: null,
       despacho_drive_status:  'none'
     })
-    return getImport(importId)
+    return await getImport(importId)
   })
 
   // ── PL - Packing List ─────────────────────────────────────────────────────
@@ -949,7 +949,7 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:pl:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
 
     const ext          = path.extname(filePath)
@@ -963,7 +963,7 @@ export function registerComexIpc(): void {
     }
 
     fs.copyFileSync(filePath, dest)
-    updateImport(importId, {
+    await updateImport(importId, {
       pl_stored_name:   storedName,
       pl_original_name: originalName,
       pl_drive_status:  'none',
@@ -971,46 +971,46 @@ export function registerComexIpc(): void {
     })
 
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { pl_drive_status: 'uploading' })
+      await updateImport(importId, { pl_drive_status: 'uploading' })
       try {
         let plFolderId = imp.pl_folder_id
         if (!plFolderId) {
           plFolderId = await driveService.createSubfolder('PL - Packing List', imp.drive_folder_id)
-          updateImport(importId, { pl_folder_id: plFolderId })
+          await updateImport(importId, { pl_folder_id: plFolderId })
         }
         const mimeType   = getMimeType(ext)
         const driveFileId = await driveService.uploadFileToFolder(dest, plFolderId, originalName, mimeType)
-        updateImport(importId, { pl_drive_file_id: driveFileId, pl_drive_status: 'synced' })
+        await updateImport(importId, { pl_drive_file_id: driveFileId, pl_drive_status: 'synced' })
       } catch (err) {
-        updateImport(importId, { pl_drive_status: 'error' })
+        await updateImport(importId, { pl_drive_status: 'error' })
         console.error('[PL] Drive upload error:', err)
       }
     }
 
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:pl:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:pl:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.pl_stored_name) throw new Error('Sin archivo de Packing List')
     shell.openPath(path.join(getAttachmentsDir(), imp.pl_stored_name))
   })
 
-  ipcMain.handle('comex:pl:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:pl:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.pl_stored_name) {
       const fp = path.join(getAttachmentsDir(), imp.pl_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    updateImport(importId, {
+    await updateImport(importId, {
       pl_stored_name:   null,
       pl_original_name: null,
       pl_drive_file_id: null,
       pl_drive_status:  'none',
       pl_extracted_json: null
     })
-    return getImport(importId)
+    return await getImport(importId)
   })
 
   // ── BL - Bill of Lading ───────────────────────────────────────────────────
@@ -1026,7 +1026,7 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:bl:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
 
     const ext = path.extname(filePath)
@@ -1040,7 +1040,7 @@ export function registerComexIpc(): void {
     }
 
     fs.copyFileSync(filePath, dest)
-    updateImport(importId, {
+    await updateImport(importId, {
       bl_stored_name:   storedName,
       bl_original_name: originalName,
       bl_drive_status:  'none',
@@ -1048,45 +1048,45 @@ export function registerComexIpc(): void {
     })
 
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { bl_drive_status: 'uploading' })
+      await updateImport(importId, { bl_drive_status: 'uploading' })
       try {
         let blFolderId = imp.bl_folder_id
         if (!blFolderId) {
           blFolderId = await driveService.createSubfolder('BL - Bill of Lading', imp.drive_folder_id)
-          updateImport(importId, { bl_folder_id: blFolderId })
+          await updateImport(importId, { bl_folder_id: blFolderId })
         }
         const mimeType = getMimeType(ext)
         const driveFileId = await driveService.uploadFileToFolder(dest, blFolderId, originalName, mimeType)
-        updateImport(importId, { bl_drive_file_id: driveFileId, bl_drive_status: 'synced' })
+        await updateImport(importId, { bl_drive_file_id: driveFileId, bl_drive_status: 'synced' })
       } catch (err) {
-        updateImport(importId, { bl_drive_status: 'error' })
+        await updateImport(importId, { bl_drive_status: 'error' })
         console.error('[BL] Drive upload error:', err)
       }
     }
 
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:bl:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:bl:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.bl_stored_name) throw new Error('Sin archivo de BL')
     shell.openPath(path.join(getAttachmentsDir(), imp.bl_stored_name))
   })
 
-  ipcMain.handle('comex:bl:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:bl:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.bl_stored_name) {
       const fp = path.join(getAttachmentsDir(), imp.bl_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    updateImport(importId, {
+    await updateImport(importId, {
       bl_stored_name:   null,
       bl_original_name: null,
       bl_drive_file_id: null,
       bl_drive_status:  'none'
     })
-    return getImport(importId)
+    return await getImport(importId)
   })
 
   // ── INAL — Packing List ──────────────────────────────────────────────────
@@ -1102,38 +1102,38 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:inal:pl:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_pl_${randomUUID()}${ext}`
     const dest = path.join(getAttachmentsDir(), stored)
     if (imp.inal_pl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_pl_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
-    updateImport(importId, { inal_pl_stored_name: stored, inal_pl_original_name: orig, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
+    await updateImport(importId, { inal_pl_stored_name: stored, inal_pl_original_name: orig, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { inal_pl_drive_status: 'uploading' })
+      await updateImport(importId, { inal_pl_drive_status: 'uploading' })
       try {
-        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
-        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        let fId = (await getImport(importId))?.inal_drive_folder_id ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); await updateImport(importId, { inal_drive_folder_id: fId }) }
         const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
-        updateImport(importId, { inal_pl_drive_file_id: driveId, inal_pl_drive_status: 'synced' })
-      } catch { updateImport(importId, { inal_pl_drive_status: 'error' }) }
+        await updateImport(importId, { inal_pl_drive_file_id: driveId, inal_pl_drive_status: 'synced' })
+      } catch { await updateImport(importId, { inal_pl_drive_status: 'error' }) }
     }
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:inal:pl:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:pl:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.inal_pl_stored_name) throw new Error('Sin archivo PL')
     shell.openPath(path.join(getAttachmentsDir(), imp.inal_pl_stored_name))
   })
 
-  ipcMain.handle('comex:inal:pl:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:pl:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.inal_pl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_pl_stored_name)) } catch { /* */ } }
-    updateImport(importId, { inal_pl_stored_name: null, inal_pl_original_name: null, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
-    return getImport(importId)
+    await updateImport(importId, { inal_pl_stored_name: null, inal_pl_original_name: null, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
+    return await getImport(importId)
   })
 
   // ── INAL — Xls Resumen ───────────────────────────────────────────────────
@@ -1149,38 +1149,38 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:inal:xls:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_xls_${randomUUID()}${ext}`
     const dest = path.join(getAttachmentsDir(), stored)
     if (imp.inal_xls_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_xls_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
-    updateImport(importId, { inal_xls_stored_name: stored, inal_xls_original_name: orig, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
+    await updateImport(importId, { inal_xls_stored_name: stored, inal_xls_original_name: orig, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { inal_xls_drive_status: 'uploading' })
+      await updateImport(importId, { inal_xls_drive_status: 'uploading' })
       try {
-        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
-        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        let fId = (await getImport(importId))?.inal_drive_folder_id ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); await updateImport(importId, { inal_drive_folder_id: fId }) }
         const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
-        updateImport(importId, { inal_xls_drive_file_id: driveId, inal_xls_drive_status: 'synced' })
-      } catch { updateImport(importId, { inal_xls_drive_status: 'error' }) }
+        await updateImport(importId, { inal_xls_drive_file_id: driveId, inal_xls_drive_status: 'synced' })
+      } catch { await updateImport(importId, { inal_xls_drive_status: 'error' }) }
     }
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:inal:xls:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:xls:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.inal_xls_stored_name) throw new Error('Sin archivo Xls')
     shell.openPath(path.join(getAttachmentsDir(), imp.inal_xls_stored_name))
   })
 
-  ipcMain.handle('comex:inal:xls:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:xls:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.inal_xls_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_xls_stored_name)) } catch { /* */ } }
-    updateImport(importId, { inal_xls_stored_name: null, inal_xls_original_name: null, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
-    return getImport(importId)
+    await updateImport(importId, { inal_xls_stored_name: null, inal_xls_original_name: null, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
+    return await getImport(importId)
   })
 
   // ── INAL — Factura comercial (copia para carpeta INAL) ───────────────────
@@ -1196,38 +1196,38 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:inal:factura:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_factura_${randomUUID()}${ext}`
     const dest = path.join(getAttachmentsDir(), stored)
     if (imp.inal_factura_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_factura_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
-    updateImport(importId, { inal_factura_stored_name: stored, inal_factura_original_name: orig, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
+    await updateImport(importId, { inal_factura_stored_name: stored, inal_factura_original_name: orig, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { inal_factura_drive_status: 'uploading' })
+      await updateImport(importId, { inal_factura_drive_status: 'uploading' })
       try {
-        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
-        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        let fId = (await getImport(importId))?.inal_drive_folder_id ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); await updateImport(importId, { inal_drive_folder_id: fId }) }
         const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
-        updateImport(importId, { inal_factura_drive_file_id: driveId, inal_factura_drive_status: 'synced' })
-      } catch { updateImport(importId, { inal_factura_drive_status: 'error' }) }
+        await updateImport(importId, { inal_factura_drive_file_id: driveId, inal_factura_drive_status: 'synced' })
+      } catch { await updateImport(importId, { inal_factura_drive_status: 'error' }) }
     }
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:inal:factura:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:factura:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.inal_factura_stored_name) throw new Error('Sin archivo')
     shell.openPath(path.join(getAttachmentsDir(), imp.inal_factura_stored_name))
   })
 
-  ipcMain.handle('comex:inal:factura:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:factura:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.inal_factura_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_factura_stored_name)) } catch { /* */ } }
-    updateImport(importId, { inal_factura_stored_name: null, inal_factura_original_name: null, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
-    return getImport(importId)
+    await updateImport(importId, { inal_factura_stored_name: null, inal_factura_original_name: null, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
+    return await getImport(importId)
   })
 
   // ── INAL — BL (copia para carpeta INAL) ─────────────────────────────────
@@ -1243,38 +1243,38 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:inal:blcopy:upload', async (_e, importId: string, filePath: string) => {
-    const imp = getImport(importId)
+    const imp = await getImport(importId)
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_bl_${randomUUID()}${ext}`
     const dest = path.join(getAttachmentsDir(), stored)
     if (imp.inal_bl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_bl_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
-    updateImport(importId, { inal_bl_stored_name: stored, inal_bl_original_name: orig, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
+    await updateImport(importId, { inal_bl_stored_name: stored, inal_bl_original_name: orig, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
-      updateImport(importId, { inal_bl_drive_status: 'uploading' })
+      await updateImport(importId, { inal_bl_drive_status: 'uploading' })
       try {
-        let fId = (getImport(importId)?.inal_drive_folder_id) ?? null
-        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); updateImport(importId, { inal_drive_folder_id: fId }) }
+        let fId = (await getImport(importId))?.inal_drive_folder_id ?? null
+        if (!fId) { fId = await driveService.createSubfolder('INAL', imp.drive_folder_id); await updateImport(importId, { inal_drive_folder_id: fId }) }
         const driveId = await driveService.uploadFileToFolder(dest, fId, orig, getMimeType(ext))
-        updateImport(importId, { inal_bl_drive_file_id: driveId, inal_bl_drive_status: 'synced' })
-      } catch { updateImport(importId, { inal_bl_drive_status: 'error' }) }
+        await updateImport(importId, { inal_bl_drive_file_id: driveId, inal_bl_drive_status: 'synced' })
+      } catch { await updateImport(importId, { inal_bl_drive_status: 'error' }) }
     }
-    return getImport(importId)
+    return await getImport(importId)
   })
 
-  ipcMain.handle('comex:inal:blcopy:open', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:blcopy:open', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp?.inal_bl_stored_name) throw new Error('Sin archivo')
     shell.openPath(path.join(getAttachmentsDir(), imp.inal_bl_stored_name))
   })
 
-  ipcMain.handle('comex:inal:blcopy:delete', (_e, importId: string) => {
-    const imp = getImport(importId)
+  ipcMain.handle('comex:inal:blcopy:delete', async (_e, importId: string) => {
+    const imp = await getImport(importId)
     if (!imp) return
     if (imp.inal_bl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_bl_stored_name)) } catch { /* */ } }
-    updateImport(importId, { inal_bl_stored_name: null, inal_bl_original_name: null, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
-    return getImport(importId)
+    await updateImport(importId, { inal_bl_stored_name: null, inal_bl_original_name: null, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
+    return await getImport(importId)
   })
 
   // ── Gestores INAL ─────────────────────────────────────────────────────────

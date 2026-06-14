@@ -55,7 +55,7 @@ export function registerAIIpc(): void {
   // ── Análisis del despacho adjunto a una importación ──────────────────────
   // page: 1 = primera hoja (default), 2 = segunda hoja, etc.
   ipcMain.handle('ai:analyzeDespacho', async (_e, importId: string, page: number = 1) => {
-    const record = getImport(importId)
+    const record = await getImport(importId)
     if (!record) throw new Error('Importación no encontrada')
     if (!record.despacho_stored_name) throw new Error('No hay despacho adjunto a esta importación. Subí el PDF primero.')
     const filePath = path.join(getAttachmentsDir(), record.despacho_stored_name)
@@ -77,7 +77,7 @@ export function registerAIIpc(): void {
 
   // ── Análisis del BL adjunto a una importación ────────────────────────────
   ipcMain.handle('ai:analyzeBL', async (_e, importId: string) => {
-    const record = getImport(importId)
+    const record = await getImport(importId)
     if (!record) throw new Error('Importación no encontrada')
     if (!record.bl_stored_name) throw new Error('No hay BL adjunto a esta importación. Subí el archivo primero.')
     const filePath = path.join(getAttachmentsDir(), record.bl_stored_name)
@@ -86,7 +86,7 @@ export function registerAIIpc(): void {
 
   // ── Análisis del PL adjunto a una importación ────────────────────────────
   ipcMain.handle('ai:analyzePL', async (_e, importId: string) => {
-    const record = getImport(importId)
+    const record = await getImport(importId)
     if (!record) throw new Error('Importación no encontrada')
     if (!record.pl_stored_name) throw new Error('No hay Packing List adjunto a esta importación. Subí el archivo primero.')
     const filePath = path.join(getAttachmentsDir(), record.pl_stored_name)
@@ -95,7 +95,7 @@ export function registerAIIpc(): void {
 
   // ── Análisis de proforma ──────────────────────────────────────────────────
   ipcMain.handle('ai:analyzeProforma', async (_e, proformaId: string) => {
-    const pf = getProforma(proformaId)
+    const pf = await getProforma(proformaId)
     if (!pf) throw new Error('Proforma no encontrada')
     if (!pf.stored_name) throw new Error('No hay archivo adjunto a esta proforma. Subí el PDF primero.')
     const filePath = path.join(getAttachmentsDir(), pf.stored_name)
@@ -116,7 +116,7 @@ export function registerAIIpc(): void {
   }
 
   ipcMain.handle('ai:analyzeExtraCost', async (_e, costId: string) => {
-    const cost = getExtraCost(costId)
+    const cost = await getExtraCost(costId)
     if (!cost) throw new Error('Registro de costo no encontrado')
     if (!cost.stored_name) throw new Error('No hay factura adjunta a este costo. Subí el PDF primero.')
     const filePath   = path.join(getAttachmentsDir(), cost.stored_name)
@@ -130,7 +130,7 @@ export function registerAIIpc(): void {
     _e,
     params: { docId: string; operationOverride?: AIOperation }
   ) => {
-    const doc = getDocument(params.docId)
+    const doc = await getDocument(params.docId)
     if (!doc) throw new Error('Documento no encontrado')
     if (!doc.local_stored_name) throw new Error('El documento no tiene archivo local adjunto. Adjuntá el archivo primero.')
     const filePath = path.join(getAttachmentsDir(), doc.local_stored_name)

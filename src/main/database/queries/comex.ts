@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto'
-import { getDb } from '../db'
 import { getPowerSyncDb } from '../powersync'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
@@ -169,32 +168,32 @@ const IMPORT_SELECT = `
   LEFT JOIN comex_freight_operators fo ON fo.id = i.freight_operator_id
 `
 
-export function listImports(status?: string): ComexImport[] {
-  const db = getDb()
+export async function listImports(status?: string): Promise<ComexImport[]> {
+  const db = getPowerSyncDb()
   const rows = status
-    ? db.prepare(`${IMPORT_SELECT} WHERE i.status = ? ORDER BY i.created_at DESC`).all(status) as Record<string, unknown>[]
-    : db.prepare(`${IMPORT_SELECT} ORDER BY i.created_at DESC`).all() as Record<string, unknown>[]
+    ? await db.getAll<Record<string, unknown>>(`${IMPORT_SELECT} WHERE i.status = ? ORDER BY i.created_at DESC`, [status])
+    : await db.getAll<Record<string, unknown>>(`${IMPORT_SELECT} ORDER BY i.created_at DESC`)
   return rows.map(hydrateImport)
 }
 
-export function getImport(id: string): ComexImport | null {
-  const row = getDb().prepare(`${IMPORT_SELECT} WHERE i.id = ?`).get(id) as Record<string, unknown> | undefined
+export async function getImport(id: string): Promise<ComexImport | null> {
+  const row = await getPowerSyncDb().getOptional<Record<string, unknown>>(`${IMPORT_SELECT} WHERE i.id = ?`, [id])
   return row ? hydrateImport(row) : null
 }
 
-export function createImport(input: CreateComexImportInput): ComexImport {
-  const db = getDb()
+export async function createImport(input: CreateComexImportInput): Promise<ComexImport> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_imports
       (id, title, supplier_id, status, incoterm, origin_country, origin_port, currency,
        estimated_value, actual_value, order_date, payment_date, ship_date,
        arrival_date, eta_2, eta_3, eta_4,
        actual_ship_date, actual_arrival_date, tracking_number,
-       customs_agent, drive_folder_id, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       customs_agent, drive_folder_id, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.title, input.supplier_id ?? null,
     input.status ?? 'planning', input.incoterm ?? 'FOB',
     input.origin_country ?? '', input.origin_port ?? '', input.currency ?? 'USD',
@@ -204,13 +203,13 @@ export function createImport(input: CreateComexImportInput): ComexImport {
     input.eta_2 ?? null, input.eta_3 ?? null, input.eta_4 ?? null,
     input.actual_ship_date ?? null, input.actual_arrival_date ?? null,
     input.tracking_number ?? '', input.customs_agent ?? '',
-    input.drive_folder_id ?? null, input.notes ?? '', now, now
-  )
-  return getImport(id)!
+    input.drive_folder_id ?? null, input.notes ?? '', now, now, WORKSPACE_ID
+  ])
+  return (await getImport(id))!
 }
 
-export function updateImport(id: string, data: Partial<ComexImport>): ComexImport | null {
-  const db = getDb()
+export async function updateImport(id: string, data: Partial<ComexImport>): Promise<ComexImport | null> {
+  const db = getPowerSyncDb()
   const allowed = [
     'title','supplier_id','status','incoterm','origin_country','origin_port','currency',
     'estimated_value','actual_value','order_date','payment_date','ship_date',
@@ -240,75 +239,71 @@ export function updateImport(id: string, data: Partial<ComexImport>): ComexImpor
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   vals.push(id)
-  db.prepare(`UPDATE comex_imports SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_imports SET ${sets.join(', ')} WHERE id = ?`, vals)
   return getImport(id)
 }
 
-export function deleteImport(id: string): void {
-  getDb().prepare('DELETE FROM comex_imports WHERE id = ?').run(id)
+export async function deleteImport(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_imports WHERE id = ?', [id])
 }
 
-export function getImportFullDetail(id: string): {
+export async function getImportFullDetail(id: string): Promise<{
   import: ComexImport
   items: ComexImportItem[]
   documents: ComexDocument[]
   quotes: ComexLogisticsQuote[]
   customs: ComexCustoms | null
   costs: ComexCostItem[]
-} | null {
-  const imp = getImport(id)
+} | null> {
+  const imp = await getImport(id)
   if (!imp) return null
-  return {
-    import: imp,
-    items: listItems(id),
-    documents: listDocuments(id),
-    quotes: listQuotes(id),
-    customs: getCustoms(id),
-    costs: listCosts(id)
-  }
+  const [items, documents, quotes, customs, costs] = await Promise.all([
+    listItems(id), listDocuments(id), listQuotes(id), getCustoms(id), listCosts(id)
+  ])
+  return { import: imp, items, documents, quotes, customs, costs }
 }
 
 // ─── Import Items ─────────────────────────────────────────────────────────────
 
-export function listItems(importId: string): ComexImportItem[] {
-  return getDb().prepare('SELECT * FROM comex_import_items WHERE import_id = ? ORDER BY created_at ASC').all(importId) as ComexImportItem[]
+export async function listItems(importId: string): Promise<ComexImportItem[]> {
+  return getPowerSyncDb().getAll<ComexImportItem>('SELECT * FROM comex_import_items WHERE import_id = ? ORDER BY created_at ASC', [importId])
 }
 
-export function createItem(input: CreateComexItemInput): ComexImportItem {
-  const db = getDb()
+export async function createItem(input: CreateComexItemInput): Promise<ComexImportItem> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO comex_import_items (id, import_id, description, hs_code, quantity, unit, unit_price, currency, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.import_id, input.description, input.hs_code ?? '', input.quantity, input.unit ?? 'u', input.unit_price, input.currency ?? 'USD', now)
-  return db.prepare('SELECT * FROM comex_import_items WHERE id = ?').get(id) as ComexImportItem
+  await db.execute(`
+    INSERT INTO comex_import_items (id, import_id, description, hs_code, quantity, unit, unit_price, currency, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, input.import_id, input.description, input.hs_code ?? '', input.quantity, input.unit ?? 'u', input.unit_price, input.currency ?? 'USD', now, now, WORKSPACE_ID])
+  return (await db.getOptional<ComexImportItem>('SELECT * FROM comex_import_items WHERE id = ?', [id]))!
 }
 
-export function deleteItem(id: string): void {
-  getDb().prepare('DELETE FROM comex_import_items WHERE id = ?').run(id)
+export async function deleteItem(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_import_items WHERE id = ?', [id])
 }
 
 // ─── Documents ────────────────────────────────────────────────────────────────
 
-export function listDocuments(importId: string): ComexDocument[] {
-  return getDb().prepare('SELECT * FROM comex_documents WHERE import_id = ? ORDER BY created_at ASC').all(importId) as ComexDocument[]
+export async function listDocuments(importId: string): Promise<ComexDocument[]> {
+  return getPowerSyncDb().getAll<ComexDocument>('SELECT * FROM comex_documents WHERE import_id = ? ORDER BY created_at ASC', [importId])
 }
 
-export function getDocument(id: string): ComexDocument | null {
-  return getDb().prepare('SELECT * FROM comex_documents WHERE id = ?').get(id) as ComexDocument | null
+export async function getDocument(id: string): Promise<ComexDocument | null> {
+  return (await getPowerSyncDb().getOptional<ComexDocument>('SELECT * FROM comex_documents WHERE id = ?', [id])) ?? null
 }
 
-export function createDocument(input: CreateComexDocumentInput): ComexDocument {
-  const db = getDb()
+export async function createDocument(input: CreateComexDocumentInput): Promise<ComexDocument> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_documents
       (id, import_id, type, name, drive_file_id, status, notes, received_at,
-       local_stored_name, size_bytes, mime_type, drive_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       local_stored_name, size_bytes, mime_type, drive_status, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.import_id, input.type ?? 'other', input.name,
     input.drive_file_id ?? null,
     input.status ?? 'pending', input.notes ?? '', input.received_at ?? null,
@@ -316,13 +311,13 @@ export function createDocument(input: CreateComexDocumentInput): ComexDocument {
     (input as Partial<ComexDocument>).size_bytes ?? null,
     (input as Partial<ComexDocument>).mime_type ?? null,
     (input as Partial<ComexDocument>).drive_status ?? 'none',
-    now
-  )
-  return db.prepare('SELECT * FROM comex_documents WHERE id = ?').get(id) as ComexDocument
+    now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexDocument>('SELECT * FROM comex_documents WHERE id = ?', [id]))!
 }
 
-export function updateDocument(id: string, data: Partial<ComexDocument>): void {
-  const db = getDb()
+export async function updateDocument(id: string, data: Partial<ComexDocument>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = [
     'type','name','drive_file_id','status','notes','received_at',
     'local_stored_name','size_bytes','mime_type','drive_status'
@@ -333,31 +328,32 @@ export function updateDocument(id: string, data: Partial<ComexDocument>): void {
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_documents SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_documents SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteDocument(id: string): void {
-  getDb().prepare('DELETE FROM comex_documents WHERE id = ?').run(id)
+export async function deleteDocument(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_documents WHERE id = ?', [id])
 }
 
 // ─── Logistics Quotes ─────────────────────────────────────────────────────────
 
-export function listQuotes(importId: string): ComexLogisticsQuote[] {
-  return getDb().prepare('SELECT * FROM comex_logistics_quotes WHERE import_id = ? ORDER BY created_at DESC').all(importId) as ComexLogisticsQuote[]
+export async function listQuotes(importId: string): Promise<ComexLogisticsQuote[]> {
+  return getPowerSyncDb().getAll<ComexLogisticsQuote>('SELECT * FROM comex_logistics_quotes WHERE import_id = ? ORDER BY created_at DESC', [importId])
 }
 
-export function createQuote(input: CreateComexQuoteInput): ComexLogisticsQuote {
-  const db = getDb()
+export async function createQuote(input: CreateComexQuoteInput): Promise<ComexLogisticsQuote> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_logistics_quotes
       (id, import_id, operator_id, operator_name, contact, cargo_type,
        quote_amount, currency, services_included, valid_until, status,
-       rfq_sent_at, rfq_email_text, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       rfq_sent_at, rfq_email_text, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.import_id,
     (input as Partial<ComexLogisticsQuote>).operator_id ?? null,
     input.operator_name,
@@ -371,13 +367,13 @@ export function createQuote(input: CreateComexQuoteInput): ComexLogisticsQuote {
     (input as Partial<ComexLogisticsQuote>).rfq_sent_at ?? null,
     (input as Partial<ComexLogisticsQuote>).rfq_email_text ?? '',
     input.notes ?? '',
-    now
-  )
-  return db.prepare('SELECT * FROM comex_logistics_quotes WHERE id = ?').get(id) as ComexLogisticsQuote
+    now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexLogisticsQuote>('SELECT * FROM comex_logistics_quotes WHERE id = ?', [id]))!
 }
 
-export function updateQuote(id: string, data: Partial<ComexLogisticsQuote>): void {
-  const db = getDb()
+export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = [
     'operator_id','operator_name','contact','cargo_type',
     'quote_amount','currency','services_included','valid_until',
@@ -389,37 +385,38 @@ export function updateQuote(id: string, data: Partial<ComexLogisticsQuote>): voi
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_logistics_quotes SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_logistics_quotes SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteQuote(id: string): void {
-  getDb().prepare('DELETE FROM comex_logistics_quotes WHERE id = ?').run(id)
+export async function deleteQuote(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_logistics_quotes WHERE id = ?', [id])
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
-export function listPayments(importId: string): ComexPayment[] {
-  return getDb().prepare('SELECT * FROM comex_payments WHERE import_id = ? ORDER BY created_at ASC').all(importId) as ComexPayment[]
+export async function listPayments(importId: string): Promise<ComexPayment[]> {
+  return getPowerSyncDb().getAll<ComexPayment>('SELECT * FROM comex_payments WHERE import_id = ? ORDER BY created_at ASC', [importId])
 }
 
-export function createPayment(input: CreateComexPaymentInput): ComexPayment {
-  const db = getDb()
+export async function createPayment(input: CreateComexPaymentInput): Promise<ComexPayment> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_payments
-      (id, import_id, amount, currency, exchange_rate, payment_date, method, bank, reference, status, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.import_id, input.amount, input.currency ?? 'USD',
+      (id, import_id, amount, currency, exchange_rate, payment_date, method, bank, reference, status, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, input.import_id, input.amount, input.currency ?? 'USD',
          input.exchange_rate ?? null, input.payment_date ?? null,
          input.method ?? 'wire', input.bank ?? '', input.reference ?? '',
-         input.status ?? 'pending', input.notes ?? '', now)
-  return db.prepare('SELECT * FROM comex_payments WHERE id = ?').get(id) as ComexPayment
+         input.status ?? 'pending', input.notes ?? '', now, now, WORKSPACE_ID])
+  return (await db.getOptional<ComexPayment>('SELECT * FROM comex_payments WHERE id = ?', [id]))!
 }
 
-export function updatePayment(id: string, data: Partial<ComexPayment>): void {
-  const db = getDb()
+export async function updatePayment(id: string, data: Partial<ComexPayment>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['amount','currency','exchange_rate','payment_date','method','bank','reference','status','notes']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -427,28 +424,25 @@ export function updatePayment(id: string, data: Partial<ComexPayment>): void {
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_payments SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_payments SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deletePayment(id: string): void {
-  getDb().prepare('DELETE FROM comex_payments WHERE id = ?').run(id)
+export async function deletePayment(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_payments WHERE id = ?', [id])
 }
 
 // ─── Customs (1:1 per import) ─────────────────────────────────────────────────
 
-export function getCustoms(importId: string): ComexCustoms | null {
-  return getDb()
-    .prepare('SELECT * FROM comex_import_customs WHERE import_id = ?')
-    .get(importId) as ComexCustoms | null
+export async function getCustoms(importId: string): Promise<ComexCustoms | null> {
+  return (await getPowerSyncDb().getOptional<ComexCustoms>('SELECT * FROM comex_import_customs WHERE import_id = ?', [importId])) ?? null
 }
 
-export function upsertCustoms(importId: string, data: Partial<UpsertComexCustomsInput>): ComexCustoms {
-  const db = getDb()
+export async function upsertCustoms(importId: string, data: Partial<UpsertComexCustomsInput>): Promise<ComexCustoms> {
+  const db = getPowerSyncDb()
   const now = Date.now()
-  const existing = db
-    .prepare('SELECT id FROM comex_import_customs WHERE import_id = ?')
-    .get(importId) as { id: string } | undefined
+  const existing = await db.getOptional<{ id: string }>('SELECT id FROM comex_import_customs WHERE import_id = ?', [importId])
 
   if (existing) {
     // Update only provided fields
@@ -465,11 +459,11 @@ export function upsertCustoms(importId: string, data: Partial<UpsertComexCustoms
       if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
     }
     vals.push(existing.id)
-    db.prepare(`UPDATE comex_import_customs SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-    return db.prepare('SELECT * FROM comex_import_customs WHERE id = ?').get(existing.id) as ComexCustoms
+    await db.execute(`UPDATE comex_import_customs SET ${sets.join(', ')} WHERE id = ?`, vals)
+    return (await db.getOptional<ComexCustoms>('SELECT * FROM comex_import_customs WHERE id = ?', [existing.id]))!
   } else {
     const id = randomUUID()
-    db.prepare(`
+    await db.execute(`
       INSERT INTO comex_import_customs (
         id, import_id, fob_currency, fob_invoice, fob_declared,
         dolar_aduana, dolar_naviera, paridad_usd_eur,
@@ -478,11 +472,11 @@ export function upsertCustoms(importId: string, data: Partial<UpsertComexCustoms
         peso_bruto_kg, volumen_m3, cant_pallets, cant_cartons, cant_bultos,
         mulc_date, fecha_pago_banco, cierre_banco_date,
         listas_despachante_date, listas_oscar_andrea_date,
-        created_at, updated_at
+        created_at, updated_at, workspace_id
       ) VALUES (
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
       )
-    `).run(
+    `, [
       id, importId,
       data.fob_currency ?? 'USD', data.fob_invoice ?? null, data.fob_declared ?? null,
       data.dolar_aduana ?? null, data.dolar_naviera ?? null, data.paridad_usd_eur ?? null,
@@ -492,37 +486,35 @@ export function upsertCustoms(importId: string, data: Partial<UpsertComexCustoms
       data.volumen_m3 ?? null, data.cant_pallets ?? null, data.cant_cartons ?? null, data.cant_bultos ?? null,
       data.mulc_date ?? null, data.fecha_pago_banco ?? null, data.cierre_banco_date ?? null,
       data.listas_despachante_date ?? null, data.listas_oscar_andrea_date ?? null,
-      now, now
-    )
-    return db.prepare('SELECT * FROM comex_import_customs WHERE id = ?').get(id) as ComexCustoms
+      now, now, WORKSPACE_ID
+    ])
+    return (await db.getOptional<ComexCustoms>('SELECT * FROM comex_import_customs WHERE id = ?', [id]))!
   }
 }
 
 // ─── Cost Items ───────────────────────────────────────────────────────────────
 
-export function listCosts(importId: string): ComexCostItem[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_import_costs WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .all(importId) as ComexCostItem[]
+export async function listCosts(importId: string): Promise<ComexCostItem[]> {
+  return getPowerSyncDb().getAll<ComexCostItem>('SELECT * FROM comex_import_costs WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC', [importId])
 }
 
-export function createCost(input: CreateComexCostInput): ComexCostItem {
-  const db = getDb()
+export async function createCost(input: CreateComexCostInput): Promise<ComexCostItem> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO comex_import_costs (id, import_id, category, concept, amount_pesos, amount_usd, sort_order, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  await db.execute(`
+    INSERT INTO comex_import_costs (id, import_id, category, concept, amount_pesos, amount_usd, sort_order, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.import_id, input.category ?? 'otros', input.concept,
     input.amount_pesos ?? 0, input.amount_usd ?? null,
-    input.sort_order ?? 0, now
-  )
-  return db.prepare('SELECT * FROM comex_import_costs WHERE id = ?').get(id) as ComexCostItem
+    input.sort_order ?? 0, now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexCostItem>('SELECT * FROM comex_import_costs WHERE id = ?', [id]))!
 }
 
-export function updateCost(id: string, data: Partial<ComexCostItem>): void {
-  const db = getDb()
+export async function updateCost(id: string, data: Partial<ComexCostItem>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['category','concept','amount_pesos','amount_usd','sort_order']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -530,12 +522,13 @@ export function updateCost(id: string, data: Partial<ComexCostItem>): void {
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_import_costs SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_import_costs SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteCost(id: string): void {
-  getDb().prepare('DELETE FROM comex_import_costs WHERE id = ?').run(id)
+export async function deleteCost(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_import_costs WHERE id = ?', [id])
 }
 
 // ─── Supplier Contacts ────────────────────────────────────────────────────────
@@ -717,26 +710,24 @@ export async function deleteOperatorContact(id: string): Promise<void> {
 
 // ─── Tributos del despacho ────────────────────────────────────────────────────
 
-export function listTributos(importId: string): ComexImportTributo[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_import_tributos WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .all(importId) as ComexImportTributo[]
+export async function listTributos(importId: string): Promise<ComexImportTributo[]> {
+  return getPowerSyncDb().getAll<ComexImportTributo>('SELECT * FROM comex_import_tributos WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC', [importId])
 }
 
-export function createTributo(input: CreateComexImportTributoInput): ComexImportTributo {
-  const db = getDb()
+export async function createTributo(input: CreateComexImportTributoInput): Promise<ComexImportTributo> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
-    INSERT INTO comex_import_tributos (id, import_id, codigo, concepto, porcentaje, importe_usd, sort_order, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.import_id, input.codigo ?? '', input.concepto ?? '',
-    input.porcentaje ?? null, input.importe_usd ?? 0, input.sort_order ?? 0, now)
-  return db.prepare('SELECT * FROM comex_import_tributos WHERE id = ?').get(id) as ComexImportTributo
+  await db.execute(`
+    INSERT INTO comex_import_tributos (id, import_id, codigo, concepto, porcentaje, importe_usd, sort_order, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, input.import_id, input.codigo ?? '', input.concepto ?? '',
+    input.porcentaje ?? null, input.importe_usd ?? 0, input.sort_order ?? 0, now, now, WORKSPACE_ID])
+  return (await db.getOptional<ComexImportTributo>('SELECT * FROM comex_import_tributos WHERE id = ?', [id]))!
 }
 
-export function updateTributo(id: string, data: Partial<ComexImportTributo>): void {
-  const db = getDb()
+export async function updateTributo(id: string, data: Partial<ComexImportTributo>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['codigo', 'concepto', 'porcentaje', 'importe_usd', 'sort_order']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -744,88 +735,86 @@ export function updateTributo(id: string, data: Partial<ComexImportTributo>): vo
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_import_tributos SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_import_tributos SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteTributo(id: string): void {
-  getDb().prepare('DELETE FROM comex_import_tributos WHERE id = ?').run(id)
+export async function deleteTributo(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_import_tributos WHERE id = ?', [id])
 }
 
 /** Reemplaza todos los tributos de una importación de una sola vez (usado por IA) */
-export function upsertTributos(importId: string, tributos: Omit<CreateComexImportTributoInput, 'import_id'>[]): ComexImportTributo[] {
-  const db = getDb()
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM comex_import_tributos WHERE import_id = ?').run(importId)
-    const now = Date.now()
+export async function upsertTributos(importId: string, tributos: Omit<CreateComexImportTributoInput, 'import_id'>[]): Promise<ComexImportTributo[]> {
+  const db = getPowerSyncDb()
+  const now = Date.now()
+  await db.writeTransaction(async (tx) => {
+    await tx.execute('DELETE FROM comex_import_tributos WHERE import_id = ?', [importId])
     for (let i = 0; i < tributos.length; i++) {
       const t = tributos[i]
       const id = randomUUID()
-      db.prepare(`
-        INSERT INTO comex_import_tributos (id, import_id, codigo, concepto, porcentaje, importe_usd, sort_order, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, importId, t.codigo ?? '', t.concepto ?? '', t.porcentaje ?? null, t.importe_usd ?? 0, i, now)
+      await tx.execute(`
+        INSERT INTO comex_import_tributos (id, import_id, codigo, concepto, porcentaje, importe_usd, sort_order, created_at, updated_at, workspace_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [id, importId, t.codigo ?? '', t.concepto ?? '', t.porcentaje ?? null, t.importe_usd ?? 0, i, now, now, WORKSPACE_ID])
     }
   })
-  tx()
   return listTributos(importId)
 }
 
 // ─── Extra costs ─────────────────────────────────────────────────────────────
 
 /** Crea los 3 costos fijos por defecto al crear una importación */
-export function createDefaultExtraCosts(importId: string): void {
+export async function createDefaultExtraCosts(importId: string): Promise<void> {
   const defaults: Array<{ categoria: string; concepto: string; sort_order: number }> = [
     { categoria: 'flete_internacional', concepto: 'Flete internacional', sort_order: 0 },
     { categoria: 'flete_local',         concepto: 'Flete local',         sort_order: 1 },
     { categoria: 'despachante',         concepto: 'Despachante',         sort_order: 2 },
     { categoria: 'deposito_fiscal',     concepto: 'Depósito fiscal',     sort_order: 3 }
   ]
-  const db = getDb()
+  const db = getPowerSyncDb()
   const now = Date.now()
   for (const d of defaults) {
     const id = randomUUID()
-    db.prepare(`
+    await db.execute(`
       INSERT INTO comex_import_extra_costs
         (id, import_id, categoria, concepto, proveedor, nro_factura, fecha_factura,
          importe, moneda, stored_name, original_name, drive_file_id, drive_folder_id,
-         drive_status, sort_order, created_at)
-      VALUES (?, ?, ?, ?, '', '', NULL, 0, 'ARS', NULL, NULL, NULL, NULL, 'none', ?, ?)
-    `).run(id, importId, d.categoria, d.concepto, d.sort_order, now)
+         drive_status, sort_order, created_at, updated_at, workspace_id)
+      VALUES (?, ?, ?, ?, '', '', NULL, 0, 'ARS', NULL, NULL, NULL, NULL, 'none', ?, ?, ?, ?)
+    `, [id, importId, d.categoria, d.concepto, d.sort_order, now, now, WORKSPACE_ID])
   }
 }
 
-export function listExtraCosts(importId: string): ComexImportExtraCost[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_import_extra_costs WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .all(importId) as ComexImportExtraCost[]
+export async function listExtraCosts(importId: string): Promise<ComexImportExtraCost[]> {
+  return getPowerSyncDb().getAll<ComexImportExtraCost>('SELECT * FROM comex_import_extra_costs WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC', [importId])
 }
 
-export function getExtraCost(id: string): ComexImportExtraCost | null {
-  return getDb().prepare('SELECT * FROM comex_import_extra_costs WHERE id = ?').get(id) as ComexImportExtraCost | null
+export async function getExtraCost(id: string): Promise<ComexImportExtraCost | null> {
+  return (await getPowerSyncDb().getOptional<ComexImportExtraCost>('SELECT * FROM comex_import_extra_costs WHERE id = ?', [id])) ?? null
 }
 
-export function createExtraCost(input: CreateComexImportExtraCostInput): ComexImportExtraCost {
-  const db = getDb()
+export async function createExtraCost(input: CreateComexImportExtraCostInput): Promise<ComexImportExtraCost> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_import_extra_costs
       (id, import_id, categoria, concepto, proveedor, nro_factura, fecha_factura,
        importe, moneda, stored_name, original_name, drive_file_id, drive_folder_id,
-       drive_status, sort_order, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       drive_status, sort_order, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.import_id, input.categoria ?? 'otro', input.concepto ?? '',
     input.proveedor ?? '', input.nro_factura ?? '', input.fecha_factura ?? null,
     input.importe ?? 0, input.moneda ?? 'ARS',
-    null, null, null, null, 'none', input.sort_order ?? 0, now
-  )
-  return db.prepare('SELECT * FROM comex_import_extra_costs WHERE id = ?').get(id) as ComexImportExtraCost
+    null, null, null, null, 'none', input.sort_order ?? 0, now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexImportExtraCost>('SELECT * FROM comex_import_extra_costs WHERE id = ?', [id]))!
 }
 
-export function updateExtraCost(id: string, data: Partial<ComexImportExtraCost>): void {
-  const db = getDb()
+export async function updateExtraCost(id: string, data: Partial<ComexImportExtraCost>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = [
     'categoria', 'concepto', 'proveedor', 'nro_factura', 'fecha_factura',
     'importe', 'moneda',
@@ -842,51 +831,50 @@ export function updateExtraCost(id: string, data: Partial<ComexImportExtraCost>)
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_import_extra_costs SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_import_extra_costs SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteExtraCost(id: string): void {
-  getDb().prepare('DELETE FROM comex_import_extra_costs WHERE id = ?').run(id)
+export async function deleteExtraCost(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_import_extra_costs WHERE id = ?', [id])
 }
 
 // ─── Proformas ────────────────────────────────────────────────────────────────
 
-export function listProformas(importId: string, tipo: 'proforma' | 'factura' = 'proforma'): ComexProforma[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_proformas WHERE import_id = ? AND tipo = ? ORDER BY numero ASC, created_at ASC')
-    .all(importId, tipo) as ComexProforma[]
+export async function listProformas(importId: string, tipo: 'proforma' | 'factura' = 'proforma'): Promise<ComexProforma[]> {
+  return getPowerSyncDb().getAll<ComexProforma>('SELECT * FROM comex_proformas WHERE import_id = ? AND tipo = ? ORDER BY numero ASC, created_at ASC', [importId, tipo])
 }
 
-export function getProforma(id: string): ComexProforma | null {
-  return getDb().prepare('SELECT * FROM comex_proformas WHERE id = ?').get(id) as ComexProforma | null
+export async function getProforma(id: string): Promise<ComexProforma | null> {
+  return (await getPowerSyncDb().getOptional<ComexProforma>('SELECT * FROM comex_proformas WHERE id = ?', [id])) ?? null
 }
 
-export function createProforma(input: CreateComexProformaInput): ComexProforma {
-  const db  = getDb()
+export async function createProforma(input: CreateComexProformaInput): Promise<ComexProforma> {
+  const db  = getPowerSyncDb()
   const id  = randomUUID()
   const now = Date.now()
   const tipo   = input.tipo ?? 'proforma'
   // Auto-número por tipo
-  const maxRow = db.prepare('SELECT MAX(numero) as m FROM comex_proformas WHERE import_id = ? AND tipo = ?').get(input.import_id, tipo) as { m: number | null }
+  const maxRow = await db.getOptional<{ m: number | null }>('SELECT MAX(numero) as m FROM comex_proformas WHERE import_id = ? AND tipo = ?', [input.import_id, tipo])
   const numero = (maxRow?.m ?? 0) + 1
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_proformas
       (id, import_id, tipo, numero, fecha_proforma, importe, moneda, nro_proforma, descripcion,
-       incluir_en_total, stored_name, original_name, drive_file_id, drive_folder_id, drive_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       incluir_en_total, stored_name, original_name, drive_file_id, drive_folder_id, drive_status, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.import_id, tipo, numero,
     input.fecha_proforma ?? null, input.importe ?? null,
     input.moneda ?? 'USD', input.nro_proforma ?? '', input.descripcion ?? '',
     input.incluir_en_total ?? 1,
-    null, null, null, null, 'none', now
-  )
-  return db.prepare('SELECT * FROM comex_proformas WHERE id = ?').get(id) as ComexProforma
+    null, null, null, null, 'none', now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexProforma>('SELECT * FROM comex_proformas WHERE id = ?', [id]))!
 }
 
-export function updateProforma(id: string, data: Partial<ComexProforma>): void {
-  const db = getDb()
+export async function updateProforma(id: string, data: Partial<ComexProforma>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = [
     'fecha_proforma', 'importe', 'moneda', 'nro_proforma', 'descripcion',
     'incluir_en_total', 'stored_name', 'original_name',
@@ -898,40 +886,39 @@ export function updateProforma(id: string, data: Partial<ComexProforma>): void {
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_proformas SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_proformas SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteProforma(id: string): void {
-  getDb().prepare('DELETE FROM comex_proformas WHERE id = ?').run(id)
+export async function deleteProforma(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_proformas WHERE id = ?', [id])
 }
 
 // ─── INAL Certificates ────────────────────────────────────────────────────────
 
-export function listInalCerts(importId: string): ComexInalCert[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_inal_certs WHERE import_id = ? ORDER BY created_at ASC')
-    .all(importId) as ComexInalCert[]
+export async function listInalCerts(importId: string): Promise<ComexInalCert[]> {
+  return getPowerSyncDb().getAll<ComexInalCert>('SELECT * FROM comex_inal_certs WHERE import_id = ? ORDER BY created_at ASC', [importId])
 }
 
-export function createInalCert(
+export async function createInalCert(
   importId: string,
   originalName: string,
   opts: { local_stored_name?: string; size_bytes?: number; mime_type?: string } = {}
-): ComexInalCert {
-  const db = getDb()
+): Promise<ComexInalCert> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_inal_certs
-      (id, import_id, original_name, local_stored_name, size_bytes, mime_type, drive_file_id, drive_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, NULL, 'none', ?)
-  `).run(id, importId, originalName, opts.local_stored_name ?? null, opts.size_bytes ?? null, opts.mime_type ?? null, now)
-  return db.prepare('SELECT * FROM comex_inal_certs WHERE id = ?').get(id) as ComexInalCert
+      (id, import_id, original_name, local_stored_name, size_bytes, mime_type, drive_file_id, drive_status, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, NULL, 'none', ?, ?, ?)
+  `, [id, importId, originalName, opts.local_stored_name ?? null, opts.size_bytes ?? null, opts.mime_type ?? null, now, now, WORKSPACE_ID])
+  return (await db.getOptional<ComexInalCert>('SELECT * FROM comex_inal_certs WHERE id = ?', [id]))!
 }
 
-export function updateInalCert(id: string, data: Partial<ComexInalCert>): void {
-  const db = getDb()
+export async function updateInalCert(id: string, data: Partial<ComexInalCert>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['drive_file_id', 'drive_status', 'local_stored_name', 'size_bytes', 'mime_type']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -939,16 +926,17 @@ export function updateInalCert(id: string, data: Partial<ComexInalCert>): void {
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_inal_certs SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_inal_certs SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteInalCert(id: string): void {
-  getDb().prepare('DELETE FROM comex_inal_certs WHERE id = ?').run(id)
+export async function deleteInalCert(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_inal_certs WHERE id = ?', [id])
 }
 
-export function getInalCert(id: string): ComexInalCert | null {
-  return getDb().prepare('SELECT * FROM comex_inal_certs WHERE id = ?').get(id) as ComexInalCert | null
+export async function getInalCert(id: string): Promise<ComexInalCert | null> {
+  return (await getPowerSyncDb().getOptional<ComexInalCert>('SELECT * FROM comex_inal_certs WHERE id = ?', [id])) ?? null
 }
 
 // ─── Gestores INAL ────────────────────────────────────────────────────────────
@@ -1177,12 +1165,12 @@ async function hydratePlanning(row: Record<string, unknown> | null): Promise<Imp
   if (planning.supplier_id) {
     planning.supplier = (await getSupplier(planning.supplier_id)) ?? undefined
   }
-  planning.milestones = listMilestones(planning.id)
+  planning.milestones = await listMilestones(planning.id)
   return planning
 }
 
 export async function listPlannings(filters?: { brandId?: string; status?: string }): Promise<ImportOrderPlanning[]> {
-  const db = getDb()
+  const db = getPowerSyncDb()
   let sql = 'SELECT * FROM import_order_plannings'
   const conditions: string[] = []
   const params: unknown[] = []
@@ -1190,18 +1178,17 @@ export async function listPlannings(filters?: { brandId?: string; status?: strin
   if (filters?.status) { conditions.push('status = ?'); params.push(filters.status) }
   if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
   sql += ' ORDER BY target_commercial_availability_date ASC, created_at DESC'
-  const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+  const rows = await db.getAll<Record<string, unknown>>(sql, params)
   return Promise.all(rows.map((r) => hydratePlanning(r) as Promise<ImportOrderPlanning>))
 }
 
 export async function getPlanning(id: string): Promise<ImportOrderPlanning | null> {
-  const db = getDb()
-  const row = db.prepare('SELECT * FROM import_order_plannings WHERE id = ?').get(id) as Record<string, unknown> | null
-  return hydratePlanning(row)
+  const row = await getPowerSyncDb().getOptional<Record<string, unknown>>('SELECT * FROM import_order_plannings WHERE id = ?', [id])
+  return hydratePlanning(row ?? null)
 }
 
 export async function createPlanning(input: CreateImportOrderPlanningInput): Promise<ImportOrderPlanning> {
-  const db = getDb()
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
 
@@ -1221,28 +1208,27 @@ export async function createPlanning(input: CreateImportOrderPlanningInput): Pro
   }
 
   const placeholders = PLANNING_COLUMNS.map(() => '?').join(', ')
-  db.prepare(`
+  await db.execute(`
     INSERT INTO import_order_plannings (id, ${PLANNING_COLUMNS.join(', ')}, created_at, updated_at)
     VALUES (?, ${placeholders}, ?, ?)
-  `).run(
+  `, [
     id,
     ...PLANNING_COLUMNS.map((col) => (merged as unknown as Record<string, unknown>)[col] ?? null),
     now, now
-  )
+  ])
 
   if (result.milestoneDates) {
     const milestoneRecords = buildMilestoneRecords(id, result.milestoneDates)
-    const insertMilestone = db.prepare(`
-      INSERT INTO import_order_planning_milestones
-        (id, planning_id, milestone_type, estimated_date, calculated_date, real_date, status, notes, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
     for (const m of milestoneRecords) {
-      insertMilestone.run(
+      await db.execute(`
+        INSERT INTO import_order_planning_milestones
+          (id, planning_id, milestone_type, estimated_date, calculated_date, real_date, status, notes, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
         randomUUID(), m.planning_id, m.milestone_type,
         m.estimated_date, m.calculated_date, m.real_date,
         m.status, m.notes, m.sort_order, now, now
-      )
+      ])
     }
   }
 
@@ -1250,49 +1236,49 @@ export async function createPlanning(input: CreateImportOrderPlanningInput): Pro
 }
 
 export async function updatePlanning(id: string, data: Partial<ImportOrderPlanning>): Promise<ImportOrderPlanning | null> {
-  const db = getDb()
+  const db = getPowerSyncDb()
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
   for (const key of PLANNING_COLUMNS) {
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   vals.push(id)
-  db.prepare(`UPDATE import_order_plannings SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE import_order_plannings SET ${sets.join(', ')} WHERE id = ?`, vals)
   return recalculatePlanning(id)
 }
 
-export function deletePlanning(id: string): void {
-  getDb().prepare('DELETE FROM import_order_plannings WHERE id = ?').run(id)
+export async function deletePlanning(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM import_order_plannings WHERE id = ?', [id])
 }
 
 /** Recalcula fechas, riesgo, demanda y `calculated_date` de los hitos a partir del estado actual. */
 export async function recalculatePlanning(id: string): Promise<ImportOrderPlanning | null> {
-  const db = getDb()
+  const db = getPowerSyncDb()
   const planning = await getPlanning(id)
   if (!planning) return null
 
   const brand = planning.brand ?? null
   const result = calculatePlanning(planning, brand)
 
-  db.prepare(`
+  await db.execute(`
     UPDATE import_order_plannings SET
       recommended_order_date = ?, approval_deadline_date = ?, estimated_reception_date = ?,
       total_lead_time_days = ?, risk_status = ?, demand_for_period = ?, desired_coverage_months = ?,
       updated_at = ?
     WHERE id = ?
-  `).run(
+  `, [
     result.recommended_order_date, result.approval_deadline_date, result.estimated_reception_date,
     result.total_lead_time_days, result.risk_status, result.demand_for_period, result.desired_coverage_months,
     Date.now(), id
-  )
+  ])
 
   if (result.milestoneDates) {
-    const updateMilestoneDate = db.prepare(
-      'UPDATE import_order_planning_milestones SET calculated_date = ?, updated_at = ? WHERE planning_id = ? AND milestone_type = ?'
-    )
     const now = Date.now()
     for (const [type, date] of Object.entries(result.milestoneDates)) {
-      updateMilestoneDate.run(date, now, id, type)
+      await db.execute(
+        'UPDATE import_order_planning_milestones SET calculated_date = ?, updated_at = ? WHERE planning_id = ? AND milestone_type = ?',
+        [date, now, id, type]
+      )
     }
   }
 
@@ -1301,16 +1287,15 @@ export async function recalculatePlanning(id: string): Promise<ImportOrderPlanni
 
 // ─── Hitos de programación ─────────────────────────────────────────────────────
 
-export function listMilestones(planningId: string): ImportOrderPlanningMilestone[] {
-  const db = getDb()
-  const rows = db.prepare(
-    'SELECT * FROM import_order_planning_milestones WHERE planning_id = ? ORDER BY sort_order ASC'
-  ).all(planningId) as Record<string, unknown>[]
-  return rows as unknown as ImportOrderPlanningMilestone[]
+export async function listMilestones(planningId: string): Promise<ImportOrderPlanningMilestone[]> {
+  return getPowerSyncDb().getAll<ImportOrderPlanningMilestone>(
+    'SELECT * FROM import_order_planning_milestones WHERE planning_id = ? ORDER BY sort_order ASC',
+    [planningId]
+  )
 }
 
-export function updateMilestone(id: string, data: Partial<ImportOrderPlanningMilestone>): ImportOrderPlanningMilestone | null {
-  const db = getDb()
+export async function updateMilestone(id: string, data: Partial<ImportOrderPlanningMilestone>): Promise<ImportOrderPlanningMilestone | null> {
+  const db = getPowerSyncDb()
   const allowed = ['real_date', 'status', 'notes']
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
@@ -1318,18 +1303,17 @@ export function updateMilestone(id: string, data: Partial<ImportOrderPlanningMil
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   vals.push(id)
-  db.prepare(`UPDATE import_order_planning_milestones SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM import_order_planning_milestones WHERE id = ?').get(id) as ImportOrderPlanningMilestone | null
+  await db.execute(`UPDATE import_order_planning_milestones SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return db.getOptional<ImportOrderPlanningMilestone>('SELECT * FROM import_order_planning_milestones WHERE id = ?', [id])
 }
 
 // ─── Reportes IA de programación ───────────────────────────────────────────────
 
-export function listPlanningAIReports(filters?: {
+export async function listPlanningAIReports(filters?: {
   reportType?: string
   brandId?: string
   supplierId?: string
-}): ImportOrderPlanningAIReport[] {
-  const db = getDb()
+}): Promise<ImportOrderPlanningAIReport[]> {
   let sql = 'SELECT * FROM import_order_planning_ai_reports'
   const conditions: string[] = []
   const params: unknown[] = []
@@ -1338,33 +1322,30 @@ export function listPlanningAIReports(filters?: {
   if (filters?.supplierId) { conditions.push('supplier_id = ?'); params.push(filters.supplierId) }
   if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
   sql += ' ORDER BY created_at DESC'
-  const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
-  return rows as unknown as ImportOrderPlanningAIReport[]
+  return getPowerSyncDb().getAll<ImportOrderPlanningAIReport>(sql, params)
 }
 
-export function getPlanningAIReport(id: string): ImportOrderPlanningAIReport | null {
-  const db = getDb()
-  const row = db.prepare('SELECT * FROM import_order_planning_ai_reports WHERE id = ?').get(id) as Record<string, unknown> | null
-  return row as unknown as ImportOrderPlanningAIReport | null
+export async function getPlanningAIReport(id: string): Promise<ImportOrderPlanningAIReport | null> {
+  return (await getPowerSyncDb().getOptional<ImportOrderPlanningAIReport>('SELECT * FROM import_order_planning_ai_reports WHERE id = ?', [id])) ?? null
 }
 
-export function createPlanningAIReport(input: CreateImportOrderPlanningAIReportInput): ImportOrderPlanningAIReport {
-  const db = getDb()
+export async function createPlanningAIReport(input: CreateImportOrderPlanningAIReportInput): Promise<ImportOrderPlanningAIReport> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO import_order_planning_ai_reports
-      (id, report_type, brand_id, supplier_id, period_start_date, period_end_date, summary, findings, recommendations, risks, generated_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+      (id, report_type, brand_id, supplier_id, period_start_date, period_end_date, summary, findings, recommendations, risks, generated_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.report_type, input.brand_id, input.supplier_id,
     input.period_start_date, input.period_end_date,
     input.summary, input.findings, input.recommendations, input.risks,
-    input.generated_by, now
-  )
-  return getPlanningAIReport(id)!
+    input.generated_by, now, now
+  ])
+  return (await getPlanningAIReport(id))!
 }
 
-export function deletePlanningAIReport(id: string): void {
-  getDb().prepare('DELETE FROM import_order_planning_ai_reports WHERE id = ?').run(id)
+export async function deletePlanningAIReport(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM import_order_planning_ai_reports WHERE id = ?', [id])
 }
