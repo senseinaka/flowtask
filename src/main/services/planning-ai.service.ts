@@ -87,7 +87,7 @@ function buildPlanningContext(planning: ImportOrderPlanning) {
 export async function generatePlanningRecommendation(
   planningId: string
 ): Promise<{ summary: string; riskExplanation: string; tokensUsed: number }> {
-  const planning = getPlanning(planningId)
+  const planning = await getPlanning(planningId)
   if (!planning) throw new Error('Programación no encontrada')
 
   const config = getAIConfig()
@@ -201,7 +201,7 @@ function buildReportContext(plannings: ImportOrderPlanning[], input: GeneratePla
 export async function generatePlanningAIReport(
   input: GeneratePlanningAIReportInput
 ): Promise<CreateImportOrderPlanningAIReportInput & { tokensUsed: number }> {
-  const plannings = listPlannings(input.brandId ? { brandId: input.brandId } : undefined)
+  const plannings = (await listPlannings(input.brandId ? { brandId: input.brandId } : undefined))
     .filter(p => !input.supplierId || p.supplier_id === input.supplierId)
 
   const config = getAIConfig()

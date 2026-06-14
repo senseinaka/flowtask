@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { getDb } from '../db'
+import { getPowerSyncDb } from '../powersync'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
   ComexLogisticsQuote, ComexPayment, ComexCustoms, ComexCostItem,
@@ -16,21 +17,23 @@ import type {
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput
 } from '@shared/types'
 
+const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 
-export function listSuppliers(): ComexSupplier[] {
-  return getDb().prepare('SELECT * FROM comex_suppliers ORDER BY name ASC').all() as ComexSupplier[]
+export async function listSuppliers(): Promise<ComexSupplier[]> {
+  return getPowerSyncDb().getAll<ComexSupplier>('SELECT * FROM comex_suppliers ORDER BY name ASC')
 }
 
-export function getSupplier(id: string): ComexSupplier | null {
-  return getDb().prepare('SELECT * FROM comex_suppliers WHERE id = ?').get(id) as ComexSupplier | null
+export async function getSupplier(id: string): Promise<ComexSupplier | null> {
+  return (await getPowerSyncDb().getOptional<ComexSupplier>('SELECT * FROM comex_suppliers WHERE id = ?', [id])) ?? null
 }
 
-export function createSupplier(input: CreateComexSupplierInput): ComexSupplier {
-  const db = getDb()
+export async function createSupplier(input: CreateComexSupplierInput): Promise<ComexSupplier> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_suppliers
       (id, name, address, city, country, zip_code, tax_id, rex_number,
        contact_name, contact_email, contact_phone,
@@ -38,9 +41,9 @@ export function createSupplier(input: CreateComexSupplierInput): ComexSupplier {
        incoterms_preferred, port_of_origin, lead_time_days,
        production_days, preparation_days, transit_days, customs_days, local_delivery_days,
        moq, non_operational_periods_json, reliability_notes,
-       pickup_address, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       pickup_address, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id,
     input.name,
     (input as Partial<ComexSupplier>).address ?? '',
@@ -70,13 +73,13 @@ export function createSupplier(input: CreateComexSupplierInput): ComexSupplier {
     (input as Partial<ComexSupplier>).reliability_notes ?? '',
     (input as Partial<ComexSupplier>).pickup_address ?? '',
     input.notes ?? '',
-    now, now
-  )
-  return db.prepare('SELECT * FROM comex_suppliers WHERE id = ?').get(id) as ComexSupplier
+    now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexSupplier>('SELECT * FROM comex_suppliers WHERE id = ?', [id]))!
 }
 
-export function updateSupplier(id: string, data: Partial<ComexSupplier>): ComexSupplier | null {
-  const db = getDb()
+export async function updateSupplier(id: string, data: Partial<ComexSupplier>): Promise<ComexSupplier | null> {
+  const db = getPowerSyncDb()
   const allowed = [
     'name','address','city','country','zip_code','tax_id','rex_number',
     'contact_name','contact_email','contact_phone',
@@ -92,12 +95,12 @@ export function updateSupplier(id: string, data: Partial<ComexSupplier>): ComexS
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   vals.push(id)
-  db.prepare(`UPDATE comex_suppliers SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM comex_suppliers WHERE id = ?').get(id) as ComexSupplier | null
+  await db.execute(`UPDATE comex_suppliers SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await db.getOptional<ComexSupplier>('SELECT * FROM comex_suppliers WHERE id = ?', [id])) ?? null
 }
 
-export function deleteSupplier(id: string): void {
-  getDb().prepare('DELETE FROM comex_suppliers WHERE id = ?').run(id)
+export async function deleteSupplier(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_suppliers WHERE id = ?', [id])
 }
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
@@ -537,31 +540,32 @@ export function deleteCost(id: string): void {
 
 // ─── Supplier Contacts ────────────────────────────────────────────────────────
 
-export function listSupplierContacts(supplierId: string): ComexSupplierContact[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_supplier_contacts WHERE supplier_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .all(supplierId) as ComexSupplierContact[]
+export async function listSupplierContacts(supplierId: string): Promise<ComexSupplierContact[]> {
+  return getPowerSyncDb().getAll<ComexSupplierContact>(
+    'SELECT * FROM comex_supplier_contacts WHERE supplier_id = ? ORDER BY sort_order ASC, created_at ASC',
+    [supplierId]
+  )
 }
 
-export function createSupplierContact(input: CreateComexSupplierContactInput): ComexSupplierContact {
-  const db = getDb()
+export async function createSupplierContact(input: CreateComexSupplierContactInput): Promise<ComexSupplierContact> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_supplier_contacts
-      (id, supplier_id, role, name, position, email, phone, whatsapp, notes, sort_order, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+      (id, supplier_id, role, name, position, email, phone, whatsapp, notes, sort_order, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.supplier_id, input.role ?? 'commercial',
     input.name ?? '', input.position ?? '',
     input.email ?? '', input.phone ?? '', input.whatsapp ?? '',
-    input.notes ?? '', input.sort_order ?? 0, now
-  )
-  return db.prepare('SELECT * FROM comex_supplier_contacts WHERE id = ?').get(id) as ComexSupplierContact
+    input.notes ?? '', input.sort_order ?? 0, now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexSupplierContact>('SELECT * FROM comex_supplier_contacts WHERE id = ?', [id]))!
 }
 
-export function updateSupplierContact(id: string, data: Partial<ComexSupplierContact>): void {
-  const db = getDb()
+export async function updateSupplierContact(id: string, data: Partial<ComexSupplierContact>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['role','name','position','email','phone','whatsapp','notes','sort_order']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -569,43 +573,45 @@ export function updateSupplierContact(id: string, data: Partial<ComexSupplierCon
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string,unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_supplier_contacts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_supplier_contacts SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteSupplierContact(id: string): void {
-  getDb().prepare('DELETE FROM comex_supplier_contacts WHERE id = ?').run(id)
+export async function deleteSupplierContact(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_supplier_contacts WHERE id = ?', [id])
 }
 
 // ─── Supplier Bank Accounts ───────────────────────────────────────────────────
 
-export function listSupplierBankAccounts(supplierId: string): ComexSupplierBankAccount[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_supplier_bank_accounts WHERE supplier_id = ? ORDER BY created_at ASC')
-    .all(supplierId) as ComexSupplierBankAccount[]
+export async function listSupplierBankAccounts(supplierId: string): Promise<ComexSupplierBankAccount[]> {
+  return getPowerSyncDb().getAll<ComexSupplierBankAccount>(
+    'SELECT * FROM comex_supplier_bank_accounts WHERE supplier_id = ? ORDER BY created_at ASC',
+    [supplierId]
+  )
 }
 
-export function createSupplierBankAccount(input: CreateComexSupplierBankAccountInput): ComexSupplierBankAccount {
-  const db = getDb()
+export async function createSupplierBankAccount(input: CreateComexSupplierBankAccountInput): Promise<ComexSupplierBankAccount> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_supplier_bank_accounts
-      (id, supplier_id, bank_name, beneficiary_name, account_number, swift_bic, iban, routing_number, currency, bank_address, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+      (id, supplier_id, bank_name, beneficiary_name, account_number, swift_bic, iban, routing_number, currency, bank_address, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.supplier_id,
     input.bank_name ?? '', input.beneficiary_name ?? '',
     input.account_number ?? '', input.swift_bic ?? '',
     input.iban ?? '', input.routing_number ?? '',
     input.currency ?? 'USD', input.bank_address ?? '',
-    input.notes ?? '', now
-  )
-  return db.prepare('SELECT * FROM comex_supplier_bank_accounts WHERE id = ?').get(id) as ComexSupplierBankAccount
+    input.notes ?? '', now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexSupplierBankAccount>('SELECT * FROM comex_supplier_bank_accounts WHERE id = ?', [id]))!
 }
 
-export function updateSupplierBankAccount(id: string, data: Partial<ComexSupplierBankAccount>): void {
-  const db = getDb()
+export async function updateSupplierBankAccount(id: string, data: Partial<ComexSupplierBankAccount>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['bank_name','beneficiary_name','account_number','swift_bic','iban','routing_number','currency','bank_address','notes']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -613,48 +619,45 @@ export function updateSupplierBankAccount(id: string, data: Partial<ComexSupplie
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string,unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_supplier_bank_accounts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_supplier_bank_accounts SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteSupplierBankAccount(id: string): void {
-  getDb().prepare('DELETE FROM comex_supplier_bank_accounts WHERE id = ?').run(id)
+export async function deleteSupplierBankAccount(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_supplier_bank_accounts WHERE id = ?', [id])
 }
 
 // ─── Freight Operators ────────────────────────────────────────────────────────
 
-export function listFreightOperators(): ComexFreightOperator[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_freight_operators ORDER BY name ASC')
-    .all() as ComexFreightOperator[]
+export async function listFreightOperators(): Promise<ComexFreightOperator[]> {
+  return getPowerSyncDb().getAll<ComexFreightOperator>('SELECT * FROM comex_freight_operators ORDER BY name ASC')
 }
 
-export function getFreightOperator(id: string): ComexFreightOperator | null {
-  return getDb()
-    .prepare('SELECT * FROM comex_freight_operators WHERE id = ?')
-    .get(id) as ComexFreightOperator | null
+export async function getFreightOperator(id: string): Promise<ComexFreightOperator | null> {
+  return (await getPowerSyncDb().getOptional<ComexFreightOperator>('SELECT * FROM comex_freight_operators WHERE id = ?', [id])) ?? null
 }
 
-export function createFreightOperator(input: CreateComexFreightOperatorInput): ComexFreightOperator {
-  const db = getDb()
+export async function createFreightOperator(input: CreateComexFreightOperatorInput): Promise<ComexFreightOperator> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_freight_operators
-      (id, name, company_type, contact_name, email, phone, whatsapp, services, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+      (id, name, company_type, contact_name, email, phone, whatsapp, services, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.name, input.company_type ?? 'agente',
     input.contact_name ?? '', input.email ?? '',
     input.phone ?? '', input.whatsapp ?? '',
     input.services ?? '', input.notes ?? '',
-    now, now
-  )
-  return db.prepare('SELECT * FROM comex_freight_operators WHERE id = ?').get(id) as ComexFreightOperator
+    now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexFreightOperator>('SELECT * FROM comex_freight_operators WHERE id = ?', [id]))!
 }
 
-export function updateFreightOperator(id: string, data: Partial<ComexFreightOperator>): ComexFreightOperator | null {
-  const db = getDb()
+export async function updateFreightOperator(id: string, data: Partial<ComexFreightOperator>): Promise<ComexFreightOperator | null> {
+  const db = getPowerSyncDb()
   const allowed = ['name','company_type','contact_name','email','phone','whatsapp','services','notes','logo_stored_name']
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
@@ -662,39 +665,40 @@ export function updateFreightOperator(id: string, data: Partial<ComexFreightOper
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   vals.push(id)
-  db.prepare(`UPDATE comex_freight_operators SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM comex_freight_operators WHERE id = ?').get(id) as ComexFreightOperator | null
+  await db.execute(`UPDATE comex_freight_operators SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await db.getOptional<ComexFreightOperator>('SELECT * FROM comex_freight_operators WHERE id = ?', [id])) ?? null
 }
 
-export function deleteFreightOperator(id: string): void {
-  getDb().prepare('DELETE FROM comex_freight_operators WHERE id = ?').run(id)
+export async function deleteFreightOperator(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_freight_operators WHERE id = ?', [id])
 }
 
 // ─── Freight Operator Contacts ────────────────────────────────────────────────
 
-export function listOperatorContacts(operatorId: string): ComexFreightOperatorContact[] {
-  return getDb()
-    .prepare('SELECT * FROM comex_freight_operator_contacts WHERE operator_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .all(operatorId) as ComexFreightOperatorContact[]
+export async function listOperatorContacts(operatorId: string): Promise<ComexFreightOperatorContact[]> {
+  return getPowerSyncDb().getAll<ComexFreightOperatorContact>(
+    'SELECT * FROM comex_freight_operator_contacts WHERE operator_id = ? ORDER BY sort_order ASC, created_at ASC',
+    [operatorId]
+  )
 }
 
-export function createOperatorContact(input: CreateComexFreightOperatorContactInput): ComexFreightOperatorContact {
-  const db = getDb()
+export async function createOperatorContact(input: CreateComexFreightOperatorContactInput): Promise<ComexFreightOperatorContact> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_freight_operator_contacts
-      (id, operator_id, name, nickname, role, email, phone, sort_order, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+      (id, operator_id, name, nickname, role, email, phone, sort_order, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id, input.operator_id, input.name ?? '', input.nickname ?? '',
-    input.role ?? '', input.email ?? '', input.phone ?? '', input.sort_order ?? 0, now
-  )
-  return db.prepare('SELECT * FROM comex_freight_operator_contacts WHERE id = ?').get(id) as ComexFreightOperatorContact
+    input.role ?? '', input.email ?? '', input.phone ?? '', input.sort_order ?? 0, now, now, WORKSPACE_ID
+  ])
+  return (await db.getOptional<ComexFreightOperatorContact>('SELECT * FROM comex_freight_operator_contacts WHERE id = ?', [id]))!
 }
 
-export function updateOperatorContact(id: string, data: Partial<ComexFreightOperatorContact>): void {
-  const db = getDb()
+export async function updateOperatorContact(id: string, data: Partial<ComexFreightOperatorContact>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['name', 'nickname', 'role', 'email', 'phone', 'sort_order']
   const sets: string[] = []
   const vals: unknown[] = []
@@ -702,12 +706,13 @@ export function updateOperatorContact(id: string, data: Partial<ComexFreightOper
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_freight_operator_contacts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_freight_operator_contacts SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteOperatorContact(id: string): void {
-  getDb().prepare('DELETE FROM comex_freight_operator_contacts WHERE id = ?').run(id)
+export async function deleteOperatorContact(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_freight_operator_contacts WHERE id = ?', [id])
 }
 
 // ─── Tributos del despacho ────────────────────────────────────────────────────
@@ -950,155 +955,165 @@ export function getInalCert(id: string): ComexInalCert | null {
 
 import type { ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput, ComexDespachante, CreateComexDespachanteInput } from '@shared/types'
 
-export function listGestores(): ComexGestor[] {
-  const db = getDb()
-  const gestores = db.prepare('SELECT * FROM comex_gestores ORDER BY name ASC').all() as ComexGestor[]
+export async function listGestores(): Promise<ComexGestor[]> {
+  const db = getPowerSyncDb()
+  const gestores = await db.getAll<ComexGestor>('SELECT * FROM comex_gestores ORDER BY name ASC')
   for (const g of gestores) {
-    g.contacts = db.prepare('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC, created_at ASC').all(g.id) as ComexGestorContact[]
+    g.contacts = await db.getAll<ComexGestorContact>('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC, created_at ASC', [g.id])
   }
   return gestores
 }
 
-export function getGestor(id: string): ComexGestor | null {
-  const db = getDb()
-  const g = db.prepare('SELECT * FROM comex_gestores WHERE id = ?').get(id) as ComexGestor | null
-  if (g) g.contacts = db.prepare('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC').all(id) as ComexGestorContact[]
+export async function getGestor(id: string): Promise<ComexGestor | null> {
+  const db = getPowerSyncDb()
+  const g = (await db.getOptional<ComexGestor>('SELECT * FROM comex_gestores WHERE id = ?', [id])) ?? null
+  if (g) g.contacts = await db.getAll<ComexGestorContact>('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC', [id])
   return g
 }
 
-export function createGestor(input: CreateComexGestorInput): ComexGestor {
-  const db = getDb()
+export async function createGestor(input: CreateComexGestorInput): Promise<ComexGestor> {
+  const db = getPowerSyncDb()
   const id = randomUUID(), now = Date.now()
-  db.prepare(`INSERT INTO comex_gestores (id,name,estudio,cuit,email,phone,phone_empresa,whatsapp,website,direccion,especialidades,notas,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, input.name, input.estudio??'', input.cuit??'', input.email??'', input.phone??'', (input as Partial<ComexGestor>).phone_empresa??'', input.whatsapp??'', (input as Partial<ComexGestor>).website??'', (input as Partial<ComexGestor>).direccion??'', input.especialidades??'', input.notas??'', now, now)
-  return getGestor(id)!
+  await db.execute(
+    `INSERT INTO comex_gestores (id,name,estudio,cuit,email,phone,phone_empresa,whatsapp,website,direccion,especialidades,notas,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.name, input.estudio??'', input.cuit??'', input.email??'', input.phone??'', (input as Partial<ComexGestor>).phone_empresa??'', input.whatsapp??'', (input as Partial<ComexGestor>).website??'', (input as Partial<ComexGestor>).direccion??'', input.especialidades??'', input.notas??'', now, now, WORKSPACE_ID]
+  )
+  return (await getGestor(id))!
 }
 
-export function updateGestor(id: string, data: Partial<ComexGestor>): ComexGestor | null {
-  const db = getDb()
+export async function updateGestor(id: string, data: Partial<ComexGestor>): Promise<ComexGestor | null> {
+  const db = getPowerSyncDb()
   const allowed = ['name','estudio','cuit','email','phone','phone_empresa','whatsapp','website','direccion','especialidades','notas','logo_stored_name']
   const sets = ['updated_at = ?'], vals: unknown[] = [Date.now()]
   for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
   vals.push(id)
-  db.prepare(`UPDATE comex_gestores SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_gestores SET ${sets.join(', ')} WHERE id = ?`, vals)
   return getGestor(id)
 }
 
-export function deleteGestor(id: string): void {
-  getDb().prepare('DELETE FROM comex_gestores WHERE id = ?').run(id)
+export async function deleteGestor(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_gestores WHERE id = ?', [id])
 }
 
-export function createGestorContact(input: CreateComexGestorContactInput): ComexGestorContact {
-  const db = getDb(), id = randomUUID(), now = Date.now()
-  db.prepare(`INSERT INTO comex_gestor_contacts (id,gestor_id,name,role,email,phone,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?)`)
-    .run(id, input.gestor_id, input.name??'', input.role??'', input.email??'', input.phone??'', input.sort_order??0, now)
-  return db.prepare('SELECT * FROM comex_gestor_contacts WHERE id = ?').get(id) as ComexGestorContact
+export async function createGestorContact(input: CreateComexGestorContactInput): Promise<ComexGestorContact> {
+  const db = getPowerSyncDb(), id = randomUUID(), now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_gestor_contacts (id,gestor_id,name,role,email,phone,sort_order,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.gestor_id, input.name??'', input.role??'', input.email??'', input.phone??'', input.sort_order??0, now, now, WORKSPACE_ID]
+  )
+  return (await db.getOptional<ComexGestorContact>('SELECT * FROM comex_gestor_contacts WHERE id = ?', [id]))!
 }
 
-export function updateGestorContact(id: string, data: Partial<ComexGestorContact>): void {
-  const db = getDb()
+export async function updateGestorContact(id: string, data: Partial<ComexGestorContact>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['name','role','email','phone','sort_order']
   const sets: string[] = [], vals: unknown[] = []
   for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_gestor_contacts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_gestor_contacts SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteGestorContact(id: string): void {
-  getDb().prepare('DELETE FROM comex_gestor_contacts WHERE id = ?').run(id)
+export async function deleteGestorContact(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_gestor_contacts WHERE id = ?', [id])
 }
 
 // ─── Despachantes ─────────────────────────────────────────────────────────────
 
 import type { ComexDespachanteContact, CreateComexDespachanteContactInput } from '@shared/types'
 
-export function listDespachantes(): ComexDespachante[] {
-  const db = getDb()
-  const despachantes = db.prepare('SELECT * FROM comex_despachantes ORDER BY name ASC').all() as ComexDespachante[]
+export async function listDespachantes(): Promise<ComexDespachante[]> {
+  const db = getPowerSyncDb()
+  const despachantes = await db.getAll<ComexDespachante>('SELECT * FROM comex_despachantes ORDER BY name ASC')
   for (const d of despachantes) {
-    d.contacts = db.prepare('SELECT * FROM comex_despachante_contacts WHERE despachante_id = ? ORDER BY sort_order ASC, created_at ASC').all(d.id) as ComexDespachanteContact[]
+    d.contacts = await db.getAll<ComexDespachanteContact>('SELECT * FROM comex_despachante_contacts WHERE despachante_id = ? ORDER BY sort_order ASC, created_at ASC', [d.id])
   }
   return despachantes
 }
 
-export function createDespachante(input: CreateComexDespachanteInput): ComexDespachante {
-  const db = getDb(), id = randomUUID(), now = Date.now()
-  db.prepare(`INSERT INTO comex_despachantes (id,name,matricula,empresa,cuit,email,phone,phone_empresa,whatsapp,website,direccion,notas,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, input.name, input.matricula??'', input.empresa??'', input.cuit??'', input.email??'', input.phone??'', (input as Partial<ComexDespachante>).phone_empresa??'', input.whatsapp??'', (input as Partial<ComexDespachante>).website??'', (input as Partial<ComexDespachante>).direccion??'', input.notas??'', now, now)
-  return db.prepare('SELECT * FROM comex_despachantes WHERE id = ?').get(id) as ComexDespachante
+export async function createDespachante(input: CreateComexDespachanteInput): Promise<ComexDespachante> {
+  const db = getPowerSyncDb(), id = randomUUID(), now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_despachantes (id,name,matricula,empresa,cuit,email,phone,phone_empresa,whatsapp,website,direccion,notas,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.name, input.matricula??'', input.empresa??'', input.cuit??'', input.email??'', input.phone??'', (input as Partial<ComexDespachante>).phone_empresa??'', input.whatsapp??'', (input as Partial<ComexDespachante>).website??'', (input as Partial<ComexDespachante>).direccion??'', input.notas??'', now, now, WORKSPACE_ID]
+  )
+  return (await db.getOptional<ComexDespachante>('SELECT * FROM comex_despachantes WHERE id = ?', [id]))!
 }
 
-export function updateDespachante(id: string, data: Partial<ComexDespachante>): ComexDespachante | null {
-  const db = getDb()
+export async function updateDespachante(id: string, data: Partial<ComexDespachante>): Promise<ComexDespachante | null> {
+  const db = getPowerSyncDb()
   const allowed = ['name','matricula','empresa','cuit','email','phone','phone_empresa','whatsapp','website','direccion','notas','logo_stored_name']
   const sets = ['updated_at = ?'], vals: unknown[] = [Date.now()]
   for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
   vals.push(id)
-  db.prepare(`UPDATE comex_despachantes SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-  return db.prepare('SELECT * FROM comex_despachantes WHERE id = ?').get(id) as ComexDespachante | null
+  await db.execute(`UPDATE comex_despachantes SET ${sets.join(', ')} WHERE id = ?`, vals)
+  return (await db.getOptional<ComexDespachante>('SELECT * FROM comex_despachantes WHERE id = ?', [id])) ?? null
 }
 
-export function deleteDespachante(id: string): void {
-  getDb().prepare('DELETE FROM comex_despachantes WHERE id = ?').run(id)
+export async function deleteDespachante(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_despachantes WHERE id = ?', [id])
 }
 
-export function createDespachanteContact(input: CreateComexDespachanteContactInput): ComexDespachanteContact {
-  const db = getDb(), id = randomUUID(), now = Date.now()
-  db.prepare(`INSERT INTO comex_despachante_contacts (id,despachante_id,name,role,email,phone,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?)`)
-    .run(id, input.despachante_id, input.name??'', input.role??'', input.email??'', input.phone??'', input.sort_order??0, now)
-  return db.prepare('SELECT * FROM comex_despachante_contacts WHERE id = ?').get(id) as ComexDespachanteContact
+export async function createDespachanteContact(input: CreateComexDespachanteContactInput): Promise<ComexDespachanteContact> {
+  const db = getPowerSyncDb(), id = randomUUID(), now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_despachante_contacts (id,despachante_id,name,role,email,phone,sort_order,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.despachante_id, input.name??'', input.role??'', input.email??'', input.phone??'', input.sort_order??0, now, now, WORKSPACE_ID]
+  )
+  return (await db.getOptional<ComexDespachanteContact>('SELECT * FROM comex_despachante_contacts WHERE id = ?', [id]))!
 }
 
-export function updateDespachanteContact(id: string, data: Partial<ComexDespachanteContact>): void {
-  const db = getDb()
+export async function updateDespachanteContact(id: string, data: Partial<ComexDespachanteContact>): Promise<void> {
+  const db = getPowerSyncDb()
   const allowed = ['name','role','email','phone','sort_order']
   const sets: string[] = [], vals: unknown[] = []
   for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
   if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
-  db.prepare(`UPDATE comex_despachante_contacts SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_despachante_contacts SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export function deleteDespachanteContact(id: string): void {
-  getDb().prepare('DELETE FROM comex_despachante_contacts WHERE id = ?').run(id)
+export async function deleteDespachanteContact(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_despachante_contacts WHERE id = ?', [id])
 }
 
 // ─── Marcas (Programación Pedidos) ─────────────────────────────────────────────
 
 import type { ComexBrand, CreateComexBrandInput } from '@shared/types'
 
-function hydrateBrand(row: Record<string, unknown> | null): ComexBrand | null {
+async function hydrateBrand(row: Record<string, unknown> | null): Promise<ComexBrand | null> {
   if (!row) return null
   const brand = row as unknown as ComexBrand
   if (brand.primary_supplier_id) {
-    brand.primary_supplier = getSupplier(brand.primary_supplier_id) ?? undefined
+    brand.primary_supplier = (await getSupplier(brand.primary_supplier_id)) ?? undefined
   }
   return brand
 }
 
-export function listBrands(): ComexBrand[] {
-  const db = getDb()
-  const rows = db.prepare('SELECT * FROM comex_brands ORDER BY name ASC').all() as Record<string, unknown>[]
-  return rows.map((r) => hydrateBrand(r)!) as ComexBrand[]
+export async function listBrands(): Promise<ComexBrand[]> {
+  const db = getPowerSyncDb()
+  const rows = await db.getAll<Record<string, unknown>>('SELECT * FROM comex_brands ORDER BY name ASC')
+  return Promise.all(rows.map((r) => hydrateBrand(r) as Promise<ComexBrand>))
 }
 
-export function getBrand(id: string): ComexBrand | null {
-  const db = getDb()
-  const row = db.prepare('SELECT * FROM comex_brands WHERE id = ?').get(id) as Record<string, unknown> | null
+export async function getBrand(id: string): Promise<ComexBrand | null> {
+  const db = getPowerSyncDb()
+  const row = (await db.getOptional<Record<string, unknown>>('SELECT * FROM comex_brands WHERE id = ?', [id])) ?? null
   return hydrateBrand(row)
 }
 
-export function createBrand(input: CreateComexBrandInput): ComexBrand {
-  const db = getDb()
+export async function createBrand(input: CreateComexBrandInput): Promise<ComexBrand> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  db.prepare(`
+  await db.execute(`
     INSERT INTO comex_brands
       (id, name, category, primary_supplier_id, demand_annual, demand_monthly_json,
-       current_stock, safety_stock, purchase_frequency_days, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+       current_stock, safety_stock, purchase_frequency_days, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     id,
     input.name,
     input.category ?? '',
@@ -1109,13 +1124,13 @@ export function createBrand(input: CreateComexBrandInput): ComexBrand {
     input.safety_stock ?? null,
     input.purchase_frequency_days ?? null,
     input.notes ?? '',
-    now, now
-  )
-  return getBrand(id)!
+    now, now, WORKSPACE_ID
+  ])
+  return (await getBrand(id))!
 }
 
-export function updateBrand(id: string, data: Partial<ComexBrand>): ComexBrand | null {
-  const db = getDb()
+export async function updateBrand(id: string, data: Partial<ComexBrand>): Promise<ComexBrand | null> {
+  const db = getPowerSyncDb()
   const allowed = [
     'name','category','primary_supplier_id','demand_annual','demand_monthly_json',
     'current_stock','safety_stock','purchase_frequency_days','notes','logo_stored_name'
@@ -1126,12 +1141,12 @@ export function updateBrand(id: string, data: Partial<ComexBrand>): ComexBrand |
     if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
   }
   vals.push(id)
-  db.prepare(`UPDATE comex_brands SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  await db.execute(`UPDATE comex_brands SET ${sets.join(', ')} WHERE id = ?`, vals)
   return getBrand(id)
 }
 
-export function deleteBrand(id: string): void {
-  getDb().prepare('DELETE FROM comex_brands WHERE id = ?').run(id)
+export async function deleteBrand(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_brands WHERE id = ?', [id])
 }
 
 // ─── Programaciones de pedido (Programación Pedidos) ──────────────────────────
@@ -1155,18 +1170,18 @@ const PLANNING_COLUMNS = [
   'ai_recommendation_summary', 'ai_risk_explanation', 'notes', 'linked_import_id'
 ] as const
 
-function hydratePlanning(row: Record<string, unknown> | null): ImportOrderPlanning | null {
+async function hydratePlanning(row: Record<string, unknown> | null): Promise<ImportOrderPlanning | null> {
   if (!row) return null
   const planning = row as unknown as ImportOrderPlanning
-  planning.brand = getBrand(planning.brand_id) ?? undefined
+  planning.brand = (await getBrand(planning.brand_id)) ?? undefined
   if (planning.supplier_id) {
-    planning.supplier = getSupplier(planning.supplier_id) ?? undefined
+    planning.supplier = (await getSupplier(planning.supplier_id)) ?? undefined
   }
   planning.milestones = listMilestones(planning.id)
   return planning
 }
 
-export function listPlannings(filters?: { brandId?: string; status?: string }): ImportOrderPlanning[] {
+export async function listPlannings(filters?: { brandId?: string; status?: string }): Promise<ImportOrderPlanning[]> {
   const db = getDb()
   let sql = 'SELECT * FROM import_order_plannings'
   const conditions: string[] = []
@@ -1176,21 +1191,21 @@ export function listPlannings(filters?: { brandId?: string; status?: string }): 
   if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
   sql += ' ORDER BY target_commercial_availability_date ASC, created_at DESC'
   const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
-  return rows.map((r) => hydratePlanning(r)!) as ImportOrderPlanning[]
+  return Promise.all(rows.map((r) => hydratePlanning(r) as Promise<ImportOrderPlanning>))
 }
 
-export function getPlanning(id: string): ImportOrderPlanning | null {
+export async function getPlanning(id: string): Promise<ImportOrderPlanning | null> {
   const db = getDb()
   const row = db.prepare('SELECT * FROM import_order_plannings WHERE id = ?').get(id) as Record<string, unknown> | null
   return hydratePlanning(row)
 }
 
-export function createPlanning(input: CreateImportOrderPlanningInput): ImportOrderPlanning {
+export async function createPlanning(input: CreateImportOrderPlanningInput): Promise<ImportOrderPlanning> {
   const db = getDb()
   const id = randomUUID()
   const now = Date.now()
 
-  const brand = getBrand(input.brand_id)
+  const brand = await getBrand(input.brand_id)
   const result = calculatePlanning({ ...input, id, created_at: now, updated_at: now } as ImportOrderPlanning, brand)
 
   const merged: ImportOrderPlanning = {
@@ -1231,10 +1246,10 @@ export function createPlanning(input: CreateImportOrderPlanningInput): ImportOrd
     }
   }
 
-  return getPlanning(id)!
+  return (await getPlanning(id))!
 }
 
-export function updatePlanning(id: string, data: Partial<ImportOrderPlanning>): ImportOrderPlanning | null {
+export async function updatePlanning(id: string, data: Partial<ImportOrderPlanning>): Promise<ImportOrderPlanning | null> {
   const db = getDb()
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
@@ -1251,9 +1266,9 @@ export function deletePlanning(id: string): void {
 }
 
 /** Recalcula fechas, riesgo, demanda y `calculated_date` de los hitos a partir del estado actual. */
-export function recalculatePlanning(id: string): ImportOrderPlanning | null {
+export async function recalculatePlanning(id: string): Promise<ImportOrderPlanning | null> {
   const db = getDb()
-  const planning = getPlanning(id)
+  const planning = await getPlanning(id)
   if (!planning) return null
 
   const brand = planning.brand ?? null

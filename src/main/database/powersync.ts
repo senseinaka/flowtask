@@ -171,6 +171,209 @@ const company_finance_month_insights = new Table(financeMonthInsightColumns, {
   indexes: { workspace: ['workspace_id'], period: ['year', 'month'] }
 })
 
+// ── Fase 4 (sync multi-dispositivo): Comex, sub-dominio "maestros" ─────────
+// Proveedores, operadores logísticos, gestores, despachantes y marcas.
+
+const comex_suppliers = new Table(
+  {
+    name: column.text,
+    country: column.text,
+    contact_name: column.text,
+    contact_email: column.text,
+    contact_phone: column.text,
+    website: column.text,
+    payment_terms: column.text,
+    notes: column.text,
+    address: column.text,
+    city: column.text,
+    zip_code: column.text,
+    tax_id: column.text,
+    rex_number: column.text,
+    wechat: column.text,
+    product_categories: column.text,
+    incoterms_preferred: column.text,
+    port_of_origin: column.text,
+    lead_time_days: column.integer,
+    pickup_address: column.text,
+    brand: column.text,
+    logo_stored_name: column.text,
+    production_days: column.integer,
+    preparation_days: column.integer,
+    transit_days: column.integer,
+    customs_days: column.integer,
+    local_delivery_days: column.integer,
+    moq: column.integer,
+    non_operational_periods_json: column.text,
+    reliability_notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const comex_supplier_contacts = new Table(
+  {
+    supplier_id: column.text,
+    role: column.text,
+    name: column.text,
+    position: column.text,
+    email: column.text,
+    phone: column.text,
+    whatsapp: column.text,
+    notes: column.text,
+    sort_order: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], supplier: ['supplier_id'] } }
+)
+
+const comex_supplier_bank_accounts = new Table(
+  {
+    supplier_id: column.text,
+    bank_name: column.text,
+    beneficiary_name: column.text,
+    account_number: column.text,
+    swift_bic: column.text,
+    iban: column.text,
+    routing_number: column.text,
+    currency: column.text,
+    bank_address: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], supplier: ['supplier_id'] } }
+)
+
+const comex_freight_operators = new Table(
+  {
+    name: column.text,
+    company_type: column.text,
+    contact_name: column.text,
+    email: column.text,
+    phone: column.text,
+    whatsapp: column.text,
+    services: column.text,
+    notes: column.text,
+    logo_stored_name: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const comex_freight_operator_contacts = new Table(
+  {
+    operator_id: column.text,
+    name: column.text,
+    role: column.text,
+    email: column.text,
+    phone: column.text,
+    nickname: column.text,
+    sort_order: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], operator: ['operator_id'] } }
+)
+
+const comex_gestores = new Table(
+  {
+    name: column.text,
+    estudio: column.text,
+    cuit: column.text,
+    email: column.text,
+    phone: column.text,
+    whatsapp: column.text,
+    especialidades: column.text,
+    notas: column.text,
+    website: column.text,
+    direccion: column.text,
+    phone_empresa: column.text,
+    logo_stored_name: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const comex_gestor_contacts = new Table(
+  {
+    gestor_id: column.text,
+    name: column.text,
+    role: column.text,
+    email: column.text,
+    phone: column.text,
+    sort_order: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], gestor: ['gestor_id'] } }
+)
+
+const comex_despachantes = new Table(
+  {
+    name: column.text,
+    matricula: column.text,
+    empresa: column.text,
+    cuit: column.text,
+    email: column.text,
+    phone: column.text,
+    whatsapp: column.text,
+    notas: column.text,
+    website: column.text,
+    direccion: column.text,
+    phone_empresa: column.text,
+    logo_stored_name: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const comex_despachante_contacts = new Table(
+  {
+    despachante_id: column.text,
+    name: column.text,
+    role: column.text,
+    email: column.text,
+    phone: column.text,
+    sort_order: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], despachante: ['despachante_id'] } }
+)
+
+const comex_brands = new Table(
+  {
+    name: column.text,
+    category: column.text,
+    primary_supplier_id: column.text,
+    demand_annual: column.integer,
+    demand_monthly_json: column.text,
+    current_stock: column.integer,
+    safety_stock: column.integer,
+    purchase_frequency_days: column.integer,
+    notes: column.text,
+    logo_stored_name: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], supplier: ['primary_supplier_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -189,7 +392,17 @@ export const AppSchema = new Schema({
   company_finance_concepts,
   company_finance_movements,
   company_finance_movement_entries,
-  company_finance_month_insights
+  company_finance_month_insights,
+  comex_suppliers,
+  comex_supplier_contacts,
+  comex_supplier_bank_accounts,
+  comex_freight_operators,
+  comex_freight_operator_contacts,
+  comex_gestores,
+  comex_gestor_contacts,
+  comex_despachantes,
+  comex_despachante_contacts,
+  comex_brands
 })
 
 /**
@@ -426,9 +639,42 @@ const FINANCE_TABLES = [
 ]
 
 async function migrateLegacyFinanceData(psDb: PowerSyncDatabase): Promise<void> {
+  await migrateLegacyTableData(psDb, FINANCE_TABLES)
+}
+
+/**
+ * Fase 4 (sync multi-dispositivo): copia única de los datos existentes de las
+ * 10 tablas "maestros" de Comex (proveedores, operadores logísticos,
+ * gestores, despachantes, marcas y sus contactos/cuentas) desde flowtask.db
+ * hacia powersync.db.
+ */
+const COMEX_MAESTROS_TABLES = [
+  'comex_suppliers',
+  'comex_supplier_contacts',
+  'comex_supplier_bank_accounts',
+  'comex_freight_operators',
+  'comex_freight_operator_contacts',
+  'comex_gestores',
+  'comex_gestor_contacts',
+  'comex_despachantes',
+  'comex_despachante_contacts',
+  'comex_brands'
+]
+
+async function migrateLegacyComexMaestrosData(psDb: PowerSyncDatabase): Promise<void> {
+  await migrateLegacyTableData(psDb, COMEX_MAESTROS_TABLES)
+}
+
+/**
+ * Copia única (idempotente por tabla) de los datos existentes de
+ * flowtask.db hacia powersync.db, para que PowerSync los suba a Supabase.
+ * Si una tabla ya tiene filas en powersync.db, se omite (puede haber pasado
+ * por una conexión anterior o por sync remoto si ya hay otro dispositivo).
+ */
+async function migrateLegacyTableData(psDb: PowerSyncDatabase, tables: string[]): Promise<void> {
   const flowDb = getDb()
 
-  for (const table of FINANCE_TABLES) {
+  for (const table of tables) {
     const { count } = await psDb.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${table}`)
     if (count > 0) continue
 
@@ -478,6 +724,7 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyTaskData(db)
   await migrateUserPermissions(db)
   await migrateLegacyFinanceData(db)
+  await migrateLegacyComexMaestrosData(db)
   await db.connect(new ProductionTokenConnector(endpoint))
   console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
 }
@@ -533,6 +780,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES], throttleMs: 1000 }
   )
 }
