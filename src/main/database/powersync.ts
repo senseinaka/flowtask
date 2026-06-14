@@ -1286,6 +1286,18 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyComexPlanningsData(db)
   await fixLegacyNullDoubleStrings(db)
   await backfillLogoData(db)
+  for (const table of LOGO_TABLES) {
+    const [row] = await db.getAll<{ total: number; with_logo: number }>(
+      `SELECT COUNT(*) as total, SUM(CASE WHEN logo_data IS NOT NULL THEN 1 ELSE 0 END) as with_logo FROM ${table}`
+    )
+    console.log(`[PowerSync] logo_data en ${table}: ${row.with_logo ?? 0}/${row.total}`)
+  }
+  try {
+    const [crud] = await db.getAll<{ n: number }>('SELECT COUNT(*) as n FROM ps_crud')
+    console.log('[PowerSync] operaciones pendientes de subir (ps_crud):', crud.n)
+  } catch (e) {
+    console.log('[PowerSync] no se pudo leer ps_crud:', errorMessage(e))
+  }
   await db.connect(new ProductionTokenConnector(endpoint))
   console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
 }
