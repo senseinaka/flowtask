@@ -185,7 +185,7 @@ const api = {
   comex: {
     logo: {
       selectFile: ():                                   Promise<string | null> => ipcRenderer.invoke('comex:logo:selectFile'),
-      getDataUrl: (storedName: string):                 Promise<string | null> => ipcRenderer.invoke('comex:logo:getDataUrl', storedName)
+      getDataUrl: (storedName: string | null, logoData?: string | null): Promise<string | null> => ipcRenderer.invoke('comex:logo:getDataUrl', storedName, logoData)
     },
     suppliers: {
       list:        ():                                          Promise<ComexSupplier[]>      => ipcRenderer.invoke('comex:suppliers:list'),

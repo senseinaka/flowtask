@@ -547,13 +547,12 @@ export function registerComexIpc(): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('comex:logo:getDataUrl', (_e, storedName: string) => {
-    const fp = path.join(getAttachmentsDir(), storedName)
-    if (!fs.existsSync(fp)) return null
-    const ext = path.extname(storedName).slice(1).toLowerCase()
-    const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-    const data = fs.readFileSync(fp)
-    return `data:${mime};base64,${data.toString('base64')}`
+  // logoData (si está presente, ya viaja sincronizado vía PowerSync y sirve para
+  // cualquier dispositivo); si no, se intenta leer el archivo local (legacy / mismo equipo)
+  ipcMain.handle('comex:logo:getDataUrl', (_e, storedName: string | null, logoData?: string | null) => {
+    if (logoData) return logoData
+    if (!storedName) return null
+    return fileToDataUrl(path.join(getAttachmentsDir(), storedName))
   })
 
   ipcMain.handle('comex:suppliers:uploadLogo', async (_e, supplierId: string, filePath: string) => {
@@ -566,7 +565,7 @@ export function registerComexIpc(): void {
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
     fs.copyFileSync(filePath, dest)
-    await updateSupplier(supplierId, { logo_stored_name: storedName })
+    await updateSupplier(supplierId, { logo_stored_name: storedName, logo_data: fileToDataUrl(dest) })
     return storedName
   })
 
@@ -576,7 +575,7 @@ export function registerComexIpc(): void {
       const fp = path.join(getAttachmentsDir(), existing.logo_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    await updateSupplier(supplierId, { logo_stored_name: null })
+    await updateSupplier(supplierId, { logo_stored_name: null, logo_data: null })
   })
 
   ipcMain.handle('comex:operators:uploadLogo', async (_e, operatorId: string, filePath: string) => {
@@ -589,7 +588,7 @@ export function registerComexIpc(): void {
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
     fs.copyFileSync(filePath, dest)
-    await updateFreightOperator(operatorId, { logo_stored_name: storedName })
+    await updateFreightOperator(operatorId, { logo_stored_name: storedName, logo_data: fileToDataUrl(dest) })
     return storedName
   })
 
@@ -599,7 +598,7 @@ export function registerComexIpc(): void {
       const fp = path.join(getAttachmentsDir(), existing.logo_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
-    await updateFreightOperator(operatorId, { logo_stored_name: null })
+    await updateFreightOperator(operatorId, { logo_stored_name: null, logo_data: null })
   })
 
   // ── Freight Operators ─────────────────────────────────────────────────────
@@ -1296,13 +1295,13 @@ export function registerComexIpc(): void {
     const existing = await getGestor(gestorId)
     if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
-    await updateGestor(gestorId, { logo_stored_name: storedName })
+    await updateGestor(gestorId, { logo_stored_name: storedName, logo_data: fileToDataUrl(dest) })
     return storedName
   })
   ipcMain.handle('comex:gestores:deleteLogo', async (_e, gestorId: string) => {
     const existing = await getGestor(gestorId)
     if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
-    await updateGestor(gestorId, { logo_stored_name: null })
+    await updateGestor(gestorId, { logo_stored_name: null, logo_data: null })
   })
 
   // ── Despachantes ──────────────────────────────────────────────────────────
@@ -1323,14 +1322,22 @@ export function registerComexIpc(): void {
     const existing = (await listDespachantes()).find(d => d.id === despId)
     if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
-    await updateDespachante(despId, { logo_stored_name: storedName })
+    await updateDespachante(despId, { logo_stored_name: storedName, logo_data: fileToDataUrl(dest) })
     return storedName
   })
   ipcMain.handle('comex:despachantes:deleteLogo', async (_e, despId: string) => {
     const existing = (await listDespachantes()).find(d => d.id === despId)
     if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
-    await updateDespachante(despId, { logo_stored_name: null })
+    await updateDespachante(despId, { logo_stored_name: null, logo_data: null })
   })
+}
+
+function fileToDataUrl(fp: string): string | null {
+  if (!fs.existsSync(fp)) return null
+  const ext = path.extname(fp).slice(1).toLowerCase()
+  const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
+  const data = fs.readFileSync(fp)
+  return `data:${mime};base64,${data.toString('base64')}`
 }
 
 function getMimeType(ext: string): string {

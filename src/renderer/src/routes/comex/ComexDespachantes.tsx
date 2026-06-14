@@ -11,10 +11,10 @@ import { cn } from '../../components/ui/utils'
 
 // ── Avatar con logo ───────────────────────────────────────────────────────────
 
-function Avatar({ name, logo, size = 48 }: { name: string; logo?: string | null; size?: number }) {
+function Avatar({ name, logo, logoData, size = 48 }: { name: string; logo?: string | null; logoData?: string | null; size?: number }) {
   const { data: dataUrl } = useQuery({
-    queryKey: ['logo-url', logo], queryFn: () => logo ? window.api.comex.logo.getDataUrl(logo) : null,
-    enabled: !!logo, staleTime: Infinity, gcTime: Infinity,
+    queryKey: ['logo-url', logo, logoData], queryFn: () => (logo || logoData) ? window.api.comex.logo.getDataUrl(logo ?? null, logoData) : null,
+    enabled: !!(logo || logoData), staleTime: Infinity, gcTime: Infinity,
   })
   const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const COLORS   = ['#0ea5e9','#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
@@ -203,7 +203,7 @@ function DespachanteCard({ d }: { d: ComexDespachante }) {
           <div className="flex items-start gap-3">
             {/* Avatar/Logo */}
             <div className="flex-shrink-0 relative group/logo">
-              <Avatar name={d.name} logo={d.logo_stored_name} size={48} />
+              <Avatar name={d.name} logo={d.logo_stored_name} logoData={d.logo_data} size={48} />
               <button onClick={async () => {
                   const fp = await window.api.comex.logo.selectFile?.() ?? null
                   if (!fp) return

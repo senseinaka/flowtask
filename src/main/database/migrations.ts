@@ -2129,6 +2129,24 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         db.exec(`UPDATE ${table} SET updated_at = created_at`)
       }
     }
+  },
+  {
+    version: 66,
+    up: (db) => {
+      // Los logos se guardaban solo como archivo local (logo_stored_name),
+      // que no viaja entre dispositivos. Se agrega logo_data (base64) para
+      // que el logo sincronice junto con el resto de los datos.
+      const TABLES = [
+        'comex_suppliers',
+        'comex_freight_operators',
+        'comex_gestores',
+        'comex_despachantes',
+        'comex_brands'
+      ]
+      for (const table of TABLES) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN logo_data TEXT`)
+      }
+    }
   }
 ]
 

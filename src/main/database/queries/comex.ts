@@ -86,7 +86,7 @@ export async function updateSupplier(id: string, data: Partial<ComexSupplier>): 
     'incoterms_preferred','port_of_origin','lead_time_days',
     'production_days','preparation_days','transit_days','customs_days','local_delivery_days',
     'moq','non_operational_periods_json','reliability_notes',
-    'pickup_address','notes','logo_stored_name'
+    'pickup_address','notes','logo_stored_name','logo_data'
   ]
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
@@ -137,6 +137,7 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
   if (row._extras_count   != null)    imp._extras_count   = row._extras_count   as number
   // Logo del proveedor
   if (row._supplier_logo)       imp._supplier_logo       = row._supplier_logo       as string
+  if (row._supplier_logo_data)  imp._supplier_logo_data  = row._supplier_logo_data  as string
   return imp
 }
 
@@ -152,6 +153,7 @@ const IMPORT_SELECT = `
     s.notes AS _supplier_notes, s.created_at AS _supplier_created_at,
     s.updated_at AS _supplier_updated_at,
     s.logo_stored_name AS _supplier_logo,
+    s.logo_data AS _supplier_logo_data,
     c.despacho_number AS _despacho_number,
     c.canal           AS _canal_despacho,
     c.peso_bruto_kg   AS _peso_bruto_kg,
@@ -651,7 +653,7 @@ export async function createFreightOperator(input: CreateComexFreightOperatorInp
 
 export async function updateFreightOperator(id: string, data: Partial<ComexFreightOperator>): Promise<ComexFreightOperator | null> {
   const db = getPowerSyncDb()
-  const allowed = ['name','company_type','contact_name','email','phone','whatsapp','services','notes','logo_stored_name']
+  const allowed = ['name','company_type','contact_name','email','phone','whatsapp','services','notes','logo_stored_name','logo_data']
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
   for (const key of allowed) {
@@ -971,7 +973,7 @@ export async function createGestor(input: CreateComexGestorInput): Promise<Comex
 
 export async function updateGestor(id: string, data: Partial<ComexGestor>): Promise<ComexGestor | null> {
   const db = getPowerSyncDb()
-  const allowed = ['name','estudio','cuit','email','phone','phone_empresa','whatsapp','website','direccion','especialidades','notas','logo_stored_name']
+  const allowed = ['name','estudio','cuit','email','phone','phone_empresa','whatsapp','website','direccion','especialidades','notas','logo_stored_name','logo_data']
   const sets = ['updated_at = ?'], vals: unknown[] = [Date.now()]
   for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
   vals.push(id)
@@ -1031,7 +1033,7 @@ export async function createDespachante(input: CreateComexDespachanteInput): Pro
 
 export async function updateDespachante(id: string, data: Partial<ComexDespachante>): Promise<ComexDespachante | null> {
   const db = getPowerSyncDb()
-  const allowed = ['name','matricula','empresa','cuit','email','phone','phone_empresa','whatsapp','website','direccion','notas','logo_stored_name']
+  const allowed = ['name','matricula','empresa','cuit','email','phone','phone_empresa','whatsapp','website','direccion','notas','logo_stored_name','logo_data']
   const sets = ['updated_at = ?'], vals: unknown[] = [Date.now()]
   for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
   vals.push(id)
@@ -1121,7 +1123,7 @@ export async function updateBrand(id: string, data: Partial<ComexBrand>): Promis
   const db = getPowerSyncDb()
   const allowed = [
     'name','category','primary_supplier_id','demand_annual','demand_monthly_json',
-    'current_stock','safety_stock','purchase_frequency_days','notes','logo_stored_name'
+    'current_stock','safety_stock','purchase_frequency_days','notes','logo_stored_name','logo_data'
   ]
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]

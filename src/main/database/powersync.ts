@@ -2,7 +2,7 @@ import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
-import { getDb } from './db'
+import { getDb, getAttachmentsDir } from './db'
 import { getSession } from '../services/auth.service'
 import { PowerSyncDatabase } from '@powersync/node'
 import {
@@ -197,6 +197,7 @@ const comex_suppliers = new Table(
     pickup_address: column.text,
     brand: column.text,
     logo_stored_name: column.text,
+    logo_data: column.text,
     production_days: column.integer,
     preparation_days: column.integer,
     transit_days: column.integer,
@@ -260,6 +261,7 @@ const comex_freight_operators = new Table(
     services: column.text,
     notes: column.text,
     logo_stored_name: column.text,
+    logo_data: column.text,
     created_at: column.integer,
     updated_at: column.integer,
     workspace_id: column.text
@@ -297,6 +299,7 @@ const comex_gestores = new Table(
     direccion: column.text,
     phone_empresa: column.text,
     logo_stored_name: column.text,
+    logo_data: column.text,
     created_at: column.integer,
     updated_at: column.integer,
     workspace_id: column.text
@@ -333,6 +336,7 @@ const comex_despachantes = new Table(
     direccion: column.text,
     phone_empresa: column.text,
     logo_stored_name: column.text,
+    logo_data: column.text,
     created_at: column.integer,
     updated_at: column.integer,
     workspace_id: column.text
@@ -367,6 +371,7 @@ const comex_brands = new Table(
     purchase_frequency_days: column.integer,
     notes: column.text,
     logo_stored_name: column.text,
+    logo_data: column.text,
     created_at: column.integer,
     updated_at: column.integer,
     workspace_id: column.text
@@ -1209,6 +1214,39 @@ async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void
   }
 }
 
+const LOGO_TABLES = ['comex_suppliers', 'comex_freight_operators', 'comex_gestores', 'comex_despachantes', 'comex_brands']
+
+function logoFileToDataUrl(storedName: string): string | null {
+  const fp = path.join(getAttachmentsDir(), storedName)
+  if (!fs.existsSync(fp)) return null
+  const ext = path.extname(storedName).slice(1).toLowerCase()
+  const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
+  const data = fs.readFileSync(fp)
+  return `data:${mime};base64,${data.toString('base64')}`
+}
+
+/**
+ * Los logos se guardaban solo como archivo local (logo_stored_name), que no
+ * viaja entre dispositivos. Para filas existentes con logo_stored_name pero
+ * sin logo_data, lee el archivo local y lo guarda como base64 para que
+ * sincronice junto con el resto de los datos.
+ */
+async function backfillLogoData(psDb: PowerSyncDatabase): Promise<void> {
+  const flowDb = getDb()
+  for (const table of LOGO_TABLES) {
+    const rows = flowDb
+      .prepare(`SELECT id, logo_stored_name FROM ${table} WHERE logo_stored_name IS NOT NULL AND logo_data IS NULL`)
+      .all() as { id: string; logo_stored_name: string }[]
+    for (const row of rows) {
+      const dataUrl = logoFileToDataUrl(row.logo_stored_name)
+      if (!dataUrl) continue
+      flowDb.prepare(`UPDATE ${table} SET logo_data = ? WHERE id = ?`).run(dataUrl, row.id)
+      await psDb.execute(`UPDATE ${table} SET logo_data = ? WHERE id = ?`, [dataUrl, row.id])
+      console.log(`[PowerSync] Backfill logo_data en ${table}:`, row.id)
+    }
+  }
+}
+
 /**
  * Conecta la instancia de PowerSync al backend, en paralelo a better-sqlite3.
  * Antes de conectar, copia los datos existentes de tasks/projects/task_dependencies
@@ -1247,6 +1285,7 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyComexImportsData(db)
   await migrateLegacyComexPlanningsData(db)
   await fixLegacyNullDoubleStrings(db)
+  await backfillLogoData(db)
   await db.connect(new ProductionTokenConnector(endpoint))
   console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
 }

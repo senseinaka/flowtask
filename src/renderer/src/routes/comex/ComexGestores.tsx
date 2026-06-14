@@ -25,10 +25,10 @@ function EspTag({ label }: { label: string }) {
   return <span className={cn('text-[9px] font-semibold px-2 py-0.5 rounded-full border', cls)}>{label.trim()}</span>
 }
 
-function Avatar({ name, logo, size = 44 }: { name: string; logo?: string | null; size?: number }) {
+function Avatar({ name, logo, logoData, size = 44 }: { name: string; logo?: string | null; logoData?: string | null; size?: number }) {
   const { data: dataUrl } = useQuery({
-    queryKey: ['logo-url', logo], queryFn: () => logo ? window.api.comex.logo.getDataUrl(logo) : null,
-    enabled: !!logo, staleTime: Infinity, gcTime: Infinity,
+    queryKey: ['logo-url', logo, logoData], queryFn: () => (logo || logoData) ? window.api.comex.logo.getDataUrl(logo ?? null, logoData) : null,
+    enabled: !!(logo || logoData), staleTime: Infinity, gcTime: Infinity,
   })
   const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const COLORS   = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
@@ -228,7 +228,7 @@ function GestorCard({ gestor }: { gestor: ComexGestor }) {
           <div className="flex items-start gap-3">
             {/* Avatar/Logo con botón upload */}
             <div className="flex-shrink-0 relative group/logo">
-              <Avatar name={gestor.name} logo={gestor.logo_stored_name} size={48} />
+              <Avatar name={gestor.name} logo={gestor.logo_stored_name} logoData={gestor.logo_data} size={48} />
               <button
                 onClick={handleLogoUpload}
                 className="absolute inset-0 rounded-xl bg-black/60 opacity-0 group-hover/logo:opacity-100 transition-opacity flex items-center justify-center"

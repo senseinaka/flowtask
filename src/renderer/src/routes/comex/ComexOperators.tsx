@@ -433,6 +433,7 @@ function OperatorContactsSection({ operatorId }: { operatorId: string }) {
 
 function LogoBadge({
   storedName,
+  logoData,
   onUpload,
   onRemove,
   uploading,
@@ -440,6 +441,7 @@ function LogoBadge({
   size = 44
 }: {
   storedName: string | null
+  logoData?: string | null
   onUpload: (e: React.MouseEvent) => void
   onRemove: (e: React.MouseEvent) => void
   uploading: boolean
@@ -450,9 +452,9 @@ function LogoBadge({
   const [confirmRemove, setConfirmRemove] = useState(false)
 
   useEffect(() => {
-    if (!storedName) { setDataUrl(null); return }
-    window.api.comex.logo.getDataUrl(storedName).then(setDataUrl)
-  }, [storedName])
+    if (!storedName && !logoData) { setDataUrl(null); return }
+    window.api.comex.logo.getDataUrl(storedName, logoData).then(setDataUrl)
+  }, [storedName, logoData])
 
   const handleMouseLeave = () => { if (confirmRemove) setConfirmRemove(false) }
 
@@ -579,6 +581,7 @@ function OperatorCard({ op }: { op: ComexFreightOperator }) {
         <div className="flex items-start justify-between gap-2">
           <LogoBadge
             storedName={op.logo_stored_name}
+            logoData={op.logo_data}
             onUpload={handleUploadLogo}
             onRemove={handleDeleteLogo}
             uploading={uploadLogo.isPending}

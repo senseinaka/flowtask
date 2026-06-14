@@ -154,13 +154,13 @@ function InalBadge({ lcStatus, etaDays }: { lcStatus: string; etaDays: number | 
 
 // ── SupplierAvatar ────────────────────────────────────────────────────────────
 
-function SupplierAvatar({ storedName, supplierName, size = 40 }: {
-  storedName?: string | null; supplierName?: string; size?: number
+function SupplierAvatar({ storedName, logoData, supplierName, size = 40 }: {
+  storedName?: string | null; logoData?: string | null; supplierName?: string; size?: number
 }) {
   const { data: dataUrl } = useQuery({
-    queryKey:  ['logo-url', storedName],
-    queryFn:   () => storedName ? window.api.comex.logo.getDataUrl(storedName) : null,
-    enabled:   !!storedName, staleTime: Infinity, gcTime: Infinity,
+    queryKey:  ['logo-url', storedName, logoData],
+    queryFn:   () => (storedName || logoData) ? window.api.comex.logo.getDataUrl(storedName ?? null, logoData) : null,
+    enabled:   !!(storedName || logoData), staleTime: Infinity, gcTime: Infinity,
   })
   const initials  = (supplierName ?? '?').split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const COLORS    = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
@@ -332,7 +332,7 @@ function ImportCard({ imp }: { imp: ComexImport }) {
       <div className="p-3.5 space-y-3">
         {/* ── ZONA 1: Identificación ── */}
         <div className="flex items-start gap-2.5">
-          <SupplierAvatar storedName={imp._supplier_logo} supplierName={imp.supplier?.name} size={40} />
+          <SupplierAvatar storedName={imp._supplier_logo} logoData={imp._supplier_logo_data} supplierName={imp.supplier?.name} size={40} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -442,7 +442,7 @@ function MiniCard({ imp }: { imp: ComexImport }) {
       )}
     >
       <div className="flex items-start gap-2">
-        <SupplierAvatar storedName={imp._supplier_logo} supplierName={imp.supplier?.name} size={28} />
+        <SupplierAvatar storedName={imp._supplier_logo} logoData={imp._supplier_logo_data} supplierName={imp.supplier?.name} size={28} />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-white truncate leading-tight">{imp.title}</p>
           <p className="text-[10px] text-cyan-400 font-medium mt-0.5">{fmtValue(imp)}</p>
@@ -600,7 +600,7 @@ function TimelineRow({ imp, eta, days, color }: {
       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
 
       {/* Logo */}
-      <SupplierAvatar storedName={imp._supplier_logo} supplierName={imp.supplier?.name} size={28} />
+      <SupplierAvatar storedName={imp._supplier_logo} logoData={imp._supplier_logo_data} supplierName={imp.supplier?.name} size={28} />
 
       {/* Info */}
       <div className="flex-1 min-w-0">

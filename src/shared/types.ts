@@ -492,11 +492,12 @@ export interface ComexFreightOperator {
   services: string      // free-text: "LCL, FCL, aéreo"
   notes: string
   logo_stored_name: string | null
+  logo_data: string | null
   created_at: number
   updated_at: number
 }
 
-export type CreateComexFreightOperatorInput = Omit<ComexFreightOperator, 'id' | 'created_at' | 'updated_at'>
+export type CreateComexFreightOperatorInput = Omit<ComexFreightOperator, 'id' | 'created_at' | 'updated_at' | 'logo_data'>
 
 export interface ComexFreightOperatorContact {
   id: string
@@ -528,6 +529,7 @@ export interface ComexGestor {
   especialidades: string   // "INAL, ANMAT, Cosméticos" (comma-separated)
   notas:          string
   logo_stored_name: string | null
+  logo_data:      string | null
   created_at:     number
   updated_at:     number
   // relacional
@@ -545,7 +547,7 @@ export interface ComexGestorContact {
   created_at: number
 }
 
-export type CreateComexGestorInput         = Omit<ComexGestor, 'id' | 'created_at' | 'updated_at' | 'contacts' | 'logo_stored_name'>
+export type CreateComexGestorInput         = Omit<ComexGestor, 'id' | 'created_at' | 'updated_at' | 'contacts' | 'logo_stored_name' | 'logo_data'>
 export type CreateComexGestorContactInput  = Omit<ComexGestorContact, 'id' | 'created_at'>
 
 // ── Despachantes ──────────────────────────────────────────────────────────────
@@ -577,13 +579,14 @@ export interface ComexDespachante {
   direccion:        string
   notas:            string
   logo_stored_name: string | null
+  logo_data:        string | null
   created_at:       number
   updated_at:       number
   // relacional
   contacts?:        ComexDespachanteContact[]
 }
 
-export type CreateComexDespachanteInput = Omit<ComexDespachante, 'id' | 'created_at' | 'updated_at' | 'logo_stored_name' | 'contacts'>
+export type CreateComexDespachanteInput = Omit<ComexDespachante, 'id' | 'created_at' | 'updated_at' | 'logo_stored_name' | 'logo_data' | 'contacts'>
 
 // ── Costos extras de importación ─────────────────────────────────────────────
 
@@ -981,6 +984,7 @@ export interface ComexSupplier {
   contact_phone: string
   notes: string
   logo_stored_name: string | null
+  logo_data: string | null
   created_at: number
   updated_at: number
 }
@@ -1119,6 +1123,7 @@ export interface ComexImport {
   _despacho_number?:        string | null
   _canal_despacho?:         string | null
   _supplier_logo?:          string | null   // logo_stored_name del proveedor
+  _supplier_logo_data?:     string | null   // logo_data del proveedor
   // Datos de carga del JOIN con customs (para la tarjeta de importación)
   _peso_bruto_kg?:            number | null
   _volumen_m3?:               number | null
@@ -1907,13 +1912,14 @@ export interface ComexBrand {
   purchase_frequency_days: number | null
   notes: string
   logo_stored_name: string | null
+  logo_data: string | null
   created_at: number
   updated_at: number
   // relacional
   primary_supplier?: ComexSupplier
 }
 
-export type CreateComexBrandInput = Omit<ComexBrand, 'id' | 'created_at' | 'updated_at' | 'primary_supplier' | 'logo_stored_name'>
+export type CreateComexBrandInput = Omit<ComexBrand, 'id' | 'created_at' | 'updated_at' | 'primary_supplier' | 'logo_stored_name' | 'logo_data'>
 
 // ── Programaciones de pedido ──────────────────────────────────────────────────
 

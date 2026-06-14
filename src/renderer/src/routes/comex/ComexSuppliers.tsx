@@ -102,6 +102,7 @@ function QuickCreateModal({ onClose }: { onClose: () => void }) {
 
 function LogoBadge({
   storedName,
+  logoData,
   onUpload,
   onRemove,
   uploading,
@@ -109,6 +110,7 @@ function LogoBadge({
   size = 44
 }: {
   storedName: string | null
+  logoData?: string | null
   onUpload: (e: React.MouseEvent) => void
   onRemove: (e: React.MouseEvent) => void
   uploading: boolean
@@ -119,9 +121,9 @@ function LogoBadge({
   const [confirmRemove, setConfirmRemove] = useState(false)
 
   useEffect(() => {
-    if (!storedName) { setDataUrl(null); return }
-    window.api.comex.logo.getDataUrl(storedName).then(setDataUrl)
-  }, [storedName])
+    if (!storedName && !logoData) { setDataUrl(null); return }
+    window.api.comex.logo.getDataUrl(storedName, logoData).then(setDataUrl)
+  }, [storedName, logoData])
 
   // Si se cancela la confirmación al perder hover, reseteamos
   const handleMouseLeave = () => { if (confirmRemove) setConfirmRemove(false) }
@@ -235,6 +237,7 @@ function SupplierCard({ supplier }: { supplier: ComexSupplier }) {
       <div className="flex items-start justify-between gap-3">
         <LogoBadge
           storedName={supplier.logo_stored_name}
+          logoData={supplier.logo_data}
           onUpload={handleUploadLogo}
           onRemove={handleDeleteLogo}
           uploading={uploadLogo.isPending}
