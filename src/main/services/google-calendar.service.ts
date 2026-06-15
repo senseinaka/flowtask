@@ -27,7 +27,10 @@ import type { CalendarConnectionStatus, GoogleCalendarInfo } from '@shared/types
 const store = new ConfigStore('google-calendar')
 const REDIRECT_PORT = 42814
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/oauth2callback`
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/userinfo.email'
+]
 
 // Reutilizamos las credenciales OAuth (Client ID/Secret) ya configuradas para
 // Google Drive — son credenciales de la misma app de Google Cloud, solo el
