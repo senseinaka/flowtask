@@ -976,8 +976,8 @@ function MovementsTable({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('category')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const toggleExpanded = (id: string) => setExpandedIds(prev => {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) => setCollapsedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
@@ -1085,7 +1085,7 @@ function MovementsTable({
                         }
                       >
                         <Receipt size={9} /> {m.entries_count ?? 0}
-                        <ChevronDown size={9} className={cn('transition-transform', expandedIds.has(m.id) && 'rotate-180')} />
+                        <ChevronDown size={9} className={cn('transition-transform', !collapsedIds.has(m.id) && 'rotate-180')} />
                       </button>
                     )}
                   </div>
@@ -1163,7 +1163,7 @@ function MovementsTable({
                   </div>
                 </td>
               </tr>
-              {!!m.concept?.tracks_multiple_entries && expandedIds.has(m.id) && (
+              {!!m.concept?.tracks_multiple_entries && !collapsedIds.has(m.id) && (
                 <tr key={`${m.id}-entries`} className="bg-slate-900/40">
                   <td />
                   <td colSpan={12} className="px-3 py-2">
@@ -1200,6 +1200,7 @@ function MovementsTable({
  */
 function MovementEntriesQuickList({ movementId, conceptName }: { movementId: string; conceptName: string }) {
   const { data: entries = [], isLoading } = useMovementEntries(movementId)
+  const add    = useAddMovementEntry()
   const update = useUpdateMovementEntry()
   const remove = useRemoveMovementEntry()
 
@@ -1209,11 +1210,27 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
   )
   const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
 
+  const handleAddEntry = () => {
+    const lastAmount = sorted.length > 0 ? sorted[sorted.length - 1].amount : 0
+    add.mutate({ movement_id: movementId, amount: lastAmount, entry_date: dayjs().valueOf(), note: '' })
+  }
+
   if (isLoading) {
     return <p className="text-[11px] text-slate-500 italic px-1">Cargando cargas…</p>
   }
   if (sorted.length === 0) {
-    return <p className="text-[11px] text-slate-500 italic px-1">"{conceptName}" todavía no tiene cargas este mes. Abrí "Editar" para agregar la primera.</p>
+    return (
+      <div className="flex items-center gap-2 px-1">
+        <p className="text-[11px] text-slate-500 italic">"{conceptName}" todavía no tiene cargas este mes.</p>
+        <button
+          onClick={handleAddEntry}
+          disabled={add.isPending}
+          className="flex items-center gap-1 text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
+        >
+          <Plus size={11} /> Agregar carga
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -1243,6 +1260,14 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
           </button>
         </div>
       ))}
+      <button
+        onClick={handleAddEntry}
+        disabled={add.isPending}
+        className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-white border border-dashed border-purple-700/50 hover:bg-purple-600 hover:border-purple-600 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
+        title={`Agregar "Carga ${conceptName} ${sorted.length + 1}"`}
+      >
+        <Plus size={11} /> Agregar carga
+      </button>
       <span className="text-[11px] font-semibold text-purple-300 ml-1">Total: {formatCurrency(total)}</span>
     </div>
   )
@@ -1292,8 +1317,8 @@ function CategoryGroupedMovements({
   const toggleCollapse = (name: string) =>
     setCollapsed(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s })
 
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const toggleExpanded = (id: string) => setExpandedIds(prev => {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) => setCollapsedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
@@ -1445,7 +1470,7 @@ function CategoryGroupedMovements({
                               }
                             >
                               <Receipt size={9} /> {m.entries_count ?? 0}
-                              <ChevronDown size={9} className={cn('transition-transform', expandedIds.has(m.id) && 'rotate-180')} />
+                              <ChevronDown size={9} className={cn('transition-transform', !collapsedIds.has(m.id) && 'rotate-180')} />
                             </button>
                           )}
                         </div>
@@ -1499,6 +1524,15 @@ function CategoryGroupedMovements({
                         </div>
                       </td>
                     </tr>
+                    {!!m.concept?.tracks_multiple_entries && !collapsedIds.has(m.id) && (
+                      <tr style={{ borderLeft: `3px solid ${group.color}40` }} className="bg-slate-900/40">
+                        <td />
+                        <td colSpan={11} className="px-3 py-2">
+                          <MovementEntriesQuickList movementId={m.id} conceptName={m.concept?.name ?? 'Carga'} />
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )
                 })}
 
@@ -1589,6 +1623,12 @@ function QuickFillMode({
 
   const [filterEmpty, setFilterEmpty] = useState(false)
   const amountRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [collapsedEntryIds, setCollapsedEntryIds] = useState<Set<string>>(new Set())
+  const toggleEntries = (id: string) => setCollapsedEntryIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   const setDraft = (id: string, patch: Partial<QuickFillDraft>) =>
     setDrafts(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
@@ -1762,9 +1802,11 @@ function QuickFillMode({
                     const isLoaded = !!existing && !draft?.editMode
 
                     if (isLoaded) {
+                      const tracksEntries = !!c.tracks_multiple_entries
+                      const expanded      = tracksEntries && !collapsedEntryIds.has(existing!.id)
                       return (
+                        <React.Fragment key={c.id}>
                         <tr
-                          key={c.id}
                           className="border-b border-slate-800 opacity-40 hover:opacity-70 transition-opacity"
                         >
                           <td className="p-0 w-1" style={{ background: group.catColor + '30' }} />
@@ -1772,6 +1814,16 @@ function QuickFillMode({
                             <span className="flex items-center gap-1.5">
                               <Check size={11} className="text-emerald-600 flex-shrink-0" />
                               {c.name}
+                              {tracksEntries && (
+                                <button
+                                  onClick={() => toggleEntries(existing!.id)}
+                                  className="flex items-center gap-0.5 text-[9px] font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 rounded px-1 py-0.5 flex-shrink-0 hover:bg-purple-900/40 transition-colors"
+                                  title="Click para ver/editar las cargas"
+                                >
+                                  <Receipt size={9} /> {existing!.entries_count ?? 0}
+                                  <ChevronDown size={9} className={cn('transition-transform', expanded && 'rotate-180')} />
+                                </button>
+                              )}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-xs text-slate-500 text-right">
@@ -1804,6 +1856,15 @@ function QuickFillMode({
                             </button>
                           </td>
                         </tr>
+                        {expanded && (
+                          <tr className="border-b border-slate-800 bg-slate-900/40">
+                            <td className="p-0 w-1" style={{ background: group.catColor + '30' }} />
+                            <td colSpan={6} className="px-4 py-2">
+                              <MovementEntriesQuickList movementId={existing!.id} conceptName={c.name} />
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       )
                     }
 
