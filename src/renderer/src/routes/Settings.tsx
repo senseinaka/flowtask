@@ -13,6 +13,7 @@ import {
   AI_OPERATION_DEFAULT_MODELS
 } from '@shared/types'
 import PermissionsAdmin from '../components/settings/PermissionsAdmin'
+import CalendarSettingsSection from '../components/settings/CalendarSettingsSection'
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/useProjects'
 import { useAIConfigured, useAIModels, useSaveAIApiKey, useSaveAIModels } from '../hooks/useAI'
 import { usePersonalContact, useSavePersonalContact } from '../hooks/useSettings'
@@ -733,6 +734,9 @@ export default function Settings() {
           </div>
         )}
       </section>
+
+      {/* Calendario / Agenda */}
+      <CalendarSettingsSection />
 
       {/* WhatsApp */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">

@@ -31,6 +31,9 @@ import { registerPowerSyncIpc } from './ipc/powersync.ipc'
 import { registerAppIpc } from './ipc/app.ipc'
 import { registerAuthIpc } from './ipc/auth.ipc'
 import { registerPermissionsIpc } from './ipc/permissions.ipc'
+import { registerCalendarIpc } from './ipc/calendar.ipc'
+import { syncEnabledCalendars } from './services/google-calendar.service'
+import cron from 'node-cron'
 import { installIpcPermissionGuard } from './services/permissions.service'
 import { initUpdater } from './services/updater.service'
 import { driveService } from './services/drive.service'
@@ -123,6 +126,14 @@ app.whenReady().then(() => {
   registerAppIpc()
   registerAuthIpc(getMainWindow)
   registerPermissionsIpc()
+  registerCalendarIpc()
+
+  // ── Calendario: sync automático cada 10 minutos (si hay conexión activa) ──
+  cron.schedule('*/10 * * * *', () => {
+    syncEnabledCalendars().catch((err) => {
+      console.error('[Calendar] Error en sync automático:', (err as Error).message)
+    })
+  })
 
   // ── Backup automático cada 6 horas ────────────────────────────────────────
   const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000  // 6 horas

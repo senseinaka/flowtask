@@ -2105,3 +2105,56 @@ export interface ImportOrderPlanningAIReport {
 }
 
 export type CreateImportOrderPlanningAIReportInput = Omit<ImportOrderPlanningAIReport, 'id' | 'created_at'>
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Calendario / Agenda (Fase 1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Fila de la tabla local-only `calendar_events_cache`. */
+export interface CalendarEventCache {
+  id: string
+  google_event_id: string
+  google_calendar_id: string
+  summary: string
+  description: string | null
+  location: string | null
+  start_at: number
+  end_at: number | null
+  all_day: number
+  status: string | null
+  color_id: string | null
+  updated_at: number
+  fetched_at: number
+}
+
+export type CalendarEventSource = 'google' | 'finance' | 'company_finance' | 'comex_planning'
+
+/** Evento unificado: combina cache de Google Calendar con vencimientos/hitos internos. */
+export interface UnifiedCalendarEvent {
+  id: string
+  source: CalendarEventSource
+  title: string
+  start_at: number
+  end_at: number | null
+  all_day: boolean
+  /** Para 'google': el google_calendar_id. Para otras fuentes: la categoría/módulo. */
+  category: string
+  /** Ruta interna de Summit para fuentes que no son Google (null para eventos de Google). */
+  link: string | null
+}
+
+export interface GoogleCalendarInfo {
+  id: string
+  summary: string
+  description?: string | null
+  backgroundColor?: string | null
+  primary?: boolean
+  accessRole?: string | null
+}
+
+export interface CalendarConnectionStatus {
+  connected: boolean
+  googleEmail: string | null
+  enabledCalendarIds: string[]
+  lastSyncAt: number | null
+}

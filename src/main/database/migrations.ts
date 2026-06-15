@@ -2147,6 +2147,54 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         db.exec(`ALTER TABLE ${table} ADD COLUMN logo_data TEXT`)
       }
     }
+  },
+  {
+    version: 67,
+    up: (db) => {
+      // Calendario / Agenda (Fase 1): tablas LOCAL-ONLY (no viajan por
+      // PowerSync) — cache de eventos de Google Calendar y configuración de
+      // la conexión OAuth por usuario.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS calendar_events_cache (
+          id                TEXT PRIMARY KEY,
+          google_event_id   TEXT NOT NULL,
+          google_calendar_id TEXT NOT NULL,
+          summary           TEXT NOT NULL DEFAULT '',
+          description       TEXT,
+          location          TEXT,
+          start_at          INTEGER NOT NULL,
+          end_at            INTEGER,
+          all_day           INTEGER NOT NULL DEFAULT 0,
+          status            TEXT,
+          color_id          TEXT,
+          updated_at        INTEGER NOT NULL,
+          fetched_at        INTEGER NOT NULL,
+          UNIQUE(google_calendar_id, google_event_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_calendar_events_cache_range
+          ON calendar_events_cache(start_at, end_at);
+        CREATE INDEX IF NOT EXISTS idx_calendar_events_cache_calendar
+          ON calendar_events_cache(google_calendar_id);
+
+        CREATE TABLE IF NOT EXISTS calendar_connections (
+          user_id              TEXT PRIMARY KEY,
+          google_email         TEXT NOT NULL,
+          connected_at         INTEGER NOT NULL,
+          last_sync_at         INTEGER,
+          enabled_calendar_ids TEXT NOT NULL DEFAULT '[]'
+        );
+      `)
+
+      // Seed: Diego (admin) tiene acceso de lectura al nuevo módulo Calendario.
+      const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+      const DIEGO_USER_ID = 'ac2b1796-0571-43d2-b645-c72ba939824f'
+      const now = Date.now()
+      db.prepare(`
+        INSERT INTO user_permissions (id, user_id, module_key, submodule_key, level, created_at, updated_at, workspace_id)
+        VALUES (?, ?, 'calendar', NULL, 'write', ?, ?, ?)
+      `).run(randomUUID(), DIEGO_USER_ID, now, now, WORKSPACE_ID)
+    }
   }
 ]
 

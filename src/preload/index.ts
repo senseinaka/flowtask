@@ -39,7 +39,8 @@ import type {
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus,
   AuthSession, AuthLoginResult,
-  UserPermission
+  UserPermission,
+  CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -825,6 +826,18 @@ const api = {
     listAll: (): Promise<UserPermission[]> => ipcRenderer.invoke('permissions:listAll'),
     setLevel: (input: { user_id: string; module_key: string; submodule_key?: string | null; level: PermissionLevel }): Promise<UserPermission> =>
       ipcRenderer.invoke('permissions:setLevel', input)
+  },
+
+  calendar: {
+    status: (): Promise<CalendarConnectionStatus> => ipcRenderer.invoke('calendar:status'),
+    connect: (): Promise<CalendarConnectionStatus> => ipcRenderer.invoke('calendar:connect'),
+    disconnect: (): Promise<void> => ipcRenderer.invoke('calendar:disconnect'),
+    listCalendars: (): Promise<GoogleCalendarInfo[]> => ipcRenderer.invoke('calendar:listCalendars'),
+    setEnabledCalendars: (calendarIds: string[]): Promise<CalendarConnectionStatus> =>
+      ipcRenderer.invoke('calendar:setEnabledCalendars', calendarIds),
+    getEvents: (startDate: number, endDate: number): Promise<UnifiedCalendarEvent[]> =>
+      ipcRenderer.invoke('calendar:getEvents', startDate, endDate),
+    syncNow: (): Promise<{ synced: number }> => ipcRenderer.invoke('calendar:syncNow')
   },
 
   on: (

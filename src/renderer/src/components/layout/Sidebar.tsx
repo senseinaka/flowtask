@@ -4,7 +4,7 @@ import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet, Tag,
-  CalendarClock, LogOut
+  CalendarClock, LogOut, CalendarDays
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -225,6 +225,24 @@ export default function Sidebar() {
                 subActive: 'bg-cyan-700/40 text-cyan-200'
               }}
             />
+          </div>
+        )}
+
+        {/* ── Calendario ────────────────────────────────────────────────── */}
+        {canRead('calendar') && (
+          <div className="pt-1">
+            <NavLink
+              to="/calendario"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-indigo-900/30 text-indigo-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <CalendarDays size={16} />
+              Calendario
+            </NavLink>
           </div>
         )}
 
