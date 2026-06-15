@@ -1234,9 +1234,9 @@ function logoFileToDataUrl(storedName: string): string | null {
 async function backfillLogoData(psDb: PowerSyncDatabase): Promise<void> {
   const flowDb = getDb()
   for (const table of LOGO_TABLES) {
-    const rows = flowDb
-      .prepare(`SELECT id, logo_stored_name FROM ${table} WHERE logo_stored_name IS NOT NULL AND logo_data IS NULL`)
-      .all() as { id: string; logo_stored_name: string }[]
+    const rows = await psDb.getAll<{ id: string; logo_stored_name: string }>(
+      `SELECT id, logo_stored_name FROM ${table} WHERE logo_stored_name IS NOT NULL AND logo_data IS NULL`
+    )
     for (const row of rows) {
       const dataUrl = logoFileToDataUrl(row.logo_stored_name)
       if (!dataUrl) continue
