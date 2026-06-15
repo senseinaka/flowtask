@@ -38,6 +38,8 @@ import {
   useFinanceSecurityStatus, useSetupFinancePin, useVerifyFinancePin, useDisableFinancePin, useChangeFinancePin,
   type FinanceMovementUrgency, type FinanceAlert, type FinanceAlertKind, type FinanceAlertSeverity
 } from '../../hooks/useFinance'
+import { useEventLinks, useAuthSession } from '../../hooks/useCalendar'
+import { CalendarLinkButton } from '../../components/calendar/CalendarLinkButton'
 import type {
   FinanceMovement, FinanceConcept, FinanceMonthSummary, FinanceCategory, FinanceAccount,
   FinancePaymentMethodEntity, FinanceMovementEntry,
@@ -974,6 +976,12 @@ function MovementsTable({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('category')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) => setExpandedIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   const onSort = (key: SortKey) => {
     if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -1052,7 +1060,8 @@ function MovementsTable({
               : null
             const catColor  = m.concept?.category?.color ?? '#6366f1'
             return (
-              <tr key={m.id} className={cn('hover:bg-slate-800/40 transition-colors group', selectedIds.has(m.id) && 'bg-emerald-500/5')}>
+              <React.Fragment key={m.id}>
+              <tr className={cn('hover:bg-slate-800/40 transition-colors group', selectedIds.has(m.id) && 'bg-emerald-500/5')}>
                 <td className="px-3 py-2">
                   <input
                     type="checkbox"
@@ -1066,16 +1075,18 @@ function MovementsTable({
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
                     <span className="font-medium text-slate-200 truncate">{m.concept?.name ?? '—'}</span>
                     {!!m.concept?.tracks_multiple_entries && (
-                      <span
-                        className="flex items-center gap-0.5 text-[9px] font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 rounded px-1 py-0.5 flex-shrink-0"
+                      <button
+                        onClick={() => toggleExpanded(m.id)}
+                        className="flex items-center gap-0.5 text-[9px] font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 rounded px-1 py-0.5 flex-shrink-0 hover:bg-purple-900/40 transition-colors"
                         title={
                           m.entries_count
-                            ? `Suma ${m.entries_count} ${m.entries_count === 1 ? 'carga' : 'cargas'} de este mes — el monto real es el total acumulado, no un pago único.`
-                            : 'Este concepto acumula varias cargas en el mes — todavía no cargaste ninguna.'
+                            ? `Suma ${m.entries_count} ${m.entries_count === 1 ? 'carga' : 'cargas'} de este mes — click para ver/editar el detalle.`
+                            : 'Este concepto acumula varias cargas en el mes — todavía no cargaste ninguna. Click para agregar.'
                         }
                       >
                         <Receipt size={9} /> {m.entries_count ?? 0}
-                      </span>
+                        <ChevronDown size={9} className={cn('transition-transform', expandedIds.has(m.id) && 'rotate-180')} />
+                      </button>
                     )}
                   </div>
                 </td>
@@ -1152,6 +1163,15 @@ function MovementsTable({
                   </div>
                 </td>
               </tr>
+              {!!m.concept?.tracks_multiple_entries && expandedIds.has(m.id) && (
+                <tr key={`${m.id}-entries`} className="bg-slate-900/40">
+                  <td />
+                  <td colSpan={12} className="px-3 py-2">
+                    <MovementEntriesQuickList movementId={m.id} conceptName={m.concept?.name ?? 'Carga'} />
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
             )
           })}
         </tbody>
@@ -1168,6 +1188,62 @@ function MovementsTable({
           </tr>
         </tfoot>
       </table>
+    </div>
+  )
+}
+
+/**
+ * Detalle expandible de cargas de un movimiento multi-entrada, mostrado inline
+ * en la fila de la tabla principal (sin abrir el modal). Cada carga se muestra
+ * con un nombre derivado del concepto madre ("Carga Nafta 1", "Carga Nafta 2", ...)
+ * numerado por fecha de carga, y permite edición rápida del monto.
+ */
+function MovementEntriesQuickList({ movementId, conceptName }: { movementId: string; conceptName: string }) {
+  const { data: entries = [], isLoading } = useMovementEntries(movementId)
+  const update = useUpdateMovementEntry()
+  const remove = useRemoveMovementEntry()
+
+  const sorted = useMemo(
+    () => [...entries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at)),
+    [entries]
+  )
+  const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
+
+  if (isLoading) {
+    return <p className="text-[11px] text-slate-500 italic px-1">Cargando cargas…</p>
+  }
+  if (sorted.length === 0) {
+    return <p className="text-[11px] text-slate-500 italic px-1">"{conceptName}" todavía no tiene cargas este mes. Abrí "Editar" para agregar la primera.</p>
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-1">
+      {sorted.map((e, i) => (
+        <div key={e.id} className="flex items-center gap-1.5 rounded-lg border border-purple-800/30 bg-purple-950/10 pl-2 pr-1 py-1">
+          <span className="text-[11px] text-slate-400 whitespace-nowrap">
+            Carga {conceptName} {i + 1}
+            {e.entry_date && <span className="text-slate-600"> · {dayjs(e.entry_date).format('DD/MM')}</span>}
+          </span>
+          <EditableAmount
+            value={e.amount}
+            onSave={v => {
+              if (v === null) return
+              update.mutate({ id: e.id, movementId, data: { amount: v } })
+            }}
+          />
+          <button
+            onClick={() => {
+              if (!confirm(`¿Eliminar "Carga ${conceptName} ${i + 1}" de ${formatCurrency(e.amount)}?`)) return
+              remove.mutate({ id: e.id, movementId })
+            }}
+            className="p-1 rounded-md text-slate-600 hover:text-red-400 hover:bg-slate-700/50 transition-colors"
+            title="Eliminar carga"
+          >
+            <Trash2 size={11} />
+          </button>
+        </div>
+      ))}
+      <span className="text-[11px] font-semibold text-purple-300 ml-1">Total: {formatCurrency(total)}</span>
     </div>
   )
 }
@@ -1215,6 +1291,13 @@ function CategoryGroupedMovements({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const toggleCollapse = (name: string) =>
     setCollapsed(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s })
+
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) => setExpandedIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   if (movements.length === 0) {
     return (
@@ -1340,15 +1423,33 @@ function CategoryGroupedMovements({
                     : null
                   const isSel = selectedIds.has(m.id)
                   return (
+                    <React.Fragment key={m.id}>
                     <tr
-                      key={m.id}
                       style={{ borderLeft: `3px solid ${group.color}40` }}
                       className={cn('group divide-y divide-slate-800/60 hover:bg-slate-800/30 transition-colors', isSel && 'bg-emerald-950/20')}
                     >
                       <td className="px-3 py-2">
                         <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(m.id)} className="accent-emerald-500" />
                       </td>
-                      <td className="px-3 py-2 font-medium text-slate-200 whitespace-nowrap">{m.concept?.name ?? '—'}</td>
+                      <td className="px-3 py-2 font-medium text-slate-200 whitespace-nowrap">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="truncate">{m.concept?.name ?? '—'}</span>
+                          {!!m.concept?.tracks_multiple_entries && (
+                            <button
+                              onClick={() => toggleExpanded(m.id)}
+                              className="flex items-center gap-0.5 text-[9px] font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 rounded px-1 py-0.5 flex-shrink-0 hover:bg-purple-900/40 transition-colors"
+                              title={
+                                m.entries_count
+                                  ? `Suma ${m.entries_count} ${m.entries_count === 1 ? 'carga' : 'cargas'} de este mes — click para ver/editar el detalle.`
+                                  : 'Este concepto acumula varias cargas en el mes — todavía no cargaste ninguna. Click para agregar.'
+                              }
+                            >
+                              <Receipt size={9} /> {m.entries_count ?? 0}
+                              <ChevronDown size={9} className={cn('transition-transform', expandedIds.has(m.id) && 'rotate-180')} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span className="text-[11px] text-slate-400">{FINANCE_EXPENSE_TYPE_LABELS[m.concept?.expense_type ?? 'variable'] ?? '—'}</span>
                       </td>
@@ -2310,6 +2411,8 @@ function UpcomingMovementCard({
   const urgency = getMovementUrgency(movement)
   const color = urgency ? FINANCE_URGENCY_COLORS[urgency] : '#64748b'
   const catColor = movement.concept?.category?.color ?? '#6366f1'
+  const { data: links = [] } = useEventLinks('finance', [movement.id])
+  const { data: session } = useAuthSession()
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-800/40 px-4 py-2.5 hover:bg-slate-800/60 transition-colors group">
@@ -2347,6 +2450,17 @@ function UpcomingMovementCard({
           >
             <Edit3 size={14} />
           </button>
+          {movement.due_date !== null && (
+            <CalendarLinkButton
+              link={links[0]}
+              currentUserId={session?.userId}
+              sourceModule="finance"
+              sourceType="vencimiento"
+              sourceEventId={movement.id}
+              title={`Vencimiento: ${movement.concept?.name ?? 'Movimiento'}`}
+              dueAtMs={movement.due_date}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -2681,7 +2795,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
           </div>
 
           {tracksEntries && (
-            <MovementEntriesLedger movementId={movement!.id} entries={liveEntries} />
+            <MovementEntriesLedger movementId={movement!.id} entries={liveEntries} conceptName={firstConcept?.name ?? 'Carga'} />
           )}
 
           <div className="grid grid-cols-2 gap-3">
@@ -2771,9 +2885,10 @@ function MovementForm({ movement, concepts, period, onClose }: {
  * y `payment_date` del movimiento a partir de la suma/lista de entradas
  * (ver `recalcMovementFromEntries` en queries/finance.ts).
  */
-function MovementEntriesLedger({ movementId, entries }: {
-  movementId: string
-  entries:    FinanceMovementEntry[]
+function MovementEntriesLedger({ movementId, entries, conceptName }: {
+  movementId:  string
+  entries:     FinanceMovementEntry[]
+  conceptName: string
 }) {
   const add    = useAddMovementEntry()
   const update = useUpdateMovementEntry()
@@ -2791,6 +2906,15 @@ function MovementEntriesLedger({ movementId, entries }: {
     () => [...entries].sort((a, b) => (b.entry_date ?? 0) - (a.entry_date ?? 0) || b.created_at - a.created_at),
     [entries]
   )
+
+  // Numera las cargas en orden cronológico ("Carga Nafta 1" = la más antigua),
+  // independientemente del orden de visualización (más reciente primero).
+  const entryNumbers = useMemo(() => {
+    const chrono = [...entries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at))
+    const map = new Map<string, number>()
+    chrono.forEach((e, i) => map.set(e.id, i + 1))
+    return map
+  }, [entries])
 
   const resetDraft = () => setDraft({ amount: '', entry_date: todayStr, note: '' })
 
@@ -2891,6 +3015,7 @@ function MovementEntriesLedger({ movementId, entries }: {
               ) : (
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex items-baseline gap-2.5">
+                    <span className="text-[11px] font-medium text-purple-300 flex-shrink-0">Carga {conceptName} {entryNumbers.get(e.id)}</span>
                     <span className="text-sm font-semibold text-slate-100 flex-shrink-0">{formatCurrency(e.amount)}</span>
                     <span className="text-[11px] text-slate-500 flex-shrink-0">
                       {e.entry_date ? dayjs(e.entry_date).format('DD/MM/YYYY') : 'sin fecha'}

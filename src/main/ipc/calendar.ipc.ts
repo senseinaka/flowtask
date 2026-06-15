@@ -1,6 +1,16 @@
 import { ipcMain } from 'electron'
 import * as googleCalendar from '../services/google-calendar.service'
-import { getUnifiedEvents } from '../database/queries/calendar'
+import {
+  getUnifiedEvents,
+  createManualEvent,
+  updateManualEvent,
+  deleteManualEvent,
+  getEventLinks,
+  linkEntityToCalendar,
+  unlinkEntity,
+  refreshLinkedEvent
+} from '../database/queries/calendar'
+import type { CalendarEventInput, CalendarEventLink, LinkEntityInput } from '@shared/types'
 
 export function registerCalendarIpc(): void {
   ipcMain.handle('calendar:status', async () => googleCalendar.getConnectionStatus())
@@ -24,4 +34,36 @@ export function registerCalendarIpc(): void {
     const result = await googleCalendar.syncEnabledCalendars()
     return { synced: result?.synced ?? 0 }
   })
+
+  // ── Fase 2: escritura manual de eventos ──────────────────────────────────
+
+  ipcMain.handle('calendar:createEvent', async (_e, calendarId: string, input: CalendarEventInput) =>
+    createManualEvent(calendarId, input)
+  )
+
+  ipcMain.handle('calendar:updateEvent', async (_e, calendarId: string, googleEventId: string, input: CalendarEventInput) =>
+    updateManualEvent(calendarId, googleEventId, input)
+  )
+
+  ipcMain.handle('calendar:deleteEvent', async (_e, calendarId: string, googleEventId: string) =>
+    deleteManualEvent(calendarId, googleEventId)
+  )
+
+  // ── Fase 2: links opt-in con Finanzas/Comex ──────────────────────────────
+
+  ipcMain.handle('calendar:getLinks', async (_e, sourceModule: CalendarEventLink['source_module'], sourceEventIds: string[]) =>
+    getEventLinks(sourceModule, sourceEventIds)
+  )
+
+  ipcMain.handle('calendar:linkEntity', async (_e, input: LinkEntityInput) =>
+    linkEntityToCalendar(input)
+  )
+
+  ipcMain.handle('calendar:unlinkEntity', async (_e, linkId: string) =>
+    unlinkEntity(linkId)
+  )
+
+  ipcMain.handle('calendar:refreshLinkedEvent', async (_e, linkId: string, input: { title: string; dueAtMs: number }) =>
+    refreshLinkedEvent(linkId, input)
+  )
 }

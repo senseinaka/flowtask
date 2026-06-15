@@ -2195,6 +2195,34 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         VALUES (?, ?, 'calendar', NULL, 'write', ?, ?, ?)
       `).run(randomUUID(), DIEGO_USER_ID, now, now, WORKSPACE_ID)
     }
+  },
+  {
+    version: 68,
+    up: (db) => {
+      // Calendario / Agenda (Fase 2): tabla de "links" entre vencimientos de
+      // Finanzas/Comex y eventos de Google Calendar. Viaja por PowerSync
+      // (workspace_id) para que ambos dispositivos vean qué ítems ya están
+      // agendados y de qué cuenta de Google son (owner_user_id).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS calendar_event_links (
+          id                 TEXT PRIMARY KEY,
+          workspace_id       TEXT NOT NULL,
+          owner_user_id      TEXT NOT NULL,
+          source_module      TEXT NOT NULL,
+          source_type        TEXT NOT NULL,
+          source_event_id    TEXT NOT NULL,
+          google_calendar_id TEXT NOT NULL,
+          google_event_id    TEXT NOT NULL,
+          title              TEXT NOT NULL,
+          created_at         INTEGER NOT NULL,
+          updated_at         INTEGER NOT NULL,
+          UNIQUE(source_module, source_event_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_calendar_event_links_source
+          ON calendar_event_links(source_module, source_event_id);
+      `)
+    }
   }
 ]
 

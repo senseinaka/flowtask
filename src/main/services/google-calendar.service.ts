@@ -22,13 +22,17 @@ import ConfigStore from './config-store'
 import { getSession } from './auth.service'
 import { getDb } from '../database/db'
 import type { calendar_v3 } from 'googleapis'
-import type { CalendarConnectionStatus, GoogleCalendarInfo } from '@shared/types'
+import type { CalendarConnectionStatus, CalendarEventInput, GoogleCalendarInfo } from '@shared/types'
 
 const store = new ConfigStore('google-calendar')
 const REDIRECT_PORT = 42814
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/oauth2callback`
 const SCOPES = [
+  // calendar.readonly: necesario para listCalendars()/calendarList.list.
+  // calendar.events: lectura/escritura de eventos (Fase 2) sin otorgar
+  // permisos para administrar la configuración de los calendarios.
   'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/userinfo.email'
 ]
 
@@ -352,6 +356,96 @@ export async function syncEvents(calendarIds: string[], timeMin: number, timeMax
   db.prepare('UPDATE calendar_connections SET last_sync_at = ? WHERE user_id = ?').run(now, userId)
 
   return { synced }
+}
+
+// ── Escritura de eventos (Fase 2) ───────────────────────────────────────────
+
+/** Convierte un CalendarEventInput al formato de recurso de la API de Google Calendar. */
+function toGoogleEventResource(input: Partial<CalendarEventInput>): calendar_v3.Schema$Event {
+  const event: calendar_v3.Schema$Event = {}
+  if (input.summary !== undefined) event.summary = input.summary
+  if (input.description !== undefined) event.description = input.description ?? undefined
+  if (input.location !== undefined) event.location = input.location ?? undefined
+
+  if (input.allDay) {
+    const startDate = new Date(input.startAt!)
+    const endDate = input.endAt ? new Date(input.endAt) : new Date(input.startAt!)
+    if (endDate.getTime() <= startDate.getTime()) endDate.setDate(startDate.getDate() + 1)
+    event.start = { date: startDate.toISOString().slice(0, 10) }
+    event.end = { date: endDate.toISOString().slice(0, 10) }
+  } else if (input.startAt !== undefined) {
+    event.start = { dateTime: new Date(input.startAt).toISOString() }
+    event.end = { dateTime: new Date(input.endAt ?? input.startAt).toISOString() }
+  }
+
+  return event
+}
+
+/** Devuelve el id del calendario primario de la cuenta conectada. */
+export async function getPrimaryCalendarId(): Promise<string> {
+  const calendars = await listCalendars()
+  const primary = calendars.find((c) => c.primary)
+  if (!primary) throw new Error('No se encontró el calendario primario de Google.')
+  return primary.id
+}
+
+/** Crea un evento en el calendario indicado. */
+export async function createEvent(
+  calendarId: string,
+  input: CalendarEventInput
+): Promise<{ googleEventId: string; googleCalendarId: string }> {
+  const userId = await getActiveUserId()
+  if (!userId) throw new Error('No hay sesión activa.')
+
+  const authorized = await getAuthorizedClient(userId)
+  if (!authorized) throw new Error('Google Calendar no está conectado.')
+
+  const calendar = google.calendar({ version: 'v3', auth: authorized.client })
+  const res = await calendar.events.insert({
+    calendarId,
+    requestBody: toGoogleEventResource(input)
+  })
+
+  if (!res.data.id) throw new Error('Google Calendar no devolvió un id de evento.')
+  return { googleEventId: res.data.id, googleCalendarId: calendarId }
+}
+
+/** Actualiza (parcialmente) un evento existente. */
+export async function updateEvent(
+  calendarId: string,
+  googleEventId: string,
+  input: Partial<CalendarEventInput>
+): Promise<void> {
+  const userId = await getActiveUserId()
+  if (!userId) throw new Error('No hay sesión activa.')
+
+  const authorized = await getAuthorizedClient(userId)
+  if (!authorized) throw new Error('Google Calendar no está conectado.')
+
+  const calendar = google.calendar({ version: 'v3', auth: authorized.client })
+  await calendar.events.patch({
+    calendarId,
+    eventId: googleEventId,
+    requestBody: toGoogleEventResource(input)
+  })
+}
+
+/** Elimina un evento. Si ya no existe en Google (404/410), se considera éxito. */
+export async function deleteEvent(calendarId: string, googleEventId: string): Promise<void> {
+  const userId = await getActiveUserId()
+  if (!userId) throw new Error('No hay sesión activa.')
+
+  const authorized = await getAuthorizedClient(userId)
+  if (!authorized) throw new Error('Google Calendar no está conectado.')
+
+  const calendar = google.calendar({ version: 'v3', auth: authorized.client })
+  try {
+    await calendar.events.delete({ calendarId, eventId: googleEventId })
+  } catch (err) {
+    const status = (err as { code?: number; response?: { status?: number } })?.response?.status
+      ?? (err as { code?: number })?.code
+    if (status !== 404 && status !== 410) throw err
+  }
 }
 
 /** Sincroniza usando los calendarios habilitados guardados, en una ventana de ±90 días. */

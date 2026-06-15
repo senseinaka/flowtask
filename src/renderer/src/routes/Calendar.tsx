@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List } from 'lucide-react'
+import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List, Plus, Trash2, X } from 'lucide-react'
 import dayjs, { Dayjs } from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
 
-import type { UnifiedCalendarEvent, CalendarEventSource } from '@shared/types'
-import { useCalendarStatus, useCalendarEvents, useConnectGoogle, useSyncNow } from '../hooks/useCalendar'
+import type { UnifiedCalendarEvent, CalendarEventSource, CalendarEventInput, GoogleCalendarInfo } from '@shared/types'
+import {
+  useCalendarStatus, useCalendarEvents, useConnectGoogle, useSyncNow, useEnabledCalendars,
+  useCreateManualEvent, useUpdateManualEvent, useDeleteManualEvent
+} from '../hooks/useCalendar'
 import { cn } from '../components/ui/utils'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -36,11 +39,17 @@ function formatLastSync(ts: number | null): string {
   return dayjs(ts).format('DD/MM HH:mm')
 }
 
+type ModalState =
+  | { mode: 'create'; date: Dayjs }
+  | { mode: 'edit'; event: UnifiedCalendarEvent }
+
 export default function Calendar() {
   const navigate = useNavigate()
   const { data: status, isLoading: statusLoading } = useCalendarStatus()
   const connectGoogle = useConnectGoogle()
   const syncNow = useSyncNow()
+  const { data: calendars = [] } = useEnabledCalendars(!!status?.connected)
+  const [modal, setModal] = useState<ModalState | null>(null)
 
   const [view, setView] = useState<ViewMode>('month')
   const [cursor, setCursor] = useState<Dayjs>(() => dayjs().startOf('month'))
@@ -109,7 +118,12 @@ export default function Calendar() {
   }
 
   function handleEventClick(ev: UnifiedCalendarEvent) {
-    if (ev.link) navigate(ev.link)
+    if (ev.source === 'google') setModal({ mode: 'edit', event: ev })
+    else if (ev.link) navigate(ev.link)
+  }
+
+  function handleDayClick(day: Dayjs) {
+    setModal({ mode: 'create', date: day })
   }
 
   function goPrev() {
@@ -192,6 +206,13 @@ export default function Calendar() {
               : <RefreshCw size={13} />}
             Sincronizar ahora
           </button>
+          <button
+            onClick={() => setModal({ mode: 'create', date: dayjs() })}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <Plus size={13} />
+            Nuevo evento
+          </button>
         </div>
       </div>
 
@@ -260,9 +281,17 @@ export default function Calendar() {
         ) : view === 'agenda' ? (
           <AgendaView events={filteredEvents} onEventClick={handleEventClick} />
         ) : (
-          <MonthGrid days={days} eventsByDay={eventsByDay} onEventClick={handleEventClick} cursor={cursor} view={view} />
+          <MonthGrid days={days} eventsByDay={eventsByDay} onEventClick={handleEventClick} onDayClick={handleDayClick} cursor={cursor} view={view} />
         )}
       </div>
+
+      {modal && (
+        <EventModal
+          modal={modal}
+          calendars={calendars}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -270,11 +299,12 @@ export default function Calendar() {
 // ── Month/Week/Day grid ──────────────────────────────────────────────────────
 
 function MonthGrid({
-  days, eventsByDay, onEventClick, cursor, view
+  days, eventsByDay, onEventClick, onDayClick, cursor, view
 }: {
   days: Dayjs[]
   eventsByDay: Map<string, UnifiedCalendarEvent[]>
   onEventClick: (ev: UnifiedCalendarEvent) => void
+  onDayClick: (day: Dayjs) => void
   cursor: Dayjs
   view: ViewMode
 }) {
@@ -299,8 +329,9 @@ function MonthGrid({
           return (
             <div
               key={key}
+              onClick={() => onDayClick(day)}
               className={cn(
-                'border-b border-r border-slate-700/40 p-2 min-h-[100px]',
+                'border-b border-r border-slate-700/40 p-2 min-h-[100px] cursor-pointer hover:bg-slate-700/20',
                 !inMonth && 'bg-slate-900/40'
               )}
             >
@@ -311,22 +342,25 @@ function MonthGrid({
                 {day.format('D')}
               </div>
               <div className="space-y-1">
-                {dayEvents.slice(0, view === 'day' ? undefined : 4).map((ev) => (
-                  <button
-                    key={ev.id}
-                    onClick={() => onEventClick(ev)}
-                    title={ev.title}
-                    disabled={!ev.link}
-                    className={cn(
-                      'block w-full text-left text-[11px] px-1.5 py-0.5 rounded truncate text-white',
-                      ev.link && 'cursor-pointer hover:opacity-80'
-                    )}
-                    style={{ backgroundColor: eventColor(ev) }}
-                  >
-                    {!ev.all_day && `${dayjs(ev.start_at).format('HH:mm')} `}
-                    {ev.title}
-                  </button>
-                ))}
+                {dayEvents.slice(0, view === 'day' ? undefined : 4).map((ev) => {
+                  const clickable = !!ev.link || ev.source === 'google'
+                  return (
+                    <button
+                      key={ev.id}
+                      onClick={(e) => { e.stopPropagation(); onEventClick(ev) }}
+                      title={ev.title}
+                      disabled={!clickable}
+                      className={cn(
+                        'block w-full text-left text-[11px] px-1.5 py-0.5 rounded truncate text-white',
+                        clickable && 'cursor-pointer hover:opacity-80'
+                      )}
+                      style={{ backgroundColor: eventColor(ev) }}
+                    >
+                      {!ev.all_day && `${dayjs(ev.start_at).format('HH:mm')} `}
+                      {ev.title}
+                    </button>
+                  )
+                })}
                 {view !== 'day' && dayEvents.length > 4 && (
                   <p className="text-[10px] text-slate-500 px-1.5">+{dayEvents.length - 4} más</p>
                 )}
@@ -370,14 +404,16 @@ function AgendaView({ events, onEventClick }: { events: UnifiedCalendarEvent[]; 
             {dayjs(date).format('dddd D [de] MMMM')}
           </div>
           <div className="divide-y divide-slate-700/40">
-            {dayEvents.map((ev) => (
+            {dayEvents.map((ev) => {
+              const clickable = !!ev.link || ev.source === 'google'
+              return (
               <button
                 key={ev.id}
                 onClick={() => onEventClick(ev)}
-                disabled={!ev.link}
+                disabled={!clickable}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-2 text-left transition-colors',
-                  ev.link && 'hover:bg-slate-700/40 cursor-pointer'
+                  clickable && 'hover:bg-slate-700/40 cursor-pointer'
                 )}
               >
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: eventColor(ev) }} />
@@ -386,10 +422,240 @@ function AgendaView({ events, onEventClick }: { events: UnifiedCalendarEvent[]; 
                 </span>
                 <span className="text-sm text-slate-200 truncate">{ev.title}</span>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Modal crear/editar/borrar evento manual ─────────────────────────────────
+
+function EventModal({
+  modal, calendars, onClose
+}: {
+  modal: ModalState
+  calendars: GoogleCalendarInfo[]
+  onClose: () => void
+}) {
+  const isEdit = modal.mode === 'edit'
+  const initial = useMemo(() => {
+    if (modal.mode === 'edit') {
+      const start = dayjs(modal.event.start_at)
+      const end = modal.event.end_at ? dayjs(modal.event.end_at) : start.add(1, 'hour')
+      const idParts = modal.event.id.split(':')
+      return {
+        title: modal.event.title,
+        allDay: modal.event.all_day,
+        date: start.format('YYYY-MM-DD'),
+        startTime: start.format('HH:mm'),
+        endTime: end.format('HH:mm'),
+        calendarId: modal.event.category,
+        googleEventId: idParts.slice(1).join(':')
+      }
+    }
+    return {
+      title: '',
+      allDay: false,
+      date: modal.date.format('YYYY-MM-DD'),
+      startTime: '09:00',
+      endTime: '10:00',
+      calendarId: calendars.find((c) => c.primary)?.id ?? calendars[0]?.id ?? '',
+      googleEventId: ''
+    }
+  }, [modal, calendars])
+
+  const [title, setTitle] = useState(initial.title)
+  const [description, setDescription] = useState('')
+  const [location, setLocation] = useState('')
+  const [allDay, setAllDay] = useState(initial.allDay)
+  const [date, setDate] = useState(initial.date)
+  const [startTime, setStartTime] = useState(initial.startTime)
+  const [endTime, setEndTime] = useState(initial.endTime)
+  const [calendarId, setCalendarId] = useState(initial.calendarId)
+
+  const createEvent = useCreateManualEvent()
+  const updateEvent = useUpdateManualEvent()
+  const deleteEvent = useDeleteManualEvent()
+
+  const isSaving = createEvent.isPending || updateEvent.isPending
+  const error = createEvent.error || updateEvent.error || deleteEvent.error
+
+  function buildInput(): CalendarEventInput {
+    const startAt = allDay
+      ? dayjs(date).startOf('day').valueOf()
+      : dayjs(`${date} ${startTime}`).valueOf()
+    const endAt = allDay
+      ? null
+      : dayjs(`${date} ${endTime}`).valueOf()
+    return {
+      summary: title.trim(),
+      description: description.trim() || null,
+      location: location.trim() || null,
+      startAt,
+      endAt,
+      allDay
+    }
+  }
+
+  async function handleSave() {
+    if (!title.trim() || !calendarId) return
+    const input = buildInput()
+    if (isEdit && modal.mode === 'edit') {
+      await updateEvent.mutateAsync({ calendarId, googleEventId: initial.googleEventId, input })
+    } else {
+      await createEvent.mutateAsync({ calendarId, input })
+    }
+    onClose()
+  }
+
+  async function handleDelete() {
+    if (!isEdit || modal.mode !== 'edit') return
+    await deleteEvent.mutateAsync({ calendarId: initial.calendarId, googleEventId: initial.googleEventId })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+          <h2 className="text-sm font-semibold text-white">
+            {isEdit ? 'Editar evento' : 'Nuevo evento'}
+          </h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-700 text-slate-400">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Título</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Título del evento"
+              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Descripción</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Ubicación</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="event-allday"
+              checked={allDay}
+              onChange={(e) => setAllDay(e.target.checked)}
+              className="rounded border-slate-700 bg-slate-900"
+            />
+            <label htmlFor="event-allday" className="text-xs text-slate-300">Todo el día</label>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className={allDay ? 'col-span-3' : ''}>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Fecha</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            {!allDay && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Inicio</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Fin</label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Calendario</label>
+            <select
+              value={calendarId}
+              onChange={(e) => setCalendarId(e.target.value)}
+              disabled={isEdit}
+              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+            >
+              {calendars.map((c) => (
+                <option key={c.id} value={c.id}>{c.summary}{c.primary ? ' (principal)' : ''}</option>
+              ))}
+            </select>
+          </div>
+
+          {error && (
+            <p className="text-red-400 text-xs">{(error as Error).message}</p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700">
+          {isEdit ? (
+            <button
+              onClick={handleDelete}
+              disabled={deleteEvent.isPending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              {deleteEvent.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              Eliminar
+            </button>
+          ) : <span />}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 rounded-lg transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !title.trim() || !calendarId}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isSaving && <Loader2 size={13} className="animate-spin" />}
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -40,7 +40,8 @@ import type {
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus,
   AuthSession, AuthLoginResult,
   UserPermission,
-  CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent
+  CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent,
+  CalendarEventInput, CalendarEventLink, LinkEntityInput
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -837,7 +838,23 @@ const api = {
       ipcRenderer.invoke('calendar:setEnabledCalendars', calendarIds),
     getEvents: (startDate: number, endDate: number): Promise<UnifiedCalendarEvent[]> =>
       ipcRenderer.invoke('calendar:getEvents', startDate, endDate),
-    syncNow: (): Promise<{ synced: number }> => ipcRenderer.invoke('calendar:syncNow')
+    syncNow: (): Promise<{ synced: number }> => ipcRenderer.invoke('calendar:syncNow'),
+
+    createEvent: (calendarId: string, input: CalendarEventInput): Promise<UnifiedCalendarEvent> =>
+      ipcRenderer.invoke('calendar:createEvent', calendarId, input),
+    updateEvent: (calendarId: string, googleEventId: string, input: CalendarEventInput): Promise<void> =>
+      ipcRenderer.invoke('calendar:updateEvent', calendarId, googleEventId, input),
+    deleteEvent: (calendarId: string, googleEventId: string): Promise<void> =>
+      ipcRenderer.invoke('calendar:deleteEvent', calendarId, googleEventId),
+
+    getLinks: (sourceModule: CalendarEventLink['source_module'], sourceEventIds: string[]): Promise<CalendarEventLink[]> =>
+      ipcRenderer.invoke('calendar:getLinks', sourceModule, sourceEventIds),
+    linkEntity: (input: LinkEntityInput): Promise<CalendarEventLink> =>
+      ipcRenderer.invoke('calendar:linkEntity', input),
+    unlinkEntity: (linkId: string): Promise<void> =>
+      ipcRenderer.invoke('calendar:unlinkEntity', linkId),
+    refreshLinkedEvent: (linkId: string, input: { title: string; dueAtMs: number }): Promise<CalendarEventLink> =>
+      ipcRenderer.invoke('calendar:refreshLinkedEvent', linkId, input)
   },
 
   on: (

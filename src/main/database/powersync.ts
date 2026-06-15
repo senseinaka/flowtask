@@ -771,6 +771,22 @@ const import_order_planning_ai_reports = new Table(
   { indexes: { workspace: ['workspace_id'], brand: ['brand_id'] } }
 )
 
+const calendar_event_links = new Table(
+  {
+    owner_user_id: column.text,
+    source_module: column.text,
+    source_type: column.text,
+    source_event_id: column.text,
+    google_calendar_id: column.text,
+    google_event_id: column.text,
+    title: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], source: ['source_module', 'source_event_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -813,7 +829,8 @@ export const AppSchema = new Schema({
   comex_proformas,
   import_order_plannings,
   import_order_planning_milestones,
-  import_order_planning_ai_reports
+  import_order_planning_ai_reports,
+  calendar_event_links
 })
 
 /**
@@ -1373,6 +1390,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links'], throttleMs: 1000 }
   )
 }

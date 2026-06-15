@@ -5,9 +5,20 @@
 // Programación de Pedidos.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { randomUUID } from 'crypto'
 import { getDb } from '../db'
 import { getPowerSyncDb } from '../powersync'
-import type { UnifiedCalendarEvent, CalendarEventCache } from '@shared/types'
+import * as googleCalendar from '../../services/google-calendar.service'
+import { getSession } from '../../services/auth.service'
+import type {
+  UnifiedCalendarEvent,
+  CalendarEventCache,
+  CalendarEventInput,
+  CalendarEventLink,
+  LinkEntityInput
+} from '@shared/types'
+
+const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 
 // ── calendar_events_cache ─────────────────────────────────────────────────────
 
@@ -95,7 +106,7 @@ export async function getUnifiedEvents(startDate: number, endDate: number): Prom
   // Google Calendar (cache local)
   for (const ev of listCachedEvents(startDate, endDate)) {
     events.push({
-      id: `google:${ev.id}`,
+      id: `google:${ev.google_event_id}`,
       source: 'google',
       title: ev.summary,
       start_at: ev.start_at,
@@ -155,4 +166,153 @@ export async function getUnifiedEvents(startDate: number, endDate: number): Prom
 
   events.sort((a, b) => a.start_at - b.start_at)
   return events
+}
+
+// ── Escritura manual de eventos de Google Calendar (Fase 2) ────────────────
+// calendar_events_cache es local-only (no PowerSync): se actualiza de
+// inmediato para que la UI refleje los cambios sin esperar el próximo
+// syncNow().
+
+function upsertEventCache(
+  calendarId: string,
+  googleEventId: string,
+  input: CalendarEventInput
+): void {
+  const now = Date.now()
+  getDb().prepare(`
+    INSERT INTO calendar_events_cache
+      (id, google_event_id, google_calendar_id, summary, description, location, start_at, end_at, all_day, status, color_id, updated_at, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', NULL, ?, ?)
+    ON CONFLICT(google_calendar_id, google_event_id) DO UPDATE SET
+      summary = excluded.summary,
+      description = excluded.description,
+      location = excluded.location,
+      start_at = excluded.start_at,
+      end_at = excluded.end_at,
+      all_day = excluded.all_day,
+      updated_at = excluded.updated_at,
+      fetched_at = excluded.fetched_at
+  `).run(
+    randomUUID(), googleEventId, calendarId,
+    input.summary, input.description ?? null, input.location ?? null,
+    input.startAt, input.endAt, input.allDay ? 1 : 0, now, now
+  )
+}
+
+/** Crea un evento manual en Google Calendar y lo refleja en la caché local. */
+export async function createManualEvent(
+  calendarId: string, input: CalendarEventInput
+): Promise<UnifiedCalendarEvent> {
+  const { googleEventId, googleCalendarId } = await googleCalendar.createEvent(calendarId, input)
+  upsertEventCache(googleCalendarId, googleEventId, input)
+  return {
+    id: `google:${googleEventId}`,
+    source: 'google',
+    title: input.summary,
+    start_at: input.startAt,
+    end_at: input.endAt,
+    all_day: input.allDay,
+    category: googleCalendarId,
+    link: null
+  }
+}
+
+/** Actualiza un evento de Google Calendar y la caché local. */
+export async function updateManualEvent(
+  calendarId: string, googleEventId: string, input: CalendarEventInput
+): Promise<void> {
+  await googleCalendar.updateEvent(calendarId, googleEventId, input)
+  upsertEventCache(calendarId, googleEventId, input)
+}
+
+/** Elimina un evento de Google Calendar y de la caché local. */
+export async function deleteManualEvent(calendarId: string, googleEventId: string): Promise<void> {
+  await googleCalendar.deleteEvent(calendarId, googleEventId)
+  getDb().prepare(`
+    DELETE FROM calendar_events_cache WHERE google_calendar_id = ? AND google_event_id = ?
+  `).run(calendarId, googleEventId)
+}
+
+// ── Links de Finanzas/Comex con Google Calendar (opt-in, Fase 2) ────────────
+// calendar_event_links SÍ viaja por PowerSync (tabla compartida entre
+// dispositivos para saber qué ítems ya están agendados y por quién).
+
+async function getActiveUserId(): Promise<string> {
+  const session = await getSession()
+  if (!session?.userId) throw new Error('No hay sesión activa.')
+  return session.userId
+}
+
+/** Devuelve los links existentes para un conjunto de ítems de un módulo. */
+export async function getEventLinks(
+  sourceModule: CalendarEventLink['source_module'], sourceEventIds: string[]
+): Promise<CalendarEventLink[]> {
+  if (sourceEventIds.length === 0) return []
+  const placeholders = sourceEventIds.map(() => '?').join(', ')
+  return getPowerSyncDb().getAll<CalendarEventLink>(`
+    SELECT * FROM calendar_event_links
+    WHERE source_module = ? AND source_event_id IN (${placeholders})
+  `, [sourceModule, ...sourceEventIds])
+}
+
+/** Crea un evento de día completo en Google Calendar y guarda el link (opt-in). */
+export async function linkEntityToCalendar(input: LinkEntityInput): Promise<CalendarEventLink> {
+  const userId = await getActiveUserId()
+  const calendarId = await googleCalendar.getPrimaryCalendarId()
+
+  const { googleEventId, googleCalendarId } = await googleCalendar.createEvent(calendarId, {
+    summary: input.title,
+    startAt: input.dueAtMs,
+    endAt: null,
+    allDay: true
+  })
+
+  const db = getPowerSyncDb()
+  const id = randomUUID()
+  const now = Date.now()
+  await db.execute(`
+    INSERT INTO calendar_event_links
+      (id, owner_user_id, source_module, source_type, source_event_id, google_calendar_id, google_event_id, title, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, userId, input.sourceModule, input.sourceType, input.sourceEventId, googleCalendarId, googleEventId, input.title, now, now, WORKSPACE_ID])
+
+  return (await db.getOptional<CalendarEventLink>('SELECT * FROM calendar_event_links WHERE id = ?', [id]))!
+}
+
+/** Elimina el evento de Google Calendar y el link. Solo el dueño del link puede hacerlo. */
+export async function unlinkEntity(linkId: string): Promise<void> {
+  const userId = await getActiveUserId()
+  const db = getPowerSyncDb()
+  const link = await db.getOptional<CalendarEventLink>('SELECT * FROM calendar_event_links WHERE id = ?', [linkId])
+  if (!link) return
+  if (link.owner_user_id !== userId) {
+    throw new Error('Este evento está agendado en otra cuenta de Google y solo se puede quitar desde ese dispositivo.')
+  }
+
+  await googleCalendar.deleteEvent(link.google_calendar_id, link.google_event_id)
+  await db.execute('DELETE FROM calendar_event_links WHERE id = ?', [linkId])
+}
+
+/** Actualiza el evento de Google Calendar vinculado con el título/fecha actuales. */
+export async function refreshLinkedEvent(
+  linkId: string, input: { title: string; dueAtMs: number }
+): Promise<CalendarEventLink> {
+  const userId = await getActiveUserId()
+  const db = getPowerSyncDb()
+  const link = await db.getOptional<CalendarEventLink>('SELECT * FROM calendar_event_links WHERE id = ?', [linkId])
+  if (!link) throw new Error('El link ya no existe.')
+  if (link.owner_user_id !== userId) {
+    throw new Error('Este evento está agendado en otra cuenta de Google y solo se puede actualizar desde ese dispositivo.')
+  }
+
+  await googleCalendar.updateEvent(link.google_calendar_id, link.google_event_id, {
+    summary: input.title,
+    startAt: input.dueAtMs,
+    endAt: null,
+    allDay: true
+  })
+
+  const now = Date.now()
+  await db.execute('UPDATE calendar_event_links SET title = ?, updated_at = ? WHERE id = ?', [input.title, now, linkId])
+  return (await db.getOptional<CalendarEventLink>('SELECT * FROM calendar_event_links WHERE id = ?', [linkId]))!
 }

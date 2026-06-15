@@ -20,6 +20,8 @@ import {
   PLANNING_MILESTONE_LABELS, PLANNING_MILESTONE_STATUSES
 } from '@shared/types'
 import type { ImportOrderPlanning, ImportOrderPlanningMilestone, PlanningMilestoneStatus } from '@shared/types'
+import { useEventLinks, useAuthSession } from '../../hooks/useCalendar'
+import { CalendarLinkButton } from '../../components/calendar/CalendarLinkButton'
 
 // ── Inline edit primitives ────────────────────────────────────────────────────
 
@@ -251,20 +253,23 @@ function RiskBadge({ status }: { status: ImportOrderPlanning['risk_status'] }) {
 
 // ── Milestone row ──────────────────────────────────────────────────────────────
 
-function MilestoneRow({ milestone, planningId }: { milestone: ImportOrderPlanningMilestone; planningId: string }) {
+function MilestoneRow({ milestone, planningId, planningLabel }: { milestone: ImportOrderPlanningMilestone; planningId: string; planningLabel: string }) {
   const updateMilestone = useUpdatePlanningMilestone()
+  const { data: links = [] } = useEventLinks('comex_planning', [milestone.id])
+  const { data: session } = useAuthSession()
 
   const save = (data: Partial<ImportOrderPlanningMilestone>) =>
     updateMilestone.mutate({ id: milestone.id, planningId, data })
 
   const date = milestone.calculated_date
   const isPast = date != null && date < Date.now()
+  const label = PLANNING_MILESTONE_LABELS[milestone.milestone_type]
 
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-slate-700/40 last:border-0">
       <div className={`w-2 h-2 rounded-full shrink-0 ${milestone.status === 'done' ? 'bg-emerald-500' : milestone.status === 'delayed' ? 'bg-red-500' : isPast ? 'bg-amber-500' : 'bg-slate-600'}`} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-white truncate">{PLANNING_MILESTONE_LABELS[milestone.milestone_type]}</p>
+        <p className="text-sm text-white truncate">{label}</p>
       </div>
       <div className="w-24 shrink-0">
         <span className="text-xs text-slate-400">{date ? dayjs(date).format('DD/MM/YY') : '—'}</span>
@@ -282,6 +287,17 @@ function MilestoneRow({ milestone, planningId }: { milestone: ImportOrderPlannin
       <div className="w-28 shrink-0">
         <EDate value={milestone.real_date} onSave={(v) => save({ real_date: v })} />
       </div>
+      {date != null && (
+        <CalendarLinkButton
+          link={links[0]}
+          currentUserId={session?.userId}
+          sourceModule="comex_planning"
+          sourceType="milestone"
+          sourceEventId={milestone.id}
+          title={`${label} — ${planningLabel}`}
+          dueAtMs={date}
+        />
+      )}
     </div>
   )
 }
@@ -441,7 +457,7 @@ export default function ComexPlanningDetail() {
               <div className="w-28 shrink-0">Fecha real</div>
             </div>
             {milestones.map((m) => (
-              <MilestoneRow key={m.id} milestone={m} planningId={planning.id} />
+              <MilestoneRow key={m.id} milestone={m} planningId={planning.id} planningLabel={planning.brand?.name ?? 'Programación'} />
             ))}
           </div>
         )}

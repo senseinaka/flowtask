@@ -2158,3 +2158,36 @@ export interface CalendarConnectionStatus {
   enabledCalendarIds: string[]
   lastSyncAt: number | null
 }
+
+/** Datos de un evento de Google Calendar para crear/editar (Fase 2). */
+export interface CalendarEventInput {
+  summary: string
+  description?: string | null
+  location?: string | null
+  startAt: number
+  endAt: number | null
+  allDay: boolean
+}
+
+/** Link entre un vencimiento/hito de Summit y un evento de Google Calendar. */
+export interface CalendarEventLink {
+  id: string
+  owner_user_id: string
+  source_module: 'finance' | 'company_finance' | 'comex_planning'
+  source_type: string
+  source_event_id: string
+  google_calendar_id: string
+  google_event_id: string
+  title: string
+  created_at: number
+  updated_at: number
+}
+
+/** Input para vincular un vencimiento/hito a Google Calendar (opt-in). */
+export interface LinkEntityInput {
+  sourceModule: CalendarEventLink['source_module']
+  sourceType: string
+  sourceEventId: string
+  title: string
+  dueAtMs: number
+}
