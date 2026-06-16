@@ -1267,6 +1267,59 @@ export async function restoreComexLocalCache(psDb?: PowerSyncDatabase): Promise<
 }
 
 /**
+ * Restaura los datos de finanzas empresa directamente en las tablas ps_data__
+ * de PowerSync, sin pasar por la cola de sincronización (ps_crud).
+ *
+ * Por qué es necesario: los sync-rules del servidor PowerSync solo incluyen
+ * las tablas de finanzas personales (finance_*). Las tablas company_finance_*
+ * se suben correctamente vía ps_crud → Supabase, pero el servidor no las envía
+ * de vuelta porque no hay sync-rules definidos para ellas. Al escribir
+ * directamente en ps_data__<tabla> simulamos lo que haría un sync exitoso;
+ * como el servidor no emite operaciones de borrado para estas tablas, los
+ * datos persisten entre sesiones.
+ *
+ * Idempotente: omite las tablas que ya tienen filas en ps_data__.
+ */
+export async function restoreCompanyFinanceLocalCache(psDb?: PowerSyncDatabase): Promise<void> {
+  psDb = psDb ?? getPowerSyncDb()
+  const flowDb = getDb()
+  const tables = [
+    'company_finance_accounts',
+    'company_finance_categories',
+    'company_finance_payment_methods',
+    'company_finance_concepts',
+    'company_finance_movements',
+    'company_finance_movement_entries',
+    'company_finance_month_insights'
+  ]
+
+  for (const table of tables) {
+    const psTable = `ps_data__${table}`
+
+    const { count } = await psDb.get<{ count: number }>(`SELECT COUNT(*) as count FROM "${psTable}"`)
+    if (count > 0) continue
+
+    let rows: Record<string, unknown>[]
+    try {
+      rows = flowDb.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[]
+    } catch {
+      continue
+    }
+    if (rows.length === 0) continue
+
+    console.log(`[PowerSync] restoreCompanyFinanceLocalCache: ${rows.length} filas → ${psTable}`)
+    for (const row of rows) {
+      const id = row['id'] as string
+      if (!id) continue
+      await psDb.execute(`INSERT OR IGNORE INTO "${psTable}" (id, data) VALUES (?, ?)`, [
+        id,
+        JSON.stringify(row)
+      ])
+    }
+  }
+}
+
+/**
  * Copia única (idempotente por tabla) de los datos existentes de
  * flowtask.db hacia powersync.db, para que PowerSync los suba a Supabase.
  * Si una tabla ya tiene filas en powersync.db, se omite (puede haber pasado
@@ -1419,6 +1472,7 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyTaskData(db)
   await migrateUserPermissions(db)
   await migrateLegacyFinanceData(db)
+  await restoreCompanyFinanceLocalCache(db)
   await restoreComexLocalCache(db)
   await migrateLegacyComexMaestrosData(db)
   await migrateLegacyComexImportsData(db)

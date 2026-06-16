@@ -1207,10 +1207,32 @@ function MovementsTable({
 function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFocus?: boolean; onSave: (v: number) => void }) {
   const [draft, setDraft] = useState(String(value))
   const ref = useRef<HTMLInputElement>(null)
+  const isFocused = useRef(false)
+  const onSaveRef = useRef(onSave)
+  const valueRef  = useRef(value)
+
+  useEffect(() => { onSaveRef.current = onSave }, [onSave])
+  useEffect(() => { valueRef.current  = value  }, [value])
+
+  // Sync display when server value changes and the user is not actively editing
+  useEffect(() => {
+    if (!isFocused.current) setDraft(String(value))
+  }, [value])
 
   useEffect(() => {
     if (autoFocus) ref.current?.focus()
   }, [autoFocus])
+
+  // Autosave 500 ms after the user stops typing — prevents lost edits if blur
+  // doesn't fire before the parent re-renders (e.g. clicking "+ Agregar" fast)
+  useEffect(() => {
+    const num = Number(draft.replace(',', '.'))
+    if (!Number.isFinite(num)) return
+    const timer = setTimeout(() => {
+      if (num !== valueRef.current) onSaveRef.current(num)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const commit = () => {
     const num = Number(draft.replace(',', '.'))
@@ -1224,10 +1246,11 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
       type="number"
       value={draft}
       onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
+      onFocus={() => { isFocused.current = true }}
+      onBlur={() => { isFocused.current = false; commit() }}
       onKeyDown={e => {
         if (e.key === 'Enter') { commit(); e.currentTarget.blur() }
-        if (e.key === 'Escape') setDraft(String(value))
+        if (e.key === 'Escape') { isFocused.current = false; setDraft(String(value)) }
       }}
       className="w-24 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
     />
