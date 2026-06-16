@@ -4,7 +4,7 @@ import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet, Tag,
-  CalendarClock, LogOut, CalendarDays, FileText
+  CalendarClock, LogOut, CalendarDays, FileText, Mail
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -260,6 +260,24 @@ export default function Sidebar() {
             >
               <FileText size={16} />
               Presupuestos
+            </NavLink>
+          </div>
+        )}
+
+        {/* ── Correo ────────────────────────────────────────────────────── */}
+        {canRead('email') && (
+          <div className="pt-1">
+            <NavLink
+              to="/email"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-sky-900/40 text-sky-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Mail size={16} />
+              Correo
             </NavLink>
           </div>
         )}

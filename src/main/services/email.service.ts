@@ -1,0 +1,288 @@
+import { ImapFlow } from 'imapflow'
+import { simpleParser, type ParsedMail } from 'mailparser'
+import { randomUUID } from 'crypto'
+import { app } from 'electron'
+import fs from 'fs'
+import path from 'path'
+import type { EmailAccount } from '@shared/types'
+import {
+  upsertEmailMessage,
+  upsertEmailAttachment,
+  setLastUidInbox,
+  getEmailAccount,
+  listEmailAccounts
+} from '../database/queries/email'
+
+const ATTACHMENTS_DIR = path.join(app.getPath('userData'), 'email-attachments')
+
+function ensureAttachmentsDir(): void {
+  if (!fs.existsSync(ATTACHMENTS_DIR)) fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true })
+}
+
+// Opciones base compartidas — timeout nativo de imapflow (no Promise.race)
+// rejectUnauthorized:false permite certs autofirmados o mismatch de hostname
+// que son comunes en servidores de correo corporativos/hosting compartido
+const IMAP_DEFAULTS = {
+  logger: false,
+  connectionTimeout: 12000,
+  greetingTimeout: 8000,
+  socketTimeout: 15000,
+  tls: { rejectUnauthorized: false }
+} as const
+
+function makeClient(account: EmailAccount): ImapFlow {
+  return new ImapFlow({
+    host: account.imap_host,
+    port: account.imap_port,
+    secure: account.imap_secure === 1,
+    auth: { user: account.username, pass: account.password },
+    ...IMAP_DEFAULTS
+  })
+}
+
+// ── Connection test ────────────────────────────────────────────────────────────
+
+export async function testImapConnection(
+  host: string, port: number, secure: boolean, user: string, pass: string
+): Promise<{ ok: boolean; error?: string; folders?: string[] }> {
+  const client = new ImapFlow({ host, port, secure, auth: { user, pass }, ...IMAP_DEFAULTS })
+  try {
+    await client.connect()
+    const list = await client.list()
+    await client.logout()
+    return { ok: true, folders: list.map((m) => m.path).slice(0, 15) }
+  } catch (e) {
+    try { client.close() } catch { /* ignore */ }
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
+export async function testImapFetch(
+  host: string, port: number, secure: boolean, user: string, pass: string
+): Promise<{ ok: boolean; error?: string; total?: number; subjects?: string[] }> {
+  const client = new ImapFlow({ host, port, secure, auth: { user, pass }, ...IMAP_DEFAULTS })
+  try {
+    await client.connect()
+    const lock = await client.getMailboxLock('INBOX')
+    const subjects: string[] = []
+    let total = 0
+    try {
+      const mb = client.mailbox as { exists?: number } | false
+      total = mb && mb.exists != null ? mb.exists : 0
+      if (total > 0) {
+        const from = Math.max(1, total - 2)
+        for await (const msg of client.fetch(`${from}:${total}`, { envelope: true })) {
+          subjects.unshift((msg.envelope as { subject?: string })?.subject ?? '(sin asunto)')
+        }
+      }
+    } finally {
+      lock.release()
+    }
+    await client.logout()
+    return { ok: true, total, subjects }
+  } catch (e) {
+    try { client.close() } catch { /* ignore */ }
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
+// ── List IMAP folders ──────────────────────────────────────────────────────────
+
+export async function listImapFolders(account: EmailAccount): Promise<string[]> {
+  const client = makeClient(account)
+  try {
+    await client.connect()
+    const list = await client.list()
+    await client.logout()
+    return list.map((m) => m.path)
+  } catch {
+    return []
+  }
+}
+
+// ── Sync folder ───────────────────────────────────────────────────────────────
+
+export async function syncFolder(
+  account: EmailAccount,
+  folder = 'INBOX',
+  sinceUid = 1
+): Promise<number> {
+  ensureAttachmentsDir()
+  const client = makeClient(account)
+  let synced = 0
+
+  try {
+    await client.connect()
+    const lock = await client.getMailboxLock(folder)
+    try {
+      const range = sinceUid > 1 ? `${sinceUid}:*` : '1:50'
+      for await (const msg of client.fetch(range, { source: true, uid: true, flags: true })) {
+        try {
+          if (!msg.source) continue
+          const parsed: ParsedMail = await new Promise((resolve, reject) => {
+            simpleParser(msg.source as Buffer, (err, mail) => {
+              if (err) reject(err)
+              else resolve(mail)
+            })
+          })
+          const uid = msg.uid
+          const msgId = randomUUID()
+          const now = Date.now()
+
+          const toAddrs = (parsed.to
+            ? (Array.isArray(parsed.to) ? parsed.to : [parsed.to]).flatMap((a) => a.value)
+            : [])
+          const ccAddrs = (parsed.cc
+            ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).flatMap((a) => a.value)
+            : [])
+
+          const fromVal = parsed.from?.value?.[0]
+
+          const savedMsg = await upsertEmailMessage({
+            id: msgId,
+            account_id: account.id,
+            workspace_id: account.workspace_id,
+            uid,
+            folder,
+            message_id: parsed.messageId ?? '',
+            in_reply_to: (parsed.inReplyTo as string) ?? '',
+            thread_refs: Array.isArray(parsed.references)
+              ? parsed.references.join(' ')
+              : (parsed.references as string) ?? '',
+            subject: parsed.subject ?? '(sin asunto)',
+            from_address: fromVal?.address ?? '',
+            from_name: fromVal?.name ?? fromVal?.address ?? '',
+            to_addresses: JSON.stringify(toAddrs.map((a) => ({ name: a.name ?? '', email: a.address ?? '' }))),
+            cc_addresses: JSON.stringify(ccAddrs.map((a) => ({ name: a.name ?? '', email: a.address ?? '' }))),
+            sent_at: parsed.date?.getTime() ?? now,
+            body_text: parsed.text ?? '',
+            body_html: parsed.html || '',
+            has_attachments: (parsed.attachments?.length ?? 0) > 0 ? 1 : 0,
+            is_read: msg.flags?.has('\\Seen') ? 1 : 0,
+            is_starred: msg.flags?.has('\\Flagged') ? 1 : 0,
+            ai_category: '',
+            ai_summary: '',
+            linked_quote_id: '',
+            linked_import_id: '',
+            created_at: now,
+            updated_at: now
+          })
+
+          for (const att of parsed.attachments ?? []) {
+            if (!att.filename) continue
+            const attId = randomUUID()
+            const ext = path.extname(att.filename)
+            const localPath = path.join(ATTACHMENTS_DIR, `${attId}${ext}`)
+            fs.writeFileSync(localPath, att.content)
+            await upsertEmailAttachment({
+              id: attId,
+              message_id: savedMsg.id,
+              workspace_id: account.workspace_id,
+              filename: att.filename,
+              mime_type: att.contentType,
+              size_bytes: att.size,
+              local_path: localPath,
+              ai_category: '',
+              created_at: now
+            })
+          }
+
+          if (uid > (account.last_uid_inbox ?? 0)) {
+            await setLastUidInbox(account.id, uid)
+            account.last_uid_inbox = uid
+          }
+          synced++
+        } catch {
+          // skip malformed messages
+        }
+      }
+    } finally {
+      lock.release()
+    }
+    await client.logout()
+  } catch (e) {
+    console.error('[Email] syncFolder error:', e)
+  }
+
+  return synced
+}
+
+// ── Sync initial (first 50) + incremental ─────────────────────────────────────
+
+export async function syncAccount(account: EmailAccount): Promise<void> {
+  const sinceUid = account.last_uid_inbox > 0 ? account.last_uid_inbox : 1
+  await syncFolder(account, 'INBOX', sinceUid)
+}
+
+// ── Sync all active accounts ───────────────────────────────────────────────────
+
+export async function syncAllAccounts(): Promise<void> {
+  const accounts = await listEmailAccounts()
+  for (const acc of accounts.filter((a) => a.is_active)) {
+    await syncAccount(acc)
+  }
+}
+
+// ── Mark read on IMAP server ───────────────────────────────────────────────────
+
+export async function imapMarkRead(accountId: string, uid: number): Promise<void> {
+  const account = await getEmailAccount(accountId)
+  if (!account) return
+  const client = makeClient(account)
+  try {
+    await client.connect()
+    const lock = await client.getMailboxLock('INBOX')
+    try {
+      await client.messageFlagsAdd({ uid }, ['\\Seen'])
+    } finally {
+      lock.release()
+    }
+    await client.logout()
+  } catch (e) {
+    console.error('[Email] imapMarkRead error:', e)
+  }
+}
+
+// ── Move to Trash ──────────────────────────────────────────────────────────────
+
+export async function imapMoveToTrash(accountId: string, uid: number): Promise<void> {
+  const account = await getEmailAccount(accountId)
+  if (!account) return
+  const client = makeClient(account)
+  try {
+    await client.connect()
+    const lock = await client.getMailboxLock('INBOX')
+    try {
+      await client.messageMove({ uid }, 'Trash')
+    } catch {
+      await client.messageFlagsAdd({ uid }, ['\\Deleted'])
+    } finally {
+      lock.release()
+    }
+    await client.logout()
+  } catch (e) {
+    console.error('[Email] imapMoveToTrash error:', e)
+  }
+}
+
+// ── Download attachment bytes ──────────────────────────────────────────────────
+
+export function getAttachmentPath(localPath: string): string | null {
+  return fs.existsSync(localPath) ? localPath : null
+}
+
+// ── Background auto-sync (every 5 min) ────────────────────────────────────────
+
+let syncTimer: NodeJS.Timeout | null = null
+
+export function startEmailAutoSync(): void {
+  if (syncTimer) return
+  syncAllAccounts().catch(console.error)
+  syncTimer = setInterval(() => {
+    syncAllAccounts().catch(console.error)
+  }, 5 * 60 * 1000)
+}
+
+export function stopEmailAutoSync(): void {
+  if (syncTimer) { clearInterval(syncTimer); syncTimer = null }
+}

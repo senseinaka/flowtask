@@ -45,7 +45,9 @@ import type {
   Quote, QuoteActivity, QuoteCompany, QuoteContact, QuoteKPIs,
   CreateQuoteInput, UpdateQuoteInput,
   CreateQuoteCompanyInput, CreateQuoteContactInput,
-  AddQuoteActivityInput
+  AddQuoteActivityInput,
+  EmailAccount, EmailMessage, EmailAttachment,
+  CreateEmailAccountInput, SendEmailInput, EmailListFilters
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -886,6 +888,47 @@ const api = {
     kpis: {
       get: (): Promise<QuoteKPIs> => ipcRenderer.invoke('quotes:kpis:get')
     }
+  },
+
+  email: {
+    accounts: {
+      list: (): Promise<EmailAccount[]> => ipcRenderer.invoke('email:accounts:list'),
+      get: (id: string): Promise<EmailAccount | null> => ipcRenderer.invoke('email:accounts:get', id),
+      create: (data: CreateEmailAccountInput): Promise<EmailAccount> => ipcRenderer.invoke('email:accounts:create', data),
+      update: (id: string, data: Partial<CreateEmailAccountInput>): Promise<EmailAccount> => ipcRenderer.invoke('email:accounts:update', id, data),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('email:accounts:delete', id)
+    },
+    test: {
+      imap: (host: string, port: number, secure: boolean, user: string, pass: string): Promise<{ ok: boolean; error?: string; folders?: string[] }> =>
+        ipcRenderer.invoke('email:test:imap', host, port, secure, user, pass),
+      smtp: (host: string, port: number, secure: boolean, user: string, pass: string): Promise<{ ok: boolean; error?: string }> =>
+        ipcRenderer.invoke('email:test:smtp', host, port, secure, user, pass),
+      fetch: (host: string, port: number, secure: boolean, user: string, pass: string): Promise<{ ok: boolean; error?: string; total?: number; subjects?: string[] }> =>
+        ipcRenderer.invoke('email:test:fetch', host, port, secure, user, pass),
+      send: (host: string, port: number, secure: boolean, user: string, pass: string, toEmail: string, displayName: string): Promise<{ ok: boolean; error?: string }> =>
+        ipcRenderer.invoke('email:test:send', host, port, secure, user, pass, toEmail, displayName)
+    },
+    folders: {
+      list: (accountId: string): Promise<string[]> => ipcRenderer.invoke('email:folders:list', accountId)
+    },
+    sync: (accountId: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('email:sync', accountId),
+    messages: {
+      list: (filters: EmailListFilters): Promise<EmailMessage[]> => ipcRenderer.invoke('email:messages:list', filters),
+      get: (id: string): Promise<EmailMessage | null> => ipcRenderer.invoke('email:messages:get', id),
+      markRead: (id: string, isRead: boolean): Promise<void> => ipcRenderer.invoke('email:messages:markRead', id, isRead),
+      markStarred: (id: string, isStarred: boolean): Promise<void> => ipcRenderer.invoke('email:messages:markStarred', id, isStarred),
+      updateAI: (id: string, category: string, summary: string): Promise<void> => ipcRenderer.invoke('email:messages:updateAI', id, category, summary),
+      linkQuote: (id: string, quoteId: string): Promise<void> => ipcRenderer.invoke('email:messages:linkQuote', id, quoteId),
+      linkImport: (id: string, importId: string): Promise<void> => ipcRenderer.invoke('email:messages:linkImport', id, importId),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('email:messages:delete', id),
+      unreadCount: (accountId: string): Promise<number> => ipcRenderer.invoke('email:messages:unreadCount', accountId)
+    },
+    attachments: {
+      list: (messageId: string): Promise<EmailAttachment[]> => ipcRenderer.invoke('email:attachments:list', messageId),
+      path: (localPath: string): Promise<string | null> => ipcRenderer.invoke('email:attachments:path', localPath)
+    },
+    send: (input: SendEmailInput): Promise<{ ok: boolean; messageId?: string; error?: string }> =>
+      ipcRenderer.invoke('email:send', input)
   },
 
   on: (

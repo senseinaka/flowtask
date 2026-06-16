@@ -85,6 +85,11 @@ export const MODULES: ModuleDef[] = [
     routes: ['/quotes']
   },
   {
+    key: 'email',
+    label: 'Correo',
+    routes: ['/email']
+  },
+  {
     key: 'settings',
     label: 'Configuración',
     routes: ['/settings']

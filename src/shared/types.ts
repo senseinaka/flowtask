@@ -2383,3 +2383,117 @@ export const QUOTE_SLA_MS: Record<QuotePriority, number> = {
   p3: 7 * 24 * 60 * 60 * 1000,
   p4: 30 * 24 * 60 * 60 * 1000
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MÓDULO CORREO
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface EmailAccount {
+  id: string
+  workspace_id: string
+  email: string
+  display_name: string
+  imap_host: string
+  imap_port: number
+  imap_secure: number
+  smtp_host: string
+  smtp_port: number
+  smtp_secure: number
+  username: string
+  password: string
+  is_active: number
+  last_uid_inbox: number
+  created_at: number
+  updated_at: number
+}
+
+export interface EmailAddress {
+  name: string
+  email: string
+}
+
+export interface EmailMessage {
+  id: string
+  account_id: string
+  workspace_id: string
+  uid: number
+  folder: string
+  message_id: string
+  in_reply_to: string
+  thread_refs: string
+  subject: string
+  from_address: string
+  from_name: string
+  to_addresses: string   // JSON: EmailAddress[]
+  cc_addresses: string   // JSON: EmailAddress[]
+  sent_at: number
+  body_text: string
+  body_html: string
+  has_attachments: number
+  is_read: number
+  is_starred: number
+  ai_category: string
+  ai_summary: string
+  linked_quote_id: string
+  linked_import_id: string
+  created_at: number
+  updated_at: number
+}
+
+export interface EmailAttachment {
+  id: string
+  message_id: string
+  workspace_id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  local_path: string
+  ai_category: string
+  created_at: number
+}
+
+export interface CreateEmailAccountInput {
+  email: string
+  display_name?: string
+  imap_host: string
+  imap_port?: number
+  imap_secure?: boolean
+  smtp_host: string
+  smtp_port?: number
+  smtp_secure?: boolean
+  username: string
+  password: string
+}
+
+export interface SendEmailInput {
+  account_id: string
+  to: EmailAddress[]
+  cc?: EmailAddress[]
+  bcc?: EmailAddress[]
+  subject: string
+  body_text?: string
+  body_html?: string
+  in_reply_to?: string
+  references?: string
+  attachments?: { filename: string; path: string }[]
+}
+
+export interface EmailListFilters {
+  account_id?: string
+  folder?: string
+  search?: string
+  only_unread?: boolean
+  only_starred?: boolean
+  limit?: number
+  offset?: number
+}
+
+export type EmailAICategory =
+  | 'factura'
+  | 'presupuesto'
+  | 'comex'
+  | 'consulta'
+  | 'notificacion'
+  | 'newsletter'
+  | 'personal'
+  | 'otro'
