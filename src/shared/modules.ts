@@ -80,6 +80,11 @@ export const MODULES: ModuleDef[] = [
     routes: ['/calendario']
   },
   {
+    key: 'quotes',
+    label: 'Presupuestos',
+    routes: ['/quotes']
+  },
+  {
     key: 'settings',
     label: 'Configuración',
     routes: ['/settings']

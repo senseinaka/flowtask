@@ -32,6 +32,7 @@ import { registerAppIpc } from './ipc/app.ipc'
 import { registerAuthIpc } from './ipc/auth.ipc'
 import { registerPermissionsIpc } from './ipc/permissions.ipc'
 import { registerCalendarIpc } from './ipc/calendar.ipc'
+import { registerQuotesIpc } from './ipc/quotes.ipc'
 import { syncEnabledCalendars } from './services/google-calendar.service'
 import cron from 'node-cron'
 import { installIpcPermissionGuard } from './services/permissions.service'
@@ -127,6 +128,7 @@ app.whenReady().then(() => {
   registerAuthIpc(getMainWindow)
   registerPermissionsIpc()
   registerCalendarIpc()
+  registerQuotesIpc()
 
   // ── Calendario: sync automático cada 10 minutos (si hay conexión activa) ──
   cron.schedule('*/10 * * * *', () => {

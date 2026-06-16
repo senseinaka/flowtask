@@ -41,7 +41,11 @@ import type {
   AuthSession, AuthLoginResult,
   UserPermission,
   CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent,
-  CalendarEventInput, CalendarEventLink, LinkEntityInput
+  CalendarEventInput, CalendarEventLink, LinkEntityInput,
+  Quote, QuoteActivity, QuoteCompany, QuoteContact, QuoteKPIs,
+  CreateQuoteInput, UpdateQuoteInput,
+  CreateQuoteCompanyInput, CreateQuoteContactInput,
+  AddQuoteActivityInput
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -855,6 +859,33 @@ const api = {
       ipcRenderer.invoke('calendar:unlinkEntity', linkId),
     refreshLinkedEvent: (linkId: string, input: { title: string; dueAtMs: number }): Promise<CalendarEventLink> =>
       ipcRenderer.invoke('calendar:refreshLinkedEvent', linkId, input)
+  },
+
+  quotes: {
+    companies: {
+      list: (): Promise<QuoteCompany[]> => ipcRenderer.invoke('quotes:companies:list'),
+      create: (data: CreateQuoteCompanyInput): Promise<QuoteCompany> => ipcRenderer.invoke('quotes:companies:create', data),
+      update: (id: string, data: Partial<CreateQuoteCompanyInput>): Promise<QuoteCompany> => ipcRenderer.invoke('quotes:companies:update', id, data),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('quotes:companies:delete', id)
+    },
+    contacts: {
+      list: (companyId?: string): Promise<QuoteContact[]> => ipcRenderer.invoke('quotes:contacts:list', companyId),
+      create: (data: CreateQuoteContactInput): Promise<QuoteContact> => ipcRenderer.invoke('quotes:contacts:create', data),
+      update: (id: string, data: Partial<Omit<CreateQuoteContactInput, 'company_id'>>): Promise<QuoteContact> => ipcRenderer.invoke('quotes:contacts:update', id, data),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('quotes:contacts:delete', id)
+    },
+    list: (filters?: { status?: string; priority?: string; assigned_to?: string }): Promise<Quote[]> => ipcRenderer.invoke('quotes:list', filters),
+    get: (id: string): Promise<Quote | null> => ipcRenderer.invoke('quotes:get', id),
+    create: (data: CreateQuoteInput, userId: string): Promise<Quote> => ipcRenderer.invoke('quotes:create', data, userId),
+    update: (id: string, data: UpdateQuoteInput, userId: string): Promise<Quote> => ipcRenderer.invoke('quotes:update', id, data, userId),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('quotes:delete', id),
+    activities: {
+      list: (quoteId: string): Promise<QuoteActivity[]> => ipcRenderer.invoke('quotes:activities:list', quoteId),
+      add: (data: AddQuoteActivityInput): Promise<QuoteActivity> => ipcRenderer.invoke('quotes:activities:add', data)
+    },
+    kpis: {
+      get: (): Promise<QuoteKPIs> => ipcRenderer.invoke('quotes:kpis:get')
+    }
   },
 
   on: (

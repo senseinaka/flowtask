@@ -44,14 +44,14 @@ import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
-  QUOTE_STATUS_LABELS,
-  QUOTE_STATUS_COLORS,
+  FREIGHT_QUOTE_STATUS_LABELS,
+  FREIGHT_QUOTE_STATUS_COLORS,
   CARGO_TYPE_LABELS,
   INCOTERMS
 } from '@shared/types'
 import type {
   ImportStatus, DocumentType, DocumentStatus, DriveDocStatus,
-  QuoteStatus, PaymentMethod, ComexImport, ComexDocument, ComexInalCert,
+  PaymentMethod, ComexImport, ComexDocument, ComexInalCert,
   InalLCStatus,
   ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexCustoms,
   UpsertComexCustomsInput
@@ -5703,7 +5703,7 @@ function QuotesSection({
       ) : (
         <div className="space-y-2 mt-1">
           {quotes.map((q) => {
-            const statusColor = QUOTE_STATUS_COLORS[q.status]
+            const statusColor = FREIGHT_QUOTE_STATUS_COLORS[q.status]
             const isSelected = q.status === 'selected'
             const isRejected = q.status === 'rejected'
             const isRequested = q.status === 'requested'
@@ -5718,7 +5718,7 @@ function QuotesSection({
                       <p className="text-xs font-semibold text-slate-200">{q.operator_name}</p>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
                         style={{ backgroundColor: statusColor + '22', color: statusColor }}>
-                        {QUOTE_STATUS_LABELS[q.status]}
+                        {FREIGHT_QUOTE_STATUS_LABELS[q.status]}
                       </span>
                       {q.cargo_type && <span className="text-[10px] text-slate-500">{CARGO_TYPE_LABELS[q.cargo_type] ?? q.cargo_type}</span>}
                     </div>

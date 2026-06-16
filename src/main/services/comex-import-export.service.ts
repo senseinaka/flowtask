@@ -14,7 +14,7 @@ const autoTable = (autoTableImport as unknown as { default?: typeof autoTableImp
 import dayjs from 'dayjs'
 import fs from 'fs'
 import {
-  IMPORT_STATUS_LABELS, DOCUMENT_STATUS_LABELS, DOCUMENT_TYPE_LABELS, QUOTE_STATUS_LABELS
+  IMPORT_STATUS_LABELS, DOCUMENT_STATUS_LABELS, DOCUMENT_TYPE_LABELS, FREIGHT_QUOTE_STATUS_LABELS
 } from '@shared/types'
 import type {
   ComexImport, ComexImportItem, ComexDocument, ComexLogisticsQuote, ComexCustoms, ComexCostItem
@@ -106,7 +106,7 @@ export function writeImportExcel(filePath: string, detail: ComexImportFullDetail
       'Moneda':     q.currency,
       'Servicios':  q.services_included,
       'Válido hasta': fmtDate(q.valid_until),
-      'Estado':     QUOTE_STATUS_LABELS[q.status],
+      'Estado':     FREIGHT_QUOTE_STATUS_LABELS[q.status],
       'Notas':      q.notes
     })))
     wsQuotes['!cols'] = [
@@ -214,7 +214,7 @@ export function writeImportPdf(filePath: string, detail: ComexImportFullDetail):
     autoTable(doc, {
       startY: cursorY,
       head: [['Operador', 'Tipo carga', 'Monto', 'Estado', 'Válido hasta']],
-      body: quotes.map(q => [q.operator_name, q.cargo_type, q.quote_amount != null ? `${q.quote_amount} ${q.currency}` : '', QUOTE_STATUS_LABELS[q.status], fmtDate(q.valid_until)]),
+      body: quotes.map(q => [q.operator_name, q.cargo_type, q.quote_amount != null ? `${q.quote_amount} ${q.currency}` : '', FREIGHT_QUOTE_STATUS_LABELS[q.status], fmtDate(q.valid_until)]),
       theme: 'grid',
       headStyles: { fillColor: [51, 65, 85] }
     })

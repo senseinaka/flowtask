@@ -28,6 +28,8 @@ import ExpiryDashboard from './routes/expiry/ExpiryDashboard'
 import FinanceDashboard from './routes/finance/FinanceDashboard'
 import CompanyFinanceDashboard from './routes/company-finance/CompanyFinanceDashboard'
 import Calendar from './routes/Calendar'
+import QuotesDashboard from './routes/quotes/QuotesDashboard'
+import QuoteDetail from './routes/quotes/QuoteDetail'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -66,7 +68,9 @@ const router = createHashRouter([
       { path: 'expiry', element: <ExpiryDashboard /> },
       { path: 'finance', element: <FinanceDashboard /> },
       { path: 'company-finance', element: <CompanyFinanceDashboard /> },
-      { path: 'calendario', element: <Calendar /> }
+      { path: 'calendario', element: <Calendar /> },
+      { path: 'quotes', element: <QuotesDashboard /> },
+      { path: 'quotes/:id', element: <QuoteDetail /> }
     ]
   }
 ])

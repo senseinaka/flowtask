@@ -2223,6 +2223,87 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
           ON calendar_event_links(source_module, source_event_id);
       `)
     }
+  },
+  {
+    version: 69,
+    up: (db) => {
+      // Módulo Presupuestos: 4 tablas para gestión del pipeline de cotizaciones.
+      // Sincronizadas vía PowerSync (workspace_id en todas).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS quote_companies (
+          id           TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          name         TEXT NOT NULL DEFAULT '',
+          industry     TEXT NOT NULL DEFAULT '',
+          website      TEXT NOT NULL DEFAULT '',
+          notes        TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_quote_companies_workspace
+          ON quote_companies(workspace_id);
+
+        CREATE TABLE IF NOT EXISTS quote_contacts (
+          id           TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          company_id   TEXT NOT NULL DEFAULT '',
+          name         TEXT NOT NULL DEFAULT '',
+          email        TEXT NOT NULL DEFAULT '',
+          phone        TEXT NOT NULL DEFAULT '',
+          role         TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_quote_contacts_workspace
+          ON quote_contacts(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_quote_contacts_company
+          ON quote_contacts(company_id);
+
+        CREATE TABLE IF NOT EXISTS quotes (
+          id                 TEXT PRIMARY KEY,
+          workspace_id       TEXT NOT NULL,
+          title              TEXT NOT NULL DEFAULT '',
+          status             TEXT NOT NULL DEFAULT 'new',
+          priority           TEXT NOT NULL DEFAULT 'p3',
+          channel            TEXT NOT NULL DEFAULT 'email',
+          assigned_to        TEXT NOT NULL DEFAULT '',
+          company_id         TEXT NOT NULL DEFAULT '',
+          contact_id         TEXT NOT NULL DEFAULT '',
+          estimated_value    REAL,
+          won_value          REAL,
+          lost_reason        TEXT NOT NULL DEFAULT '',
+          next_follow_up_at  INTEGER,
+          sla_due_at         INTEGER,
+          notes              TEXT NOT NULL DEFAULT '',
+          created_at         INTEGER NOT NULL,
+          updated_at         INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_quotes_workspace
+          ON quotes(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_quotes_status
+          ON quotes(status);
+        CREATE INDEX IF NOT EXISTS idx_quotes_assigned_to
+          ON quotes(assigned_to);
+        CREATE INDEX IF NOT EXISTS idx_quotes_company
+          ON quotes(company_id);
+        CREATE INDEX IF NOT EXISTS idx_quotes_follow_up
+          ON quotes(next_follow_up_at);
+
+        CREATE TABLE IF NOT EXISTS quote_activities (
+          id           TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          quote_id     TEXT NOT NULL,
+          user_id      TEXT NOT NULL DEFAULT '',
+          type         TEXT NOT NULL DEFAULT 'system',
+          payload      TEXT NOT NULL DEFAULT '{}',
+          created_at   INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_quote_activities_workspace
+          ON quote_activities(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_quote_activities_quote
+          ON quote_activities(quote_id);
+      `)
+    }
   }
 ]
 

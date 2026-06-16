@@ -1207,8 +1207,13 @@ function MovementsTable({
  * una sin pasos intermedios. Mantiene su propio estado local mientras se tipea
  * y confirma el cambio con blur/Enter.
  */
-function EntryAmountInput({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFocus?: boolean; onSave: (v: number) => void }) {
   const [draft, setDraft] = useState(String(value))
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus()
+  }, [autoFocus])
 
   const commit = () => {
     const num = Number(draft.replace(',', '.'))
@@ -1218,6 +1223,7 @@ function EntryAmountInput({ value, onSave }: { value: number; onSave: (v: number
 
   return (
     <input
+      ref={ref}
       type="number"
       value={draft}
       onChange={e => setDraft(e.target.value)}
@@ -1231,11 +1237,35 @@ function EntryAmountInput({ value, onSave }: { value: number; onSave: (v: number
   )
 }
 
+function EntryNoteInput({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [draft, setDraft] = useState(value)
+
+  const commit = () => {
+    if (draft !== value) onSave(draft)
+  }
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      placeholder="nota…"
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { commit(); e.currentTarget.blur() }
+        if (e.key === 'Escape') setDraft(value)
+      }}
+      className="flex-1 min-w-0 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-400 placeholder:text-slate-600 focus:outline-none"
+    />
+  )
+}
+
 function MovementEntriesQuickList({ movementId, conceptName }: { movementId: string; conceptName: string }) {
   const { data: entries = [], isLoading } = useCompanyMovementEntries(movementId)
   const add    = useAddCompanyMovementEntry()
   const update = useUpdateCompanyMovementEntry()
   const remove = useRemoveCompanyMovementEntry()
+  const [newEntryId, setNewEntryId] = useState<string | null>(null)
 
   const sorted = useMemo(
     () => [...entries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at)),
@@ -1244,8 +1274,10 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
   const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
 
   const handleAddEntry = () => {
-    const lastAmount = sorted.length > 0 ? sorted[sorted.length - 1].amount : 0
-    add.mutate({ movement_id: movementId, amount: lastAmount, entry_date: dayjs().valueOf(), note: '' })
+    add.mutate(
+      { movement_id: movementId, amount: 0, entry_date: dayjs().valueOf(), note: '' },
+      { onSuccess: (newEntry) => { if (newEntry?.id) setNewEntryId(newEntry.id) } }
+    )
   }
 
   if (isLoading) {
@@ -1260,45 +1292,52 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
           disabled={add.isPending}
           className="flex items-center gap-1 text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
         >
-          <Plus size={11} /> Agregar carga
+          <Plus size={11} /> Agregar
         </button>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-1">
+    <div className="flex flex-col gap-1 px-1">
       {sorted.map((e, i) => (
-        <div key={e.id} className="flex items-center gap-1.5 rounded-lg border border-purple-800/30 bg-purple-950/10 pl-2 pr-1 py-1">
-          <span className="text-[11px] text-slate-400 whitespace-nowrap">
-            Carga {conceptName} {i + 1}
+        <div key={e.id} className="flex items-center gap-2 rounded-lg border border-purple-800/30 bg-purple-950/10 pl-2 pr-1 py-1">
+          <span className="text-[11px] text-slate-400 shrink-0 min-w-0 truncate max-w-[160px]">
+            {conceptName} {i + 1}
             {e.entry_date && <span className="text-slate-600"> · {dayjs(e.entry_date).format('DD/MM')}</span>}
           </span>
           <EntryAmountInput
             value={e.amount}
-            onSave={v => update.mutate({ id: e.id, movementId, data: { amount: v } })}
+            autoFocus={e.id === newEntryId}
+            onSave={v => { update.mutate({ id: e.id, movementId, data: { amount: v } }); setNewEntryId(null) }}
+          />
+          <EntryNoteInput
+            value={e.note ?? ''}
+            onSave={v => update.mutate({ id: e.id, movementId, data: { note: v } })}
           />
           <button
             onClick={() => {
-              if (!confirm(`¿Eliminar "Carga ${conceptName} ${i + 1}" de ${formatCurrency(e.amount)}?`)) return
+              if (!confirm(`¿Eliminar "${conceptName} ${i + 1}" de ${formatCurrency(e.amount)}?`)) return
               remove.mutate({ id: e.id, movementId })
             }}
-            className="p-1 rounded-md text-slate-600 hover:text-red-400 hover:bg-slate-700/50 transition-colors"
-            title="Eliminar carga"
+            className="p-1 rounded-md text-slate-600 hover:text-red-400 hover:bg-slate-700/50 transition-colors shrink-0"
+            title="Eliminar"
           >
             <Trash2 size={11} />
           </button>
         </div>
       ))}
-      <button
-        onClick={handleAddEntry}
-        disabled={add.isPending}
-        className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-white border border-dashed border-purple-700/50 hover:bg-purple-600 hover:border-purple-600 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
-        title={`Agregar "Carga ${conceptName} ${sorted.length + 1}"`}
-      >
-        <Plus size={11} /> Agregar carga
-      </button>
-      <span className="text-[11px] font-semibold text-purple-300 ml-1">Total: {formatCurrency(total)}</span>
+      <div className="flex items-center gap-3 pt-0.5">
+        <button
+          onClick={handleAddEntry}
+          disabled={add.isPending}
+          className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-white border border-dashed border-purple-700/50 hover:bg-purple-600 hover:border-purple-600 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
+          title={`Agregar "${conceptName} ${sorted.length + 1}"`}
+        >
+          <Plus size={11} /> Agregar
+        </button>
+        <span className="text-[11px] font-semibold text-purple-300">Total: {formatCurrency(total)}</span>
+      </div>
     </div>
   )
 }

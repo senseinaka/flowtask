@@ -388,7 +388,7 @@ export type DocumentType =
 
 export type DocumentStatus     = 'pending' | 'received' | 'approved'
 export type DriveDocStatus     = 'none' | 'uploading' | 'synced' | 'error'
-export type QuoteStatus        = 'requested' | 'quoted' | 'selected' | 'rejected'
+export type FreightQuoteStatus = 'requested' | 'quoted' | 'selected' | 'rejected'
 export type ComexPaymentStatus = 'pending' | 'completed'
 export type PaymentMethod      = 'advance' | 'wire' | 'lc' | 'other'
 export type FreightCompanyType = 'agente' | 'naviera' | 'courier' | 'aereo' | 'otro'
@@ -450,14 +450,14 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   other:   'Otro'
 }
 
-export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+export const FREIGHT_QUOTE_STATUS_LABELS: Record<FreightQuoteStatus, string> = {
   requested: 'Solicitado',
   quoted:    'Cotizado',
   selected:  'Seleccionado',
   rejected:  'Rechazado'
 }
 
-export const QUOTE_STATUS_COLORS: Record<QuoteStatus, string> = {
+export const FREIGHT_QUOTE_STATUS_COLORS: Record<FreightQuoteStatus, string> = {
   requested: '#60a5fa',
   quoted:    '#f59e0b',
   selected:  '#10b981',
@@ -1211,7 +1211,7 @@ export interface ComexLogisticsQuote {
   currency: string
   services_included: string
   valid_until: number | null
-  status: QuoteStatus
+  status: FreightQuoteStatus
   rfq_sent_at: number | null    // when the RFQ email was sent
   rfq_email_text: string        // copy of the email body sent
   notes: string
@@ -2190,4 +2190,196 @@ export interface LinkEntityInput {
   sourceEventId: string
   title: string
   dueAtMs: number
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MÓDULO PRESUPUESTOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type QuoteStatus =
+  | 'new'
+  | 'analysis'
+  | 'elaborating'
+  | 'sent'
+  | 'follow_up'
+  | 'won'
+  | 'lost'
+  | 'archived'
+  | 'postponed'
+
+export type QuotePriority = 'p1' | 'p2' | 'p3' | 'p4'
+
+export type QuoteChannel = 'email' | 'whatsapp' | 'form' | 'phone' | 'in_person'
+
+export type QuoteActivityType =
+  | 'status_change'
+  | 'assignment'
+  | 'comment'
+  | 'value_update'
+  | 'follow_up_set'
+  | 'lost_reason_set'
+  | 'system'
+
+export interface QuoteCompany {
+  id: string
+  workspace_id: string
+  name: string
+  industry: string
+  website: string
+  notes: string
+  created_at: number
+  updated_at: number
+}
+
+export interface QuoteContact {
+  id: string
+  workspace_id: string
+  company_id: string
+  name: string
+  email: string
+  phone: string
+  role: string
+  created_at: number
+  updated_at: number
+}
+
+export interface Quote {
+  id: string
+  workspace_id: string
+  title: string
+  status: QuoteStatus
+  priority: QuotePriority
+  channel: QuoteChannel
+  assigned_to: string
+  company_id: string
+  contact_id: string
+  estimated_value: number | null
+  won_value: number | null
+  lost_reason: string
+  next_follow_up_at: number | null
+  sla_due_at: number | null
+  notes: string
+  created_at: number
+  updated_at: number
+}
+
+export interface QuoteActivity {
+  id: string
+  workspace_id: string
+  quote_id: string
+  user_id: string
+  type: QuoteActivityType
+  payload: string
+  created_at: number
+}
+
+export interface CreateQuoteInput {
+  title: string
+  priority?: QuotePriority
+  channel?: QuoteChannel
+  assigned_to?: string
+  company_id?: string
+  contact_id?: string
+  estimated_value?: number | null
+  notes?: string
+}
+
+export interface UpdateQuoteInput {
+  title?: string
+  status?: QuoteStatus
+  priority?: QuotePriority
+  channel?: QuoteChannel
+  assigned_to?: string
+  company_id?: string
+  contact_id?: string
+  estimated_value?: number | null
+  won_value?: number | null
+  lost_reason?: string
+  next_follow_up_at?: number | null
+  notes?: string
+}
+
+export interface CreateQuoteCompanyInput {
+  name: string
+  industry?: string
+  website?: string
+  notes?: string
+}
+
+export interface CreateQuoteContactInput {
+  company_id: string
+  name: string
+  email?: string
+  phone?: string
+  role?: string
+}
+
+export interface AddQuoteActivityInput {
+  quote_id: string
+  user_id: string
+  type: QuoteActivityType
+  payload: Record<string, unknown>
+}
+
+export interface QuoteKPIs {
+  total: number
+  byStatus: Record<QuoteStatus, number>
+  pipelineValue: number
+  wonValue: number
+  lostCount: number
+  avgDaysOpen: number | null
+}
+
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  new: 'Nuevo',
+  analysis: 'En Análisis',
+  elaborating: 'Elaborando',
+  sent: 'Enviado',
+  follow_up: 'Seguimiento',
+  won: 'Ganado',
+  lost: 'Perdido',
+  archived: 'Archivado',
+  postponed: 'Postergado'
+}
+
+export const QUOTE_STATUS_COLORS: Record<QuoteStatus, string> = {
+  new: '#64748b',
+  analysis: '#3b82f6',
+  elaborating: '#8b5cf6',
+  sent: '#f59e0b',
+  follow_up: '#06b6d4',
+  won: '#10b981',
+  lost: '#ef4444',
+  archived: '#475569',
+  postponed: '#94a3b8'
+}
+
+export const QUOTE_PRIORITY_LABELS: Record<QuotePriority, string> = {
+  p1: 'P1 · Urgente',
+  p2: 'P2 · Alta',
+  p3: 'P3 · Normal',
+  p4: 'P4 · Baja'
+}
+
+export const QUOTE_PRIORITY_COLORS: Record<QuotePriority, string> = {
+  p1: '#ef4444',
+  p2: '#f97316',
+  p3: '#3b82f6',
+  p4: '#64748b'
+}
+
+export const QUOTE_CHANNEL_LABELS: Record<QuoteChannel, string> = {
+  email: 'Email',
+  whatsapp: 'WhatsApp',
+  form: 'Formulario',
+  phone: 'Teléfono',
+  in_person: 'Presencial'
+}
+
+/** SLA en milisegundos por prioridad */
+export const QUOTE_SLA_MS: Record<QuotePriority, number> = {
+  p1: 24 * 60 * 60 * 1000,
+  p2: 72 * 60 * 60 * 1000,
+  p3: 7 * 24 * 60 * 60 * 1000,
+  p4: 30 * 24 * 60 * 60 * 1000
 }

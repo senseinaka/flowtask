@@ -787,6 +787,77 @@ const calendar_event_links = new Table(
   { indexes: { workspace: ['workspace_id'], source: ['source_module', 'source_event_id'] } }
 )
 
+// ── Módulo Presupuestos ───────────────────────────────────────────────────────
+
+const quote_companies = new Table(
+  {
+    name: column.text,
+    industry: column.text,
+    website: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const quote_contacts = new Table(
+  {
+    company_id: column.text,
+    name: column.text,
+    email: column.text,
+    phone: column.text,
+    role: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], company: ['company_id'] } }
+)
+
+const quotes = new Table(
+  {
+    title: column.text,
+    status: column.text,
+    priority: column.text,
+    channel: column.text,
+    assigned_to: column.text,
+    company_id: column.text,
+    contact_id: column.text,
+    estimated_value: column.real,
+    won_value: column.real,
+    lost_reason: column.text,
+    next_follow_up_at: column.integer,
+    sla_due_at: column.integer,
+    notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  {
+    indexes: {
+      workspace: ['workspace_id'],
+      status: ['status'],
+      assigned: ['assigned_to'],
+      company: ['company_id'],
+      follow_up: ['next_follow_up_at']
+    }
+  }
+)
+
+const quote_activities = new Table(
+  {
+    quote_id: column.text,
+    user_id: column.text,
+    type: column.text,
+    payload: column.text,
+    created_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], quote: ['quote_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -830,7 +901,11 @@ export const AppSchema = new Schema({
   import_order_plannings,
   import_order_planning_milestones,
   import_order_planning_ai_reports,
-  calendar_event_links
+  calendar_event_links,
+  quote_companies,
+  quote_contacts,
+  quotes,
+  quote_activities
 })
 
 /**
@@ -1390,6 +1465,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities'], throttleMs: 1000 }
   )
 }
