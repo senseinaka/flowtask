@@ -487,9 +487,9 @@ function MessageRow({ msg, selected, onClick, onContextMenu }: {
       <button
         onClick={(e) => { e.stopPropagation(); markRead.mutate({ id: msg.id, isRead: !isUnread }) }}
         title={isUnread ? 'Marcar como leído' : 'Marcar como no leído'}
-        className="w-4 shrink-0 self-stretch flex items-stretch hover:bg-blue-50 transition-colors"
+        className="w-4 shrink-0 self-stretch flex items-stretch hover:bg-blue-100 transition-colors cursor-pointer"
       >
-        <span className={`w-[3px] self-stretch transition-colors ${isUnread ? 'bg-blue-500' : ''}`} />
+        <span className={`w-[3px] self-stretch transition-colors ${isUnread ? 'bg-blue-500' : 'group-hover:bg-blue-200'}`} />
       </button>
 
       {/* Main row — click to open */}
