@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Mail, RefreshCw, Star, Paperclip, Send, Inbox,
   Plus, Settings, Search, Trash2, Reply, ReplyAll, Forward,
@@ -418,16 +418,13 @@ function MessageDetail({ message, account, onDelete, onPurge, onRestore }: {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-white">
-        <div className="px-6 py-5">
-          {message.body_html ? (
-            <div
-              className="text-sm text-gray-900 leading-relaxed email-body"
-              dangerouslySetInnerHTML={{ __html: message.body_html }}
-            />
-          ) : (
+        {message.body_html ? (
+          <EmailBody html={message.body_html} />
+        ) : (
+          <div className="px-6 py-5">
             <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{message.body_text}</pre>
-          )}
-        </div>
+          </div>
+        )}
 
         {attachments.data && attachments.data.length > 0 && (
           <div className="px-6 pb-5 border-t border-gray-200">
@@ -486,13 +483,13 @@ function MessageRow({ msg, selected, onClick, onContextMenu }: {
       onMouseLeave={() => setHovered(false)}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY) }}
     >
-      {/* Unread dot — click to toggle read/unread */}
+      {/* Unread left-bar — click to toggle read/unread */}
       <button
         onClick={(e) => { e.stopPropagation(); markRead.mutate({ id: msg.id, isRead: !isUnread }) }}
         title={isUnread ? 'Marcar como leído' : 'Marcar como no leído'}
-        className="w-6 shrink-0 flex items-center justify-center self-stretch hover:bg-gray-100 transition-colors"
+        className="w-4 shrink-0 self-stretch flex items-stretch hover:bg-blue-50 transition-colors"
       >
-        <span className={`w-2 h-2 rounded-full transition-colors ${isUnread ? 'bg-blue-500' : `bg-transparent border ${hovered ? 'border-gray-400' : 'border-gray-300'}`}`} />
+        <span className={`w-[3px] self-stretch transition-colors ${isUnread ? 'bg-blue-500' : ''}`} />
       </button>
 
       {/* Main row — click to open */}
@@ -607,6 +604,53 @@ function UnreadBadge({ accountId }: { accountId: string }) {
     <span className="ml-auto text-blue-600 text-[11px] font-semibold">
       {data > 99 ? '99+' : data}
     </span>
+  )
+}
+
+// ── Email body (sandboxed iframe to prevent CSS bleed) ────────────────────────
+
+function EmailBody({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement>(null)
+  const [height, setHeight] = useState(400)
+
+  useEffect(() => {
+    setHeight(400)
+    const frame = ref.current
+    if (!frame) return
+    const onLoad = () => {
+      try {
+        if (frame.contentDocument?.body) {
+          setHeight(Math.max(80, frame.contentDocument.body.scrollHeight + 24))
+        }
+      } catch { /* cross-origin */ }
+    }
+    frame.addEventListener('load', onLoad)
+    return () => frame.removeEventListener('load', onLoad)
+  }, [html])
+
+  const safeStyle = [
+    '<base target="_blank">',
+    '<style>',
+    '*{max-width:100%!important;box-sizing:border-box;}',
+    'img{height:auto!important;}',
+    'body{margin:0;padding:0 24px 24px;font-family:-apple-system,system-ui,"Segoe UI",sans-serif;font-size:14px;color:#111827;line-height:1.6;}',
+    'a{color:#2563eb;}',
+    'pre,code{white-space:pre-wrap;word-break:break-all;}',
+    '</style>'
+  ].join('')
+
+  const srcDoc = /<html[\s>]/i.test(html)
+    ? html.replace(/<\/head>/i, safeStyle + '</head>')
+    : `<!DOCTYPE html><html><head><meta charset="utf-8">${safeStyle}</head><body>${html}</body></html>`
+
+  return (
+    <iframe
+      ref={ref}
+      srcDoc={srcDoc}
+      sandbox="allow-same-origin allow-popups"
+      style={{ width: '100%', height, border: 'none', display: 'block' }}
+      title="email-body"
+    />
   )
 }
 
