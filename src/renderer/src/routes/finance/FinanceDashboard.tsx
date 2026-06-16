@@ -1198,6 +1198,36 @@ function MovementsTable({
  * con un nombre derivado del concepto madre ("Carga Nafta 1", "Carga Nafta 2", ...)
  * numerado por fecha de carga, y permite edición rápida del monto.
  */
+/**
+ * Input de monto siempre editable (sin toggle click-to-edit) para las cargas
+ * del MovementEntriesQuickList — las recién agregadas deben poder editarse de
+ * una sin pasos intermedios. Mantiene su propio estado local mientras se tipea
+ * y confirma el cambio con blur/Enter.
+ */
+function EntryAmountInput({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+
+  const commit = () => {
+    const num = Number(draft.replace(',', '.'))
+    if (Number.isFinite(num) && num !== value) onSave(num)
+    else setDraft(String(value))
+  }
+
+  return (
+    <input
+      type="number"
+      value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { commit(); e.currentTarget.blur() }
+        if (e.key === 'Escape') setDraft(String(value))
+      }}
+      className="w-24 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
+    />
+  )
+}
+
 function MovementEntriesQuickList({ movementId, conceptName }: { movementId: string; conceptName: string }) {
   const { data: entries = [], isLoading } = useMovementEntries(movementId)
   const add    = useAddMovementEntry()
@@ -1241,12 +1271,9 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
             Carga {conceptName} {i + 1}
             {e.entry_date && <span className="text-slate-600"> · {dayjs(e.entry_date).format('DD/MM')}</span>}
           </span>
-          <EditableAmount
+          <EntryAmountInput
             value={e.amount}
-            onSave={v => {
-              if (v === null) return
-              update.mutate({ id: e.id, movementId, data: { amount: v } })
-            }}
+            onSave={v => update.mutate({ id: e.id, movementId, data: { amount: v } })}
           />
           <button
             onClick={() => {
