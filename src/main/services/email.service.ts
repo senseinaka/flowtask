@@ -5,6 +5,7 @@ import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import type { EmailAccount } from '@shared/types'
+import { getDb } from '../database/db'
 import {
   upsertEmailMessage,
   upsertEmailAttachment,
@@ -187,7 +188,7 @@ export async function syncFolder(
             })
           }
 
-          if (uid > (account.last_uid_inbox ?? 0)) {
+          if (folder === 'INBOX' && uid > (account.last_uid_inbox ?? 0)) {
             await setLastUidInbox(account.id, uid)
             account.last_uid_inbox = uid
           }
@@ -209,9 +210,21 @@ export async function syncFolder(
 
 // ── Sync initial (first 50) + incremental ─────────────────────────────────────
 
-export async function syncAccount(account: EmailAccount): Promise<void> {
-  const sinceUid = account.last_uid_inbox > 0 ? account.last_uid_inbox : 1
-  await syncFolder(account, 'INBOX', sinceUid)
+function getLastUidForFolder(accountId: string, folder: string): number {
+  const row = getDb()
+    .prepare('SELECT COALESCE(MAX(uid), 0) as max_uid FROM email_messages WHERE account_id = ? AND folder = ?')
+    .get(accountId, folder) as { max_uid: number }
+  return row?.max_uid ?? 0
+}
+
+export async function syncAccount(account: EmailAccount, folder = 'INBOX'): Promise<void> {
+  if (folder === 'INBOX') {
+    const sinceUid = account.last_uid_inbox > 0 ? account.last_uid_inbox : 1
+    await syncFolder(account, 'INBOX', sinceUid)
+  } else {
+    const sinceUid = getLastUidForFolder(account.id, folder) + 1
+    await syncFolder(account, folder, sinceUid)
+  }
 }
 
 // ── Sync all active accounts ───────────────────────────────────────────────────

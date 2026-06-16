@@ -1,6 +1,17 @@
 // Node.js en Electron no usa el CA store del sistema; necesario para googleapis
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'
 
+// imapflow puede emitir socket timeouts como excepciones no capturadas cuando
+// el cliente ya fue descartado. Las logueamos pero no crasheamos la app.
+process.on('uncaughtException', (err) => {
+  if (err.message?.includes('Socket timeout') || err.message?.includes('socket hang up') || err.message?.includes('ECONNRESET')) {
+    console.warn('[Email] Uncaught socket error (imapflow):', err.message)
+    return
+  }
+  console.error('[Main] Uncaught exception:', err)
+  throw err
+})
+
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { exec } from 'child_process'
 import { join } from 'path'

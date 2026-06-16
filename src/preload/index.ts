@@ -911,7 +911,7 @@ const api = {
     folders: {
       list: (accountId: string): Promise<string[]> => ipcRenderer.invoke('email:folders:list', accountId)
     },
-    sync: (accountId: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('email:sync', accountId),
+    sync: (accountId: string, folder?: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('email:sync', accountId, folder ?? 'INBOX'),
     messages: {
       list: (filters: EmailListFilters): Promise<EmailMessage[]> => ipcRenderer.invoke('email:messages:list', filters),
       get: (id: string): Promise<EmailMessage | null> => ipcRenderer.invoke('email:messages:get', id),

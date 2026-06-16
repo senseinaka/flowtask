@@ -68,11 +68,11 @@ export function registerEmailIpc(): void {
   })
 
   // ── Sync ─────────────────────────────────────────────────────────────────────
-  ipcMain.handle('email:sync', async (_e, accountId: string) => {
+  ipcMain.handle('email:sync', async (_e, accountId: string, folder = 'INBOX') => {
     const account = await getEmailAccount(accountId)
     if (!account) return { ok: false, error: 'Cuenta no encontrada' }
     try {
-      await syncAccount(account)
+      await syncAccount(account, folder)
       return { ok: true }
     } catch (e) {
       return { ok: false, error: (e as Error).message }

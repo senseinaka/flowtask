@@ -68,8 +68,9 @@ export function useTestSmtpConnection() {
 export function useSyncEmail() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (accountId: string) => window.api.email.sync(accountId),
-    onSuccess: (_data, accountId) => invalidateEmail(qc, accountId)
+    mutationFn: ({ accountId, folder }: { accountId: string; folder?: string }) =>
+      window.api.email.sync(accountId, folder),
+    onSuccess: (_data, { accountId }) => invalidateEmail(qc, accountId)
   })
 }
 
