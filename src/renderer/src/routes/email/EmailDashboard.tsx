@@ -58,6 +58,7 @@ function SetupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [phase, setPhase] = useState<'form' | 'testing' | 'done'>('form')
   const [log, setLog] = useState<LogEntry[]>([])
   const [allOk, setAllOk] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const create = useCreateEmailAccount()
 
   function upsertLog(entry: LogEntry) {
@@ -116,14 +117,19 @@ function SetupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       }
     }
 
-    setAllOk(r1.ok && r2.ok)
+    setAllOk(r1.ok)
     setPhase('done')
   }
 
   async function handleSave() {
-    await create.mutateAsync(form)
-    onSaved()
-    onClose()
+    setSaveError('')
+    try {
+      await create.mutateAsync(form)
+      onSaved()
+      onClose()
+    } catch (e) {
+      setSaveError((e as Error).message ?? 'Error al guardar la cuenta')
+    }
   }
 
   const f = (field: keyof CreateEmailAccountInput, val: string | number | boolean) =>
@@ -224,6 +230,9 @@ function SetupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
             <button disabled className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg opacity-50 flex items-center gap-2">
               <RefreshCw size={13} className="animate-spin" /> Probando…
             </button>
+          )}
+          {saveError && (
+            <span className="text-red-400 text-xs">{saveError}</span>
           )}
           {phase === 'done' && allOk && (
             <button
