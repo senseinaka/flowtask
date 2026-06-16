@@ -12,6 +12,7 @@ import {
   updateEmailAI,
   linkEmailToQuote,
   linkEmailToImport,
+  moveEmailToFolder,
   deleteEmailMessage,
   getUnreadCount,
   listEmailAttachments,
@@ -24,6 +25,7 @@ import {
   syncAccount,
   imapMarkRead,
   imapMoveToTrash,
+  imapRestoreFromTrash,
   getAttachmentPath
 } from '../services/email.service'
 import { testSmtpConnection, sendTestEmail, sendEmail } from '../services/email-smtp.service'
@@ -115,8 +117,16 @@ export function registerEmailIpc(): void {
   )
   ipcMain.handle('email:messages:delete', async (_e, id: string) => {
     const msg = await getEmailMessage(id)
-    if (msg) await imapMoveToTrash(msg.account_id, msg.uid).catch(() => null)
+    if (msg && msg.folder !== 'Trash') await imapMoveToTrash(msg.account_id, msg.uid).catch(() => null)
+    await moveEmailToFolder(id, 'Trash')
+  })
+  ipcMain.handle('email:messages:purge', async (_e, id: string) => {
     await deleteEmailMessage(id)
+  })
+  ipcMain.handle('email:messages:restore', async (_e, id: string) => {
+    const msg = await getEmailMessage(id)
+    if (msg) await imapRestoreFromTrash(msg.account_id, msg.uid).catch(() => null)
+    await moveEmailToFolder(id, 'INBOX')
   })
   ipcMain.handle('email:messages:unreadCount', async (_e, accountId: string) =>
     getUnreadCount(accountId)

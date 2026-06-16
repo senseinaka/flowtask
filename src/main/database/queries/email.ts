@@ -205,6 +205,12 @@ export async function linkEmailToImport(id: string, importId: string): Promise<v
     .run(importId, Date.now(), id)
 }
 
+export async function moveEmailToFolder(id: string, folder: string): Promise<void> {
+  getDb()
+    .prepare(`UPDATE email_messages SET folder = ?, updated_at = ? WHERE id = ?`)
+    .run(folder, Date.now(), id)
+}
+
 export async function deleteEmailMessage(id: string): Promise<void> {
   const db = getDb()
   db.prepare(`DELETE FROM email_attachments WHERE message_id = ?`).run(id)

@@ -135,6 +135,22 @@ export function useDeleteEmailMessage() {
   })
 }
 
+export function usePurgeEmail() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.email.messages.purge(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['email-messages'] })
+  })
+}
+
+export function useRestoreEmail() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.email.messages.restore(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['email-messages'] })
+  })
+}
+
 // ── Attachments ───────────────────────────────────────────────────────────────
 
 export function useEmailAttachments(messageId: string) {

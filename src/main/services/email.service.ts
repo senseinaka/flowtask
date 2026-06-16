@@ -314,6 +314,28 @@ export async function imapMoveToTrash(accountId: string, uid: number): Promise<v
   }
 }
 
+// ── Restore from Trash ────────────────────────────────────────────────────────
+
+export async function imapRestoreFromTrash(accountId: string, uid: number): Promise<void> {
+  const account = await getEmailAccount(accountId)
+  if (!account) return
+  const client = makeClient(account)
+  try {
+    await client.connect()
+    const lock = await client.getMailboxLock('Trash')
+    try {
+      await client.messageMove({ uid }, 'INBOX')
+    } catch {
+      // ignore — message may not exist on server yet
+    } finally {
+      lock.release()
+    }
+    await client.logout()
+  } catch (e) {
+    console.error('[Email] imapRestoreFromTrash error:', e)
+  }
+}
+
 // ── Download attachment bytes ──────────────────────────────────────────────────
 
 export function getAttachmentPath(localPath: string): string | null {

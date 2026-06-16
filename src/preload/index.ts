@@ -928,6 +928,8 @@ const api = {
       linkQuote: (id: string, quoteId: string): Promise<void> => ipcRenderer.invoke('email:messages:linkQuote', id, quoteId),
       linkImport: (id: string, importId: string): Promise<void> => ipcRenderer.invoke('email:messages:linkImport', id, importId),
       delete: (id: string): Promise<void> => ipcRenderer.invoke('email:messages:delete', id),
+      purge: (id: string): Promise<void> => ipcRenderer.invoke('email:messages:purge', id),
+      restore: (id: string): Promise<void> => ipcRenderer.invoke('email:messages:restore', id),
       unreadCount: (accountId: string): Promise<number> => ipcRenderer.invoke('email:messages:unreadCount', accountId)
     },
     attachments: {

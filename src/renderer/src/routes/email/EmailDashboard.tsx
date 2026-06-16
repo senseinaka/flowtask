@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import {
   Mail, RefreshCw, Star, Paperclip, Send, Inbox,
-  Plus, Settings, Search, Trash2, Reply, Forward,
+  Plus, Settings, Search, Trash2, Reply, ReplyAll, Forward,
   X, Check, AlertCircle, Pencil, ShieldOff, ArchiveX,
-  ChevronRight, RotateCcw
+  ChevronRight, RotateCcw, MoreHorizontal
 } from 'lucide-react'
 import {
   useEmailAccounts,
@@ -16,7 +16,9 @@ import {
   useDeleteEmailMessage,
   useEmailAttachments,
   useSendEmail,
-  useCreateEmailAccount
+  useCreateEmailAccount,
+  usePurgeEmail,
+  useRestoreEmail
 } from '../../hooks/useEmail'
 import type { EmailMessage, EmailAccount, CreateEmailAccountInput, SendEmailInput, EmailListFilters } from '@shared/types'
 import type { LucideIcon } from 'lucide-react'
@@ -304,11 +306,13 @@ function SenderAvatar({ name, email, size = 'md' }: { name: string; email: strin
 
 // ── Message detail ─────────────────────────────────────────────────────────────
 
-function MessageDetail({ message, account }: { message: EmailMessage; account: EmailAccount }) {
+function MessageDetail({ message, account, onDelete, onPurge, onRestore }: {
+  message: EmailMessage; account: EmailAccount
+  onDelete: () => void; onPurge: () => void; onRestore: () => void
+}) {
   const attachments = useEmailAttachments(message.id)
   const markRead = useMarkEmailRead()
   const markStarred = useMarkEmailStarred()
-  const deleteMsg = useDeleteEmailMessage()
   const [replying, setReplying] = useState(false)
 
   useEffect(() => {
@@ -320,41 +324,14 @@ function MessageDetail({ message, account }: { message: EmailMessage; account: E
   const isSent = message.folder === 'Sent'
 
   return (
-    <div className="flex flex-col h-full bg-gray-950">
-      {/* Header bar */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800 shrink-0">
-        <button
-          onClick={() => markStarred.mutate({ id: message.id, isStarred: !message.is_starred })}
-          className={`p-1.5 rounded-lg transition-colors ${message.is_starred ? 'text-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
-        >
-          <Star size={16} className={message.is_starred ? 'fill-amber-400' : ''} />
-        </button>
-        <div className="flex-1" />
-        {!isSent && (
-          <button onClick={() => setReplying(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-gray-300 hover:text-white hover:bg-gray-800 text-xs rounded-lg transition-colors">
-            <Reply size={13} /> Responder
-          </button>
-        )}
-        <button
-          onClick={() => setReplying(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-gray-300 hover:text-white hover:bg-gray-800 text-xs rounded-lg transition-colors">
-          <Forward size={13} /> Reenviar
-        </button>
-        <button
-          onClick={() => deleteMsg.mutate(message.id)}
-          className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-gray-800 transition-colors">
-          <Trash2 size={15} />
-        </button>
-      </div>
-
+    <div className="flex flex-col h-full bg-white">
       {/* Subject */}
-      <div className="px-6 pt-5 pb-3 shrink-0">
-        <h1 className="text-lg font-semibold text-white leading-tight">{message.subject || '(sin asunto)'}</h1>
+      <div className="px-6 pt-5 pb-2 shrink-0">
+        <h1 className="text-lg font-semibold text-gray-900 leading-tight">{message.subject || '(sin asunto)'}</h1>
       </div>
 
-      {/* Sender info */}
-      <div className="px-6 pb-4 shrink-0">
+      {/* Sender row */}
+      <div className="px-6 pb-3 shrink-0">
         <div className="flex items-start gap-3">
           <SenderAvatar
             name={isSent ? toAddrs[0]?.name ?? '' : message.from_name}
@@ -362,11 +339,19 @@ function MessageDetail({ message, account }: { message: EmailMessage; account: E
             size="lg"
           />
           <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-2 justify-between">
-              <span className="text-sm font-semibold text-white">
+            <div className="flex items-center gap-2 justify-between">
+              <span className="text-sm font-semibold text-gray-900">
                 {isSent ? (toAddrs[0]?.name || toAddrs[0]?.email || 'Enviado') : (message.from_name || message.from_address)}
               </span>
-              <span className="text-xs text-gray-500 shrink-0">{new Date(message.sent_at).toLocaleString('es-AR')}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => markStarred.mutate({ id: message.id, isStarred: !message.is_starred })}
+                  className={`p-1 rounded transition-colors ${message.is_starred ? 'text-amber-400' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <Star size={15} className={message.is_starred ? 'fill-amber-400' : ''} />
+                </button>
+                <span className="text-xs text-gray-400 ml-1">{new Date(message.sent_at).toLocaleString('es-AR')}</span>
+              </div>
             </div>
             <div className="text-xs text-gray-500 mt-0.5 space-y-0.5">
               {isSent ? (
@@ -385,8 +370,51 @@ function MessageDetail({ message, account }: { message: EmailMessage; account: E
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="border-t border-gray-800 mx-6 shrink-0" />
+      {/* Action buttons bar */}
+      <div className="flex items-center gap-1.5 px-6 py-2 border-t border-b border-gray-200 shrink-0">
+        {message.folder === 'Trash' ? (
+          <>
+            <button onClick={onRestore}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors">
+              <RotateCcw size={13} /> Recuperar
+            </button>
+            <div className="flex-1" />
+            <button onClick={onPurge}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded transition-colors">
+              <Trash2 size={13} /> Eliminar permanentemente
+            </button>
+          </>
+        ) : (
+          <>
+            {!isSent && (
+              <button onClick={() => setReplying(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors">
+                <Reply size={13} /> Responder
+              </button>
+            )}
+            {!isSent && (
+              <button onClick={() => setReplying(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors">
+                <ReplyAll size={13} /> Responder a todos
+              </button>
+            )}
+            <button onClick={() => setReplying(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors">
+              <Forward size={13} /> Reenviar
+            </button>
+            <button
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors">
+              <MoreHorizontal size={13} />
+            </button>
+            <div className="flex-1" />
+            <button onClick={onDelete}
+              className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <Trash2 size={14} />
+            </button>
+          </>
+        )}
+      </div>
+
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-white">
@@ -436,7 +464,11 @@ function MessageDetail({ message, account }: { message: EmailMessage; account: E
 
 // ── Message row ───────────────────────────────────────────────────────────────
 
-function MessageRow({ msg, selected, onClick }: { msg: EmailMessage; selected: boolean; onClick: () => void }) {
+function MessageRow({ msg, selected, onClick, onContextMenu }: {
+  msg: EmailMessage; selected: boolean; onClick: () => void
+  onContextMenu: (x: number, y: number) => void
+}) {
+  const [hovered, setHovered] = useState(false)
   const isSent = msg.folder === 'Sent'
   const toAddrs = isSent ? parseAddresses(msg.to_addresses) : []
   const displayName = isSent
@@ -448,16 +480,19 @@ function MessageRow({ msg, selected, onClick }: { msg: EmailMessage; selected: b
 
   return (
     <div
-      className={`w-full flex border-b border-gray-800/60 transition-colors group
-        ${selected ? 'bg-sky-950/60' : 'hover:bg-gray-800/40'}`}
+      className={`w-full flex border-b border-gray-200 transition-colors
+        ${selected ? 'bg-blue-50' : hovered ? 'bg-gray-50' : ''}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY) }}
     >
       {/* Unread dot — click to toggle read/unread */}
       <button
         onClick={(e) => { e.stopPropagation(); markRead.mutate({ id: msg.id, isRead: !isUnread }) }}
         title={isUnread ? 'Marcar como leído' : 'Marcar como no leído'}
-        className="w-6 shrink-0 flex items-center justify-center self-stretch hover:bg-gray-700/40 transition-colors"
+        className="w-6 shrink-0 flex items-center justify-center self-stretch hover:bg-gray-100 transition-colors"
       >
-        <span className={`w-2 h-2 rounded-full transition-colors ${isUnread ? 'bg-sky-500' : 'bg-transparent border border-gray-600 group-hover:border-gray-400'}`} />
+        <span className={`w-2 h-2 rounded-full transition-colors ${isUnread ? 'bg-blue-500' : `bg-transparent border ${hovered ? 'border-gray-400' : 'border-gray-300'}`}`} />
       </button>
 
       {/* Main row — click to open */}
@@ -466,24 +501,99 @@ function MessageRow({ msg, selected, onClick }: { msg: EmailMessage; selected: b
           <SenderAvatar name={displayName} email={displayEmail} size="sm" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <span className={`text-sm truncate ${isUnread ? 'font-bold text-white' : 'font-normal text-gray-300'}`}>
+              <span className={`text-sm truncate ${isUnread ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
                 {displayName}
               </span>
-              <span className="text-[11px] text-gray-500 shrink-0">{formatDate(msg.sent_at)}</span>
+              <span className="text-[11px] text-gray-400 shrink-0">{formatDate(msg.sent_at)}</span>
             </div>
-            <p className={`text-xs truncate mt-0.5 ${isUnread ? 'font-semibold text-sky-400' : 'text-gray-400'}`}>
+            <p className={`text-xs truncate mt-0.5 ${isUnread ? 'font-semibold text-blue-600' : 'text-gray-500'}`}>
               {msg.subject || '(sin asunto)'}
             </p>
-            <p className="text-[11px] text-gray-600 truncate mt-0.5">
+            <p className="text-[11px] text-gray-400 truncate mt-0.5">
               {msg.body_text.slice(0, 90).replace(/\s+/g, ' ')}
             </p>
           </div>
           <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
             {msg.is_starred && <Star size={11} className="text-amber-400 fill-amber-400" />}
-            {msg.has_attachments ? <Paperclip size={11} className="text-gray-600" /> : null}
+            {msg.has_attachments ? <Paperclip size={11} className="text-gray-400" /> : null}
           </div>
         </div>
       </button>
+    </div>
+  )
+}
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+
+function ContextMenu({ msg, x, y, onClose, onReply, onReplyAll, onForward, onDelete, onPurge, onRestore }: {
+  msg: EmailMessage; x: number; y: number
+  onClose: () => void; onReply: () => void; onReplyAll: () => void; onForward: () => void
+  onDelete: () => void; onPurge: () => void; onRestore: () => void
+}) {
+  const markRead = useMarkEmailRead()
+  const markStarred = useMarkEmailStarred()
+  const isTrash = msg.folder === 'Trash'
+  const isSent = msg.folder === 'Sent'
+
+  const safeX = Math.min(x, window.innerWidth - 212)
+  const safeY = Math.min(y, window.innerHeight - (isTrash ? 120 : 260))
+
+  function act(fn: () => void) { fn(); onClose() }
+
+  const itemCls = 'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left transition-colors'
+
+  return (
+    <div
+      className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[200px]"
+      style={{ left: safeX, top: safeY }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {isTrash ? (
+        <>
+          <button className={itemCls} onClick={() => act(onRestore)}>
+            <RotateCcw size={13} className="text-gray-400" /> Recuperar
+          </button>
+          <div className="h-px bg-gray-100 my-1" />
+          <button
+            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 text-left transition-colors"
+            onClick={() => act(onPurge)}
+          >
+            <Trash2 size={13} /> Eliminar permanentemente
+          </button>
+        </>
+      ) : (
+        <>
+          {!isSent && (
+            <button className={itemCls} onClick={() => act(onReply)}>
+              <Reply size={13} className="text-gray-400" /> Responder
+            </button>
+          )}
+          {!isSent && (
+            <button className={itemCls} onClick={() => act(onReplyAll)}>
+              <ReplyAll size={13} className="text-gray-400" /> Responder a todos
+            </button>
+          )}
+          <button className={itemCls} onClick={() => act(onForward)}>
+            <Forward size={13} className="text-gray-400" /> Reenviar
+          </button>
+          <div className="h-px bg-gray-100 my-1" />
+          <button className={itemCls} onClick={() => act(() => markRead.mutate({ id: msg.id, isRead: !msg.is_read }))}>
+            <Mail size={13} className="text-gray-400" />
+            {msg.is_read ? 'Marcar como no leído' : 'Marcar como leído'}
+          </button>
+          <button className={itemCls} onClick={() => act(() => markStarred.mutate({ id: msg.id, isStarred: !msg.is_starred }))}>
+            <Star size={13} className={msg.is_starred ? 'text-amber-400 fill-amber-400' : 'text-gray-400'} />
+            {msg.is_starred ? 'Quitar destacado' : 'Destacar'}
+          </button>
+          <div className="h-px bg-gray-100 my-1" />
+          <button
+            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 text-left transition-colors"
+            onClick={() => act(onDelete)}
+          >
+            <Trash2 size={13} /> Eliminar
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -494,7 +604,7 @@ function UnreadBadge({ accountId }: { accountId: string }) {
   const { data } = useUnreadCount(accountId)
   if (!data) return null
   return (
-    <span className="ml-auto bg-sky-600 text-white text-[10px] font-semibold rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center">
+    <span className="ml-auto text-blue-600 text-[11px] font-semibold">
       {data > 99 ? '99+' : data}
     </span>
   )
@@ -504,7 +614,7 @@ function UnreadBadge({ accountId }: { accountId: string }) {
 
 function EmptyState({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full text-gray-600 gap-3 select-none">
+    <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3 select-none">
       <Icon size={36} className="opacity-30" />
       <p className="text-sm">{text}</p>
     </div>
@@ -568,6 +678,34 @@ export default function EmailDashboard() {
   const activeAccount = accounts.data?.find((a) => a.id === selectedAccountId) ?? accounts.data?.[0]
   const noAccounts = !accounts.isLoading && (!accounts.data || accounts.data.length === 0)
 
+  const deleteMsg = useDeleteEmailMessage()
+  const purgeMsg = usePurgeEmail()
+  const restoreMsg = useRestoreEmail()
+  const [sidebarW, setSidebarW] = useState(224)
+  const [listW, setListW] = useState(304)
+  const [contextMenu, setContextMenu] = useState<{ msg: EmailMessage; x: number; y: number } | null>(null)
+  const [replyTo, setReplyTo] = useState<{ msg: EmailMessage; mode: 'reply' | 'replyAll' | 'forward' } | null>(null)
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setContextMenu(null); return }
+      if (e.key !== 'Delete') return
+      const tag = (document.activeElement as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (!selectedMsg || !messages.data) return
+      const idx = messages.data.findIndex((m) => m.id === selectedMsg.id)
+      const next = messages.data[idx + 1] ?? messages.data[idx - 1] ?? null
+      if (folder === 'Trash') {
+        purgeMsg.mutate(selectedMsg.id)
+      } else {
+        deleteMsg.mutate(selectedMsg.id)
+      }
+      setSelectedMsg(next)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [selectedMsg, messages.data, deleteMsg, purgeMsg, folder])
+
   function selectFolder(key: string) {
     setFolder(key)
     setSelectedMsg(null)
@@ -584,18 +722,43 @@ export default function EmailDashboard() {
     })
   }
 
+  function startDrag(
+    e: React.MouseEvent,
+    setter: (w: number) => void,
+    min: number,
+    max: number,
+    currentW: number
+  ) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = currentW
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    const onMove = (ev: MouseEvent) => {
+      setter(Math.max(min, Math.min(max, startW + (ev.clientX - startX))))
+    }
+    const onUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
   if (noAccounts) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 bg-gray-950">
-        <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center">
-          <Mail size={32} className="text-gray-500" />
+      <div className="flex flex-col items-center justify-center h-full gap-4 bg-white">
+        <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
+          <Mail size={32} className="text-gray-400" />
         </div>
         <div className="text-center">
-          <p className="text-white font-medium">No hay cuentas de correo</p>
+          <p className="text-gray-900 font-medium">No hay cuentas de correo</p>
           <p className="text-gray-500 text-sm mt-1">Agregá una cuenta para empezar a leer tus emails</p>
         </div>
         <button onClick={() => setShowSetup(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm rounded-lg transition-colors">
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
           <Plus size={15} /> Agregar cuenta
         </button>
         {showSetup && <SetupModal onClose={() => setShowSetup(false)} onSaved={() => accounts.refetch()} />}
@@ -604,13 +767,13 @@ export default function EmailDashboard() {
   }
 
   return (
-    <div className="flex h-full bg-gray-950 text-white overflow-hidden">
+    <div className="flex h-full bg-white overflow-hidden" onClick={() => setContextMenu(null)}>
 
       {/* ── Folder sidebar ── */}
-      <div className="w-56 border-r border-gray-800 flex flex-col bg-gray-900 shrink-0">
-        <div className="p-3 border-b border-gray-800">
+      <div className="flex flex-col bg-white shrink-0" style={{ width: sidebarW }}>
+        <div className="p-3 border-b border-gray-200">
           <button onClick={() => setShowCompose(true)}
-            className="w-full flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg py-2 transition-colors">
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-full py-2 transition-colors">
             <Plus size={14} /> Redactar
           </button>
         </div>
@@ -625,7 +788,7 @@ export default function EmailDashboard() {
                 <button
                   onClick={() => selectAccount(acc.id)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors group
-                    ${isActive ? 'text-sky-300' : 'text-gray-400 hover:text-gray-200'}`}
+                    ${isActive ? 'text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
                 >
                   <div className={`w-5 h-5 rounded-full ${getAvatarColor(acc.email)} flex items-center justify-center text-[9px] font-bold text-white shrink-0`}>
                     {acc.email[0].toUpperCase()}
@@ -643,8 +806,8 @@ export default function EmailDashboard() {
                         onClick={() => { setSelectedAccountId(acc.id); selectFolder(key) }}
                         className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition-colors
                           ${folder === key && selectedAccountId === acc.id
-                            ? 'bg-sky-900/60 text-sky-300'
-                            : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800/60'}`}
+                            ? 'bg-blue-50 text-blue-700 font-semibold'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                       >
                         <Icon size={13} className="shrink-0" />
                         <span className="truncate">{label}</span>
@@ -659,36 +822,42 @@ export default function EmailDashboard() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-800 p-2">
+        <div className="border-t border-gray-200 p-2">
           <button onClick={() => setShowSetup(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors">
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
             <Settings size={13} /> Agregar cuenta
           </button>
         </div>
       </div>
 
+      {/* ── Resize handle: sidebar / list ── */}
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-blue-400 transition-colors select-none"
+        onMouseDown={(e) => startDrag(e, setSidebarW, 160, 320, sidebarW)}
+      />
+
       {/* ── Message list ── */}
-      <div className={`flex flex-col border-r border-gray-800 shrink-0 ${selectedMsg ? 'w-72' : 'w-96'}`}>
+      <div className="flex flex-col shrink-0" style={{ width: listW }}>
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-800 shrink-0">
-          <div className="flex-1 flex items-center gap-2 bg-gray-800 rounded-lg px-2.5 py-1.5">
-            <Search size={13} className="text-gray-500 shrink-0" />
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-200 shrink-0">
+          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-lg px-2.5 py-1.5">
+            <Search size={13} className="text-gray-400 shrink-0" />
             <input
               placeholder="Buscar en correos…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setSelectedMsg(null) }}
-              className="bg-transparent text-xs text-white placeholder-gray-600 outline-none flex-1"
+              className="bg-transparent text-xs text-gray-900 placeholder-gray-400 outline-none flex-1"
             />
           </div>
           <button
             onClick={() => { setOnlyUnread((v) => !v); setSelectedMsg(null) }}
-            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${onlyUnread ? 'bg-sky-600 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
+            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${onlyUnread ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
           >
             No leídos
           </button>
           <button
             onClick={() => { setOnlyStarred((v) => !v); setSelectedMsg(null) }}
-            className={`p-1.5 rounded-lg transition-colors ${onlyStarred ? 'text-amber-400' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
+            className={`p-1.5 rounded-lg transition-colors ${onlyStarred ? 'text-amber-500' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
           >
             <Star size={14} />
           </button>
@@ -696,7 +865,7 @@ export default function EmailDashboard() {
             onClick={() => activeAccount && sync.mutate({ accountId: activeAccount.id, folder })}
             disabled={sync.isPending}
             title="Sincronizar"
-            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <RefreshCw size={14} className={sync.isPending ? 'animate-spin' : ''} />
           </button>
@@ -704,13 +873,13 @@ export default function EmailDashboard() {
             <button
               onClick={() => setConfirmReset(true)}
               title="Re-sincronizar todo (borra mensajes locales y vuelve a descargar)"
-              className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-gray-800 transition-colors"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-gray-100 transition-colors"
             >
               <RotateCcw size={14} />
             </button>
           ) : (
-            <div className="flex items-center gap-1 bg-amber-950/60 border border-amber-800 rounded-lg px-2 py-1">
-              <span className="text-[10px] text-amber-400 whitespace-nowrap">¿Re-sincronizar todo?</span>
+            <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+              <span className="text-[10px] text-amber-700 whitespace-nowrap">¿Re-sincronizar todo?</span>
               <button
                 onClick={async () => {
                   setConfirmReset(false)
@@ -723,7 +892,7 @@ export default function EmailDashboard() {
               >
                 {resetSync.isPending ? '…' : 'Sí'}
               </button>
-              <button onClick={() => setConfirmReset(false)} className="text-gray-500 hover:text-gray-300">
+              <button onClick={() => setConfirmReset(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={11} />
               </button>
             </div>
@@ -732,18 +901,18 @@ export default function EmailDashboard() {
 
         {/* Progress bar */}
         {sync.isPending && (
-          <div className="px-3 py-2 border-b border-gray-800/60 shrink-0">
-            <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div className="px-3 py-2 border-b border-gray-200 shrink-0">
+            <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
               {syncProgress ? (
                 <div
-                  className="h-full bg-sky-500 rounded-full transition-all duration-200"
+                  className="h-full bg-blue-500 rounded-full transition-all duration-200"
                   style={{ width: `${Math.min(100, (syncProgress.synced / syncProgress.total) * 100)}%` }}
                 />
               ) : (
-                <div className="h-full bg-sky-500/60 rounded-full animate-pulse w-full" />
+                <div className="h-full bg-blue-400 rounded-full animate-pulse w-full" />
               )}
             </div>
-            <p className="text-[10px] text-gray-500 mt-1">
+            <p className="text-[10px] text-gray-400 mt-1">
               {syncProgress
                 ? `Descargando ${syncProgress.synced} / ${syncProgress.total} mensajes…`
                 : 'Conectando…'}
@@ -752,13 +921,13 @@ export default function EmailDashboard() {
         )}
 
         {/* Folder title + count */}
-        <div className="px-4 py-2 border-b border-gray-800 shrink-0">
+        <div className="px-4 py-2 border-b border-gray-200 shrink-0">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
               {FOLDER_DEFS.find((f) => f.key === folder)?.label ?? folder}
             </span>
             {messages.data && (
-              <span className="text-xs text-gray-600">{messages.data.length} mensajes</span>
+              <span className="text-xs text-gray-400">{messages.data.length} mensajes</span>
             )}
           </div>
         </div>
@@ -766,7 +935,7 @@ export default function EmailDashboard() {
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {messages.isLoading && (
-            <div className="flex items-center justify-center h-20 gap-2 text-gray-600 text-xs">
+            <div className="flex items-center justify-center h-20 gap-2 text-gray-400 text-xs">
               <RefreshCw size={13} className="animate-spin" /> Cargando…
             </div>
           )}
@@ -779,15 +948,43 @@ export default function EmailDashboard() {
               msg={msg}
               selected={selectedMsg?.id === msg.id}
               onClick={() => setSelectedMsg(msg)}
+              onContextMenu={(x, y) => { setSelectedMsg(msg); setContextMenu({ msg, x, y }) }}
             />
           ))}
         </div>
       </div>
 
+      {/* ── Resize handle: list / reading pane ── */}
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-blue-400 transition-colors select-none"
+        onMouseDown={(e) => startDrag(e, setListW, 220, 480, listW)}
+      />
+
       {/* ── Reading pane ── */}
       <div className="flex-1 overflow-hidden">
         {selectedMsg && activeAccount ? (
-          <MessageDetail message={selectedMsg} account={activeAccount} />
+          <MessageDetail
+            message={selectedMsg}
+            account={activeAccount}
+            onDelete={() => {
+              const idx = (messages.data ?? []).findIndex((m) => m.id === selectedMsg.id)
+              const next = (messages.data ?? [])[idx + 1] ?? (messages.data ?? [])[idx - 1] ?? null
+              deleteMsg.mutate(selectedMsg.id)
+              setSelectedMsg(next)
+            }}
+            onPurge={() => {
+              const idx = (messages.data ?? []).findIndex((m) => m.id === selectedMsg.id)
+              const next = (messages.data ?? [])[idx + 1] ?? (messages.data ?? [])[idx - 1] ?? null
+              purgeMsg.mutate(selectedMsg.id)
+              setSelectedMsg(next)
+            }}
+            onRestore={() => {
+              const idx = (messages.data ?? []).findIndex((m) => m.id === selectedMsg.id)
+              const next = (messages.data ?? [])[idx + 1] ?? (messages.data ?? [])[idx - 1] ?? null
+              restoreMsg.mutate(selectedMsg.id)
+              setSelectedMsg(next)
+            }}
+          />
         ) : (
           <EmptyState icon={Mail} text="Seleccioná un mensaje para leerlo" />
         )}
@@ -796,6 +993,57 @@ export default function EmailDashboard() {
       {showSetup && <SetupModal onClose={() => setShowSetup(false)} onSaved={() => accounts.refetch()} />}
       {showCompose && activeAccount && (
         <ComposeModal accountId={activeAccount.id} onClose={() => setShowCompose(false)} />
+      )}
+      {replyTo && activeAccount && (
+        <ComposeModal
+          accountId={activeAccount.id}
+          defaultTo={
+            replyTo.mode === 'reply' ? replyTo.msg.from_address :
+            replyTo.mode === 'replyAll'
+              ? [replyTo.msg.from_address, ...parseAddresses(replyTo.msg.to_addresses).map((a) => a.email)].join(', ')
+              : ''
+          }
+          defaultSubject={
+            replyTo.mode === 'forward'
+              ? (replyTo.msg.subject.startsWith('Fwd:') ? replyTo.msg.subject : `Fwd: ${replyTo.msg.subject}`)
+              : (replyTo.msg.subject.startsWith('Re:') ? replyTo.msg.subject : `Re: ${replyTo.msg.subject}`)
+          }
+          inReplyTo={replyTo.mode !== 'forward' ? replyTo.msg.message_id : undefined}
+          references={replyTo.mode !== 'forward' ? [replyTo.msg.thread_refs, replyTo.msg.message_id].filter(Boolean).join(' ') : undefined}
+          onClose={() => setReplyTo(null)}
+        />
+      )}
+      {contextMenu && (
+        <ContextMenu
+          msg={contextMenu.msg}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onReply={() => setReplyTo({ msg: contextMenu.msg, mode: 'reply' })}
+          onReplyAll={() => setReplyTo({ msg: contextMenu.msg, mode: 'replyAll' })}
+          onForward={() => setReplyTo({ msg: contextMenu.msg, mode: 'forward' })}
+          onDelete={() => {
+            const m = contextMenu.msg
+            const idx = (messages.data ?? []).findIndex((x) => x.id === m.id)
+            const next = (messages.data ?? [])[idx + 1] ?? (messages.data ?? [])[idx - 1] ?? null
+            deleteMsg.mutate(m.id)
+            if (selectedMsg?.id === m.id) setSelectedMsg(next)
+          }}
+          onPurge={() => {
+            const m = contextMenu.msg
+            const idx = (messages.data ?? []).findIndex((x) => x.id === m.id)
+            const next = (messages.data ?? [])[idx + 1] ?? (messages.data ?? [])[idx - 1] ?? null
+            purgeMsg.mutate(m.id)
+            if (selectedMsg?.id === m.id) setSelectedMsg(next)
+          }}
+          onRestore={() => {
+            const m = contextMenu.msg
+            const idx = (messages.data ?? []).findIndex((x) => x.id === m.id)
+            const next = (messages.data ?? [])[idx + 1] ?? (messages.data ?? [])[idx - 1] ?? null
+            restoreMsg.mutate(m.id)
+            if (selectedMsg?.id === m.id) setSelectedMsg(next)
+          }}
+        />
       )}
     </div>
   )
