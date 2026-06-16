@@ -1143,14 +1143,11 @@ const FINANCE_TABLES = [
   'finance_concepts',
   'finance_movements',
   'finance_movement_entries',
-  'finance_month_insights',
-  'company_finance_accounts',
-  'company_finance_categories',
-  'company_finance_payment_methods',
-  'company_finance_concepts',
-  'company_finance_movements',
-  'company_finance_movement_entries',
-  'company_finance_month_insights'
+  'finance_month_insights'
+  // company_finance_* se restauran via restoreCompanyFinanceLocalCache (escritura
+  // directa a ps_data__) porque el servidor PowerSync no tiene sync-rules para
+  // ellas — si se encolaran via ps_crud el servidor respondería con 0 filas y
+  // borraría ps_data__ en la reconciliación.
 ]
 
 async function migrateLegacyFinanceData(psDb: PowerSyncDatabase): Promise<void> {
