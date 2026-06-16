@@ -288,7 +288,18 @@ export function useAddCompanyMovementEntry() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: CreateFinanceMovementEntryInput) => window.api.companyFinance.movementEntries.add(data),
-    onSuccess:  (_entry, variables) => invalidateCompanyMovementEntries(qc, variables.movement_id)
+    onSuccess: (newEntry, variables) => {
+      // Patch the cache directly instead of invalidating — avoids a stale refetch that
+      // would race with any concurrent update mutations still in flight (e.g. amount/note
+      // commits triggered by blur when the user clicks "+ Agregar").
+      if (newEntry?.id) {
+        qc.setQueryData<FinanceMovementEntry[]>(
+          ['company-finance-movement-entries', variables.movement_id],
+          (old = []) => old.some(e => e.id === newEntry.id) ? old : [...old, newEntry]
+        )
+      }
+      invalidateCompanyFinanceMovements(qc)
+    }
   })
 }
 

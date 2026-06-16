@@ -1210,10 +1210,29 @@ function MovementsTable({
 function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFocus?: boolean; onSave: (v: number) => void }) {
   const [draft, setDraft] = useState(String(value))
   const ref = useRef<HTMLInputElement>(null)
+  const isFocused = useRef(false)
+  const onSaveRef = useRef(onSave)
+  const valueRef  = useRef(value)
+
+  useEffect(() => { onSaveRef.current = onSave }, [onSave])
+  useEffect(() => { valueRef.current  = value  }, [value])
+
+  useEffect(() => {
+    if (!isFocused.current) setDraft(String(value))
+  }, [value])
 
   useEffect(() => {
     if (autoFocus) ref.current?.focus()
   }, [autoFocus])
+
+  useEffect(() => {
+    const num = Number(draft.replace(',', '.'))
+    if (!Number.isFinite(num)) return
+    const timer = setTimeout(() => {
+      if (num !== valueRef.current) onSaveRef.current(num)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const commit = () => {
     const num = Number(draft.replace(',', '.'))
@@ -1227,10 +1246,11 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
       type="number"
       value={draft}
       onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
+      onFocus={() => { isFocused.current = true }}
+      onBlur={() => { isFocused.current = false; commit() }}
       onKeyDown={e => {
         if (e.key === 'Enter') { commit(); e.currentTarget.blur() }
-        if (e.key === 'Escape') setDraft(String(value))
+        if (e.key === 'Escape') { isFocused.current = false; setDraft(String(value)) }
       }}
       className="w-24 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
     />
@@ -1239,6 +1259,11 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
 
 function EntryNoteInput({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const [draft, setDraft] = useState(value)
+  const isFocused = useRef(false)
+
+  useEffect(() => {
+    if (!isFocused.current) setDraft(value)
+  }, [value])
 
   const commit = () => {
     if (draft !== value) onSave(draft)
@@ -1250,10 +1275,11 @@ function EntryNoteInput({ value, onSave }: { value: string; onSave: (v: string) 
       value={draft}
       placeholder="nota…"
       onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
+      onFocus={() => { isFocused.current = true }}
+      onBlur={() => { isFocused.current = false; commit() }}
       onKeyDown={e => {
         if (e.key === 'Enter') { commit(); e.currentTarget.blur() }
-        if (e.key === 'Escape') setDraft(value)
+        if (e.key === 'Escape') { isFocused.current = false; setDraft(value) }
       }}
       className="flex-1 min-w-0 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-400 placeholder:text-slate-600 focus:outline-none"
     />

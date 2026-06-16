@@ -424,13 +424,14 @@ async function recalcMovementFromEntries(db: SqlCtx, movementId: string): Promis
     WHERE movement_id = ?
   `, [movementId])
 
-  if (agg.n > 0) {
+  if (agg.n > 0 && agg.total > 0) {
     await db.execute(`
       UPDATE finance_movements
       SET amount_actual = ?, status = 'paid', payment_date = ?, updated_at = ?
       WHERE id = ?
     `, [agg.total, agg.lastDate, now, movementId])
   } else {
+    // Entries exist but all have amount=0 (freshly created), or no entries at all → pending
     await db.execute(`
       UPDATE finance_movements
       SET amount_actual = NULL, status = 'pending', payment_date = NULL, updated_at = ?

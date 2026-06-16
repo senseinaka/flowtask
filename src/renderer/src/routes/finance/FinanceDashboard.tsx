@@ -1259,6 +1259,11 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
 
 function EntryNoteInput({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const [draft, setDraft] = useState(value)
+  const isFocused = useRef(false)
+
+  useEffect(() => {
+    if (!isFocused.current) setDraft(value)
+  }, [value])
 
   const commit = () => {
     if (draft !== value) onSave(draft)
@@ -1270,10 +1275,11 @@ function EntryNoteInput({ value, onSave }: { value: string; onSave: (v: string) 
       value={draft}
       placeholder="nota…"
       onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
+      onFocus={() => { isFocused.current = true }}
+      onBlur={() => { isFocused.current = false; commit() }}
       onKeyDown={e => {
         if (e.key === 'Enter') { commit(); e.currentTarget.blur() }
-        if (e.key === 'Escape') setDraft(value)
+        if (e.key === 'Escape') { isFocused.current = false; setDraft(value) }
       }}
       className="flex-1 min-w-0 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-400 placeholder:text-slate-600 focus:outline-none"
     />
