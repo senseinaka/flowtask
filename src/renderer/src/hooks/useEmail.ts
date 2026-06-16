@@ -74,6 +74,14 @@ export function useSyncEmail() {
   })
 }
 
+export function useResetEmailSync() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (accountId: string) => window.api.email.resetSync(accountId),
+    onSuccess: (_data, accountId) => invalidateEmail(qc, accountId)
+  })
+}
+
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 export function useEmailMessages(filters: EmailListFilters) {

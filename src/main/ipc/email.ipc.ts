@@ -14,7 +14,8 @@ import {
   linkEmailToImport,
   deleteEmailMessage,
   getUnreadCount,
-  listEmailAttachments
+  listEmailAttachments,
+  resetEmailAccountSync
 } from '../database/queries/email'
 import {
   testImapConnection,
@@ -68,11 +69,22 @@ export function registerEmailIpc(): void {
   })
 
   // ── Sync ─────────────────────────────────────────────────────────────────────
-  ipcMain.handle('email:sync', async (_e, accountId: string, folder = 'INBOX') => {
+  ipcMain.handle('email:reset-sync', async (_e, accountId: string) => {
+    try {
+      await resetEmailAccountSync(accountId)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('email:sync', async (event, accountId: string, folder = 'INBOX') => {
     const account = await getEmailAccount(accountId)
     if (!account) return { ok: false, error: 'Cuenta no encontrada' }
     try {
-      await syncAccount(account, folder)
+      await syncAccount(account, folder, (synced, total) => {
+        event.sender.send('email:sync:progress', { accountId, synced, total })
+      })
       return { ok: true }
     } catch (e) {
       return { ok: false, error: (e as Error).message }

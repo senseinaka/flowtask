@@ -3,13 +3,14 @@ import {
   Mail, RefreshCw, Star, Paperclip, Send, Inbox,
   Plus, Settings, Search, Trash2, Reply, Forward,
   X, Check, AlertCircle, Pencil, ShieldOff, ArchiveX,
-  ChevronRight
+  ChevronRight, RotateCcw
 } from 'lucide-react'
 import {
   useEmailAccounts,
   useEmailMessages,
   useUnreadCount,
   useSyncEmail,
+  useResetEmailSync,
   useMarkEmailRead,
   useMarkEmailStarred,
   useDeleteEmailMessage,
@@ -521,6 +522,17 @@ export default function EmailDashboard() {
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
 
   const sync = useSyncEmail()
+  const resetSync = useResetEmailSync()
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [syncProgress, setSyncProgress] = useState<{ synced: number; total: number } | null>(null)
+
+  useEffect(() => {
+    if (!sync.isPending) { setSyncProgress(null); return }
+    const unsub = window.api.email.onSyncProgress((data) => {
+      if (data.accountId === activeAccount?.id) setSyncProgress({ synced: data.synced, total: data.total })
+    })
+    return unsub
+  }, [sync.isPending, activeAccount?.id])
 
   useEffect(() => {
     if (accounts.data?.length && !selectedAccountId) {
@@ -669,10 +681,39 @@ export default function EmailDashboard() {
           <button
             onClick={() => activeAccount && sync.mutate({ accountId: activeAccount.id, folder })}
             disabled={sync.isPending}
+            title="Sincronizar"
             className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
           >
             <RefreshCw size={14} className={sync.isPending ? 'animate-spin' : ''} />
           </button>
+          {!confirmReset ? (
+            <button
+              onClick={() => setConfirmReset(true)}
+              title="Re-sincronizar todo (borra mensajes locales y vuelve a descargar)"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-gray-800 transition-colors"
+            >
+              <RotateCcw size={14} />
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 bg-amber-950/60 border border-amber-800 rounded-lg px-2 py-1">
+              <span className="text-[10px] text-amber-400 whitespace-nowrap">¿Re-sincronizar todo?</span>
+              <button
+                onClick={async () => {
+                  setConfirmReset(false)
+                  if (!activeAccount) return
+                  await resetSync.mutateAsync(activeAccount.id)
+                  sync.mutate({ accountId: activeAccount.id, folder: 'INBOX' })
+                }}
+                disabled={resetSync.isPending}
+                className="px-1.5 py-0.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] rounded disabled:opacity-50"
+              >
+                {resetSync.isPending ? '…' : 'Sí'}
+              </button>
+              <button onClick={() => setConfirmReset(false)} className="text-gray-500 hover:text-gray-300">
+                <X size={11} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Folder title + count */}

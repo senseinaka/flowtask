@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { getDb } from '../db'
+import { getEmailDb as getDb } from '../email-db'
 import type {
   EmailAccount,
   EmailMessage,
@@ -78,6 +78,19 @@ export async function setLastUidInbox(accountId: string, uid: number): Promise<v
   getDb()
     .prepare(`UPDATE email_accounts SET last_uid_inbox = ?, updated_at = ? WHERE id = ?`)
     .run(uid, Date.now(), accountId)
+}
+
+export async function resetEmailAccountSync(accountId: string): Promise<void> {
+  const db = getDb()
+  const messageIds = db
+    .prepare('SELECT id FROM email_messages WHERE account_id = ?')
+    .all(accountId) as { id: string }[]
+  for (const { id } of messageIds) {
+    db.prepare('DELETE FROM email_attachments WHERE message_id = ?').run(id)
+  }
+  db.prepare('DELETE FROM email_messages WHERE account_id = ?').run(accountId)
+  db.prepare('UPDATE email_accounts SET last_uid_inbox = 0, updated_at = ? WHERE id = ?')
+    .run(Date.now(), accountId)
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────

@@ -911,7 +911,13 @@ const api = {
     folders: {
       list: (accountId: string): Promise<string[]> => ipcRenderer.invoke('email:folders:list', accountId)
     },
+    resetSync: (accountId: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('email:reset-sync', accountId),
     sync: (accountId: string, folder?: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('email:sync', accountId, folder ?? 'INBOX'),
+    onSyncProgress: (cb: (data: { accountId: string; synced: number; total: number }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { accountId: string; synced: number; total: number }) => cb(data)
+      ipcRenderer.on('email:sync:progress', handler)
+      return () => ipcRenderer.removeListener('email:sync:progress', handler)
+    },
     messages: {
       list: (filters: EmailListFilters): Promise<EmailMessage[]> => ipcRenderer.invoke('email:messages:list', filters),
       get: (id: string): Promise<EmailMessage | null> => ipcRenderer.invoke('email:messages:get', id),
