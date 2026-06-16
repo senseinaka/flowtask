@@ -389,28 +389,30 @@ function MessageDetail({ message, account }: { message: EmailMessage; account: E
       <div className="border-t border-gray-800 mx-6 shrink-0" />
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        {message.body_html ? (
-          <div
-            className="text-sm text-gray-200 leading-relaxed email-body"
-            dangerouslySetInnerHTML={{ __html: message.body_html }}
-          />
-        ) : (
-          <pre className="text-sm text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">{message.body_text}</pre>
-        )}
+      <div className="flex-1 overflow-y-auto bg-white">
+        <div className="px-6 py-5">
+          {message.body_html ? (
+            <div
+              className="text-sm text-gray-900 leading-relaxed email-body"
+              dangerouslySetInnerHTML={{ __html: message.body_html }}
+            />
+          ) : (
+            <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{message.body_text}</pre>
+          )}
+        </div>
 
         {attachments.data && attachments.data.length > 0 && (
-          <div className="border-t border-gray-800 pt-4 mt-6">
-            <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">
+          <div className="px-6 pb-5 border-t border-gray-200">
+            <p className="text-xs text-gray-400 mt-4 mb-3 font-medium uppercase tracking-wide">
               Adjuntos ({attachments.data.length})
             </p>
             <div className="flex flex-wrap gap-2">
               {attachments.data.map((att) => (
-                <div key={att.id} className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-300">
-                  <Paperclip size={11} className="text-gray-500" />
+                <div key={att.id} className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700">
+                  <Paperclip size={11} className="text-gray-400" />
                   <span>{att.filename}</span>
-                  <span className="text-gray-600">·</span>
-                  <span className="text-gray-500">{Math.round(att.size_bytes / 1024)} KB</span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-400">{Math.round(att.size_bytes / 1024)} KB</span>
                 </div>
               ))}
             </div>
@@ -441,36 +443,48 @@ function MessageRow({ msg, selected, onClick }: { msg: EmailMessage; selected: b
     ? (toAddrs[0]?.name || toAddrs[0]?.email || 'Enviado')
     : displayFrom(msg)
   const displayEmail = isSent ? (toAddrs[0]?.email ?? '') : msg.from_address
+  const markRead = useMarkEmailRead()
+  const isUnread = !msg.is_read
 
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-gray-800/60 transition-colors group
-        ${selected ? 'bg-sky-950/60 border-l-2 border-l-sky-500' : 'hover:bg-gray-800/40'}
-        ${!msg.is_read && !selected ? 'border-l-2 border-l-sky-500' : ''}`}
+    <div
+      className={`w-full flex border-b border-gray-800/60 transition-colors group
+        ${selected ? 'bg-sky-950/60' : 'hover:bg-gray-800/40'}`}
     >
-      <div className="flex items-start gap-3">
-        <SenderAvatar name={displayName} email={displayEmail} size="sm" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-sm truncate ${!msg.is_read ? 'font-semibold text-white' : 'text-gray-300'}`}>
-              {displayName}
-            </span>
-            <span className="text-[11px] text-gray-500 shrink-0">{formatDate(msg.sent_at)}</span>
+      {/* Unread dot — click to toggle read/unread */}
+      <button
+        onClick={(e) => { e.stopPropagation(); markRead.mutate({ id: msg.id, isRead: !isUnread }) }}
+        title={isUnread ? 'Marcar como leído' : 'Marcar como no leído'}
+        className="w-6 shrink-0 flex items-center justify-center self-stretch hover:bg-gray-700/40 transition-colors"
+      >
+        <span className={`w-2 h-2 rounded-full transition-colors ${isUnread ? 'bg-sky-500' : 'bg-transparent border border-gray-600 group-hover:border-gray-400'}`} />
+      </button>
+
+      {/* Main row — click to open */}
+      <button onClick={onClick} className="flex-1 text-left px-3 py-3 min-w-0">
+        <div className="flex items-start gap-3">
+          <SenderAvatar name={displayName} email={displayEmail} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-sm truncate ${isUnread ? 'font-bold text-white' : 'font-normal text-gray-300'}`}>
+                {displayName}
+              </span>
+              <span className="text-[11px] text-gray-500 shrink-0">{formatDate(msg.sent_at)}</span>
+            </div>
+            <p className={`text-xs truncate mt-0.5 ${isUnread ? 'font-semibold text-sky-400' : 'text-gray-400'}`}>
+              {msg.subject || '(sin asunto)'}
+            </p>
+            <p className="text-[11px] text-gray-600 truncate mt-0.5">
+              {msg.body_text.slice(0, 90).replace(/\s+/g, ' ')}
+            </p>
           </div>
-          <p className={`text-xs truncate mt-0.5 ${!msg.is_read ? 'font-medium text-gray-200' : 'text-gray-400'}`}>
-            {msg.subject || '(sin asunto)'}
-          </p>
-          <p className="text-[11px] text-gray-600 truncate mt-0.5">
-            {msg.body_text.slice(0, 90).replace(/\s+/g, ' ')}
-          </p>
+          <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+            {msg.is_starred && <Star size={11} className="text-amber-400 fill-amber-400" />}
+            {msg.has_attachments ? <Paperclip size={11} className="text-gray-600" /> : null}
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
-          {msg.is_starred && <Star size={11} className="text-amber-400 fill-amber-400" />}
-          {msg.has_attachments ? <Paperclip size={11} className="text-gray-600" /> : null}
-        </div>
-      </div>
-    </button>
+      </button>
+    </div>
   )
 }
 
@@ -529,10 +543,10 @@ export default function EmailDashboard() {
   useEffect(() => {
     if (!sync.isPending) { setSyncProgress(null); return }
     const unsub = window.api.email.onSyncProgress((data) => {
-      if (data.accountId === activeAccount?.id) setSyncProgress({ synced: data.synced, total: data.total })
+      if (data.accountId === selectedAccountId) setSyncProgress({ synced: data.synced, total: data.total })
     })
     return unsub
-  }, [sync.isPending, activeAccount?.id])
+  }, [sync.isPending, selectedAccountId])
 
   useEffect(() => {
     if (accounts.data?.length && !selectedAccountId) {
@@ -715,6 +729,27 @@ export default function EmailDashboard() {
             </div>
           )}
         </div>
+
+        {/* Progress bar */}
+        {sync.isPending && (
+          <div className="px-3 py-2 border-b border-gray-800/60 shrink-0">
+            <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+              {syncProgress ? (
+                <div
+                  className="h-full bg-sky-500 rounded-full transition-all duration-200"
+                  style={{ width: `${Math.min(100, (syncProgress.synced / syncProgress.total) * 100)}%` }}
+                />
+              ) : (
+                <div className="h-full bg-sky-500/60 rounded-full animate-pulse w-full" />
+              )}
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">
+              {syncProgress
+                ? `Descargando ${syncProgress.synced} / ${syncProgress.total} mensajes…`
+                : 'Conectando…'}
+            </p>
+          </div>
+        )}
 
         {/* Folder title + count */}
         <div className="px-4 py-2 border-b border-gray-800 shrink-0">

@@ -238,6 +238,8 @@ export default function Settings() {
   const [restoringFolder,   setRestoringFolder]   = useState<string | null>(null)
   const [confirmRestore,    setConfirmRestore]    = useState<string | null>(null)
   const [restoreMsg,        setRestoreMsg]        = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [restoreComexLoading, setRestoreComexLoading] = useState(false)
+  const [restoreComexMsg, setRestoreComexMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     window.api.backup.local.getStatus().then(setLocalBackupStatus)
@@ -252,6 +254,19 @@ export default function Settings() {
       setBackupIntervalHoursState(hours)
     } finally {
       setSavingInterval(false)
+    }
+  }
+
+  const handleRestoreComex = async () => {
+    setRestoreComexLoading(true)
+    setRestoreComexMsg(null)
+    try {
+      await window.api.powersync.restoreComex()
+      setRestoreComexMsg({ type: 'ok', text: 'Cache restaurado. Navega al módulo Comex para verificar.' })
+    } catch (err) {
+      setRestoreComexMsg({ type: 'error', text: err instanceof Error ? err.message : 'Error desconocido' })
+    } finally {
+      setRestoreComexLoading(false)
     }
   }
 
@@ -1113,6 +1128,36 @@ export default function Settings() {
                 </p>
               )}
             </div>
+          )}
+        </div>
+      </section>
+
+      {/* Comex — Restaurar caché local */}
+      <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <RefreshCw size={18} className="text-orange-400" />
+          <h2 className="font-semibold">Comex — Datos no visibles</h2>
+        </div>
+        <p className="text-sm text-slate-400">
+          Si los datos del módulo Comex (importaciones, proveedores, marcas) no aparecen,
+          usá este botón para restaurar el caché local de PowerSync desde la base de datos
+          principal. Es seguro y no modifica ningún dato existente.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRestoreComex}
+            disabled={restoreComexLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-orange-700 hover:bg-orange-600 text-white transition-colors disabled:opacity-50"
+          >
+            {restoreComexLoading
+              ? <><Loader2 size={14} className="animate-spin" /> Restaurando...</>
+              : <><RefreshCw size={14} /> Restaurar datos Comex</>
+            }
+          </button>
+          {restoreComexMsg && (
+            <p className={cn('text-xs', restoreComexMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400')}>
+              {restoreComexMsg.type === 'ok' ? '✓' : '✗'} {restoreComexMsg.text}
+            </p>
           )}
         </div>
       </section>
