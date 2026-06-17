@@ -493,19 +493,24 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:quote-files:list', (_e, quoteId: string) => listQuoteFiles(quoteId))
 
   ipcMain.handle('comex:quote-files:upload', async (_e, {
-    quoteId, importId, importTitle, importFolderId
-  }: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null }) => {
-    const win = BrowserWindow.getFocusedWindow()
-    const result = await dialog.showOpenDialog(win!, {
-      title: 'Seleccionar archivo de cotización',
-      properties: ['openFile'],
-      filters: [
-        { name: 'Documentos', extensions: ['pdf', 'xlsx', 'xls', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'zip', 'csv'] }
-      ]
-    })
-    if (result.canceled || !result.filePaths.length) return null
+    quoteId, importId, importTitle, importFolderId, filePath
+  }: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null; filePath?: string }) => {
+    let localPath: string
+    if (filePath) {
+      localPath = filePath
+    } else {
+      const win = BrowserWindow.getFocusedWindow()
+      const result = await dialog.showOpenDialog(win!, {
+        title: 'Seleccionar archivo de cotización',
+        properties: ['openFile'],
+        filters: [
+          { name: 'Documentos', extensions: ['pdf', 'xlsx', 'xls', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'zip', 'csv'] }
+        ]
+      })
+      if (result.canceled || !result.filePaths.length) return null
+      localPath = result.filePaths[0]
+    }
 
-    const localPath    = result.filePaths[0]
     const originalName = path.basename(localPath)
     const ext          = path.extname(localPath).toLowerCase()
     const mimeType     = getMimeType(ext)

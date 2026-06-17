@@ -173,6 +173,32 @@ create table if not exists public.comex_logistics_quotes (
 create index if not exists idx_comex_logistics_quotes_import on public.comex_logistics_quotes(import_id);
 create index if not exists idx_comex_logistics_quotes_operator on public.comex_logistics_quotes(operator_id);
 
+-- Columnas agregadas en migration 73 (presupuestos logísticos con HTML y archivos)
+alter table public.comex_logistics_quotes
+  add column if not exists quote_html         text not null default '',
+  add column if not exists quote_received_at  bigint;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- Archivos adjuntos de cotizaciones logísticas
+-- ════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.comex_quote_files (
+  id              text primary key,
+  quote_id        text not null references public.comex_logistics_quotes(id) on delete cascade,
+  import_id       text not null references public.comex_imports(id) on delete cascade,
+  file_name       text not null,
+  file_size       bigint,
+  drive_file_id   text not null default '',
+  drive_folder_id text,
+  mime_type       text not null default '',
+  workspace_id    text not null,
+  created_at      bigint not null,
+  updated_at      bigint not null
+);
+
+create index if not exists idx_comex_quote_files_quote  on public.comex_quote_files(quote_id);
+create index if not exists idx_comex_quote_files_import on public.comex_quote_files(import_id);
+
 -- ════════════════════════════════════════════════════════════════════════
 -- Pagos
 -- ════════════════════════════════════════════════════════════════════════
@@ -374,7 +400,7 @@ declare
   t text;
   tables text[] := array[
     'comex_imports', 'comex_import_items', 'comex_documents',
-    'comex_logistics_quotes', 'comex_payments', 'comex_import_customs',
+    'comex_logistics_quotes', 'comex_quote_files', 'comex_payments', 'comex_import_customs',
     'comex_import_costs', 'comex_inal_certs', 'comex_import_tributos',
     'comex_import_extra_costs', 'comex_proformas'
   ];
@@ -402,7 +428,7 @@ declare
   t text;
   tables text[] := array[
     'comex_imports', 'comex_import_items', 'comex_documents',
-    'comex_logistics_quotes', 'comex_payments', 'comex_import_customs',
+    'comex_logistics_quotes', 'comex_quote_files', 'comex_payments', 'comex_import_customs',
     'comex_import_costs', 'comex_inal_certs', 'comex_import_tributos',
     'comex_import_extra_costs', 'comex_proformas'
   ];

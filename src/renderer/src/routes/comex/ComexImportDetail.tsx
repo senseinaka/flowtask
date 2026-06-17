@@ -5884,6 +5884,18 @@ function QuoteRow({
   const { data: files = [] } = useComexQuoteFiles(expanded ? q.id : null)
   const uploadFile = useUploadComexQuoteFile()
   const deleteFile = useDeleteComexQuoteFile()
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(false)
+    const dropped = Array.from(e.dataTransfer.files)
+    for (const file of dropped) {
+      const filePath = (file as unknown as { path: string }).path
+      if (!filePath) continue
+      uploadFile.mutate({ quoteId: q.id, importId, importTitle: imp.title, importFolderId: imp.drive_folder_id ?? null, filePath })
+    }
+  }
 
   const statusColor = FREIGHT_QUOTE_STATUS_COLORS[q.status]
   const isSelected  = q.status === 'selected'
@@ -6027,34 +6039,50 @@ function QuoteRow({
                 Agregar archivo
               </button>
             </div>
-            {files.length === 0 ? (
-              <p className="text-[10px] text-slate-600 italic">Sin archivos adjuntos</p>
-            ) : (
-              <div className="space-y-1">
-                {files.map((f: ComexQuoteFile) => (
-                  <div key={f.id} className="flex items-center gap-2 group">
-                    <Paperclip size={10} className="text-slate-500 shrink-0" />
-                    <span className="text-[11px] text-slate-300 flex-1 truncate">{f.file_name}</span>
-                    {f.file_size && (
-                      <span className="text-[10px] text-slate-600 shrink-0">{formatBytes(f.file_size)}</span>
-                    )}
-                    <button
-                      onClick={() => window.api.comex.quotes.files.open(f.drive_file_id)}
-                      className="text-slate-600 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
-                      title="Abrir en Drive"
-                    >
-                      <ExternalLink size={10} />
-                    </button>
-                    <button
-                      onClick={() => deleteFile.mutate({ fileId: f.id, driveFileId: f.drive_file_id, quoteId: q.id })}
-                      className="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false) }}
+              onDrop={handleDrop}
+              className={cn(
+                'rounded-lg border border-dashed transition-colors',
+                isDragOver
+                  ? 'border-cyan-500 bg-cyan-950/30'
+                  : files.length > 0 ? 'border-transparent' : 'border-slate-700/40'
+              )}
+            >
+              {isDragOver ? (
+                <p className="text-[10px] text-cyan-400 text-center py-3">Soltá para subir</p>
+              ) : files.length === 0 ? (
+                <p className="text-[10px] text-slate-600 italic text-center py-2">
+                  Sin archivos adjuntos · arrastrá archivos acá
+                </p>
+              ) : (
+                <div className="space-y-1 py-1">
+                  {files.map((f: ComexQuoteFile) => (
+                    <div key={f.id} className="flex items-center gap-2 group px-1">
+                      <Paperclip size={10} className="text-slate-500 shrink-0" />
+                      <span className="text-[11px] text-slate-300 flex-1 truncate">{f.file_name}</span>
+                      {f.file_size && (
+                        <span className="text-[10px] text-slate-600 shrink-0">{formatBytes(f.file_size)}</span>
+                      )}
+                      <button
+                        onClick={() => window.api.comex.quotes.files.open(f.drive_file_id)}
+                        className="text-slate-600 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Abrir en Drive"
+                      >
+                        <ExternalLink size={10} />
+                      </button>
+                      <button
+                        onClick={() => deleteFile.mutate({ fileId: f.id, driveFileId: f.drive_file_id, quoteId: q.id })}
+                        className="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Acciones */}

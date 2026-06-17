@@ -1008,13 +1008,24 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
       let res: Response
 
       switch (op.op) {
-        case UpdateType.PUT:
+        case UpdateType.PUT: {
           res = await fetch(`${baseUrl}/${op.table}`, {
             method: 'POST',
             headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
             body: JSON.stringify({ ...op.opData, id: op.id })
           })
+          if (!res.ok && res.status === 404) {
+            const body = await res.text()
+            if (body.includes('PGRST205')) {
+              // Table doesn't exist in Supabase yet — skip to unblock the queue.
+              console.warn(`[PowerSync] PUT ${op.table}/${op.id}: tabla no existe en Supabase (PGRST205), omitiendo`)
+              res = new Response(null, { status: 200 })
+            } else {
+              throw new Error(`[PowerSync] PUT ${op.table}/${op.id} -> 404 ${body}`)
+            }
+          }
           break
+        }
         case UpdateType.PATCH: {
           const patchData = (op.opData ?? {}) as Record<string, unknown>
           res = await fetch(url, {
