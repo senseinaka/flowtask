@@ -324,16 +324,20 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
 
 // Los pasos que aparecen como nodos en la línea principal
 const TIMELINE_STEPS: ImportStatus[] = [
-  'planning', 'ordered', 'paid', 'production', 'shipped', 'transit',
+  'planning', 'ordered', 'paid', 'production', 'forwarder', 'shipped', 'transit',
   'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered'
 ]
 
 // Sub-estados del nodo "Proveedor" (production) — viven dentro del nodo 4
 const PROVEEDOR_SUB_STEPS: ImportStatus[] = ['production', 'carga_armada', 'esperando_embarcar']
 
+// Sub-estados del nodo "Forwarder" — viven dentro del nodo 5
+const FORWARDER_SUB_STEPS: ImportStatus[] = ['forwarder', 'cotizacion_pedida', 'forwarder_seleccionado']
+
 // Mapea cualquier status (incluyendo sub-estados) al paso principal de la línea
 function toMainStep(status: ImportStatus): ImportStatus {
   if (status === 'carga_armada' || status === 'esperando_embarcar') return 'production'
+  if (status === 'cotizacion_pedida' || status === 'forwarder_seleccionado') return 'forwarder'
   return status
 }
 
@@ -348,9 +352,12 @@ function getStepDate(step: ImportStatus, imp: ComexImport): { ts: number | null;
     case 'planning':            return { ts: imp.created_at }
     case 'ordered':             return { ts: imp.order_date }
     case 'paid':                return { ts: imp.payment_date }
-    case 'production':          return { ts: null }
-    case 'carga_armada':        return { ts: imp.carga_armada_date }
-    case 'esperando_embarcar':  return { ts: imp.esperando_embarcar_date }
+    case 'production':             return { ts: null }
+    case 'carga_armada':           return { ts: imp.carga_armada_date }
+    case 'esperando_embarcar':     return { ts: imp.esperando_embarcar_date }
+    case 'forwarder':              return { ts: null }
+    case 'cotizacion_pedida':      return { ts: null }
+    case 'forwarder_seleccionado': return { ts: null }
     case 'shipped':             return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
     case 'transit':             return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
     case 'arrived':             return { ts: imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date), isEstimate: !imp.aviso_arribo_date }
@@ -569,6 +576,208 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
   )
 }
 
+// ── Nodo especial para la etapa "Forwarder" (sub-pasos inline) ───────────────
+function ForwarderNode({ currentStatus, onChangeStatus, mainDone, mainActive }: {
+  currentStatus: ImportStatus
+  onChangeStatus: (s: ImportStatus) => void
+  mainDone: boolean
+  mainActive: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open])
+
+  const activeSubIdx = FORWARDER_SUB_STEPS.indexOf(currentStatus)
+  const effectiveSubIdx = activeSubIdx >= 0 ? activeSubIdx : (mainDone ? FORWARDER_SUB_STEPS.length - 1 : -1)
+
+  const mainColor = '#38bdf8' // sky — color del grupo forwarder
+
+  const subLabels: Record<string, string> = {
+    forwarder:              'Forwarder sin cotizar',
+    cotizacion_pedida:      'Forwarder cot. pedida',
+    forwarder_seleccionado: 'Forwarder seleccionado',
+  }
+
+  const mainLabelLines: Record<string, string[]> = {
+    forwarder:              ['Sin', 'cotizar'],
+    cotizacion_pedida:      ['Cot.', 'pedida'],
+    forwarder_seleccionado: ['Fwd.', 'selec.'],
+  }
+  const labelLines = mainLabelLines[currentStatus] ?? ['Sin', 'cotizar']
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative z-10 flex flex-col items-center flex-1 gap-1"
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Ver sub-estados del forwarder"
+        className="flex flex-col items-center gap-1 w-full group"
+      >
+        <div
+          className={cn(
+            'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
+            mainActive ? 'shadow-md scale-110' :
+            mainDone   ? 'opacity-90' :
+            open       ? 'border-sky-500/70 bg-sky-500/10' :
+            'border-slate-600 bg-slate-800 group-hover:border-slate-500'
+          )}
+          style={mainDone || mainActive ? {
+            borderColor: mainColor,
+            backgroundColor: mainDone ? mainColor + '33' : mainColor + '22',
+            boxShadow: mainActive || open ? `0 0 10px ${mainColor}55` : undefined
+          } : {}}
+        >
+          {mainDone && !mainActive ? (
+            <Check size={12} style={{ color: mainColor }} />
+          ) : (
+            <span
+              className="text-[9px] font-bold"
+              style={mainActive ? { color: mainColor } : { color: '#475569' }}
+            >
+              5
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col items-center gap-0">
+          {labelLines.map((line, i) => (
+            <span
+              key={i}
+              className={cn(
+                'text-[8px] leading-tight text-center transition-colors',
+                mainActive ? 'font-bold' : mainDone ? '' : 'text-slate-600 group-hover:text-slate-400'
+              )}
+              style={mainActive || mainDone ? { color: mainColor } : {}}
+            >
+              {line}
+            </span>
+          ))}
+        </div>
+
+        <span className="text-[7px] text-slate-700">—</span>
+
+        <ChevronDown
+          size={8}
+          className="transition-transform duration-200"
+          style={{
+            color: mainDone || mainActive ? mainColor + '99' : '#475569',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)'
+          }}
+        />
+      </button>
+
+      <div
+        className={cn(
+          'absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-20',
+          'bg-slate-900 border border-sky-900/50 rounded-lg shadow-xl shadow-black/50',
+          'transition-all duration-150 origin-top',
+          open ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+        )}
+        style={{ width: '170px' }}
+      >
+        <div
+          className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-1.5 overflow-hidden"
+        >
+          <div className="w-3 h-3 bg-slate-900 border-l border-t border-sky-900/50 rotate-45 translate-y-1/2 mx-auto" />
+        </div>
+
+        <div className="px-2.5 py-2 space-y-1">
+          {/* "Sin cotizar" — estado inicial no seleccionable */}
+          <div className="flex items-center gap-2 px-1 py-0.5 cursor-default">
+            <div
+              className="w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center"
+              style={effectiveSubIdx === 0 || (effectiveSubIdx < 0 && mainActive && currentStatus === 'forwarder') ? {
+                borderWidth: '2px', borderStyle: 'solid',
+                borderColor: IMPORT_STATUS_COLORS.forwarder,
+                backgroundColor: IMPORT_STATUS_COLORS.forwarder + '22',
+                boxShadow: `0 0 6px ${IMPORT_STATUS_COLORS.forwarder}66`
+              } : effectiveSubIdx > 0 || mainDone ? {
+                borderWidth: '1px', borderStyle: 'solid',
+                borderColor: IMPORT_STATUS_COLORS.forwarder,
+                backgroundColor: IMPORT_STATUS_COLORS.forwarder + '44'
+              } : { borderWidth: '1px', borderStyle: 'solid', borderColor: '#475569' }}
+            >
+              {(effectiveSubIdx > 0 || mainDone) && !mainActive && (
+                <Check size={7} style={{ color: IMPORT_STATUS_COLORS.forwarder }} />
+              )}
+            </div>
+            <div className="flex flex-col items-start">
+              <span className="text-[9px] leading-tight text-slate-500" style={currentStatus === 'forwarder' ? { color: IMPORT_STATUS_COLORS.forwarder, fontWeight: 'bold' } : {}}>
+                {subLabels.forwarder}
+              </span>
+            </div>
+          </div>
+
+          {/* Sub-estados seleccionables */}
+          {(['cotizacion_pedida', 'forwarder_seleccionado'] as ImportStatus[]).map((sub, i) => {
+            const subIdx    = i + 1
+            const subDone   = effectiveSubIdx > subIdx || mainDone
+            const subActive = currentStatus === sub
+            const subFuture = effectiveSubIdx < subIdx && !mainDone
+            const subColor  = IMPORT_STATUS_COLORS[sub]
+
+            return (
+              <button
+                key={sub}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onChangeStatus(sub)
+                  setOpen(false)
+                }}
+                className="w-full flex items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
+              >
+                <div
+                  className={cn(
+                    'w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
+                    subDone   ? '' :
+                    subActive ? 'border-2 scale-110' :
+                    'border border-slate-600'
+                  )}
+                  style={subDone || subActive ? {
+                    borderColor: subColor,
+                    backgroundColor: subDone ? subColor + '44' : subColor + '22',
+                    boxShadow: subActive ? `0 0 6px ${subColor}66` : undefined
+                  } : {}}
+                >
+                  {subDone && !subActive && <Check size={7} style={{ color: subColor }} />}
+                </div>
+                <div className="flex flex-col items-start min-w-0">
+                  <span
+                    className={cn(
+                      'text-[9px] leading-tight truncate transition-colors',
+                      subActive ? 'font-bold' : subFuture ? 'text-slate-600' : ''
+                    )}
+                    style={subDone || subActive ? { color: subColor } : {}}
+                  >
+                    {subLabels[sub]}
+                  </span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
   currentStatus: ImportStatus
   onChangeStatus: (s: ImportStatus) => void
@@ -608,6 +817,21 @@ function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
                   currentStatus={currentStatus}
                   onChangeStatus={onChangeStatus}
                   imp={imp}
+                  mainDone={mainDone}
+                  mainActive={mainActive}
+                />
+              )
+            }
+
+            // El nodo "forwarder" se renderiza como nodo compuesto de forwarder
+            if (step === 'forwarder') {
+              const mainDone   = currentMainIdx > idx
+              const mainActive = currentMainIdx === idx
+              return (
+                <ForwarderNode
+                  key={step}
+                  currentStatus={currentStatus}
+                  onChangeStatus={onChangeStatus}
                   mainDone={mainDone}
                   mainActive={mainActive}
                 />

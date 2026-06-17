@@ -380,6 +380,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 
 export type ImportStatus =
   | 'planning' | 'ordered' | 'paid' | 'production' | 'carga_armada' | 'esperando_embarcar'
+  | 'forwarder' | 'cotizacion_pedida' | 'forwarder_seleccionado'
   | 'shipped'  | 'transit' | 'arrived' | 'customs' | 'oficializado' | 'carga_deposito' | 'delivered'
 
 export type DocumentType =
@@ -395,13 +396,16 @@ export type FreightCompanyType = 'agente' | 'naviera' | 'courier' | 'aereo' | 'o
 export type CargoType          = 'LCL' | 'FCL' | 'aereo' | 'courier'
 
 export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
-  planning:           'Planificación',
-  ordered:            'Pedido enviado',
-  paid:               'Pago realizado',
-  production:         'En producción',
-  carga_armada:       'Carga armada',
-  esperando_embarcar: 'Esperando embarcar',
-  shipped:            'Embarcado',
+  planning:              'Planificación',
+  ordered:               'Pedido enviado',
+  paid:                  'Pago realizado',
+  production:            'En producción',
+  carga_armada:          'Carga armada',
+  esperando_embarcar:    'Esperando embarcar',
+  forwarder:             'Forwarder sin cotizar',
+  cotizacion_pedida:     'Forwarder cotización pedida',
+  forwarder_seleccionado:'Forwarder seleccionado',
+  shipped:               'Embarcado',
   transit:      'En tránsito',
   arrived:      'Arribado',
   customs:      'Traslado a depósito fiscal',
@@ -411,13 +415,16 @@ export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
 }
 
 export const IMPORT_STATUS_COLORS: Record<ImportStatus, string> = {
-  planning:           '#94a3b8',  // slate
-  ordered:            '#60a5fa',  // blue
-  paid:               '#34d399',  // emerald
-  production:         '#f59e0b',  // amber
-  carga_armada:       '#fb923c',  // orange — misma familia proveedor
-  esperando_embarcar: '#f97316',  // orange oscuro — misma familia proveedor
-  shipped:            '#6366f1',  // indigo
+  planning:              '#94a3b8',  // slate
+  ordered:               '#60a5fa',  // blue
+  paid:                  '#34d399',  // emerald
+  production:            '#f59e0b',  // amber
+  carga_armada:          '#fb923c',  // orange — misma familia proveedor
+  esperando_embarcar:    '#f97316',  // orange oscuro — misma familia proveedor
+  forwarder:             '#38bdf8',  // sky — grupo forwarder
+  cotizacion_pedida:     '#0ea5e9',  // sky oscuro
+  forwarder_seleccionado:'#0284c7',  // sky más oscuro
+  shipped:               '#6366f1',  // indigo
   transit:      '#8b5cf6',  // violet
   arrived:      '#06b6d4',  // cyan
   customs:      '#f97316',  // orange — Traslado a depósito
