@@ -842,6 +842,38 @@ export function useDeleteComexQuote() {
   })
 }
 
+// ── Quote Files ───────────────────────────────────────────────────────────────
+
+export function useComexQuoteFiles(quoteId: string | null) {
+  return useQuery({
+    queryKey: ['comex-quote-files', quoteId],
+    queryFn: () => window.api.comex.quotes.files.list(quoteId!),
+    enabled: !!quoteId
+  })
+}
+
+export function useUploadComexQuoteFile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null }) =>
+      window.api.comex.quotes.files.upload(params),
+    onSuccess: (file, { quoteId }) => {
+      if (file) qc.invalidateQueries({ queryKey: ['comex-quote-files', quoteId] })
+    }
+  })
+}
+
+export function useDeleteComexQuoteFile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ fileId, driveFileId }: { fileId: string; driveFileId: string; quoteId: string }) =>
+      window.api.comex.quotes.files.delete(fileId, driveFileId),
+    onSuccess: (_r, { quoteId }) => {
+      qc.invalidateQueries({ queryKey: ['comex-quote-files', quoteId] })
+    }
+  })
+}
+
 // ── INAL Certificates ─────────────────────────────────────────────────────────
 
 export function useComexInalCerts(importId: string | null) {

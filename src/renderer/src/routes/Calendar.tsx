@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List, Plus, Trash2, X } from 'lucide-react'
 import dayjs, { Dayjs } from 'dayjs'
@@ -30,7 +30,8 @@ const SOURCE_LABELS: Record<CalendarEventSource, string> = {
   comex_planning: 'Comex - Programación Pedidos'
 }
 
-function eventColor(ev: UnifiedCalendarEvent): string {
+function getEventColor(ev: UnifiedCalendarEvent, calendarColorMap: Map<string, string>): string {
+  if (ev.source === 'google') return calendarColorMap.get(ev.category) ?? SOURCE_COLORS.google
   return SOURCE_COLORS[ev.source] ?? '#64748b'
 }
 
@@ -56,6 +57,32 @@ export default function Calendar() {
   const [activeFilters, setActiveFilters] = useState<Set<CalendarEventSource>>(
     new Set(['google', 'finance', 'company_finance', 'comex_planning'])
   )
+  const [activeGoogleCalendars, setActiveGoogleCalendars] = useState<Set<string>>(new Set())
+  const googleCalendarsInitialized = useRef(false)
+
+  useEffect(() => {
+    if (calendars.length > 0 && !googleCalendarsInitialized.current) {
+      setActiveGoogleCalendars(new Set(calendars.map((c) => c.id)))
+      googleCalendarsInitialized.current = true
+    }
+  }, [calendars])
+
+  const calendarColorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const cal of calendars) {
+      if (cal.backgroundColor) map.set(cal.id, cal.backgroundColor)
+    }
+    return map
+  }, [calendars])
+
+  function toggleGoogleCalendar(calId: string) {
+    setActiveGoogleCalendars((prev) => {
+      const next = new Set(prev)
+      if (next.has(calId)) next.delete(calId)
+      else next.add(calId)
+      return next
+    })
+  }
 
   const { rangeStart, rangeEnd, days } = useMemo(() => {
     if (view === 'month') {
@@ -93,8 +120,12 @@ export default function Calendar() {
   })
 
   const filteredEvents = useMemo(
-    () => events.filter((ev) => activeFilters.has(ev.source)),
-    [events, activeFilters]
+    () => events.filter((ev) => {
+      if (!activeFilters.has(ev.source)) return false
+      if (ev.source === 'google') return activeGoogleCalendars.has(ev.category)
+      return true
+    }),
+    [events, activeFilters, activeGoogleCalendars]
   )
 
   const eventsByDay = useMemo(() => {
@@ -216,29 +247,6 @@ export default function Calendar() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {(Object.keys(SOURCE_LABELS) as CalendarEventSource[]).map((source) => (
-          <button
-            key={source}
-            onClick={() => toggleFilter(source)}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-              activeFilters.has(source)
-                ? 'border-transparent text-white'
-                : 'border-slate-700 text-slate-500 bg-transparent'
-            )}
-            style={activeFilters.has(source) ? { backgroundColor: SOURCE_COLORS[source] } : undefined}
-          >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: activeFilters.has(source) ? 'rgba(255,255,255,0.7)' : SOURCE_COLORS[source] }}
-            />
-            {SOURCE_LABELS[source]}
-          </button>
-        ))}
-      </div>
-
       {/* View selector + navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
@@ -273,16 +281,25 @@ export default function Calendar() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto">
-        {eventsLoading ? (
-          <div className="flex items-center justify-center h-40">
-            <Loader2 size={20} className="animate-spin text-slate-500" />
-          </div>
-        ) : view === 'agenda' ? (
-          <AgendaView events={filteredEvents} onEventClick={handleEventClick} />
-        ) : (
-          <MonthGrid days={days} eventsByDay={eventsByDay} onEventClick={handleEventClick} onDayClick={handleDayClick} cursor={cursor} view={view} />
-        )}
+      <div className="flex-1 flex gap-4 min-h-0">
+        <CalendarSidebar
+          calendars={calendars}
+          activeFilters={activeFilters}
+          activeGoogleCalendars={activeGoogleCalendars}
+          onToggleFilter={toggleFilter}
+          onToggleGoogleCalendar={toggleGoogleCalendar}
+        />
+        <div className="flex-1 overflow-auto">
+          {eventsLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <Loader2 size={20} className="animate-spin text-slate-500" />
+            </div>
+          ) : view === 'agenda' ? (
+            <AgendaView events={filteredEvents} onEventClick={handleEventClick} calendarColorMap={calendarColorMap} />
+          ) : (
+            <MonthGrid days={days} eventsByDay={eventsByDay} onEventClick={handleEventClick} onDayClick={handleDayClick} cursor={cursor} view={view} calendarColorMap={calendarColorMap} />
+          )}
+        </div>
       </div>
 
       {modal && (
@@ -299,7 +316,7 @@ export default function Calendar() {
 // ── Month/Week/Day grid ──────────────────────────────────────────────────────
 
 function MonthGrid({
-  days, eventsByDay, onEventClick, onDayClick, cursor, view
+  days, eventsByDay, onEventClick, onDayClick, cursor, view, calendarColorMap
 }: {
   days: Dayjs[]
   eventsByDay: Map<string, UnifiedCalendarEvent[]>
@@ -307,6 +324,7 @@ function MonthGrid({
   onDayClick: (day: Dayjs) => void
   cursor: Dayjs
   view: ViewMode
+  calendarColorMap: Map<string, string>
 }) {
   const cols = view === 'day' ? 1 : 7
 
@@ -354,7 +372,7 @@ function MonthGrid({
                         'block w-full text-left text-[11px] px-1.5 py-0.5 rounded truncate text-white',
                         clickable && 'cursor-pointer hover:opacity-80'
                       )}
-                      style={{ backgroundColor: eventColor(ev) }}
+                      style={{ backgroundColor: getEventColor(ev, calendarColorMap) }}
                     >
                       {!ev.all_day && `${dayjs(ev.start_at).format('HH:mm')} `}
                       {ev.title}
@@ -375,7 +393,7 @@ function MonthGrid({
 
 // ── Agenda (list) view ───────────────────────────────────────────────────────
 
-function AgendaView({ events, onEventClick }: { events: UnifiedCalendarEvent[]; onEventClick: (ev: UnifiedCalendarEvent) => void }) {
+function AgendaView({ events, onEventClick, calendarColorMap }: { events: UnifiedCalendarEvent[]; onEventClick: (ev: UnifiedCalendarEvent) => void; calendarColorMap: Map<string, string> }) {
   const byDay = useMemo(() => {
     const map = new Map<string, UnifiedCalendarEvent[]>()
     for (const ev of events) {
@@ -416,7 +434,7 @@ function AgendaView({ events, onEventClick }: { events: UnifiedCalendarEvent[]; 
                   clickable && 'hover:bg-slate-700/40 cursor-pointer'
                 )}
               >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: eventColor(ev) }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getEventColor(ev, calendarColorMap) }} />
                 <span className="text-xs text-slate-500 w-12 flex-shrink-0">
                   {ev.all_day ? 'Todo el día' : dayjs(ev.start_at).format('HH:mm')}
                 </span>
@@ -427,6 +445,104 @@ function AgendaView({ events, onEventClick }: { events: UnifiedCalendarEvent[]; 
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Calendar sidebar ─────────────────────────────────────────────────────────
+
+const SUMMIT_SOURCES: { source: CalendarEventSource; label: string; color: string }[] = [
+  { source: 'finance',         label: 'Finanzas Personal',            color: SOURCE_COLORS.finance },
+  { source: 'company_finance', label: 'Finanzas Empresa',             color: SOURCE_COLORS.company_finance },
+  { source: 'comex_planning',  label: 'Comex - Prog. Pedidos',        color: SOURCE_COLORS.comex_planning },
+]
+
+function CalendarSidebar({
+  calendars,
+  activeFilters,
+  activeGoogleCalendars,
+  onToggleFilter,
+  onToggleGoogleCalendar,
+}: {
+  calendars: GoogleCalendarInfo[]
+  activeFilters: Set<CalendarEventSource>
+  activeGoogleCalendars: Set<string>
+  onToggleFilter: (source: CalendarEventSource) => void
+  onToggleGoogleCalendar: (calId: string) => void
+}) {
+  return (
+    <div className="w-44 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+      {/* Google Calendar section */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-3">
+        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          Google Calendar
+        </p>
+        <div className="space-y-1.5">
+          {calendars.map((cal) => {
+            const active = activeGoogleCalendars.has(cal.id) && activeFilters.has('google')
+            return (
+              <button
+                key={cal.id}
+                onClick={() => {
+                  if (!activeFilters.has('google')) onToggleFilter('google')
+                  onToggleGoogleCalendar(cal.id)
+                }}
+                className="flex items-center gap-2 w-full text-left group"
+              >
+                <span
+                  className={cn(
+                    'w-3 h-3 rounded-sm flex-shrink-0 border transition-opacity',
+                    active ? 'opacity-100' : 'opacity-30'
+                  )}
+                  style={{ backgroundColor: cal.backgroundColor ?? SOURCE_COLORS.google, borderColor: cal.backgroundColor ?? SOURCE_COLORS.google }}
+                />
+                <span className={cn(
+                  'text-xs truncate transition-colors',
+                  active ? 'text-slate-200' : 'text-slate-500 group-hover:text-slate-400'
+                )}>
+                  {cal.summary}{cal.primary ? ' ★' : ''}
+                </span>
+              </button>
+            )
+          })}
+          {calendars.length === 0 && (
+            <p className="text-xs text-slate-600 italic">Sin calendarios</p>
+          )}
+        </div>
+      </div>
+
+      {/* Summit section */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-3">
+        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          Summit
+        </p>
+        <div className="space-y-1.5">
+          {SUMMIT_SOURCES.map(({ source, label, color }) => {
+            const active = activeFilters.has(source)
+            return (
+              <button
+                key={source}
+                onClick={() => onToggleFilter(source)}
+                className="flex items-center gap-2 w-full text-left group"
+              >
+                <span
+                  className={cn(
+                    'w-3 h-3 rounded-sm flex-shrink-0 border transition-opacity',
+                    active ? 'opacity-100' : 'opacity-30'
+                  )}
+                  style={{ backgroundColor: color, borderColor: color }}
+                />
+                <span className={cn(
+                  'text-xs truncate transition-colors',
+                  active ? 'text-slate-200' : 'text-slate-500 group-hover:text-slate-400'
+                )}>
+                  {label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

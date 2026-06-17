@@ -1210,19 +1210,35 @@ export interface ComexDocument {
 export interface ComexLogisticsQuote {
   id: string
   import_id: string
-  operator_id: string | null    // FK → comex_freight_operators
+  operator_id: string | null
   operator_name: string
   contact: string
-  cargo_type: CargoType         // LCL / FCL / aereo / courier
+  cargo_type: CargoType
   quote_amount: number | null
   currency: string
   services_included: string
   valid_until: number | null
   status: FreightQuoteStatus
-  rfq_sent_at: number | null    // when the RFQ email was sent
-  rfq_email_text: string        // copy of the email body sent
+  rfq_sent_at: number | null
+  rfq_email_text: string
   notes: string
+  quote_html: string
+  quote_received_at: number | null
   created_at: number
+}
+
+export interface ComexQuoteFile {
+  id: string
+  quote_id: string
+  import_id: string
+  file_name: string
+  file_size: number | null
+  drive_file_id: string
+  drive_folder_id: string | null
+  mime_type: string
+  workspace_id: string | null
+  created_at: number
+  updated_at: number
 }
 
 export interface ComexPayment {

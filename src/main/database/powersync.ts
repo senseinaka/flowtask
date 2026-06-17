@@ -529,9 +529,27 @@ const comex_logistics_quotes = new Table(
     rfq_sent_at: column.integer,
     rfq_email_text: column.text,
     workspace_id: column.text,
-    updated_at: column.integer
+    updated_at: column.integer,
+    quote_html: column.text,
+    quote_received_at: column.integer,
   },
   { indexes: { workspace: ['workspace_id'], import: ['import_id'], operator: ['operator_id'] } }
+)
+
+const comex_quote_files = new Table(
+  {
+    quote_id: column.text,
+    import_id: column.text,
+    file_name: column.text,
+    file_size: column.integer,
+    drive_file_id: column.text,
+    drive_folder_id: column.text,
+    mime_type: column.text,
+    workspace_id: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], quote: ['quote_id'], import: ['import_id'] } }
 )
 
 const comex_payments = new Table(
@@ -893,6 +911,7 @@ export const AppSchema = new Schema({
   comex_import_items,
   comex_documents,
   comex_logistics_quotes,
+  comex_quote_files,
   comex_payments,
   comex_import_customs,
   comex_import_costs,
@@ -1191,6 +1210,7 @@ const COMEX_IMPORTS_TABLES = [
   'comex_import_items',
   'comex_documents',
   'comex_logistics_quotes',
+  'comex_quote_files',
   'comex_payments',
   'comex_import_customs',
   'comex_import_costs',

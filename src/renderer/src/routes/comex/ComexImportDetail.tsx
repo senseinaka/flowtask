@@ -27,6 +27,9 @@ import {
   useCreateComexQuote,
   useUpdateComexQuote,
   useDeleteComexQuote,
+  useComexQuoteFiles,
+  useUploadComexQuoteFile,
+  useDeleteComexQuoteFile,
   useCreateComexDocument,
   useUpdateComexDocument,
   useDeleteComexDocument,
@@ -53,7 +56,7 @@ import type {
   ImportStatus, DocumentType, DocumentStatus, DriveDocStatus,
   PaymentMethod, ComexImport, ComexDocument, ComexInalCert,
   InalLCStatus,
-  ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexCustoms,
+  ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexQuoteFile, ComexCustoms,
   UpsertComexCustomsInput
 } from '@shared/types'
 import { cn, formatBytes } from '../../components/ui/utils'
@@ -5856,6 +5859,233 @@ function RFQModal({
   )
 }
 
+// ── Quote row expandible ──────────────────────────────────────────────────────
+
+function QuoteRow({
+  q, importId, imp, onSelect, onReject, onRestore, onDelete, onUpdate
+}: {
+  q: ComexLogisticsQuote
+  importId: string
+  imp: ComexImport
+  onSelect: () => void
+  onReject: () => void
+  onRestore: () => void
+  onDelete: () => void
+  onUpdate: (data: Partial<ComexLogisticsQuote>) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [htmlDraft, setHtmlDraft] = useState(q.quote_html ?? '')
+  const [previewHtml, setPreviewHtml] = useState(false)
+  const [receivedDate, setReceivedDate] = useState(
+    q.quote_received_at ? dayjs(q.quote_received_at).format('YYYY-MM-DD') : ''
+  )
+  const [saving, setSaving] = useState(false)
+
+  const { data: files = [] } = useComexQuoteFiles(expanded ? q.id : null)
+  const uploadFile = useUploadComexQuoteFile()
+  const deleteFile = useDeleteComexQuoteFile()
+
+  const statusColor = FREIGHT_QUOTE_STATUS_COLORS[q.status]
+  const isSelected  = q.status === 'selected'
+  const isRejected  = q.status === 'rejected'
+  const isRequested = q.status === 'requested'
+
+  async function handleSaveQuote() {
+    setSaving(true)
+    try {
+      onUpdate({
+        quote_html: htmlDraft,
+        quote_received_at: receivedDate ? dayjs(receivedDate).valueOf() : null,
+        status: q.status === 'requested' ? 'quoted' : q.status,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleUpload() {
+    await uploadFile.mutateAsync({
+      quoteId: q.id,
+      importId,
+      importTitle: imp.title,
+      importFolderId: imp.drive_folder_id ?? null,
+    })
+  }
+
+  return (
+    <div className={cn(
+      'border rounded-lg transition-colors',
+      isSelected ? 'border-emerald-600/50 bg-emerald-950/20' :
+      isRejected  ? 'border-slate-700/30 opacity-60' : 'border-slate-700/50'
+    )}>
+      {/* Header row */}
+      <div
+        className="flex items-center gap-3 p-3 cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <ChevronRight size={14} className={cn('text-slate-500 transition-transform shrink-0', expanded && 'rotate-90')} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs font-semibold text-slate-200">{q.operator_name}</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+              style={{ backgroundColor: statusColor + '22', color: statusColor }}>
+              {FREIGHT_QUOTE_STATUS_LABELS[q.status]}
+            </span>
+            {q.cargo_type && <span className="text-[10px] text-slate-500">{CARGO_TYPE_LABELS[q.cargo_type] ?? q.cargo_type}</span>}
+            {files.length > 0 && (
+              <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
+                <Paperclip size={9} /> {files.length}
+              </span>
+            )}
+          </div>
+          {q.contact && <p className="text-[10px] text-slate-500 mt-0.5">{q.contact}</p>}
+          {isRequested && q.rfq_sent_at && (
+            <p className="text-[10px] text-slate-600 mt-0.5">
+              Solicitud enviada {dayjs(q.rfq_sent_at).format('DD/MM/YYYY HH:mm')}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {q.quote_amount ? (
+            <span className="text-sm font-semibold text-cyan-400">
+              {q.currency} {q.quote_amount.toLocaleString('es-AR')}
+            </span>
+          ) : isRequested ? (
+            <span className="text-[10px] text-slate-500 italic">Esperando respuesta</span>
+          ) : null}
+          {isSelected && (
+            <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+              <Check size={11} /> Seleccionado
+            </span>
+          )}
+          <button onClick={onDelete} className="text-slate-700 hover:text-red-400 transition-colors">
+            <Trash2 size={11} />
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded panel */}
+      {expanded && (
+        <div className="border-t border-slate-700/50 p-3 space-y-3">
+          {/* Cotización recibida */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11px] font-medium text-slate-400">Cotización recibida</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPreviewHtml((v) => !v)}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  {previewHtml ? 'Editar' : 'Preview'}
+                </button>
+                <input
+                  type="date"
+                  value={receivedDate}
+                  onChange={(e) => setReceivedDate(e.target.value)}
+                  className="bg-slate-900 border border-slate-600 rounded px-2 py-0.5 text-[10px] text-white focus:outline-none focus:border-cyan-500"
+                  title="Fecha de recepción"
+                />
+              </div>
+            </div>
+            {previewHtml ? (
+              <div
+                className="w-full min-h-[120px] max-h-[320px] overflow-auto rounded border border-slate-600 bg-white p-2 text-xs"
+                dangerouslySetInnerHTML={{ __html: htmlDraft }}
+              />
+            ) : (
+              <textarea
+                value={htmlDraft}
+                onChange={(e) => setHtmlDraft(e.target.value)}
+                placeholder="Pegá el HTML de la cotización recibida por email..."
+                rows={6}
+                className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-[11px] text-slate-300 font-mono focus:outline-none focus:border-cyan-500 resize-y"
+              />
+            )}
+            <div className="flex justify-end mt-1.5">
+              <button
+                onClick={handleSaveQuote}
+                disabled={saving}
+                className="text-[10px] px-2.5 py-1 rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Guardando…' : 'Guardar cotización'}
+              </button>
+            </div>
+          </div>
+
+          {/* Archivos */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11px] font-medium text-slate-400">Archivos</p>
+              <button
+                onClick={handleUpload}
+                disabled={uploadFile.isPending}
+                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-cyan-400 transition-colors disabled:opacity-50"
+              >
+                {uploadFile.isPending
+                  ? <Loader2 size={10} className="animate-spin" />
+                  : <Upload size={10} />}
+                Agregar archivo
+              </button>
+            </div>
+            {files.length === 0 ? (
+              <p className="text-[10px] text-slate-600 italic">Sin archivos adjuntos</p>
+            ) : (
+              <div className="space-y-1">
+                {files.map((f: ComexQuoteFile) => (
+                  <div key={f.id} className="flex items-center gap-2 group">
+                    <Paperclip size={10} className="text-slate-500 shrink-0" />
+                    <span className="text-[11px] text-slate-300 flex-1 truncate">{f.file_name}</span>
+                    {f.file_size && (
+                      <span className="text-[10px] text-slate-600 shrink-0">{formatBytes(f.file_size)}</span>
+                    )}
+                    <button
+                      onClick={() => window.api.comex.quotes.files.open(f.drive_file_id)}
+                      className="text-slate-600 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Abrir en Drive"
+                    >
+                      <ExternalLink size={10} />
+                    </button>
+                    <button
+                      onClick={() => deleteFile.mutate({ fileId: f.id, driveFileId: f.drive_file_id, quoteId: q.id })}
+                      className="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Acciones */}
+          <div className="flex items-center justify-between pt-1 border-t border-slate-700/40">
+            <div className="flex items-center gap-2">
+              {isRejected && (
+                <button onClick={onRestore} className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors">
+                  Restaurar
+                </button>
+              )}
+              {!isRejected && !isSelected && (
+                <button onClick={onReject} className="text-[10px] text-slate-500 hover:text-red-400 transition-colors">
+                  Rechazar
+                </button>
+              )}
+            </div>
+            {!isSelected && !isRejected && !isRequested && (
+              <button
+                onClick={onSelect}
+                className="text-[10px] px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors"
+              >
+                ✓ Seleccionar este operador
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Quotes section (upgraded) ─────────────────────────────────────────────────
 
 function QuotesSection({
@@ -5917,7 +6147,7 @@ function QuotesSection({
         }
       />
 
-      {/* Quote table */}
+      {/* Quote list */}
       {quotes.length === 0 && !showManual ? (
         <p className="text-xs text-slate-500">
           Sin presupuestos. Usá{' '}
@@ -5926,72 +6156,19 @@ function QuotesSection({
         </p>
       ) : (
         <div className="space-y-2 mt-1">
-          {quotes.map((q) => {
-            const statusColor = FREIGHT_QUOTE_STATUS_COLORS[q.status]
-            const isSelected = q.status === 'selected'
-            const isRejected = q.status === 'rejected'
-            const isRequested = q.status === 'requested'
-            return (
-              <div key={q.id}
-                className={cn('border rounded-lg p-3 transition-colors',
-                  isSelected ? 'border-emerald-600/50 bg-emerald-950/20' :
-                  isRejected ? 'border-slate-700/30 opacity-50' : 'border-slate-700/50')}>
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-xs font-semibold text-slate-200">{q.operator_name}</p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: statusColor + '22', color: statusColor }}>
-                        {FREIGHT_QUOTE_STATUS_LABELS[q.status]}
-                      </span>
-                      {q.cargo_type && <span className="text-[10px] text-slate-500">{CARGO_TYPE_LABELS[q.cargo_type] ?? q.cargo_type}</span>}
-                    </div>
-                    {q.contact && <p className="text-[10px] text-slate-500 mt-0.5">{q.contact}</p>}
-                    {q.services_included && <p className="text-[10px] text-slate-500 mt-0.5">{q.services_included}</p>}
-                    {isRequested && q.rfq_sent_at && (
-                      <p className="text-[10px] text-slate-600 mt-0.5">
-                        Solicitud enviada {dayjs(q.rfq_sent_at).format('DD/MM/YYYY HH:mm')}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {q.quote_amount ? (
-                      <span className="text-sm font-semibold text-cyan-400">
-                        {q.currency} {q.quote_amount.toLocaleString('es-AR')}
-                      </span>
-                    ) : isRequested ? (
-                      <span className="text-[10px] text-slate-500 italic">Esperando respuesta</span>
-                    ) : null}
-                    {!isSelected && !isRejected && !isRequested && (
-                      <button onClick={() => select(q)}
-                        className="text-[10px] px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
-                        Seleccionar
-                      </button>
-                    )}
-                    {isSelected && (
-                      <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                        <Check size={11} /> Seleccionado
-                      </span>
-                    )}
-                    {!isRejected && !isSelected && (
-                      <button onClick={() => reject(q)} className="text-[10px] text-slate-600 hover:text-red-400 transition-colors">
-                        Rechazar
-                      </button>
-                    )}
-                    {isRejected && (
-                      <button onClick={() => restore(q)} className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
-                        Restaurar
-                      </button>
-                    )}
-                    <button onClick={() => deleteQuote.mutate({ id: q.id, importId })}
-                      className="text-slate-700 hover:text-red-400 transition-colors">
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {quotes.map((q) => (
+            <QuoteRow
+              key={q.id}
+              q={q}
+              importId={importId}
+              imp={imp}
+              onSelect={() => select(q)}
+              onReject={() => reject(q)}
+              onRestore={() => restore(q)}
+              onDelete={() => deleteQuote.mutate({ id: q.id, importId })}
+              onUpdate={(data) => updateQuote.mutate({ id: q.id, importId, data })}
+            />
+          ))}
         </div>
       )}
 

@@ -273,6 +273,43 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 
 ### Patrón: nodos compuestos en el timeline de importación (ProveedorNode / ForwarderNode)
 
+## Presupuestos logísticos — adjuntos y HTML de cotizaciones (migración 73)
+
+**Qué se agregó (junio 2026):**
+- Campo `quote_html` (HTML de la cotización recibida) y `quote_received_at` en `comex_logistics_quotes`
+- Tabla nueva `comex_quote_files` para adjuntos de cada cotización (archivos en Google Drive)
+- UI expandible por operador en `QuoteRow` con área de paste HTML, preview y lista de archivos
+
+**Supabase: SQL a ejecutar manualmente en el dashboard** (sin esto los campos nuevos no sincronizan):
+```sql
+ALTER TABLE comex_logistics_quotes ADD COLUMN IF NOT EXISTS quote_html TEXT NOT NULL DEFAULT '';
+ALTER TABLE comex_logistics_quotes ADD COLUMN IF NOT EXISTS quote_received_at BIGINT;
+
+CREATE TABLE IF NOT EXISTS comex_quote_files (
+  id              TEXT PRIMARY KEY,
+  quote_id        TEXT NOT NULL,
+  import_id       TEXT NOT NULL,
+  file_name       TEXT NOT NULL,
+  file_size       BIGINT,
+  drive_file_id   TEXT NOT NULL DEFAULT '',
+  drive_folder_id TEXT,
+  mime_type       TEXT NOT NULL DEFAULT '',
+  workspace_id    TEXT,
+  created_at      BIGINT NOT NULL,
+  updated_at      BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_quote_files_quote  ON comex_quote_files(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quote_files_import ON comex_quote_files(import_id);
+```
+
+También agregar `comex_quote_files` a las sync rules de PowerSync en el dashboard (seguir el mismo patrón que `comex_logistics_quotes`).
+
+**Drive:** Los archivos se guardan en `FlowTask Comex / {nombre importación} / Presupuestos Logísticos / {archivo}`.
+
+---
+
+## Patrón: nodos compuestos en el timeline de importación
+
 El timeline de comex (`ComexImportDetail.tsx`) tiene dos tipos de nodos:
 - **Nodo simple:** botón que llama `onChangeStatus(step)` directamente.
 - **Nodo compuesto:** abre un panel con sub-estados (expandible, click-outside + Escape para cerrar).

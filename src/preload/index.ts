@@ -14,7 +14,7 @@ import type {
   SyncResult, SyncStatus, PowerSyncStatusInfo, UpdateCheckResult, UpdateDownloadProgress,
   TaskStatusLogEntry, TaskType,
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert,
-  ComexLogisticsQuote, ComexPayment, ComexCustoms, ComexCostItem,
+  ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact,
   ComexBrand, CreateComexBrandInput,
@@ -277,7 +277,13 @@ const api = {
       list:   (importId: string):                       Promise<ComexLogisticsQuote[]> => ipcRenderer.invoke('comex:quotes:list', importId),
       create: (input: CreateComexQuoteInput):           Promise<ComexLogisticsQuote>   => ipcRenderer.invoke('comex:quotes:create', input),
       update: (id: string, data: Partial<ComexLogisticsQuote>): Promise<void>         => ipcRenderer.invoke('comex:quotes:update', id, data),
-      delete: (id: string):                             Promise<void>                  => ipcRenderer.invoke('comex:quotes:delete', id)
+      delete: (id: string):                             Promise<void>                  => ipcRenderer.invoke('comex:quotes:delete', id),
+      files: {
+        list:   (quoteId: string):                                              Promise<ComexQuoteFile[]>      => ipcRenderer.invoke('comex:quote-files:list', quoteId),
+        upload: (params: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null }): Promise<ComexQuoteFile | null> => ipcRenderer.invoke('comex:quote-files:upload', params),
+        delete: (fileId: string, driveFileId: string):                          Promise<void>                  => ipcRenderer.invoke('comex:quote-files:delete', { fileId, driveFileId }),
+        open:   (driveFileId: string):                                          Promise<void>                  => ipcRenderer.invoke('comex:quote-files:open', driveFileId),
+      }
     },
     payments: {
       list:   (importId: string):                       Promise<ComexPayment[]>       => ipcRenderer.invoke('comex:payments:list', importId),

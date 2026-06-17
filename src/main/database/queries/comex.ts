@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
-  ComexLogisticsQuote, ComexPayment, ComexCustoms, ComexCostItem,
+  ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
@@ -379,7 +379,8 @@ export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>
   const allowed = [
     'operator_id','operator_name','contact','cargo_type',
     'quote_amount','currency','services_included','valid_until',
-    'status','rfq_sent_at','rfq_email_text','notes'
+    'status','rfq_sent_at','rfq_email_text','notes',
+    'quote_html','quote_received_at'
   ]
   const sets: string[] = []
   const vals: unknown[] = []
@@ -394,6 +395,33 @@ export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>
 
 export async function deleteQuote(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_logistics_quotes WHERE id = ?', [id])
+}
+
+// ─── Quote Files ──────────────────────────────────────────────────────────────
+
+export async function listQuoteFiles(quoteId: string): Promise<ComexQuoteFile[]> {
+  return getPowerSyncDb().getAll<ComexQuoteFile>(
+    'SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC',
+    [quoteId]
+  )
+}
+
+export async function createQuoteFile(input: Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>): Promise<ComexQuoteFile> {
+  const db = getPowerSyncDb()
+  const id = randomUUID()
+  const now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_quote_files
+       (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
+     input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now]
+  )
+  return (await db.getOptional<ComexQuoteFile>('SELECT * FROM comex_quote_files WHERE id = ?', [id]))!
+}
+
+export async function deleteQuoteFile(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────

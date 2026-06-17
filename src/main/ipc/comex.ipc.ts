@@ -8,6 +8,7 @@ import {
   listItems, createItem, deleteItem,
   listDocuments, getDocument, createDocument, updateDocument, deleteDocument,
   listQuotes, createQuote, updateQuote, deleteQuote,
+  listQuoteFiles, createQuoteFile, deleteQuoteFile,
   listPayments, createPayment, updatePayment, deletePayment,
   getCustoms, upsertCustoms, listCosts, createCost, updateCost, deleteCost,
   listSupplierContacts, createSupplierContact, updateSupplierContact, deleteSupplierContact,
@@ -36,7 +37,7 @@ import { driveService } from '../services/drive.service'
 import { getAttachmentsDir } from '../database/db'
 import type {
   ComexSupplier, ComexImport, ComexDocument,
-  ComexLogisticsQuote, ComexPayment, ComexCostItem,
+  ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
@@ -487,6 +488,58 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:quotes:create', (_e, input: CreateComexQuoteInput) => createQuote(input))
   ipcMain.handle('comex:quotes:update', (_e, id: string, data: Partial<ComexLogisticsQuote>) => updateQuote(id, data))
   ipcMain.handle('comex:quotes:delete', (_e, id)                          => deleteQuote(id))
+
+  // ── Quote files (adjuntos de cotizaciones) ────────────────────────────────────
+  ipcMain.handle('comex:quote-files:list', (_e, quoteId: string) => listQuoteFiles(quoteId))
+
+  ipcMain.handle('comex:quote-files:upload', async (_e, {
+    quoteId, importId, importTitle, importFolderId
+  }: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null }) => {
+    const win = BrowserWindow.getFocusedWindow()
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Seleccionar archivo de cotización',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Documentos', extensions: ['pdf', 'xlsx', 'xls', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'zip', 'csv'] }
+      ]
+    })
+    if (result.canceled || !result.filePaths.length) return null
+
+    const localPath    = result.filePaths[0]
+    const originalName = path.basename(localPath)
+    const ext          = path.extname(localPath).toLowerCase()
+    const mimeType     = getMimeType(ext)
+    const stats        = fs.statSync(localPath)
+
+    let folderId = importFolderId
+    if (!folderId) {
+      const { folderId: newId } = await driveService.createImportFolder(importTitle)
+      await updateImport(importId, { drive_folder_id: newId })
+      folderId = newId
+    }
+    const quotesFolderId = await driveService.createSubfolder('Presupuestos Logísticos', folderId)
+    const driveFileId    = await driveService.uploadFileToFolder(localPath, quotesFolderId, originalName, mimeType)
+
+    return createQuoteFile({
+      quote_id:        quoteId,
+      import_id:       importId,
+      file_name:       originalName,
+      file_size:       stats.size,
+      drive_file_id:   driveFileId,
+      drive_folder_id: quotesFolderId,
+      mime_type:       mimeType,
+      workspace_id:    null,
+    } as Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>)
+  })
+
+  ipcMain.handle('comex:quote-files:delete', async (_e, { fileId, driveFileId }: { fileId: string; driveFileId: string }) => {
+    await driveService.deleteFile(driveFileId)
+    await deleteQuoteFile(fileId)
+  })
+
+  ipcMain.handle('comex:quote-files:open', (_e, driveFileId: string) => {
+    shell.openExternal(`https://drive.google.com/file/d/${driveFileId}/view`)
+  })
 
   // ── Payments ─────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:payments:list',   (_e, importId)                      => listPayments(importId))
