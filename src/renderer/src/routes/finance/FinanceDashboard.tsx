@@ -1016,7 +1016,22 @@ function MovementsTable({
     )
   }
 
+  const multiEntryIds = sorted.filter(m => m.concept?.tracks_multiple_entries).map(m => m.id)
+  const allCollapsed  = multiEntryIds.length > 0 && multiEntryIds.every(id => collapsedIds.has(id))
+
   return (
+    <>
+    {multiEntryIds.length > 0 && (
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => setCollapsedIds(allCollapsed ? new Set() : new Set(multiEntryIds))}
+          className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 rounded border border-slate-700 hover:border-slate-500 bg-slate-800/50"
+        >
+          <ChevronDown size={10} className={cn('transition-transform', !allCollapsed && 'rotate-180')} />
+          {allCollapsed ? 'Expandir todo' : 'Colapsar todo'}
+        </button>
+      </div>
+    )}
     <div className="overflow-x-auto rounded-xl border border-slate-800">
       <table className="w-full text-sm">
         <thead className="bg-slate-800/70 sticky top-0 z-10">
@@ -1189,6 +1204,7 @@ function MovementsTable({
         </tfoot>
       </table>
     </div>
+    </>
   )
 }
 
@@ -1355,7 +1371,8 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
       <div className="flex items-center gap-2 pt-0.5">
         <input
           ref={addRef}
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={draftAmount}
           onChange={e => setDraftAmount(e.target.value)}
           onKeyDown={e => {

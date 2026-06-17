@@ -250,7 +250,7 @@ function hydrateMovement(r: MovementRow): FinanceMovement {
     status: r.status, payment_method: r.payment_method,
     payment_date: r.payment_date, due_date: r.due_date, notes: r.notes,
     created_at: r.created_at, updated_at: r.updated_at,
-    entries_count: r.entries_count,
+    entries_count: r.entries_count ?? 0,
     concept: {
       id: r.concept_id, category_id: r.c_category_id, account_id: r.c_account_id,
       name: r.c_name, default_amount: r.c_default_amount,
@@ -277,13 +277,24 @@ const MOVEMENT_BASE_SELECT = `
          c.is_active as c_is_active, c.notes as c_notes,
          c.created_at as c_created_at, c.updated_at as c_updated_at,
          cat.name as cat_name, cat.icon as cat_icon, cat.color as cat_color,
-         acc.name as acc_name, acc.icon as acc_icon, acc.color as acc_color,
-         (SELECT COUNT(*) FROM finance_movement_entries fme WHERE fme.movement_id = m.id) as entries_count
+         acc.name as acc_name, acc.icon as acc_icon, acc.color as acc_color
   FROM finance_movements m
   JOIN finance_concepts c ON c.id = m.concept_id
   LEFT JOIN finance_categories cat ON cat.id = c.category_id
   LEFT JOIN finance_accounts   acc ON acc.id = c.account_id
 `
+
+function attachEntriesCounts(movements: FinanceMovement[]): void {
+  if (!movements.length) return
+  const flow = getDb()
+  const ids = movements.map(m => m.id)
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = flow.prepare(
+    `SELECT movement_id, COUNT(*) as cnt FROM finance_movement_entries WHERE movement_id IN (${placeholders}) GROUP BY movement_id`
+  ).all(...ids) as { movement_id: string; cnt: number }[]
+  const byId = new Map(rows.map(r => [r.movement_id, r.cnt]))
+  for (const m of movements) m.entries_count = byId.get(m.id) ?? 0
+}
 
 export async function listFinanceMovements(month: number, year: number): Promise<FinanceMovement[]> {
   const db = getPowerSyncDb()
@@ -294,6 +305,7 @@ export async function listFinanceMovements(month: number, year: number): Promise
   `, [month, year])
   const movements = rows.map(hydrateMovement)
   await attachPreviousMonthAmounts(db, movements, month, year)
+  attachEntriesCounts(movements)
   return movements
 }
 
