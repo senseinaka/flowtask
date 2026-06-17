@@ -229,9 +229,11 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 **Causa:** `type="number"` + locale argentino (coma como decimal) → Chromium/Electron rechaza caracteres del teclado.
 **Fix:** `type="text"` + `inputMode="decimal"` en ambos dashboards. El código ya parsea coma: `Number(value.replace(',', '.'))`.
 
-### Pendiente: sincronización de cargas entre dispositivos
+### Fix: sincronización de cargas y company_finance entre dispositivos (resuelto — junio 2025)
 
-`finance_movement_entries` y `company_finance_*` no sincronizan completamente (ver sección de arquitectura). Para resolverlo hay que:
-1. Agregar `finance_movement_entries` a los sync-rules del servidor PowerSync.
-2. En `addMovementEntry` / `updateMovementEntry` / `removeMovementEntry`: escribir también en PowerSync además de `flowtask.db`.
-3. Revisar si el servidor necesita el mismo tratamiento para `company_finance_movement_entries`.
+**Problema raíz:** los sync-rules del servidor PowerSync tenían typos en el workspace_id para la mayoría de las tablas (`...336fb5` en vez de `...336bf5`, y `finance_movement_entries` con un UUID completamente corrupto). El servidor devolvía 0 filas para esas tablas → PowerSync las borraba localmente en cada ciclo de sync.
+
+**Fix:**
+1. Corregidos los sync-rules en el dashboard de PowerSync (todos los workspace_id ahora son `d61a4071-1557-4f32-be5e-6443fb336bf5`).
+2. `addMovementEntry` / `updateMovementEntry` / `removeMovementEntry` (en ambos módulos): ahora escriben en `flowtask.db` Y en PowerSync dentro de la misma transacción (dual-write → Supabase).
+3. `restoreCompanyFinanceLocalCache` y `restoreComexLocalCache`: refactorizadas para usar `migrateLegacyTableData` en vez de escribir directamente a `ps_data__`. Así la primera ejecución sube los datos existentes a Supabase vía ps_crud.

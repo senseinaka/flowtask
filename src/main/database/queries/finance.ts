@@ -464,11 +464,17 @@ export async function addMovementEntry(data: CreateFinanceMovementEntryInput): P
   const flow = getDb()
   const id   = randomUUID()
   const now  = Date.now()
+  const entryDate = data.entry_date ?? now
+  const note = data.note ?? ''
   flow.prepare(`
     INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.movement_id, data.amount, data.entry_date ?? now, data.note ?? '', now, now, WORKSPACE_ID)
+  `).run(id, data.movement_id, data.amount, entryDate, note, now, now, WORKSPACE_ID)
   await psDb.writeTransaction(async (tx) => {
+    await tx.execute(
+      `INSERT OR IGNORE INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, data.movement_id, data.amount, entryDate, note, now, now, WORKSPACE_ID]
+    )
     await recalcMovementFromEntries(tx, data.movement_id)
   })
   return flow.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
@@ -490,6 +496,7 @@ export async function updateMovementEntry(id: string, data: UpdateFinanceMovemen
   flow.prepare(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
 
   await psDb.writeTransaction(async (tx) => {
+    await tx.execute(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`, vals)
     await recalcMovementFromEntries(tx, existing.movement_id)
   })
   return flow.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
@@ -502,6 +509,7 @@ export async function removeMovementEntry(id: string): Promise<void> {
   if (!existing) return
   flow.prepare('DELETE FROM finance_movement_entries WHERE id = ?').run(id)
   await psDb.writeTransaction(async (tx) => {
+    await tx.execute('DELETE FROM finance_movement_entries WHERE id = ?', [id])
     await recalcMovementFromEntries(tx, existing.movement_id)
   })
 }

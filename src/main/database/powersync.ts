@@ -1234,33 +1234,8 @@ async function migrateLegacyComexPlanningsData(psDb: PowerSyncDatabase): Promise
  */
 export async function restoreComexLocalCache(psDb?: PowerSyncDatabase): Promise<void> {
   psDb = psDb ?? getPowerSyncDb()
-  const flowDb = getDb()
   const allTables = [...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES]
-
-  for (const table of allTables) {
-    const psTable = `ps_data__${table}`
-
-    const { count } = await psDb.get<{ count: number }>(`SELECT COUNT(*) as count FROM "${psTable}"`)
-    if (count > 0) continue
-
-    let rows: Record<string, unknown>[]
-    try {
-      rows = flowDb.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[]
-    } catch {
-      continue
-    }
-    if (rows.length === 0) continue
-
-    console.log(`[PowerSync] restoreComexLocalCache: ${rows.length} filas → ${psTable}`)
-    for (const row of rows) {
-      const id = row['id'] as string
-      if (!id) continue
-      await psDb.execute(`INSERT OR IGNORE INTO "${psTable}" (id, data) VALUES (?, ?)`, [
-        id,
-        JSON.stringify(row)
-      ])
-    }
-  }
+  await migrateLegacyTableData(psDb, allTables)
 }
 
 /**
@@ -1279,8 +1254,7 @@ export async function restoreComexLocalCache(psDb?: PowerSyncDatabase): Promise<
  */
 export async function restoreCompanyFinanceLocalCache(psDb?: PowerSyncDatabase): Promise<void> {
   psDb = psDb ?? getPowerSyncDb()
-  const flowDb = getDb()
-  const tables = [
+  await migrateLegacyTableData(psDb, [
     'company_finance_accounts',
     'company_finance_categories',
     'company_finance_payment_methods',
@@ -1288,32 +1262,7 @@ export async function restoreCompanyFinanceLocalCache(psDb?: PowerSyncDatabase):
     'company_finance_movements',
     'company_finance_movement_entries',
     'company_finance_month_insights'
-  ]
-
-  for (const table of tables) {
-    const psTable = `ps_data__${table}`
-
-    const { count } = await psDb.get<{ count: number }>(`SELECT COUNT(*) as count FROM "${psTable}"`)
-    if (count > 0) continue
-
-    let rows: Record<string, unknown>[]
-    try {
-      rows = flowDb.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[]
-    } catch {
-      continue
-    }
-    if (rows.length === 0) continue
-
-    console.log(`[PowerSync] restoreCompanyFinanceLocalCache: ${rows.length} filas → ${psTable}`)
-    for (const row of rows) {
-      const id = row['id'] as string
-      if (!id) continue
-      await psDb.execute(`INSERT OR IGNORE INTO "${psTable}" (id, data) VALUES (?, ?)`, [
-        id,
-        JSON.stringify(row)
-      ])
-    }
-  }
+  ])
 }
 
 /**
