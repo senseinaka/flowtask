@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
+import { getDb } from '../db'
 import type {
   FinanceAccount, FinanceCategory, FinanceConcept, FinanceMovement,
   FinanceMovementEntry, CreateFinanceMovementEntryInput, UpdateFinanceMovementEntryInput,
@@ -407,22 +408,26 @@ export async function deleteFinanceMovement(id: string): Promise<void> {
 // solo; si se borran todas, vuelve a "Pendiente" con monto vacío.
 
 export async function listMovementEntries(movementId: string): Promise<FinanceMovementEntry[]> {
-  return getPowerSyncDb().getAll<FinanceMovementEntry>(`
+  return getDb().prepare(`
     SELECT * FROM finance_movement_entries
     WHERE movement_id = ?
     ORDER BY COALESCE(entry_date, created_at) ASC, created_at ASC
-  `, [movementId])
+  `).all(movementId) as FinanceMovementEntry[]
 }
 
-/** Recalcula amount_actual / status / payment_date del movimiento padre a partir de la suma de sus cargas. */
+/**
+ * Recalcula amount_actual / status / payment_date del movimiento padre a partir de la suma de sus cargas.
+ * Lee las entradas desde flowtask.db (better-sqlite3) y escribe el movimiento a PowerSync (→ Supabase).
+ */
 async function recalcMovementFromEntries(db: SqlCtx, movementId: string): Promise<void> {
-  const now = Date.now()
-  const agg = await db.get<{ total: number; n: number; lastDate: number | null }>(`
+  const now  = Date.now()
+  const flow = getDb()
+  const agg  = flow.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n,
            MAX(COALESCE(entry_date, created_at)) AS lastDate
     FROM finance_movement_entries
     WHERE movement_id = ?
-  `, [movementId])
+  `).get(movementId) as { total: number; n: number; lastDate: number | null }
 
   if (agg.n > 0 && agg.total > 0) {
     await db.execute(`
@@ -431,7 +436,6 @@ async function recalcMovementFromEntries(db: SqlCtx, movementId: string): Promis
       WHERE id = ?
     `, [agg.total, agg.lastDate, now, movementId])
   } else {
-    // Entries exist but all have amount=0 (freshly created), or no entries at all → pending
     await db.execute(`
       UPDATE finance_movements
       SET amount_actual = NULL, status = 'pending', payment_date = NULL, updated_at = ?
@@ -441,44 +445,48 @@ async function recalcMovementFromEntries(db: SqlCtx, movementId: string): Promis
 }
 
 export async function addMovementEntry(data: CreateFinanceMovementEntryInput): Promise<FinanceMovementEntry> {
-  const db  = getPowerSyncDb()
-  const id  = randomUUID()
-  const now = Date.now()
-  await db.writeTransaction(async (tx) => {
-    await tx.execute(`
-      INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, data.movement_id, data.amount, data.entry_date ?? now, data.note ?? '', now, now, WORKSPACE_ID])
+  const psDb = getPowerSyncDb()
+  const flow = getDb()
+  const id   = randomUUID()
+  const now  = Date.now()
+  flow.prepare(`
+    INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.movement_id, data.amount, data.entry_date ?? now, data.note ?? '', now, now, WORKSPACE_ID)
+  await psDb.writeTransaction(async (tx) => {
     await recalcMovementFromEntries(tx, data.movement_id)
   })
-  return (await db.getOptional<FinanceMovementEntry>('SELECT * FROM finance_movement_entries WHERE id = ?', [id]))!
+  return flow.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
 }
 
 export async function updateMovementEntry(id: string, data: UpdateFinanceMovementEntryInput): Promise<FinanceMovementEntry> {
-  const db  = getPowerSyncDb()
-  const now = Date.now()
-  const existing = await db.getOptional<FinanceMovementEntry>('SELECT * FROM finance_movement_entries WHERE id = ?', [id])
+  const psDb = getPowerSyncDb()
+  const flow = getDb()
+  const now  = Date.now()
+  const existing = flow.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry | undefined
   if (!existing) throw new Error('La carga que intentás editar ya no existe.')
 
-  await db.writeTransaction(async (tx) => {
-    const sets: string[] = []
-    const vals: unknown[] = []
-    if (data.amount !== undefined)     { sets.push('amount = ?');     vals.push(data.amount) }
-    if (data.entry_date !== undefined) { sets.push('entry_date = ?'); vals.push(data.entry_date) }
-    if (data.note !== undefined)       { sets.push('note = ?');       vals.push(data.note) }
-    sets.push('updated_at = ?'); vals.push(now); vals.push(id)
-    await tx.execute(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`, vals)
+  const sets: string[] = []
+  const vals: unknown[] = []
+  if (data.amount !== undefined)     { sets.push('amount = ?');     vals.push(data.amount) }
+  if (data.entry_date !== undefined) { sets.push('entry_date = ?'); vals.push(data.entry_date) }
+  if (data.note !== undefined)       { sets.push('note = ?');       vals.push(data.note) }
+  sets.push('updated_at = ?'); vals.push(now); vals.push(id)
+  flow.prepare(`UPDATE finance_movement_entries SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+
+  await psDb.writeTransaction(async (tx) => {
     await recalcMovementFromEntries(tx, existing.movement_id)
   })
-  return (await db.getOptional<FinanceMovementEntry>('SELECT * FROM finance_movement_entries WHERE id = ?', [id]))!
+  return flow.prepare('SELECT * FROM finance_movement_entries WHERE id = ?').get(id) as FinanceMovementEntry
 }
 
 export async function removeMovementEntry(id: string): Promise<void> {
-  const db = getPowerSyncDb()
-  const existing = await db.getOptional<{ movement_id: string }>('SELECT movement_id FROM finance_movement_entries WHERE id = ?', [id])
+  const psDb = getPowerSyncDb()
+  const flow = getDb()
+  const existing = flow.prepare('SELECT movement_id FROM finance_movement_entries WHERE id = ?').get(id) as { movement_id: string } | undefined
   if (!existing) return
-  await db.writeTransaction(async (tx) => {
-    await tx.execute('DELETE FROM finance_movement_entries WHERE id = ?', [id])
+  flow.prepare('DELETE FROM finance_movement_entries WHERE id = ?').run(id)
+  await psDb.writeTransaction(async (tx) => {
     await recalcMovementFromEntries(tx, existing.movement_id)
   })
 }
@@ -986,10 +994,10 @@ export async function confirmFinanceImport(
         }
         movementIdByConceptId.set(item.conceptId, movementId)
 
-        await tx.execute(`
+        getDb().prepare(`
           INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID])
+        `).run(randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID)
         await recalcMovementFromEntries(tx, movementId)
         imported++
         continue
