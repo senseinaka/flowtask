@@ -2391,6 +2391,60 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       if (!hasFMEWorkspace) db.exec(`ALTER TABLE finance_movement_entries ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5'`)
       if (!hasCFMEWorkspace) db.exec(`ALTER TABLE company_finance_movement_entries ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5'`)
     }
+  },
+  {
+    version: 72,
+    up: (db) => {
+      // Las cargas (movement_entries) viven en flowtask.db, pero su movimiento
+      // padre (finance_movements / company_finance_movements) ahora vive en la
+      // base separada que gestiona PowerSync. La FK movement_id → finance_movements(id),
+      // con foreign_keys = ON, rompe el alta de cargas para movimientos que solo
+      // existen en PowerSync (generados/sincronizados por ese camino):
+      // SQLITE_CONSTRAINT_FOREIGNKEY. Se recrea cada tabla sin esa FK — mismo
+      // criterio que la migración 63 para attachments/reminders cuando tasks
+      // pasó a PowerSync. La integridad referencial se maneja a nivel app
+      // (recalc por movement_id; borrado de cargas a mano en deleteMovement).
+      const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+      db.exec(`
+        CREATE TABLE finance_movement_entries_v2 (
+          id           TEXT PRIMARY KEY,
+          movement_id  TEXT NOT NULL,
+          amount       REAL NOT NULL,
+          entry_date   INTEGER,
+          note         TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL,
+          workspace_id TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'
+        );
+        INSERT INTO finance_movement_entries_v2
+          (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
+        SELECT id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id
+        FROM finance_movement_entries;
+        DROP TABLE finance_movement_entries;
+        ALTER TABLE finance_movement_entries_v2 RENAME TO finance_movement_entries;
+        CREATE INDEX IF NOT EXISTS idx_finance_movement_entries_movement
+          ON finance_movement_entries(movement_id);
+
+        CREATE TABLE company_finance_movement_entries_v2 (
+          id           TEXT PRIMARY KEY,
+          movement_id  TEXT NOT NULL,
+          amount       REAL NOT NULL,
+          entry_date   INTEGER,
+          note         TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL,
+          workspace_id TEXT NOT NULL DEFAULT '${WORKSPACE_ID}'
+        );
+        INSERT INTO company_finance_movement_entries_v2
+          (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
+        SELECT id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id
+        FROM company_finance_movement_entries;
+        DROP TABLE company_finance_movement_entries;
+        ALTER TABLE company_finance_movement_entries_v2 RENAME TO company_finance_movement_entries;
+        CREATE INDEX IF NOT EXISTS idx_company_finance_movement_entries_movement
+          ON company_finance_movement_entries(movement_id);
+      `)
+    }
   }
 ]
 

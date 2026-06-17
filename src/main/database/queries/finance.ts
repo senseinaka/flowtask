@@ -395,6 +395,9 @@ export async function quickUpdateFinanceMovement(id: string, data: {
 
 export async function deleteFinanceMovement(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM finance_movements WHERE id = ?', [id])
+  // Las cargas viven en flowtask.db y ya no tienen FK con ON DELETE CASCADE al
+  // movimiento (que vive en PowerSync), así que el borrado en cascada se hace acá.
+  getDb().prepare('DELETE FROM finance_movement_entries WHERE movement_id = ?').run(id)
 }
 
 // ── Registro de cargas — conceptos multi-carga (Opción C) ────────────────────
