@@ -1,6 +1,7 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import { randomUUID } from 'crypto'
 import {
   listSuppliers, getSupplier, createSupplier, updateSupplier, deleteSupplier,
@@ -493,10 +494,20 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:quote-files:list', (_e, quoteId: string) => listQuoteFiles(quoteId))
 
   ipcMain.handle('comex:quote-files:upload', async (_e, {
-    quoteId, importId, importTitle, importFolderId, filePath
-  }: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null; filePath?: string }) => {
+    quoteId, importId, importTitle, importFolderId, filePath, fileBuffer, fileName: dropFileName
+  }: {
+    quoteId: string; importId: string; importTitle: string; importFolderId: string | null
+    filePath?: string; fileBuffer?: number[]; fileName?: string
+  }) => {
     let localPath: string
-    if (filePath) {
+    let tmpPath: string | null = null
+
+    if (fileBuffer && dropFileName) {
+      // Drag-and-drop: renderer sent the raw bytes. Write to a temp file.
+      tmpPath = path.join(os.tmpdir(), `flowtask-quote-${Date.now()}-${dropFileName}`)
+      fs.writeFileSync(tmpPath, Buffer.from(fileBuffer))
+      localPath = tmpPath
+    } else if (filePath) {
       localPath = filePath
     } else {
       const win = BrowserWindow.getFocusedWindow()
@@ -511,30 +522,34 @@ export function registerComexIpc(): void {
       localPath = result.filePaths[0]
     }
 
-    const originalName = path.basename(localPath)
-    const ext          = path.extname(localPath).toLowerCase()
-    const mimeType     = getMimeType(ext)
-    const stats        = fs.statSync(localPath)
+    try {
+      const originalName = dropFileName ?? path.basename(localPath)
+      const ext          = path.extname(originalName).toLowerCase()
+      const mimeType     = getMimeType(ext) || (dropFileName ? 'application/octet-stream' : getMimeType(ext))
+      const stats        = fs.statSync(localPath)
 
-    let folderId = importFolderId
-    if (!folderId) {
-      const { folderId: newId } = await driveService.createImportFolder(importTitle)
-      await updateImport(importId, { drive_folder_id: newId })
-      folderId = newId
+      let folderId = importFolderId
+      if (!folderId) {
+        const { folderId: newId } = await driveService.createImportFolder(importTitle)
+        await updateImport(importId, { drive_folder_id: newId })
+        folderId = newId
+      }
+      const quotesFolderId = await driveService.createSubfolder('Presupuestos Logísticos', folderId)
+      const driveFileId    = await driveService.uploadFileToFolder(localPath, quotesFolderId, originalName, mimeType)
+
+      return createQuoteFile({
+        quote_id:        quoteId,
+        import_id:       importId,
+        file_name:       originalName,
+        file_size:       stats.size,
+        drive_file_id:   driveFileId,
+        drive_folder_id: quotesFolderId,
+        mime_type:       mimeType,
+        workspace_id:    null,
+      } as Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>)
+    } finally {
+      if (tmpPath) try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
     }
-    const quotesFolderId = await driveService.createSubfolder('Presupuestos Logísticos', folderId)
-    const driveFileId    = await driveService.uploadFileToFolder(localPath, quotesFolderId, originalName, mimeType)
-
-    return createQuoteFile({
-      quote_id:        quoteId,
-      import_id:       importId,
-      file_name:       originalName,
-      file_size:       stats.size,
-      drive_file_id:   driveFileId,
-      drive_folder_id: quotesFolderId,
-      mime_type:       mimeType,
-      workspace_id:    null,
-    } as Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>)
   })
 
   ipcMain.handle('comex:quote-files:delete', async (_e, { fileId, driveFileId }: { fileId: string; driveFileId: string }) => {

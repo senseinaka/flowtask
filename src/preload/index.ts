@@ -280,7 +280,7 @@ const api = {
       delete: (id: string):                             Promise<void>                  => ipcRenderer.invoke('comex:quotes:delete', id),
       files: {
         list:   (quoteId: string):                                              Promise<ComexQuoteFile[]>      => ipcRenderer.invoke('comex:quote-files:list', quoteId),
-        upload: (params: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null; filePath?: string }): Promise<ComexQuoteFile | null> => ipcRenderer.invoke('comex:quote-files:upload', params),
+        upload: (params: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null; filePath?: string; fileBuffer?: number[]; fileName?: string }): Promise<ComexQuoteFile | null> => ipcRenderer.invoke('comex:quote-files:upload', params),
         delete: (fileId: string, driveFileId: string):                          Promise<void>                  => ipcRenderer.invoke('comex:quote-files:delete', { fileId, driveFileId }),
         open:   (driveFileId: string):                                          Promise<void>                  => ipcRenderer.invoke('comex:quote-files:open', driveFileId),
       }

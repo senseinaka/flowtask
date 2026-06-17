@@ -5886,14 +5886,21 @@ function QuoteRow({
   const deleteFile = useDeleteComexQuoteFile()
   const [isDragOver, setIsDragOver] = useState(false)
 
-  function handleDrop(e: React.DragEvent) {
+  async function handleDrop(e: React.DragEvent) {
     e.preventDefault()
+    e.stopPropagation()
     setIsDragOver(false)
     const dropped = Array.from(e.dataTransfer.files)
     for (const file of dropped) {
-      const filePath = (file as unknown as { path: string }).path
-      if (!filePath) continue
-      uploadFile.mutate({ quoteId: q.id, importId, importTitle: imp.title, importFolderId: imp.drive_folder_id ?? null, filePath })
+      const buf = await file.arrayBuffer()
+      uploadFile.mutate({
+        quoteId: q.id,
+        importId,
+        importTitle: imp.title,
+        importFolderId: imp.drive_folder_id ?? null,
+        fileBuffer: Array.from(new Uint8Array(buf)),
+        fileName: file.name,
+      })
     }
   }
 

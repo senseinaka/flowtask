@@ -424,7 +424,7 @@ export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>
     try {
       const flowSets = localFields.map(k => `${k} = ?`).join(', ')
       const flowVals = [...localFields.map(k => (data as Record<string, unknown>)[k]), id]
-      getDb().prepare(`UPDATE comex_logistics_quotes SET ${flowSets} WHERE id = ?`).run(flowVals)
+      getDb().prepare(`UPDATE comex_logistics_quotes SET ${flowSets} WHERE id = ?`).run(...flowVals)
     } catch { /* column not yet in older installs — safe to ignore */ }
   }
 }
