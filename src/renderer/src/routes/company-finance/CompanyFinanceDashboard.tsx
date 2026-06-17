@@ -3066,6 +3066,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ amount: '', entry_date: '', note: '' })
   const [busy, setBusy] = useState(false)
+  const amountRef = useRef<HTMLInputElement>(null)
 
   const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
 
@@ -3097,6 +3098,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
         note:        draft.note.trim()
       })
       resetDraft()
+      amountRef.current?.focus()   // queda listo para cargar otra de inmediato
     } finally {
       setBusy(false)
     }
@@ -3210,6 +3212,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
 
       <div className="grid grid-cols-3 gap-2 pt-1">
         <input
+          ref={amountRef}
           type="number" value={draft.amount}
           onChange={e => setDraft(d => ({ ...d, amount: e.target.value }))}
           onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
