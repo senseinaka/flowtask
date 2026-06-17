@@ -86,6 +86,11 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Prevent Electron from navigating to dropped file URLs (would reload the app)
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault()
+  })
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {

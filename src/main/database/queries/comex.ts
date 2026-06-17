@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { getDb } from '../db'
 import { getPowerSyncDb } from '../powersync'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
@@ -342,7 +343,31 @@ export async function deleteDocument(id: string): Promise<void> {
 // ─── Logistics Quotes ─────────────────────────────────────────────────────────
 
 export async function listQuotes(importId: string): Promise<ComexLogisticsQuote[]> {
-  return getPowerSyncDb().getAll<ComexLogisticsQuote>('SELECT * FROM comex_logistics_quotes WHERE import_id = ? ORDER BY created_at DESC', [importId])
+  const rows = await getPowerSyncDb().getAll<ComexLogisticsQuote>(
+    'SELECT * FROM comex_logistics_quotes WHERE import_id = ? ORDER BY created_at DESC',
+    [importId]
+  )
+  // Merge quote_html / quote_received_at from flowtask.db.
+  // These fields can't reliably sync through PowerSync yet (Supabase schema cache issue),
+  // so the PowerSync sync download can overwrite them with empty values from Supabase.
+  // flowtask.db is not subject to that overwrite.
+  try {
+    const local = getDb()
+      .prepare('SELECT id, quote_html, quote_received_at FROM comex_logistics_quotes WHERE import_id = ?')
+      .all(importId) as { id: string; quote_html: string | null; quote_received_at: number | null }[]
+    const byId = new Map(local.map(r => [r.id, r]))
+    return rows.map(row => {
+      const l = byId.get(row.id)
+      if (!l) return row
+      return {
+        ...row,
+        quote_html: l.quote_html ?? row.quote_html ?? '',
+        quote_received_at: l.quote_received_at ?? row.quote_received_at ?? null,
+      }
+    })
+  } catch {
+    return rows
+  }
 }
 
 export async function createQuote(input: CreateComexQuoteInput): Promise<ComexLogisticsQuote> {
@@ -391,6 +416,17 @@ export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>
   sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
   await db.execute(`UPDATE comex_logistics_quotes SET ${sets.join(', ')} WHERE id = ?`, vals)
+
+  // Also persist quote_html / quote_received_at in flowtask.db so they survive
+  // PowerSync sync downloads that would overwrite psDb with the Supabase version.
+  const localFields = (['quote_html', 'quote_received_at'] as const).filter(k => k in data)
+  if (localFields.length) {
+    try {
+      const flowSets = localFields.map(k => `${k} = ?`).join(', ')
+      const flowVals = [...localFields.map(k => (data as Record<string, unknown>)[k]), id]
+      getDb().prepare(`UPDATE comex_logistics_quotes SET ${flowSets} WHERE id = ?`).run(flowVals)
+    } catch { /* column not yet in older installs — safe to ignore */ }
+  }
 }
 
 export async function deleteQuote(id: string): Promise<void> {
