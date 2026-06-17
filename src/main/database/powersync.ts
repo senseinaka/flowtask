@@ -1015,13 +1015,37 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
             body: JSON.stringify({ ...op.opData, id: op.id })
           })
           break
-        case UpdateType.PATCH:
+        case UpdateType.PATCH: {
+          const patchData = (op.opData ?? {}) as Record<string, unknown>
           res = await fetch(url, {
             method: 'PATCH',
             headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify(op.opData)
+            body: JSON.stringify(patchData)
           })
+          if (!res.ok && res.status === 400) {
+            const body = await res.text()
+            const m = body.match(/Could not find the '(\w+)' column/)
+            if (m) {
+              // PostgREST schema cache doesn't know a newly added column yet.
+              // Strip the offending column and retry once to unblock the queue.
+              const stripped = Object.fromEntries(Object.entries(patchData).filter(([k]) => k !== m[1]))
+              if (Object.keys(stripped).length > 0) {
+                const r2 = await fetch(url, {
+                  method: 'PATCH',
+                  headers: { ...headers, Prefer: 'return=minimal' },
+                  body: JSON.stringify(stripped)
+                })
+                if (!r2.ok) throw new Error(`[PowerSync] PATCH ${op.table}/${op.id} -> ${r2.status} ${await r2.text()}`)
+                res = r2
+              } else {
+                res = new Response(null, { status: 200 })
+              }
+            } else {
+              throw new Error(`[PowerSync] ${op.op} ${op.table}/${op.id} -> 400 ${body}`)
+            }
+          }
           break
+        }
         case UpdateType.DELETE:
           res = await fetch(url, { method: 'DELETE', headers: { ...headers, Prefer: 'return=minimal' } })
           break
