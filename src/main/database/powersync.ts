@@ -16,6 +16,8 @@ import {
 } from '@powersync/common'
 import type { PowerSyncStatusInfo } from '@shared/types'
 
+const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+
 const projects = new Table(
   {
     name: column.text,
