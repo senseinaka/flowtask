@@ -237,3 +237,56 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 1. Corregidos los sync-rules en el dashboard de PowerSync (todos los workspace_id ahora son `d61a4071-1557-4f32-be5e-6443fb336bf5`).
 2. `addMovementEntry` / `updateMovementEntry` / `removeMovementEntry` (en ambos módulos): ahora escriben en `flowtask.db` Y en PowerSync dentro de la misma transacción (dual-write → Supabase).
 3. `restoreCompanyFinanceLocalCache` y `restoreComexLocalCache`: refactorizadas para usar `migrateLegacyTableData` en vez de escribir directamente a `ps_data__`. Así la primera ejecución sube los datos existentes a Supabase vía ps_crud.
+
+### Fix: badge PowerSync mostraba "object Object" en lugar del error real (resuelto — junio 2025)
+
+**Causa:** `errorMessage()` en `powersync.ts` hacía `String(err)` cuando el error no era `instanceof Error`. Los errores de Postgres que devuelve PowerSync son objetos planos `{ message, code, hint }`, por lo que `String(obj)` = `[object Object]`.
+
+**Fix:** `errorMessage()` ahora extrae `obj.message`, luego `obj.error`, luego `JSON.stringify(obj)` como fallback. Si el badge de sync muestra un error incomprensible, revisar primero `errorMessage()` en `powersync.ts` (~línea 1485).
+
+**Regla:** nunca hacer `String(err)` ni `${err}` en catch blocks — siempre usar `errorMessage(err)` o `(err as Error).message` con guardia de tipo.
+
+### Fix: cola de sync bloqueada por string "null" en columnas numéricas (resuelto — junio 2025)
+
+**Causa:** filas de `comex_import_extra_costs` tenían el literal `"null"` (string) en columnas `REAL` (`percepcion_caba`, `percepcion_bsas`, `importe_iva`, etc.). Supabase rechazaba el upload con error `22P02` (tipo inválido) y bloqueaba **toda** la cola `ps_crud` — ningún cambio subía a Supabase mientras hubiera una fila así pendiente.
+
+**Síntoma:** badge de sync en error permanente, tooltip con `[object Object]` (antes del fix de errorMessage) o con el mensaje `22P02: invalid input syntax for type double precision`.
+
+**Fix:** `fixLegacyNullDoubleStrings()` en `powersync.ts`, que se llama en cada `connectPowerSync()`:
+- Recorre **todas** las filas de `comex_import_extra_costs` buscando `= 'null'` en las columnas numéricas conocidas.
+- Corrige en `flowtask.db` y en `powersync.db` (encola UPDATE a Supabase).
+- También corrige entradas en `ps_crud` que ya estuvieran pendientes con ese valor.
+
+**Regla:** si se agrega una nueva columna `REAL`/`DOUBLE` a `comex_import_extra_costs`, agregarla también a `EXTRA_COST_DOUBLE_COLS` en `powersync.ts`.
+
+### Fix: import_order_plannings subía con workspace_id = null (resuelto — junio 2025)
+
+**Causa:** `PLANNING_COLUMNS` en `comex.ts` no incluía `workspace_id`. El INSERT dinámico lo omitía → la fila llegaba a Supabase con `null` y era rechazada con error `23502` (NOT NULL violation). Lo mismo pasaba en `import_order_planning_milestones` y `import_order_planning_ai_reports`.
+
+**Síntoma:** badge de sync en error, mensaje `null value in column "workspace_id" of relation "import_order_plannings" violates not-null constraint`.
+
+**Fix:**
+- Agregado `workspace_id, WORKSPACE_ID` explícitamente en los tres INSERTs de `comex.ts`.
+- `fixNullWorkspaceIds()` en `powersync.ts` (corre en cada `connectPowerSync`): parchea filas existentes con `workspace_id = null` en esas tres tablas y corrige entradas pendientes en `ps_crud`.
+
+**Regla:** al crear un nuevo INSERT en `comex.ts` (o cualquier módulo que use PowerSync), siempre incluir `workspace_id = WORKSPACE_ID`. Si el INSERT usa columnas dinámicas (como `PLANNING_COLUMNS`), agregar `workspace_id` explícitamente fuera del array. Agregar la tabla a `TABLES_MISSING_WORKSPACE_ID` en `powersync.ts` solo si ya hay filas viejas sin workspace_id en producción.
+
+### Patrón: nodos compuestos en el timeline de importación (ProveedorNode / ForwarderNode)
+
+El timeline de comex (`ComexImportDetail.tsx`) tiene dos tipos de nodos:
+- **Nodo simple:** botón que llama `onChangeStatus(step)` directamente.
+- **Nodo compuesto:** abre un panel con sub-estados (expandible, click-outside + Escape para cerrar).
+
+Nodos compuestos existentes:
+- `ProveedorNode` (paso 4, color amber `#f59e0b`): sub-estados `production → carga_armada → esperando_embarcar`
+- `ForwarderNode` (paso 5, color sky `#38bdf8`): sub-estados `forwarder → cotizacion_pedida → forwarder_seleccionado`. El primer sub-estado ("Forwarder sin cotizar") es el estado inicial automático, no aparece como botón seleccionable en el panel.
+
+Para agregar un nuevo nodo compuesto:
+1. Agregar los nuevos valores a `ImportStatus` en `types.ts` + sus labels y colores.
+2. Agregar el paso principal a `TIMELINE_STEPS` (entre los pasos correctos).
+3. Agregar `NUEVO_SUB_STEPS` con los sub-estados.
+4. Actualizar `toMainStep()` para que los sub-estados mapeen al paso principal.
+5. Actualizar `getStepDate()` para los nuevos estados (puede devolver `{ ts: null }` si no hay fecha específica).
+6. Crear el componente `NuevoNode` copiando `ProveedorNode` o `ForwarderNode` como template.
+7. Agregar el `if (step === 'nuevo')` en el `.map()` de `ImportTimeline`.
+8. **No requiere migración de DB** — `status` es TEXT sin CHECK constraint en SQLite ni en Supabase.

@@ -1211,12 +1211,12 @@ export async function createPlanning(input: CreateImportOrderPlanningInput): Pro
 
   const placeholders = PLANNING_COLUMNS.map(() => '?').join(', ')
   await db.execute(`
-    INSERT INTO import_order_plannings (id, ${PLANNING_COLUMNS.join(', ')}, created_at, updated_at)
-    VALUES (?, ${placeholders}, ?, ?)
+    INSERT INTO import_order_plannings (id, ${PLANNING_COLUMNS.join(', ')}, workspace_id, created_at, updated_at)
+    VALUES (?, ${placeholders}, ?, ?, ?)
   `, [
     id,
     ...PLANNING_COLUMNS.map((col) => (merged as unknown as Record<string, unknown>)[col] ?? null),
-    now, now
+    WORKSPACE_ID, now, now
   ])
 
   if (result.milestoneDates) {
@@ -1224,12 +1224,12 @@ export async function createPlanning(input: CreateImportOrderPlanningInput): Pro
     for (const m of milestoneRecords) {
       await db.execute(`
         INSERT INTO import_order_planning_milestones
-          (id, planning_id, milestone_type, estimated_date, calculated_date, real_date, status, notes, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, planning_id, milestone_type, estimated_date, calculated_date, real_date, status, notes, sort_order, workspace_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         randomUUID(), m.planning_id, m.milestone_type,
         m.estimated_date, m.calculated_date, m.real_date,
-        m.status, m.notes, m.sort_order, now, now
+        m.status, m.notes, m.sort_order, WORKSPACE_ID, now, now
       ])
     }
   }
@@ -1337,13 +1337,13 @@ export async function createPlanningAIReport(input: CreateImportOrderPlanningAIR
   const now = Date.now()
   await db.execute(`
     INSERT INTO import_order_planning_ai_reports
-      (id, report_type, brand_id, supplier_id, period_start_date, period_end_date, summary, findings, recommendations, risks, generated_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, report_type, brand_id, supplier_id, period_start_date, period_end_date, summary, findings, recommendations, risks, generated_by, workspace_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, input.report_type, input.brand_id, input.supplier_id,
     input.period_start_date, input.period_end_date,
     input.summary, input.findings, input.recommendations, input.risks,
-    input.generated_by, now, now
+    input.generated_by, WORKSPACE_ID, now, now
   ])
   return (await getPlanningAIReport(id))!
 }

@@ -1304,41 +1304,71 @@ async function migrateLegacyTableData(psDb: PowerSyncDatabase, tables: string[])
  * pendiente en ps_crud con el valor "null", la corrige in-place para
  * desbloquear la cola.
  */
-const NULL_DOUBLE_FIXES: Record<string, string[]> = {
-  '9744eb8d-d707-423b-acf1-71f7a15d3a3c': ['percepcion_caba'],
-  'df2d2a49-fdbe-44f6-b73f-fa21b3acc1c1': ['percepcion_bsas'],
-  'b6a789b0-7388-46ba-8f28-d6e6781439fc': ['importe_iva', 'percepcion_caba', 'percepcion_bsas']
+// Tablas que alguna vez se insertaron sin workspace_id (quedó NULL → Supabase lo rechaza)
+const TABLES_MISSING_WORKSPACE_ID = [
+  'import_order_plannings',
+  'import_order_planning_milestones',
+  'import_order_planning_ai_reports',
+]
+
+async function fixNullWorkspaceIds(psDb: PowerSyncDatabase): Promise<void> {
+  const flowDb = getDb()
+  for (const table of TABLES_MISSING_WORKSPACE_ID) {
+    try {
+      // flowtask.db
+      const affected = flowDb
+        .prepare(`SELECT id FROM ${table} WHERE workspace_id IS NULL`)
+        .all() as { id: string }[]
+      for (const { id } of affected) {
+        flowDb.prepare(`UPDATE ${table} SET workspace_id = ? WHERE id = ?`).run(WORKSPACE_ID, id)
+        await psDb.execute(`UPDATE ${table} SET workspace_id = ? WHERE id = ?`, [WORKSPACE_ID, id])
+        console.log(`[PowerSync] Fix workspace_id en ${table}:`, id)
+      }
+    } catch { /* tabla puede no existir en instancias viejas */ }
+  }
+
+  // Corregir también entradas pendientes en ps_crud
+  const crudRows = await psDb.getAll<{ id: number; data: string }>('SELECT id, data FROM ps_crud')
+  for (const row of crudRows) {
+    let parsed: { type?: string; data?: Record<string, unknown> }
+    try { parsed = JSON.parse(row.data) } catch { continue }
+    if (!TABLES_MISSING_WORKSPACE_ID.includes(parsed.type ?? '')) continue
+    if (!parsed.data || parsed.data['workspace_id']) continue
+    parsed.data['workspace_id'] = WORKSPACE_ID
+    await psDb.execute('UPDATE ps_crud SET data = ? WHERE id = ?', [JSON.stringify(parsed), row.id])
+    console.log('[PowerSync] Fix workspace_id en ps_crud para', parsed.type)
+  }
 }
+
+// Columnas REAL/double en comex_import_extra_costs que pueden tener el string "null"
+const EXTRA_COST_DOUBLE_COLS = ['percepcion_caba', 'percepcion_bsas', 'importe_iva', 'importe', 'amount']
 
 async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void> {
   const flowDb = getDb()
 
-  for (const [id, cols] of Object.entries(NULL_DOUBLE_FIXES)) {
-    for (const col of cols) {
-      flowDb
-        .prepare(`UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ? AND ${col} = 'null'`)
-        .run(id)
-      await psDb.execute(
-        `UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ? AND ${col} = 'null'`,
-        [id]
-      )
-    }
+  // 1. Corregir en flowtask.db y powersync.db todas las filas afectadas (no solo IDs hardcodeados)
+  for (const col of EXTRA_COST_DOUBLE_COLS) {
+    try {
+      const affected = flowDb
+        .prepare(`SELECT id FROM comex_import_extra_costs WHERE ${col} = 'null'`)
+        .all() as { id: string }[]
+      for (const { id } of affected) {
+        flowDb.prepare(`UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ?`).run(id)
+        await psDb.execute(`UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ?`, [id])
+        console.log(`[PowerSync] Corregido ${col} = "null" → 0 en comex_import_extra_costs`, id)
+      }
+    } catch { /* columna puede no existir en versiones viejas */ }
   }
 
+  // 2. Corregir ps_crud pendiente para que no intente subir el string "null" a Supabase
   const crudRows = await psDb.getAll<{ id: number; data: string }>('SELECT id, data FROM ps_crud')
   for (const row of crudRows) {
-    const parsed = JSON.parse(row.data) as {
-      type?: string
-      id?: string
-      data?: Record<string, unknown>
-    }
-    if (parsed.type !== 'comex_import_extra_costs' || !parsed.id || !parsed.data) continue
-
-    const cols = NULL_DOUBLE_FIXES[parsed.id]
-    if (!cols) continue
+    let parsed: { type?: string; id?: string; data?: Record<string, unknown> }
+    try { parsed = JSON.parse(row.data) } catch { continue }
+    if (parsed.type !== 'comex_import_extra_costs' || !parsed.data) continue
 
     let changed = false
-    for (const col of cols) {
+    for (const col of EXTRA_COST_DOUBLE_COLS) {
       if (parsed.data[col] === 'null') {
         parsed.data[col] = 0
         changed = true
@@ -1458,6 +1488,7 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyComexMaestrosData(db)
   await migrateLegacyComexImportsData(db)
   await migrateLegacyComexPlanningsData(db)
+  await fixNullWorkspaceIds(db)
   await fixLegacyNullDoubleStrings(db)
   await backfillLogoData(db)
   for (const table of LOGO_TABLES) {
@@ -1484,6 +1515,13 @@ export async function disconnectPowerSync(): Promise<void> {
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
+  if (err && typeof err === 'object') {
+    const obj = err as Record<string, unknown>
+    if (typeof obj.message === 'string') return obj.message
+    if (typeof obj.error === 'string') return obj.error
+    if (typeof obj.hint === 'string') return `${obj.code ?? ''}: ${obj.message ?? obj.hint}`.trim()
+    try { return JSON.stringify(obj) } catch { /* */ }
+  }
   return String(err)
 }
 
