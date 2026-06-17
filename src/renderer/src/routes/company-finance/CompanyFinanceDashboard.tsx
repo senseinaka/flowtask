@@ -1291,7 +1291,6 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
   const add    = useAddCompanyMovementEntry()
   const update = useUpdateCompanyMovementEntry()
   const remove = useRemoveCompanyMovementEntry()
-  const [newEntryId, setNewEntryId] = useState<string | null>(null)
 
   const sorted = useMemo(
     () => [...entries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at)),
@@ -1299,29 +1298,25 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
   )
   const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
 
-  const handleAddEntry = () => {
-    add.mutate(
-      { movement_id: movementId, amount: 0, entry_date: dayjs().valueOf(), note: '' },
-      { onSuccess: (newEntry) => { if (newEntry?.id) setNewEntryId(newEntry.id) } }
-    )
+  // Alta en UN solo paso: el usuario tipea el monto y confirma (Enter o botón),
+  // y recién ahí se crea la carga con ese valor real. El viejo flujo en dos
+  // pasos (crear la carga en $0 y luego editar el monto inline) perdía el valor:
+  // el `invalidate` del alta re-renderizaba la tabla y descartaba la edición en
+  // curso antes de que se guardara — el bug "no guarda los valores". De paso, ya
+  // no quedan cargas fantasma en $0 si el usuario se arrepiente.
+  const [draftAmount, setDraftAmount] = useState('')
+  const addRef = useRef<HTMLInputElement>(null)
+  const draftNum = Number(draftAmount.replace(',', '.'))
+
+  const commitAdd = () => {
+    if (!Number.isFinite(draftNum) || draftNum <= 0) return
+    add.mutate({ movement_id: movementId, amount: draftNum, entry_date: dayjs().valueOf(), note: '' })
+    setDraftAmount('')
+    addRef.current?.focus()   // queda listo para cargar otra de inmediato
   }
 
   if (isLoading) {
     return <p className="text-[11px] text-slate-500 italic px-1">Cargando cargas…</p>
-  }
-  if (sorted.length === 0) {
-    return (
-      <div className="flex items-center gap-2 px-1">
-        <p className="text-[11px] text-slate-500 italic">"{conceptName}" todavía no tiene cargas este mes.</p>
-        <button
-          onClick={handleAddEntry}
-          disabled={add.isPending}
-          className="flex items-center gap-1 text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
-        >
-          <Plus size={11} /> Agregar
-        </button>
-      </div>
-    )
   }
 
   return (
@@ -1334,8 +1329,7 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
           </span>
           <EntryAmountInput
             value={e.amount}
-            autoFocus={e.id === newEntryId}
-            onSave={v => { update.mutate({ id: e.id, movementId, data: { amount: v } }); setNewEntryId(null) }}
+            onSave={v => update.mutate({ id: e.id, movementId, data: { amount: v } })}
           />
           <EntryNoteInput
             value={e.note ?? ''}
@@ -1353,11 +1347,28 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
           </button>
         </div>
       ))}
-      <div className="flex items-center gap-3 pt-0.5">
+
+      {sorted.length === 0 && (
+        <p className="text-[11px] text-slate-500 italic pb-0.5">"{conceptName}" todavía no tiene cargas este mes.</p>
+      )}
+
+      <div className="flex items-center gap-2 pt-0.5">
+        <input
+          ref={addRef}
+          type="number"
+          value={draftAmount}
+          onChange={e => setDraftAmount(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commitAdd() }
+            if (e.key === 'Escape') setDraftAmount('')
+          }}
+          placeholder="Monto…"
+          className="w-28 bg-slate-800 border border-slate-700 focus:border-emerald-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
+        />
         <button
-          onClick={handleAddEntry}
-          disabled={add.isPending}
-          className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-white border border-dashed border-purple-700/50 hover:bg-purple-600 hover:border-purple-600 disabled:opacity-50 rounded-lg px-2 py-1 transition-colors"
+          onClick={commitAdd}
+          disabled={add.isPending || !(draftNum > 0)}
+          className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-white border border-dashed border-purple-700/50 hover:bg-purple-600 hover:border-purple-600 disabled:opacity-40 rounded-lg px-2 py-1 transition-colors"
           title={`Agregar "${conceptName} ${sorted.length + 1}"`}
         >
           <Plus size={11} /> Agregar

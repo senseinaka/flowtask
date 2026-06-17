@@ -2385,10 +2385,11 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
   {
     version: 71,
     up: (db) => {
-      db.exec(`
-        ALTER TABLE finance_movement_entries ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5';
-        ALTER TABLE company_finance_movement_entries ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5';
-      `)
+      type ColInfo = { name: string }
+      const hasFMEWorkspace = (db.prepare('PRAGMA table_info(finance_movement_entries)').all() as ColInfo[]).some(c => c.name === 'workspace_id')
+      const hasCFMEWorkspace = (db.prepare('PRAGMA table_info(company_finance_movement_entries)').all() as ColInfo[]).some(c => c.name === 'workspace_id')
+      if (!hasFMEWorkspace) db.exec(`ALTER TABLE finance_movement_entries ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5'`)
+      if (!hasCFMEWorkspace) db.exec(`ALTER TABLE company_finance_movement_entries ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5'`)
     }
   }
 ]
