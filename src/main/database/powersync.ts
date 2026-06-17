@@ -1385,6 +1385,40 @@ async function backfillLogoData(psDb: PowerSyncDatabase): Promise<void> {
 }
 
 /**
+ * Detecta y elimina conceptos duplicados en company_finance_concepts (mismo nombre,
+ * IDs distintos). Ocurre cuando los sync-rules tenían un workspace_id incorrecto:
+ * restoreCompanyFinanceLocalCache llenaba ps_data__ con IDs de flowtask.db, y al
+ * corregir los sync-rules el servidor bajaba además los IDs que habían subido vía
+ * ps_crud → dos fuentes, mismo nombre, IDs distintos.
+ * Si detecta duplicados, borra TODOS los datos de company_finance desde PowerSync
+ * (lo que encola DELETEs hacia Supabase) para que restoreCompanyFinanceLocalCache
+ * re-suba todo limpio desde flowtask.db en el mismo arranque.
+ */
+async function cleanupCompanyFinanceDuplicates(psDb: PowerSyncDatabase): Promise<void> {
+  const { dupes } = await psDb.get<{ dupes: number }>(`
+    SELECT COUNT(*) as dupes FROM (
+      SELECT name FROM company_finance_concepts GROUP BY name HAVING COUNT(*) > 1
+    )
+  `)
+  if (dupes === 0) return
+
+  console.log(`[PowerSync] Detectados ${dupes} conceptos duplicados en company_finance. Limpiando...`)
+  const ordered = [
+    'company_finance_movement_entries',
+    'company_finance_month_insights',
+    'company_finance_movements',
+    'company_finance_concepts',
+    'company_finance_payment_methods',
+    'company_finance_categories',
+    'company_finance_accounts',
+  ]
+  for (const t of ordered) {
+    await psDb.execute(`DELETE FROM ${t} WHERE 1=1`)
+  }
+  console.log('[PowerSync] company_finance limpiado. Se re-sube desde flowtask.db.')
+}
+
+/**
  * Conecta la instancia de PowerSync al backend, en paralelo a better-sqlite3.
  * Antes de conectar, copia los datos existentes de tasks/projects/task_dependencies
  * (Fase 1), de user_permissions (Fase 6) y de Finanzas/Finanzas Empresa
@@ -1418,6 +1452,7 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyTaskData(db)
   await migrateUserPermissions(db)
   await migrateLegacyFinanceData(db)
+  await cleanupCompanyFinanceDuplicates(db)
   await restoreCompanyFinanceLocalCache(db)
   await restoreComexLocalCache(db)
   await migrateLegacyComexMaestrosData(db)
