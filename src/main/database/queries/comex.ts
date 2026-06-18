@@ -436,28 +436,50 @@ export async function deleteQuote(id: string): Promise<void> {
 // ─── Quote Files ──────────────────────────────────────────────────────────────
 
 export async function listQuoteFiles(quoteId: string): Promise<ComexQuoteFile[]> {
-  return getPowerSyncDb().getAll<ComexQuoteFile>(
-    'SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC',
-    [quoteId]
-  )
+  // comex_quote_files vive en flowtask.db (fuente de verdad) para sobrevivir
+  // la reconciliación de PowerSync que puede limpiar psDb si no hay sync-rules.
+  // psDb recibe el INSERT solo para que PowerSync lo suba a Supabase.
+  try {
+    return getDb()
+      .prepare('SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC')
+      .all(quoteId) as ComexQuoteFile[]
+  } catch {
+    return getPowerSyncDb().getAll<ComexQuoteFile>(
+      'SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC',
+      [quoteId]
+    )
+  }
 }
 
 export async function createQuoteFile(input: Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>): Promise<ComexQuoteFile> {
-  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  await db.execute(
-    `INSERT INTO comex_quote_files
-       (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
-     input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now]
-  )
-  return (await db.getOptional<ComexQuoteFile>('SELECT * FROM comex_quote_files WHERE id = ?', [id]))!
+  // Escribir en flowtask.db como fuente de verdad persistente
+  getDb().prepare(`
+    INSERT INTO comex_quote_files
+      (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
+         input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now)
+  // También en psDb para que PowerSync lo suba a Supabase
+  try {
+    await getPowerSyncDb().execute(
+      `INSERT INTO comex_quote_files
+         (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
+       input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now]
+    )
+  } catch { /* psDb write failed — flowtask.db still has the record */ }
+  const row = getDb().prepare('SELECT * FROM comex_quote_files WHERE id = ?').get(id) as ComexQuoteFile
+  return row
 }
 
 export async function deleteQuoteFile(id: string): Promise<void> {
-  await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
+  getDb().prepare('DELETE FROM comex_quote_files WHERE id = ?').run(id)
+  try {
+    await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
+  } catch { /* psDb write failed — still deleted from flowtask.db */ }
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────

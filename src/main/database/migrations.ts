@@ -2393,35 +2393,6 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
     }
   },
   {
-    version: 73,
-    up: (db) => {
-      const cols = [
-        "ALTER TABLE comex_logistics_quotes ADD COLUMN quote_html TEXT NOT NULL DEFAULT ''",
-        'ALTER TABLE comex_logistics_quotes ADD COLUMN quote_received_at INTEGER',
-      ]
-      for (const sql of cols) {
-        try { db.exec(sql) } catch { /* already exists */ }
-      }
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS comex_quote_files (
-          id              TEXT PRIMARY KEY,
-          quote_id        TEXT NOT NULL,
-          import_id       TEXT NOT NULL,
-          file_name       TEXT NOT NULL,
-          file_size       INTEGER,
-          drive_file_id   TEXT NOT NULL DEFAULT '',
-          drive_folder_id TEXT,
-          mime_type       TEXT NOT NULL DEFAULT '',
-          workspace_id    TEXT,
-          created_at      INTEGER NOT NULL,
-          updated_at      INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_quote_files_quote ON comex_quote_files(quote_id);
-        CREATE INDEX IF NOT EXISTS idx_quote_files_import ON comex_quote_files(import_id);
-      `)
-    }
-  },
-  {
     version: 72,
     up: (db) => {
       // Las cargas (movement_entries) viven en flowtask.db, pero su movimiento
@@ -2472,6 +2443,35 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         ALTER TABLE company_finance_movement_entries_v2 RENAME TO company_finance_movement_entries;
         CREATE INDEX IF NOT EXISTS idx_company_finance_movement_entries_movement
           ON company_finance_movement_entries(movement_id);
+      `)
+    }
+  },
+  {
+    version: 73,
+    up: (db) => {
+      const cols = [
+        "ALTER TABLE comex_logistics_quotes ADD COLUMN quote_html TEXT NOT NULL DEFAULT ''",
+        'ALTER TABLE comex_logistics_quotes ADD COLUMN quote_received_at INTEGER',
+      ]
+      for (const sql of cols) {
+        try { db.exec(sql) } catch { /* already exists */ }
+      }
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS comex_quote_files (
+          id              TEXT PRIMARY KEY,
+          quote_id        TEXT NOT NULL,
+          import_id       TEXT NOT NULL,
+          file_name       TEXT NOT NULL,
+          file_size       INTEGER,
+          drive_file_id   TEXT NOT NULL DEFAULT '',
+          drive_folder_id TEXT,
+          mime_type       TEXT NOT NULL DEFAULT '',
+          workspace_id    TEXT,
+          created_at      INTEGER NOT NULL,
+          updated_at      INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_quote_files_quote ON comex_quote_files(quote_id);
+        CREATE INDEX IF NOT EXISTS idx_quote_files_import ON comex_quote_files(import_id);
       `)
     }
   }
