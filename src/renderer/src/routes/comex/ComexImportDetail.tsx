@@ -6150,8 +6150,9 @@ function QuotesSection({
   items: Array<{ description: string }>
 }) {
   const { data: quotes = [] } = useComexQuotesByImport(importId)
-  const updateQuote = useUpdateComexQuote()
-  const deleteQuote = useDeleteComexQuote()
+  const updateQuote  = useUpdateComexQuote()
+  const updateImport = useUpdateComexImport()
+  const deleteQuote  = useDeleteComexQuote()
   const [showRFQ, setShowRFQ] = useState(false)
   const [showManual, setShowManual] = useState(false)
   const createQuote = useCreateComexQuote()
@@ -6172,8 +6173,12 @@ function QuotesSection({
     setShowManual(false)
   }
 
-  const select = (q: ComexLogisticsQuote) =>
+  const select = (q: ComexLogisticsQuote) => {
     updateQuote.mutate({ id: q.id, importId, data: { status: 'selected' } })
+    if (q.operator_id) {
+      updateImport.mutate({ id: importId, data: { freight_operator_id: q.operator_id } })
+    }
+  }
 
   const reject = (q: ComexLogisticsQuote) =>
     updateQuote.mutate({ id: q.id, importId, data: { status: 'rejected' } })
