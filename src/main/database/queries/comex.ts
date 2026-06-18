@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto'
-import { getDb } from '../db'
 import { getPowerSyncDb } from '../powersync'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
@@ -343,31 +342,10 @@ export async function deleteDocument(id: string): Promise<void> {
 // ─── Logistics Quotes ─────────────────────────────────────────────────────────
 
 export async function listQuotes(importId: string): Promise<ComexLogisticsQuote[]> {
-  const rows = await getPowerSyncDb().getAll<ComexLogisticsQuote>(
+  return getPowerSyncDb().getAll<ComexLogisticsQuote>(
     'SELECT * FROM comex_logistics_quotes WHERE import_id = ? ORDER BY created_at DESC',
     [importId]
   )
-  // Merge quote_html / quote_received_at from flowtask.db.
-  // These fields can't reliably sync through PowerSync yet (Supabase schema cache issue),
-  // so the PowerSync sync download can overwrite them with empty values from Supabase.
-  // flowtask.db is not subject to that overwrite.
-  try {
-    const local = getDb()
-      .prepare('SELECT id, quote_html, quote_received_at FROM comex_logistics_quotes WHERE import_id = ?')
-      .all(importId) as { id: string; quote_html: string | null; quote_received_at: number | null }[]
-    const byId = new Map(local.map(r => [r.id, r]))
-    return rows.map(row => {
-      const l = byId.get(row.id)
-      if (!l) return row
-      return {
-        ...row,
-        quote_html: l.quote_html ?? row.quote_html ?? '',
-        quote_received_at: l.quote_received_at ?? row.quote_received_at ?? null,
-      }
-    })
-  } catch {
-    return rows
-  }
 }
 
 export async function createQuote(input: CreateComexQuoteInput): Promise<ComexLogisticsQuote> {
@@ -416,17 +394,6 @@ export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>
   sets.push('updated_at = ?'); vals.push(Date.now())
   vals.push(id)
   await db.execute(`UPDATE comex_logistics_quotes SET ${sets.join(', ')} WHERE id = ?`, vals)
-
-  // Also persist quote_html / quote_received_at in flowtask.db so they survive
-  // PowerSync sync downloads that would overwrite psDb with the Supabase version.
-  const localFields = (['quote_html', 'quote_received_at'] as const).filter(k => k in data)
-  if (localFields.length) {
-    try {
-      const flowSets = localFields.map(k => `${k} = ?`).join(', ')
-      const flowVals = [...localFields.map(k => (data as Record<string, unknown>)[k]), id]
-      getDb().prepare(`UPDATE comex_logistics_quotes SET ${flowSets} WHERE id = ?`).run(...flowVals)
-    } catch { /* column not yet in older installs — safe to ignore */ }
-  }
 }
 
 export async function deleteQuote(id: string): Promise<void> {
@@ -436,50 +403,28 @@ export async function deleteQuote(id: string): Promise<void> {
 // ─── Quote Files ──────────────────────────────────────────────────────────────
 
 export async function listQuoteFiles(quoteId: string): Promise<ComexQuoteFile[]> {
-  // comex_quote_files vive en flowtask.db (fuente de verdad) para sobrevivir
-  // la reconciliación de PowerSync que puede limpiar psDb si no hay sync-rules.
-  // psDb recibe el INSERT solo para que PowerSync lo suba a Supabase.
-  try {
-    return getDb()
-      .prepare('SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC')
-      .all(quoteId) as ComexQuoteFile[]
-  } catch {
-    return getPowerSyncDb().getAll<ComexQuoteFile>(
-      'SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC',
-      [quoteId]
-    )
-  }
+  return getPowerSyncDb().getAll<ComexQuoteFile>(
+    'SELECT * FROM comex_quote_files WHERE quote_id = ? ORDER BY created_at ASC',
+    [quoteId]
+  )
 }
 
 export async function createQuoteFile(input: Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>): Promise<ComexQuoteFile> {
+  const db = getPowerSyncDb()
   const id = randomUUID()
   const now = Date.now()
-  // Escribir en flowtask.db como fuente de verdad persistente
-  getDb().prepare(`
-    INSERT INTO comex_quote_files
-      (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
-         input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now)
-  // También en psDb para que PowerSync lo suba a Supabase
-  try {
-    await getPowerSyncDb().execute(
-      `INSERT INTO comex_quote_files
-         (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
-       input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now]
-    )
-  } catch { /* psDb write failed — flowtask.db still has the record */ }
-  const row = getDb().prepare('SELECT * FROM comex_quote_files WHERE id = ?').get(id) as ComexQuoteFile
-  return row
+  await db.execute(
+    `INSERT INTO comex_quote_files
+       (id, quote_id, import_id, file_name, file_size, drive_file_id, drive_folder_id, mime_type, workspace_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.quote_id, input.import_id, input.file_name, input.file_size ?? null,
+     input.drive_file_id, input.drive_folder_id ?? null, input.mime_type, WORKSPACE_ID, now, now]
+  )
+  return (await db.getOptional<ComexQuoteFile>('SELECT * FROM comex_quote_files WHERE id = ?', [id]))!
 }
 
 export async function deleteQuoteFile(id: string): Promise<void> {
-  getDb().prepare('DELETE FROM comex_quote_files WHERE id = ?').run(id)
-  try {
-    await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
-  } catch { /* psDb write failed — still deleted from flowtask.db */ }
+  await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────

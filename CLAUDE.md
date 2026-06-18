@@ -58,11 +58,18 @@ Lecturas/escrituras solo-local             →  getDb()
 
 ---
 
-## Qué tablas sincronizan y cuáles no
+## Arquitectura de sincronización — DIRECTIVA FUNDAMENTAL
 
-### ✅ Sincronización completa (PowerSync ↔ Supabase ↔ todos los dispositivos)
+**Supabase es la fuente de verdad. Todos los datos deben sincronizarse vía PowerSync → Supabase.**
 
-Estas tablas tienen sync-rules en el servidor PowerSync. Se leen y escriben exclusivamente via `getPowerSyncDb()`:
+- Toda escritura va a `getPowerSyncDb()` (nunca a `getDb()` para datos de negocio).
+- PowerSync sube los cambios a Supabase vía `ps_crud` y los baja via sync-rules.
+- `flowtask.db` (`getDb()`) es **solo** para datos que por naturaleza son locales e irrepresentables en otro dispositivo: adjuntos de tareas, caché de email, configuración local.
+- **Nunca usar `flowtask.db` como workaround** para problemas de sync. Si un dato desaparece, el fix correcto es arreglar las sync-rules o el schema de Supabase, no moverlo a local.
+
+### ✅ Todas las tablas de negocio sincronizan via PowerSync ↔ Supabase
+
+Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules en el servidor PowerSync con filtro `workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'`:
 
 - `projects`, `tasks`, `task_dependencies`
 - `user_permissions`
@@ -70,29 +77,24 @@ Estas tablas tienen sync-rules en el servidor PowerSync. Se leen y escriben excl
 - `finance_concepts`, `finance_movements`, `finance_month_insights`
 - `calendar_event_links`
 - `quote_companies`, `quote_contacts`, `quotes`, `quote_activities`
-
-### ⚠️ Sincronización parcial (suben a Supabase pero NO bajan a otros dispositivos)
-
-El servidor PowerSync no tiene sync-rules para estas tablas. Los datos se suben vía `ps_crud` → Supabase cuando hay conexión, pero el servidor no los envía de vuelta a ningún cliente. Al iniciar la app, se restauran desde `flowtask.db` directamente a `ps_data__<tabla>` (bypass del sync):
-
 - `company_finance_accounts`, `company_finance_categories`, `company_finance_payment_methods`
 - `company_finance_concepts`, `company_finance_movements`, `company_finance_month_insights`
-- `company_finance_movement_entries` ← **solo local, no sincroniza**
-- Todas las tablas `comex_*` e `import_order_*`
+- `company_finance_movement_entries`
+- Todas las tablas `comex_*` e `import_order_*` (incluidas `comex_logistics_quotes`, `comex_quote_files`)
 
-**Función responsable:** `restoreCompanyFinanceLocalCache()` y `restoreComexLocalCache()` en `powersync.ts`.
+**Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 
-### ❌ Solo local (NO sincroniza en absoluto)
+### ❌ Solo local (NO sincroniza — por diseño)
 
-Estas tablas viven únicamente en `flowtask.db` y no tienen representación en PowerSync:
+Estas tablas viven únicamente en `flowtask.db` porque representan estado local del dispositivo que no tiene sentido sincronizar:
 
-- **`finance_movement_entries`** — Las "cargas" de conceptos con múltiples pagos en el mes.
-  - **Por qué:** el servidor PowerSync borra `ps_data__finance_movement_entries` en cada ciclo de sync (la tabla no tiene sync-rules adecuadas, o las tiene pero devuelve 0 filas). Mover las entradas a `flowtask.db` fue el fix para que no se pierdan en cada arranque.
-  - **Consecuencia:** en otra computadora, los movimientos muestran el `amount_actual` correcto (ese sí sincroniza) pero no las cargas individuales.
-  - **Fix pendiente:** agregar `finance_movement_entries` a los sync-rules del servidor PowerSync con el filtro `workspace_id` correcto, y escribirlas también via `getPowerSyncDb()` además de `flowtask.db`.
-- `attachments` (archivos adjuntos de tareas)
-- `email_*` (módulo de correo, usa `email-db.ts`)
-- Tablas de caché y configuración local
+- `attachments` — archivos adjuntos de tareas (binarios locales)
+- `email_*` — módulo de correo (usa `email-db.ts`, caché local de IMAP)
+- Tablas de caché y configuración de UI local
+
+### Función `restoreComexLocalCache` / `restoreCompanyFinanceLocalCache`
+
+Estas funciones copian `flowtask.db → psDb` en el primer arranque (cuando `psDb count = 0`) para hacer el bootstrap inicial de datos históricos. **No son la fuente de verdad** — son un mecanismo de seeding único para que PowerSync pueda subir los datos existentes a Supabase en la primera sincronización.
 
 ---
 
@@ -103,7 +105,7 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ```typescript
 // Cada migración es un objeto { version: number, up: (db) => void }
 // Se aplican en orden ascendente; la versión actual se guarda en PRAGMA user_version
-// Versión actual de la DB: 72
+// Versión actual de la DB: 73
 ```
 
 **Reglas:**
