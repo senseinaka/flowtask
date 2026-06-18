@@ -1,8 +1,49 @@
 # Summit — Contexto del proyecto para Claude Code
 
-**Nombre del producto:** Summit (el paquete npm se llama `flowtask`, el repo en GitHub es `senseinaka/flowtask`)
+## Qué es Summit
+
+Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego Nakamura**. Centraliza en una sola aplicación de escritorio todo lo necesario para gestionar la empresa y la productividad personal:
+
+### Módulos actuales
+
+- **Comex (Comercio Exterior):** gestión completa de importaciones de Naka Outdoors. Seguimiento de embarques, documentos para despachante y personal, presupuestos logísticos de operadores de flete, pagos, costos, arancel, proformas, y planificación de pedidos con IA.
+- **Tareas / Kanban:** sistema de gestión de tareas con tablero kanban, dependencias, recordatorios y delegación.
+- **Agenda / Calendario:** integración con Google Calendar. Sistema para programar envíos de mensajes por WhatsApp con recordatorios automáticos.
+- **Contactos:** agenda de contactos de la empresa.
+- **Presupuestos / CRM:** generación de presupuestos y seguimiento comercial tipo CRM.
+- **Finanzas personales:** módulo para llevar todas las cuentas mensuales personales de Diego (movimientos, conceptos recurrentes, cargas múltiples).
+- **Finanzas empresa:** módulo equivalente para las cuentas mensuales de Naka Outdoors.
+- **Email:** recepción y envío de correos electrónicos desde la app.
+- **Backup:** backup automático de código (GitHub) y datos (Google Drive) en la nube.
+- **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
+
+### Visión a futuro
+
+El sistema está diseñado para crecer. Próximas expansiones planificadas:
+- Facturación
+- Stock e inventario
+- Módulo de depósito / almacén
+- Recursos humanos
+- Marketing
+- **Cerebro de IA** que pueda coordinar y ejecutar acciones en todos los módulos
+
+### Arquitectura multi-dispositivo y offline-first
+
+Summit está instalado en **múltiples máquinas**. Todos los dispositivos acceden y modifican los mismos datos según permisos. El sistema debe funcionar **offline**: los datos se descargan localmente al iniciar y se sincronizan en la nube a medida que cambian.
+
+- **Código:** versionado en GitHub (`senseinaka/flowtask`), permite desarrollo desde distintas conexiones.
+- **Datos:** almacenados en **Supabase** (fuente de verdad), sincronizados a local via **PowerSync**. Los cambios siempre se escriben a Supabase y se bajan a local automáticamente.
+- **Archivos:** almacenados en **Google Drive**.
+- **Local:** PowerSync mantiene una copia local (`powersync.db`) para funcionamiento offline. `flowtask.db` solo para datos intrínsecamente locales (caché de email, adjuntos binarios).
+
+---
+
+**Nombre del producto:** Summit
+**Nombre técnico interno:** `flowtask` (paquete npm, repo GitHub `senseinaka/flowtask`, AppData, appId)
 **Stack:** Electron + React + TypeScript + Vite + React Query + PowerSync + better-sqlite3 + Supabase
 **Versión actual:** 1.0.3
+
+> **Nota sobre el nombre:** El producto se llama "Summit" pero el nombre técnico interno sigue siendo "flowtask". Esto es intencional — cambiarlo rompería el auto-update y las rutas de datos de usuarios existentes. En código se usan: `"name": "flowtask"`, `appId: "com.flowtask.app"`, `%APPDATA%\flowtask\`, `flowtask.db`, repo `senseinaka/flowtask`. El nombre visible al usuario ("Summit") vive en `"productName"` del `package.json`.
 
 ---
 
@@ -132,15 +173,15 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 
 - **Concepto** (`finance_concepts`): template de un gasto recurrente (ej. "Supermercado"). Tiene `tracks_multiple_entries` para indicar que acepta varias cargas por mes.
 - **Movimiento** (`finance_movements`): instancia mensual de un concepto (ej. "Supermercado — Junio 2025"). Tiene `amount_actual` que se recalcula como la suma de sus cargas.
-- **Entrada/Carga** (`finance_movement_entries` en `flowtask.db`): cada pago individual dentro de un movimiento multi-carga.
+- **Entrada/Carga** (`finance_movement_entries`): cada pago individual dentro de un movimiento multi-carga. Tiene sync-rules en PowerSync. El código hace dual-write (`flowtask.db` + `getPowerSyncDb()`) — pendiente migrar a solo PowerSync siguiendo la directiva central.
 
 ### Función `recalcMovementFromEntries`
 
-En ambos archivos de queries. Lee `SUM(amount)` de las cargas en `flowtask.db`, y actualiza `amount_actual`, `status`, y `payment_date` en el movimiento via `getPowerSyncDb()` (así el total sincroniza aunque las cargas individuales no).
+En ambos archivos de queries. Lee `SUM(amount)` de las cargas, y actualiza `amount_actual`, `status`, y `payment_date` en el movimiento via `getPowerSyncDb()` para que el total sincronice.
 
 ### `entries_count` en movimientos
 
-El campo `entries_count` que se muestra en el badge de la tabla NO viene del subquery de PowerSync (que siempre devuelve 0 porque la tabla PowerSync está vacía). Se calcula con `attachEntriesCounts()` que consulta `flowtask.db` después de traer los movimientos. Ver función en `finance.ts` y `company-finance.ts`.
+El campo `entries_count` se calcula con `attachEntriesCounts()` que consulta `flowtask.db` después de traer los movimientos. Ver función en `finance.ts` y `company-finance.ts`. Pendiente migrar a lectura desde PowerSync cuando se elimine el dual-write.
 
 ---
 
@@ -188,7 +229,7 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 |---------|-----|
 | `src/main/database/db.ts` | Singleton de `flowtask.db` (better-sqlite3) |
 | `src/main/database/powersync.ts` | Singleton de PowerSync, schema, conexión, migraciones de datos |
-| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: 72) |
+| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: 73) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
 | `src/main/index.ts` | Punto de entrada main, registra handlers IPC |
@@ -273,8 +314,6 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 
 **Regla:** al crear un nuevo INSERT en `comex.ts` (o cualquier módulo que use PowerSync), siempre incluir `workspace_id = WORKSPACE_ID`. Si el INSERT usa columnas dinámicas (como `PLANNING_COLUMNS`), agregar `workspace_id` explícitamente fuera del array. Agregar la tabla a `TABLES_MISSING_WORKSPACE_ID` en `powersync.ts` solo si ya hay filas viejas sin workspace_id en producción.
 
-### Patrón: nodos compuestos en el timeline de importación (ProveedorNode / ForwarderNode)
-
 ## Presupuestos logísticos — adjuntos y HTML de cotizaciones (migración 73)
 
 **Qué se agregó (junio 2026):**
@@ -304,7 +343,7 @@ CREATE INDEX IF NOT EXISTS idx_quote_files_quote  ON comex_quote_files(quote_id)
 CREATE INDEX IF NOT EXISTS idx_quote_files_import ON comex_quote_files(import_id);
 ```
 
-También agregar `comex_quote_files` a las sync rules de PowerSync en el dashboard (seguir el mismo patrón que `comex_logistics_quotes`).
+`comex_quote_files` ya está en las sync-rules de PowerSync con el filtro `workspace_id` correcto (confirmado junio 2026).
 
 **Drive:** Los archivos se guardan en `FlowTask Comex / {nombre importación} / Presupuestos Logísticos / {archivo}`.
 

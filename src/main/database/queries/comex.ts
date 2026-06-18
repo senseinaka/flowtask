@@ -246,7 +246,19 @@ export async function updateImport(id: string, data: Partial<ComexImport>): Prom
 }
 
 export async function deleteImport(id: string): Promise<void> {
-  await getPowerSyncDb().execute('DELETE FROM comex_imports WHERE id = ?', [id])
+  const db = getPowerSyncDb()
+  await db.execute('DELETE FROM comex_quote_files WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_logistics_quotes WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_payments WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_import_customs WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_import_costs WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_inal_certs WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_import_tributos WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_import_extra_costs WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_proformas WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_documents WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_import_items WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_imports WHERE id = ?', [id])
 }
 
 export async function getImportFullDetail(id: string): Promise<{
@@ -397,7 +409,9 @@ export async function updateQuote(id: string, data: Partial<ComexLogisticsQuote>
 }
 
 export async function deleteQuote(id: string): Promise<void> {
-  await getPowerSyncDb().execute('DELETE FROM comex_logistics_quotes WHERE id = ?', [id])
+  const db = getPowerSyncDb()
+  await db.execute('DELETE FROM comex_quote_files WHERE quote_id = ?', [id])
+  await db.execute('DELETE FROM comex_logistics_quotes WHERE id = ?', [id])
 }
 
 // ─── Quote Files ──────────────────────────────────────────────────────────────
@@ -501,13 +515,13 @@ export async function upsertCustoms(importId: string, data: Partial<UpsertComexC
         id, import_id, fob_currency, fob_invoice, fob_declared,
         dolar_aduana, dolar_naviera, paridad_usd_eur,
         despacho_number, despachante, oficializacion_date, sepaimpo_vencimiento,
-        bl_number, naviera_ref, carrier, etd,
+        bl_number, naviera_ref, carrier, canal, etd,
         peso_bruto_kg, volumen_m3, cant_pallets, cant_cartons, cant_bultos,
         mulc_date, fecha_pago_banco, cierre_banco_date,
         listas_despachante_date, listas_oscar_andrea_date,
         created_at, updated_at, workspace_id
       ) VALUES (
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
       )
     `, [
       id, importId,
@@ -515,7 +529,7 @@ export async function upsertCustoms(importId: string, data: Partial<UpsertComexC
       data.dolar_aduana ?? null, data.dolar_naviera ?? null, data.paridad_usd_eur ?? null,
       data.despacho_number ?? '', data.despachante ?? '', data.oficializacion_date ?? null,
       data.sepaimpo_vencimiento ?? null, data.bl_number ?? '', data.naviera_ref ?? '',
-      data.carrier ?? '', data.etd ?? null, data.peso_bruto_kg ?? null,
+      data.carrier ?? '', data.canal ?? null, data.etd ?? null, data.peso_bruto_kg ?? null,
       data.volumen_m3 ?? null, data.cant_pallets ?? null, data.cant_cartons ?? null, data.cant_bultos ?? null,
       data.mulc_date ?? null, data.fecha_pago_banco ?? null, data.cierre_banco_date ?? null,
       data.listas_despachante_date ?? null, data.listas_oscar_andrea_date ?? null,

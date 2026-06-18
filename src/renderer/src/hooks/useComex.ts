@@ -855,7 +855,7 @@ export function useComexQuoteFiles(quoteId: string | null) {
 export function useUploadComexQuoteFile() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (params: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null; filePath?: string; fileBuffer?: number[]; fileName?: string }) =>
+    mutationFn: (params: { quoteId: string; importId: string; importTitle: string; importFolderId: string | null; filePath?: string; fileBuffer?: ArrayBuffer; fileName?: string }) =>
       window.api.comex.quotes.files.upload(params),
     onSuccess: (file, { quoteId }) => {
       if (file) qc.invalidateQueries({ queryKey: ['comex-quote-files', quoteId] })

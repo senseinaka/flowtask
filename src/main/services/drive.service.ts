@@ -142,7 +142,7 @@ class DriveService {
       }
 
       const today = new Date().toISOString().slice(0, 10)
-      const fileName = `flowtask-backup-${today}.json`
+      const fileName = `summit-backup-${today}.json`
       const content = JSON.stringify(backup, null, 2)
 
       // Check if file for today already exists
@@ -220,8 +220,9 @@ class DriveService {
     const safe = importTitle.replace(/[/\\:*?"<>|]/g, '-').slice(0, 100)
 
     // Check if a folder with this name already exists inside FlowTask Comex
+    const safeSanitized = safe.replace(/'/g, "\\'")
     const existing = await drive.files.list({
-      q: `name='${safe}' and mimeType='application/vnd.google-apps.folder' and '${comexRootId}' in parents and trashed=false`,
+      q: `name='${safeSanitized}' and mimeType='application/vnd.google-apps.folder' and '${comexRootId}' in parents and trashed=false`,
       fields: 'files(id)'
     })
     let folderId: string
@@ -289,7 +290,7 @@ class DriveService {
   /**
    * Crea un backup completo de la base de datos SQLite en Drive.
    * Usa la API nativa de backup de SQLite (safe con WAL mode).
-   * Guarda en: FlowTask Backups / YYYY-MM-DD_HH-mm / flowtask.db + manifest.json
+   * Guarda en: Summit Backups / YYYY-MM-DD_HH-mm / flowtask.db + manifest.json
    * Mantiene los últimos 7 backups.
    */
   async fullBackup(): Promise<BackupStatus> {
@@ -298,7 +299,7 @@ class DriveService {
     const timestamp   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16)  // "2026-05-31_09-00"
     const displayTs   = new Date().toISOString()
     const tmpDir      = os.tmpdir()
-    const tmpDbPath   = path.join(tmpDir, `flowtask-backup-${timestamp}.db`)
+    const tmpDbPath   = path.join(tmpDir, `summit-backup-${timestamp}.db`)
 
     try {
       // 1. Backup seguro de la DB usando la API nativa de better-sqlite3
@@ -398,9 +399,10 @@ class DriveService {
   }
 
   private async getOrCreateFolder(drive: ReturnType<typeof google.drive>, name: string, parentId?: string): Promise<string> {
+    const safeName = name.replace(/'/g, "\\'")
     const parentClause = parentId ? ` and '${parentId}' in parents` : ''
     const res = await drive.files.list({
-      q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentClause}`,
+      q: `name='${safeName}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentClause}`,
       fields: 'files(id)'
     })
     if (res.data.files?.length) return res.data.files[0].id!

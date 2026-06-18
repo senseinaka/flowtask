@@ -497,21 +497,22 @@ export function registerComexIpc(): void {
     quoteId, importId, importTitle, importFolderId, filePath, fileBuffer, fileName: dropFileName
   }: {
     quoteId: string; importId: string; importTitle: string; importFolderId: string | null
-    filePath?: string; fileBuffer?: number[]; fileName?: string
+    filePath?: string; fileBuffer?: ArrayBuffer; fileName?: string
   }) => {
     let localPath: string
     let tmpPath: string | null = null
 
     if (fileBuffer && dropFileName) {
-      // Drag-and-drop: renderer sent the raw bytes. Write to a temp file.
-      tmpPath = path.join(os.tmpdir(), `flowtask-quote-${Date.now()}-${dropFileName}`)
+      // Drag-and-drop: renderer sent the raw ArrayBuffer. Write to a temp file.
+      const safeName = path.basename(dropFileName).replace(/[/\\:*?"<>|]/g, '-')
+      tmpPath = path.join(os.tmpdir(), `summit-quote-${Date.now()}-${safeName}`)
       fs.writeFileSync(tmpPath, Buffer.from(fileBuffer))
       localPath = tmpPath
     } else if (filePath) {
       localPath = filePath
     } else {
-      const win = BrowserWindow.getFocusedWindow()
-      const result = await dialog.showOpenDialog(win!, {
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+      const result = await dialog.showOpenDialog(win, {
         title: 'Seleccionar archivo de cotización',
         properties: ['openFile'],
         filters: [
@@ -553,8 +554,8 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:quote-files:delete', async (_e, { fileId, driveFileId }: { fileId: string; driveFileId: string }) => {
-    await driveService.deleteFile(driveFileId)
     await deleteQuoteFile(fileId)
+    await driveService.deleteFile(driveFileId)
   })
 
   ipcMain.handle('comex:quote-files:open', (_e, driveFileId: string) => {

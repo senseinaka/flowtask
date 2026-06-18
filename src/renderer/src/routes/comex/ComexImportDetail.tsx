@@ -5890,17 +5890,19 @@ function QuoteRow({
     e.preventDefault()
     e.stopPropagation()
     setIsDragOver(false)
-    const dropped = Array.from(e.dataTransfer.files)
+    const dropped = Array.from(e.dataTransfer.files).filter(f => f.size > 0)
     for (const file of dropped) {
-      const buf = await file.arrayBuffer()
-      uploadFile.mutate({
-        quoteId: q.id,
-        importId,
-        importTitle: imp.title,
-        importFolderId: imp.drive_folder_id ?? null,
-        fileBuffer: Array.from(new Uint8Array(buf)),
-        fileName: file.name,
-      })
+      try {
+        const buf = await file.arrayBuffer()
+        uploadFile.mutate({
+          quoteId: q.id,
+          importId,
+          importTitle: imp.title,
+          importFolderId: imp.drive_folder_id ?? null,
+          fileBuffer: buf,
+          fileName: file.name,
+        })
+      } catch { /* directorio o archivo ilegible — ignorar */ }
     }
   }
 

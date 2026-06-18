@@ -970,7 +970,7 @@ function signPowerSyncJwt(env: Record<string, string>, endpoint: string, sub: st
 
   const now = Math.floor(Date.now() / 1000)
   const header = { alg: 'RS256', typ: 'JWT', kid }
-  const payload = { sub, aud: endpoint, iat: now, exp: now + 3600 }
+  const payload = { sub, aud: endpoint, iat: now, exp: now + 86400 }
 
   const headerB64 = base64url(Buffer.from(JSON.stringify(header)))
   const payloadB64 = base64url(Buffer.from(JSON.stringify(payload)))
@@ -1027,33 +1027,25 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
           break
         }
         case UpdateType.PATCH: {
-          const patchData = (op.opData ?? {}) as Record<string, unknown>
+          let patchData = (op.opData ?? {}) as Record<string, unknown>
           res = await fetch(url, {
             method: 'PATCH',
             headers: { ...headers, Prefer: 'return=minimal' },
             body: JSON.stringify(patchData)
           })
-          if (!res.ok && res.status === 400) {
+          // PostgREST schema cache may not know newly added columns yet.
+          // Loop: strip each unknown column reported by PGRST204 until the request succeeds.
+          while (!res.ok && res.status === 400) {
             const body = await res.text()
             const m = body.match(/Could not find the '(\w+)' column/)
-            if (m) {
-              // PostgREST schema cache doesn't know a newly added column yet.
-              // Strip the offending column and retry once to unblock the queue.
-              const stripped = Object.fromEntries(Object.entries(patchData).filter(([k]) => k !== m[1]))
-              if (Object.keys(stripped).length > 0) {
-                const r2 = await fetch(url, {
-                  method: 'PATCH',
-                  headers: { ...headers, Prefer: 'return=minimal' },
-                  body: JSON.stringify(stripped)
-                })
-                if (!r2.ok) throw new Error(`[PowerSync] PATCH ${op.table}/${op.id} -> ${r2.status} ${await r2.text()}`)
-                res = r2
-              } else {
-                res = new Response(null, { status: 200 })
-              }
-            } else {
-              throw new Error(`[PowerSync] ${op.op} ${op.table}/${op.id} -> 400 ${body}`)
-            }
+            if (!m) throw new Error(`[PowerSync] ${op.op} ${op.table}/${op.id} -> 400 ${body}`)
+            patchData = Object.fromEntries(Object.entries(patchData).filter(([k]) => k !== m[1]))
+            if (Object.keys(patchData).length === 0) { res = new Response(null, { status: 200 }); break }
+            res = await fetch(url, {
+              method: 'PATCH',
+              headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify(patchData)
+            })
           }
           break
         }
@@ -1642,6 +1634,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities'], throttleMs: 1000 }
   )
 }

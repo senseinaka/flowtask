@@ -32,7 +32,9 @@ export function registerSyncIpc(): void {
   /** Desconecta Drive borrando los tokens para poder reconectar */
   ipcMain.handle('sync:disconnectDrive', () => driveService.disconnect())
 
-  ipcMain.handle('shell:open', (_e, url: string) => shell.openExternal(url))
+  ipcMain.handle('shell:open', (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+  })
 
   // ── Grupos de WhatsApp ─────────────────────────────────────────────────────
 

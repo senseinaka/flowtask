@@ -1,5 +1,11 @@
-// Node.js en Electron no usa el CA store del sistema; necesario para googleapis
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'
+// Node.js en Electron no usa el CA store del sistema. Configuramos un agente HTTPS
+// sin verificación TLS solo para googleapis (Drive, Calendar, Auth); las conexiones
+// a Supabase, IMAP y otras APIs mantienen la verificación estándar.
+import { google } from 'googleapis'
+import https from 'https'
+if (process.platform === 'win32') {
+  google.options({ agent: new https.Agent({ rejectUnauthorized: false }) })
+}
 
 // imapflow puede emitir socket timeouts como excepciones no capturadas cuando
 // el cliente ya fue descartado. Las logueamos pero no crasheamos la app.
@@ -71,7 +77,7 @@ function createWindow(): void {
     backgroundColor: '#0f172a',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
     }

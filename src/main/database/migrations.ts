@@ -2479,7 +2479,10 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
 
 export function runMigrations(db: Database.Database): void {
   const currentVersion = (db.pragma('user_version', { simple: true }) as number) || 0
-  const pending = MIGRATIONS.filter((m) => m.version > currentVersion)
+  const pending = MIGRATIONS
+    .slice()
+    .sort((a, b) => a.version - b.version)
+    .filter((m) => m.version > currentVersion)
 
   if (pending.length === 0) return
 
