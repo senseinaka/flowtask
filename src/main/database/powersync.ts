@@ -464,6 +464,10 @@ const comex_imports = new Table(
     pl_extracted_json: column.text,
     carga_armada_date: column.integer,
     esperando_embarcar_date: column.integer,
+    docs_to_despachante: column.integer,
+    docs_to_despachante_date: column.integer,
+    docs_to_compras: column.integer,
+    docs_to_compras_date: column.integer,
     workspace_id: column.text
   },
   {

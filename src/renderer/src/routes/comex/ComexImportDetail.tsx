@@ -258,6 +258,155 @@ function EditableDate({
   )
 }
 
+/** Combined sent-toggle + DD/MM date — para "Docs enviados a X" */
+function EditableSentDate({
+  label, sent, date, onSentChange, onDateSave
+}: {
+  label: string
+  sent: 0 | 1
+  date: number | null | undefined
+  onSentChange: (sent: boolean) => void
+  onDateSave: (ts: number | null) => void
+}) {
+  const [editingField, setEditingField] = useState<'day' | 'month' | null>(null)
+  const [draft, setDraft] = useState('')
+  const monthRef = useRef<HTMLInputElement>(null)
+
+  const year = new Date().getFullYear()
+  const displayDay   = date ? String(dayjs(date).date())      : ''
+  const displayMonth = date ? String(dayjs(date).month() + 1) : ''
+
+  function tryBuildTs(d: string, m: string): number | null {
+    const dd = parseInt(d, 10), mm = parseInt(m, 10)
+    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return null
+    const ts = dayjs(`${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`)
+    return ts.isValid() ? ts.valueOf() : null
+  }
+
+  function startEdit(field: 'day' | 'month') {
+    setDraft(field === 'day' ? displayDay : displayMonth)
+    setEditingField(field)
+  }
+
+  function advanceToMonth(dayVal: string) {
+    const ts = tryBuildTs(dayVal, displayMonth)
+    if (ts) onDateSave(ts)
+    setEditingField('month')
+    setDraft(displayMonth)
+    setTimeout(() => monthRef.current?.focus(), 30)
+  }
+
+  const isSent = Boolean(sent)
+
+  return (
+    <div>
+      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">{label}</p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            if (isSent) { onSentChange(false); onDateSave(null) }
+            else        { onSentChange(true) }
+          }}
+          className={cn(
+            'w-[18px] h-[18px] flex-shrink-0 rounded border transition-colors flex items-center justify-center',
+            isSent ? 'bg-cyan-600 border-cyan-600' : 'border-slate-600 hover:border-slate-400'
+          )}
+        >
+          {isSent && <Check size={10} strokeWidth={3} className="text-white" />}
+        </button>
+
+        <div className="flex items-center gap-1">
+          {editingField === 'day' ? (
+            <input
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
+              placeholder="DD"
+              value={draft}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+                setDraft(v)
+                if (v.length === 2) advanceToMonth(v)
+              }}
+              onBlur={() => {
+                const ts = tryBuildTs(draft, displayMonth)
+                if (ts) onDateSave(ts)
+                setEditingField(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === '/' || e.key === 'Tab') {
+                  e.preventDefault(); advanceToMonth(draft)
+                }
+                if (e.key === 'Escape') setEditingField(null)
+              }}
+              className="w-8 bg-slate-700 border border-cyan-600 rounded px-1 py-0.5 text-xs text-white text-center focus:outline-none"
+            />
+          ) : (
+            <button
+              disabled={!isSent}
+              onClick={() => isSent && startEdit('day')}
+              className={cn(
+                'w-8 h-[22px] rounded border text-[11px] text-center transition-colors',
+                !isSent      ? 'border-slate-800 text-slate-700 cursor-default'
+                : displayDay ? 'border-slate-600 bg-slate-700/40 text-slate-200 hover:border-cyan-600 hover:text-cyan-300'
+                             : 'border-dashed border-slate-600 text-slate-600 hover:border-cyan-600'
+              )}
+            >
+              {displayDay || 'DD'}
+            </button>
+          )}
+
+          <span className={cn('text-xs', !isSent ? 'text-slate-800' : 'text-slate-500')}>/</span>
+
+          {editingField === 'month' ? (
+            <input
+              ref={monthRef}
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
+              placeholder="MM"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value.replace(/\D/g, '').slice(0, 2))}
+              onBlur={() => {
+                const ts = tryBuildTs(displayDay, draft)
+                if (ts) onDateSave(ts)
+                setEditingField(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  const ts = tryBuildTs(displayDay, draft)
+                  if (ts) onDateSave(ts)
+                  setEditingField(null)
+                }
+                if (e.key === 'Escape') setEditingField(null)
+              }}
+              className="w-8 bg-slate-700 border border-cyan-600 rounded px-1 py-0.5 text-xs text-white text-center focus:outline-none"
+            />
+          ) : (
+            <button
+              disabled={!isSent}
+              onClick={() => isSent && startEdit('month')}
+              className={cn(
+                'w-8 h-[22px] rounded border text-[11px] text-center transition-colors',
+                !isSent        ? 'border-slate-800 text-slate-700 cursor-default'
+                : displayMonth ? 'border-slate-600 bg-slate-700/40 text-slate-200 hover:border-cyan-600 hover:text-cyan-300'
+                               : 'border-dashed border-slate-600 text-slate-600 hover:border-cyan-600'
+              )}
+            >
+              {displayMonth || 'MM'}
+            </button>
+          )}
+
+          {isSent && <span className="text-[10px] text-slate-600 ml-0.5">{year}</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Click-to-edit select */
 function EditableSelect<T extends string>({
   label, value, options, onChange
@@ -6940,6 +7089,24 @@ export default function ComexImportDetail() {
             />
             <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza a "Esp. embarque"</p>
           </div>
+        </div>
+
+        {/* Row 4c: Envío de documentación */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <EditableSentDate
+            label="Docs enviados al despachante"
+            sent={imp.docs_to_despachante ?? 0}
+            date={imp.docs_to_despachante_date}
+            onSentChange={(v) => upd({ docs_to_despachante: v ? 1 : 0 })}
+            onDateSave={(ts) => upd({ docs_to_despachante_date: ts })}
+          />
+          <EditableSentDate
+            label="Docs enviados a compras"
+            sent={imp.docs_to_compras ?? 0}
+            date={imp.docs_to_compras_date}
+            onSentChange={(v) => upd({ docs_to_compras: v ? 1 : 0 })}
+            onDateSave={(ts) => upd({ docs_to_compras_date: ts })}
+          />
         </div>
 
         {/* ── Datos de carga — siempre visible, editable manualmente ── */}

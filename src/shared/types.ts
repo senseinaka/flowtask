@@ -1126,6 +1126,11 @@ export interface ComexImport {
   despachante:            string          // "Dario Valero" | "Iván Balarino" | ""
   forwarder_ref_mail:     string          // ref. de mail al forwarder
   bl_number:              string          // BL / AWB (puede auto-llenarse del despacho)
+  // ── Docs enviados ────────────────────────────────────────────────────────────
+  docs_to_despachante:      0 | 1           // Docs enviados al despachante
+  docs_to_despachante_date: number | null    // Timestamp del envío (DD/MM año en curso)
+  docs_to_compras:          0 | 1           // Docs enviados a compras
+  docs_to_compras_date:     number | null    // Timestamp del envío
   // ── Campos del JOIN (solo en queries de lista) ─────────────────────────────
   _despacho_number?:        string | null
   _canal_despacho?:         string | null

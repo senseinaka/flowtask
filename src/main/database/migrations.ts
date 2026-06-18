@@ -2475,6 +2475,20 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       `)
     }
   }
+  {
+    version: 74,
+    up: (db) => {
+      const cols = [
+        'ALTER TABLE comex_imports ADD COLUMN docs_to_despachante      INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE comex_imports ADD COLUMN docs_to_despachante_date INTEGER',
+        'ALTER TABLE comex_imports ADD COLUMN docs_to_compras          INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE comex_imports ADD COLUMN docs_to_compras_date     INTEGER',
+      ]
+      for (const sql of cols) {
+        try { db.exec(sql) } catch { /* already exists */ }
+      }
+    }
+  }
 ]
 
 export function runMigrations(db: Database.Database): void {
