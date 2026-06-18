@@ -437,6 +437,18 @@ export async function createQuoteFile(input: Omit<ComexQuoteFile, 'id' | 'create
   return (await db.getOptional<ComexQuoteFile>('SELECT * FROM comex_quote_files WHERE id = ?', [id]))!
 }
 
+export async function updateQuoteFile(id: string, data: { drive_file_id?: string; drive_folder_id?: string | null }): Promise<void> {
+  const db = getPowerSyncDb()
+  const sets: string[] = []
+  const vals: unknown[] = []
+  if (data.drive_file_id !== undefined) { sets.push('drive_file_id = ?'); vals.push(data.drive_file_id) }
+  if (data.drive_folder_id !== undefined) { sets.push('drive_folder_id = ?'); vals.push(data.drive_folder_id) }
+  if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
+  vals.push(id)
+  await db.execute(`UPDATE comex_quote_files SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
 export async function deleteQuoteFile(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
 }

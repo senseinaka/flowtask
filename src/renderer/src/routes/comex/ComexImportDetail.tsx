@@ -5880,6 +5880,8 @@ function QuoteRow({
     q.quote_received_at ? dayjs(q.quote_received_at).format('YYYY-MM-DD') : ''
   )
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const { data: files = [] } = useComexQuoteFiles(expanded ? q.id : null)
   const uploadFile = useUploadComexQuoteFile()
@@ -5913,24 +5915,34 @@ function QuoteRow({
 
   async function handleSaveQuote() {
     setSaving(true)
+    setSaveError(null)
     try {
       onUpdate({
         quote_html: htmlDraft,
         quote_received_at: receivedDate ? dayjs(receivedDate).valueOf() : null,
         status: q.status === 'requested' ? 'quoted' : q.status,
       })
+      // Dar feedback visual brevemente
+      await new Promise((r) => setTimeout(r, 600))
+    } catch (e) {
+      setSaveError((e as Error).message ?? 'Error al guardar')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleUpload() {
-    await uploadFile.mutateAsync({
-      quoteId: q.id,
-      importId,
-      importTitle: imp.title,
-      importFolderId: imp.drive_folder_id ?? null,
-    })
+    setUploadError(null)
+    try {
+      await uploadFile.mutateAsync({
+        quoteId: q.id,
+        importId,
+        importTitle: imp.title,
+        importFolderId: imp.drive_folder_id ?? null,
+      })
+    } catch (e) {
+      setUploadError((e as Error).message ?? 'Error al subir el archivo')
+    }
   }
 
   return (
@@ -6022,7 +6034,8 @@ function QuoteRow({
                 className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-[11px] text-slate-300 font-mono focus:outline-none focus:border-cyan-500 resize-y"
               />
             )}
-            <div className="flex justify-end mt-1.5">
+            <div className="flex justify-end items-center gap-2 mt-1.5">
+              {saveError && <span className="text-[10px] text-red-400">{saveError}</span>}
               <button
                 onClick={handleSaveQuote}
                 disabled={saving}
@@ -6048,6 +6061,7 @@ function QuoteRow({
                 Agregar archivo
               </button>
             </div>
+            {uploadError && <p className="text-[10px] text-red-400 mb-1.5">{uploadError}</p>}
             <div
               onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false) }}
@@ -6074,13 +6088,15 @@ function QuoteRow({
                       {f.file_size && (
                         <span className="text-[10px] text-slate-600 shrink-0">{formatBytes(f.file_size)}</span>
                       )}
-                      <button
-                        onClick={() => window.api.comex.quotes.files.open(f.drive_file_id)}
-                        className="text-slate-600 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Abrir en Drive"
-                      >
-                        <ExternalLink size={10} />
-                      </button>
+                      {f.drive_file_id && (
+                        <button
+                          onClick={() => window.api.comex.quotes.files.open(f.drive_file_id)}
+                          className="text-slate-600 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Abrir en Drive"
+                        >
+                          <ExternalLink size={10} />
+                        </button>
+                      )}
                       <button
                         onClick={() => deleteFile.mutate({ fileId: f.id, driveFileId: f.drive_file_id, quoteId: q.id })}
                         className="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"

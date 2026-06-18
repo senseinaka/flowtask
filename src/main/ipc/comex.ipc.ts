@@ -9,7 +9,7 @@ import {
   listItems, createItem, deleteItem,
   listDocuments, getDocument, createDocument, updateDocument, deleteDocument,
   listQuotes, createQuote, updateQuote, deleteQuote,
-  listQuoteFiles, createQuoteFile, deleteQuoteFile,
+  listQuoteFiles, createQuoteFile, updateQuoteFile, deleteQuoteFile,
   listPayments, createPayment, updatePayment, deletePayment,
   getCustoms, upsertCustoms, listCosts, createCost, updateCost, deleteCost,
   listSupplierContacts, createSupplierContact, updateSupplierContact, deleteSupplierContact,
@@ -526,28 +526,42 @@ export function registerComexIpc(): void {
     try {
       const originalName = dropFileName ?? path.basename(localPath)
       const ext          = path.extname(originalName).toLowerCase()
-      const mimeType     = getMimeType(ext) || (dropFileName ? 'application/octet-stream' : getMimeType(ext))
+      const mimeType     = getMimeType(ext) || 'application/octet-stream'
       const stats        = fs.statSync(localPath)
 
-      let folderId = importFolderId
-      if (!folderId) {
-        const { folderId: newId } = await driveService.createImportFolder(importTitle)
-        await updateImport(importId, { drive_folder_id: newId })
-        folderId = newId
-      }
-      const quotesFolderId = await driveService.createSubfolder('Presupuestos Logísticos', folderId)
-      const driveFileId    = await driveService.uploadFileToFolder(localPath, quotesFolderId, originalName, mimeType)
-
-      return createQuoteFile({
+      // Crear registro en DB primero — así el archivo aparece en la UI
+      // aunque Drive falle (mismo patrón que comex_documents).
+      const record = await createQuoteFile({
         quote_id:        quoteId,
         import_id:       importId,
         file_name:       originalName,
         file_size:       stats.size,
-        drive_file_id:   driveFileId,
-        drive_folder_id: quotesFolderId,
+        drive_file_id:   '',
+        drive_folder_id: null,
         mime_type:       mimeType,
         workspace_id:    null,
       } as Omit<ComexQuoteFile, 'id' | 'created_at' | 'updated_at'>)
+
+      // Subir a Drive si está autenticado
+      if (driveService.isAuthenticated()) {
+        try {
+          let folderId = importFolderId
+          if (!folderId) {
+            const { folderId: newId } = await driveService.createImportFolder(importTitle)
+            await updateImport(importId, { drive_folder_id: newId })
+            folderId = newId
+          }
+          const quotesFolderId = await driveService.createSubfolder('Presupuestos Logísticos', folderId)
+          const driveFileId    = await driveService.uploadFileToFolder(localPath, quotesFolderId, originalName, mimeType)
+          await updateQuoteFile(record.id, { drive_file_id: driveFileId, drive_folder_id: quotesFolderId })
+          return { ...record, drive_file_id: driveFileId, drive_folder_id: quotesFolderId }
+        } catch (e) {
+          console.error('[comex:quote-files:upload] Drive upload failed:', e)
+          // El registro ya está en DB — retornar sin Drive ID
+        }
+      }
+
+      return record
     } finally {
       if (tmpPath) try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
     }
