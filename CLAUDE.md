@@ -1,5 +1,7 @@
 # Summit — Contexto del proyecto para Claude Code
 
+> **Para Claude:** Al finalizar una sesión con cambios arquitecturales o fixes significativos, proponer al usuario actualizar este archivo con lo que cambió. Este archivo es el único contexto que persiste entre sesiones.
+
 ## Qué es Summit
 
 Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego Nakamura**. Centraliza en una sola aplicación de escritorio todo lo necesario para gestionar la empresa y la productividad personal:
@@ -151,6 +153,7 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 
 **Reglas:**
 - Siempre incrementar `version` en 1.
+- **El array `MIGRATIONS` debe mantenerse en orden ascendente por `version`.** `runMigrations` ordena automáticamente antes de aplicar, pero si el array está desordenado en el source, una migración puede ejecutarse antes de sus dependencias en la misma sesión de desarrollo. Agregar siempre al final del array.
 - Las migraciones son permanentes — no hay rollback.
 - Para renombrar tablas con nuevas FK: crear `_v2`, copiar datos, borrar original, renombrar (ver migración 72 que eliminó las FK de las tablas de entradas).
 - Si hay duda de si una columna ya existe, usar `PRAGMA table_info(tabla)` para verificar antes de `ALTER TABLE` (ver migración 71).
@@ -209,7 +212,7 @@ SUPABASE_URL=https://....supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ```
 
-El JWT para autenticarse en PowerSync se firma localmente con la clave privada RSA en cada conexión (no hay token hardcodeado que expire).
+El JWT para autenticarse en PowerSync se firma localmente con la clave privada RSA en cada conexión (TTL: 24h). Si la sesión dura más de 24h sin reiniciar la app, la cola de sync puede congelarse — la solución es reiniciar.
 
 ---
 
@@ -314,6 +317,23 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 
 **Regla:** al crear un nuevo INSERT en `comex.ts` (o cualquier módulo que use PowerSync), siempre incluir `workspace_id = WORKSPACE_ID`. Si el INSERT usa columnas dinámicas (como `PLANNING_COLUMNS`), agregar `workspace_id` explícitamente fuera del array. Agregar la tabla a `TABLES_MISSING_WORKSPACE_ID` en `powersync.ts` solo si ya hay filas viejas sin workspace_id en producción.
 
+## Comportamiento de borrado en cascada (Comex)
+
+`deleteImport` borra en orden todos los registros hijos antes de borrar el import (no hay ON DELETE CASCADE en SQLite/PowerSync). El orden actual:
+
+```
+comex_quote_files → comex_logistics_quotes → comex_payments →
+comex_import_customs → comex_import_costs → comex_inal_certs →
+comex_import_tributos → comex_import_extra_costs → comex_proformas →
+comex_documents → comex_import_items → comex_imports
+```
+
+`deleteQuote` borra `comex_quote_files` antes de borrar `comex_logistics_quotes`.
+
+**Regla:** si se agrega una nueva tabla hija de `comex_imports`, agregarla al cascade de `deleteImport`.
+
+---
+
 ## Presupuestos logísticos — adjuntos y HTML de cotizaciones (migración 73)
 
 **Qué se agregó (junio 2026):**
@@ -368,3 +388,61 @@ Para agregar un nuevo nodo compuesto:
 6. Crear el componente `NuevoNode` copiando `ProveedorNode` o `ForwarderNode` como template.
 7. Agregar el `if (step === 'nuevo')` en el `.map()` de `ImportTimeline`.
 8. **No requiere migración de DB** — `status` es TEXT sin CHECK constraint en SQLite ni en Supabase.
+
+---
+
+## Bugs corregidos — revisión de código (junio 2026)
+
+### Seguridad: TLS global deshabilitado
+
+**Problema:** `process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'` al inicio de `index.ts` deshabilitaba la verificación de certificados para **todas** las conexiones HTTPS del proceso main (Supabase, IMAP, PowerSync).
+
+**Fix:** Reemplazado por `google.options({ agent: new https.Agent({ rejectUnauthorized: false }) })` al inicio de `index.ts`. El bypass TLS ahora aplica **solo a googleapis** (Drive, Calendar, Auth). Las demás conexiones validan TLS normalmente.
+
+### Seguridad: `shell:open` aceptaba cualquier esquema de URL
+
+**Problema:** `ipcMain.handle('shell:open', ...)` pasaba la URL directamente a `shell.openExternal()`. El renderer podía enviar `ms-msdt:...` u otros protocolo handlers del SO (clase Follina).
+
+**Fix:** Whitelist de esquemas en `sync.ipc.ts`: solo `https://` y `http://` son aceptados.
+
+### Migraciones: v50 declarada antes de v49 en el array
+
+**Problema:** `runMigrations` procesaba el array en orden de declaración sin ordenar. En DBs migrando desde < v49, v50 corría primero, `user_version` quedaba en 50, y v49 (tablas WhatsApp) se salteaba para siempre.
+
+**Fix:** `runMigrations` ahora ordena el array por `version` antes de filtrar y aplicar.
+
+### Comex: campo `canal` omitido del INSERT en `upsertCustoms`
+
+**Problema:** Al crear un registro de aduana por primera vez, `canal` se ignoraba silenciosamente (estaba en el UPDATE pero no en el INSERT).
+
+**Fix:** Agregado `canal` en la lista de columnas y valores del INSERT en `upsertCustoms` (`comex.ts`).
+
+### PowerSync: PGRST204 retry con múltiples columnas desconocidas bloqueaba la cola
+
+**Problema:** El retry de columna desconocida solo stripea una columna por intento. Con dos columnas nuevas simultáneas, el segundo intento fallaba con otro PGRST204 y lanzaba excepción sin llamar `transaction.complete()`, bloqueando la cola indefinidamente.
+
+**Fix:** El bloque `case PATCH` ahora usa un `while` loop que stripea columnas desconocidas hasta que el request tenga éxito (o hasta que el payload quede vacío).
+
+### Comex: `deleteImport` y `deleteQuote` no borraban registros hijos
+
+**Problema:** Borrar una importación dejaba huérfanos en 11 tablas hijas. Borrar una cotización dejaba huérfanos en `comex_quote_files`.
+
+**Fix:** Ambas funciones en `comex.ts` ahora borran en cascada en orden correcto.
+
+### PowerSync: JWT expiraba en 1h
+
+**Problema:** Con sesiones de más de 1h sin reiniciar, el upload a PowerSync fallaba con 401 y la cola quedaba congelada.
+
+**Fix:** TTL del JWT aumentado de 3600 a 86400 segundos (24h).
+
+### PowerSync: cambios en `company_finance_*` no actualizaban el renderer
+
+**Problema:** `registerSyncListeners` no incluía las tablas `company_finance_*` en el listener de cambios. Cambios locales y remotos en Finanzas Empresa no disparaban `powersync:dataChanged`.
+
+**Fix:** Las 7 tablas `company_finance_*` agregadas al listener en `powersync.ts`.
+
+### IPC: drag-drop de archivos enviaba `number[]` (lento/crasheable para archivos grandes)
+
+**Problema:** El renderer hacía `Array.from(new Uint8Array(buf))` antes de enviar por IPC, creando un array de millones de enteros para PDFs de > ~5MB. La serialización JSON podía bloquear el hilo main o crashear.
+
+**Fix:** El renderer ahora envía el `ArrayBuffer` directamente (structured clone nativo de Electron). Tipos actualizados en `useComex.ts`, `preload/index.ts` y `comex.ipc.ts`.
