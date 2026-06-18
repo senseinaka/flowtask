@@ -117,7 +117,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `projects`, `tasks`, `task_dependencies`
 - `user_permissions`
 - `finance_accounts`, `finance_categories`, `finance_payment_methods`
-- `finance_concepts`, `finance_movements`, `finance_month_insights`
+- `finance_concepts`, `finance_movements`, `finance_month_insights`, `finance_movement_entries`
 - `calendar_event_links`
 - `quote_companies`, `quote_contacts`, `quotes`, `quote_activities`
 - `company_finance_accounts`, `company_finance_categories`, `company_finance_payment_methods`
@@ -176,7 +176,7 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 
 - **Concepto** (`finance_concepts`): template de un gasto recurrente (ej. "Supermercado"). Tiene `tracks_multiple_entries` para indicar que acepta varias cargas por mes.
 - **Movimiento** (`finance_movements`): instancia mensual de un concepto (ej. "Supermercado — Junio 2025"). Tiene `amount_actual` que se recalcula como la suma de sus cargas.
-- **Entrada/Carga** (`finance_movement_entries`): cada pago individual dentro de un movimiento multi-carga. Tiene sync-rules en PowerSync. El código hace dual-write (`flowtask.db` + `getPowerSyncDb()`) — pendiente migrar a solo PowerSync siguiendo la directiva central.
+- **Entrada/Carga** (`finance_movement_entries`, `company_finance_movement_entries`): cada pago individual dentro de un movimiento multi-carga. Se leen y escriben exclusivamente via `getPowerSyncDb()` (pure PowerSync, sin dual-write). `addMovementEntry`, `updateMovementEntry` y `removeMovementEntry` usan `writeTransaction` para escribir la entrada y recalcular el movimiento en la misma transacción SQLite.
 
 ### Función `recalcMovementFromEntries`
 
@@ -184,7 +184,7 @@ En ambos archivos de queries. Lee `SUM(amount)` de las cargas, y actualiza `amou
 
 ### `entries_count` en movimientos
 
-El campo `entries_count` se calcula con `attachEntriesCounts()` que consulta `flowtask.db` después de traer los movimientos. Ver función en `finance.ts` y `company-finance.ts`. Pendiente migrar a lectura desde PowerSync cuando se elimine el dual-write.
+El campo `entries_count` se calcula con `attachEntriesCounts()` (async), que consulta `getPowerSyncDb()` después de traer los movimientos. Ver función en `finance.ts` y `company-finance.ts`.
 
 ---
 
@@ -440,6 +440,14 @@ Para agregar un nuevo nodo compuesto:
 **Problema:** `registerSyncListeners` no incluía las tablas `company_finance_*` en el listener de cambios. Cambios locales y remotos en Finanzas Empresa no disparaban `powersync:dataChanged`.
 
 **Fix:** Las 7 tablas `company_finance_*` agregadas al listener en `powersync.ts`.
+
+### Finanzas: migración dual-write → PowerSync-only (completada — junio 2026)
+
+**Problema:** `finance_movement_entries` y `company_finance_movement_entries` hacían dual-write a `flowtask.db` + PowerSync. Esto violaba la directiva fundamental y podía causar divergencia entre dispositivos.
+
+**Fix:** Todas las funciones de cargas (`addMovementEntry`, `updateMovementEntry`, `removeMovementEntry`, `listMovementEntries`, `attachEntriesCounts`, `deleteFinanceMovement`, `deleteCompanyFinanceMovement`, e `importMovements`) en `finance.ts` y `company-finance.ts` ahora usan exclusivamente `getPowerSyncDb()`. El `import { getDb }` fue eliminado de ambos archivos.
+
+**Patrón de transacción:** `addMovementEntry` y `updateMovementEntry` usan `writeTransaction(tx)` para INSERT/UPDATE + `recalcMovementFromEntries(tx, id)` en la misma transacción SQLite. Los reads del recalc dentro de la transacción ven sus propias escrituras aún no commiteadas (comportamiento estándar de SQLite).
 
 ### IPC: drag-drop de archivos enviaba `number[]` (lento/crasheable para archivos grandes)
 

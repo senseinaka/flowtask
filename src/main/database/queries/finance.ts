@@ -1001,10 +1001,10 @@ export async function confirmFinanceImport(
         }
         movementIdByConceptId.set(item.conceptId, movementId)
 
-        getDb().prepare(`
-          INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID)
+        await tx.execute(
+          `INSERT INTO finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID]
+        )
         await recalcMovementFromEntries(tx, movementId)
         imported++
         continue

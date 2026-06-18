@@ -283,14 +283,14 @@ const MOVEMENT_BASE_SELECT = `
   LEFT JOIN company_finance_accounts   acc ON acc.id = c.account_id
 `
 
-function attachEntriesCounts(movements: FinanceMovement[]): void {
+async function attachEntriesCounts(movements: FinanceMovement[]): Promise<void> {
   if (!movements.length) return
-  const flow = getDb()
   const ids = movements.map(m => m.id)
   const placeholders = ids.map(() => '?').join(',')
-  const rows = flow.prepare(
-    `SELECT movement_id, COUNT(*) as cnt FROM company_finance_movement_entries WHERE movement_id IN (${placeholders}) GROUP BY movement_id`
-  ).all(...ids) as { movement_id: string; cnt: number }[]
+  const rows = await getPowerSyncDb().getAll<{ movement_id: string; cnt: number }>(
+    `SELECT movement_id, COUNT(*) as cnt FROM company_finance_movement_entries WHERE movement_id IN (${placeholders}) GROUP BY movement_id`,
+    ids
+  )
   const byId = new Map(rows.map(r => [r.movement_id, r.cnt]))
   for (const m of movements) m.entries_count = byId.get(m.id) ?? 0
 }
@@ -304,7 +304,7 @@ export async function listCompanyFinanceMovements(month: number, year: number): 
   `, [month, year])
   const movements = rows.map(hydrateMovement)
   await attachPreviousMonthAmounts(db, movements, month, year)
-  attachEntriesCounts(movements)
+  await attachEntriesCounts(movements)
   return movements
 }
 
@@ -405,10 +405,9 @@ export async function quickUpdateCompanyFinanceMovement(id: string, data: {
 }
 
 export async function deleteCompanyFinanceMovement(id: string): Promise<void> {
-  await getPowerSyncDb().execute('DELETE FROM company_finance_movements WHERE id = ?', [id])
-  // Las cargas viven en flowtask.db y ya no tienen FK con ON DELETE CASCADE al
-  // movimiento (que vive en PowerSync), así que el borrado en cascada se hace acá.
-  getDb().prepare('DELETE FROM company_finance_movement_entries WHERE movement_id = ?').run(id)
+  const db = getPowerSyncDb()
+  await db.execute('DELETE FROM company_finance_movement_entries WHERE movement_id = ?', [id])
+  await db.execute('DELETE FROM company_finance_movements WHERE id = ?', [id])
 }
 
 // ── Registro de cargas — conceptos multi-carga (Opción C) ────────────────────
@@ -1002,10 +1001,10 @@ export async function confirmCompanyFinanceImport(
         }
         movementIdByConceptId.set(item.conceptId, movementId)
 
-        getDb().prepare(`
-          INSERT INTO company_finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID)
+        await tx.execute(
+          `INSERT INTO company_finance_movement_entries (id, movement_id, amount, entry_date, note, created_at, updated_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [randomUUID(), movementId, item.amount, item.paymentDate, item.notes, now, now, WORKSPACE_ID]
+        )
         await recalcMovementFromEntries(tx, movementId)
         imported++
         continue
