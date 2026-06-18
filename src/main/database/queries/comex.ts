@@ -233,7 +233,8 @@ export async function updateImport(id: string, data: Partial<ComexImport>): Prom
     'inal_pl_ok','inal_pl_stored_name','inal_pl_original_name','inal_pl_drive_file_id','inal_pl_drive_status',
     'inal_xls_ok','inal_xls_stored_name','inal_xls_original_name','inal_xls_drive_file_id','inal_xls_drive_status',
     'inal_factura_stored_name','inal_factura_original_name','inal_factura_drive_file_id','inal_factura_drive_status',
-    'inal_bl_stored_name','inal_bl_original_name','inal_bl_drive_file_id','inal_bl_drive_status'
+    'inal_bl_stored_name','inal_bl_original_name','inal_bl_drive_file_id','inal_bl_drive_status',
+    'docs_to_despachante','docs_to_despachante_date','docs_to_compras','docs_to_compras_date'
   ]
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
