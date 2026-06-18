@@ -341,27 +341,11 @@ comex_documents → comex_import_items → comex_imports
 - Tabla nueva `comex_quote_files` para adjuntos de cada cotización (archivos en Google Drive)
 - UI expandible por operador en `QuoteRow` con área de paste HTML, preview y lista de archivos
 
-**Supabase: SQL a ejecutar manualmente en el dashboard** (sin esto los campos nuevos no sincronizan):
-```sql
-ALTER TABLE comex_logistics_quotes ADD COLUMN IF NOT EXISTS quote_html TEXT NOT NULL DEFAULT '';
-ALTER TABLE comex_logistics_quotes ADD COLUMN IF NOT EXISTS quote_received_at BIGINT;
-
-CREATE TABLE IF NOT EXISTS comex_quote_files (
-  id              TEXT PRIMARY KEY,
-  quote_id        TEXT NOT NULL,
-  import_id       TEXT NOT NULL,
-  file_name       TEXT NOT NULL,
-  file_size       BIGINT,
-  drive_file_id   TEXT NOT NULL DEFAULT '',
-  drive_folder_id TEXT,
-  mime_type       TEXT NOT NULL DEFAULT '',
-  workspace_id    TEXT,
-  created_at      BIGINT NOT NULL,
-  updated_at      BIGINT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_quote_files_quote  ON comex_quote_files(quote_id);
-CREATE INDEX IF NOT EXISTS idx_quote_files_import ON comex_quote_files(import_id);
-```
+**SQL aplicado en Supabase** (junio 2026, via script Node.js con conexión directa PostgreSQL):
+- `ALTER TABLE comex_logistics_quotes ADD COLUMN quote_html` ✓
+- `ALTER TABLE comex_logistics_quotes ADD COLUMN quote_received_at` ✓
+- `CREATE TABLE comex_quote_files` ✓
+- `CREATE TABLE calendar_event_links` ✓
 
 `comex_quote_files` ya está en las sync-rules de PowerSync con el filtro `workspace_id` correcto (confirmado junio 2026).
 
