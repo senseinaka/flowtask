@@ -2474,7 +2474,7 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         CREATE INDEX IF NOT EXISTS idx_quote_files_import ON comex_quote_files(import_id);
       `)
     }
-  }
+  },
   {
     version: 74,
     up: (db) => {

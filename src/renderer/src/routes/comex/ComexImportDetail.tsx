@@ -268,13 +268,21 @@ function EditableSentDate({
   onSentChange: (sent: boolean) => void
   onDateSave: (ts: number | null) => void
 }) {
+  const year = new Date().getFullYear()
+  // localDay/localMonth persisten entre campo día → campo mes (date aún no guardado)
+  const [localDay,   setLocalDay]   = useState(() => date ? String(dayjs(date).date())      : '')
+  const [localMonth, setLocalMonth] = useState(() => date ? String(dayjs(date).month() + 1) : '')
   const [editingField, setEditingField] = useState<'day' | 'month' | null>(null)
   const [draft, setDraft] = useState('')
-  const monthRef = useRef<HTMLInputElement>(null)
+  const monthRef   = useRef<HTMLInputElement>(null)
+  const skipBlurRef = useRef(false)  // evita que el blur del auto-advance cierre el campo mes
 
-  const year = new Date().getFullYear()
-  const displayDay   = date ? String(dayjs(date).date())      : ''
-  const displayMonth = date ? String(dayjs(date).month() + 1) : ''
+  // Sincronizar desde prop cuando no estamos editando (ej: sync externo)
+  useEffect(() => {
+    if (editingField !== null) return
+    setLocalDay(date ? String(dayjs(date).date())      : '')
+    setLocalMonth(date ? String(dayjs(date).month() + 1) : '')
+  }, [date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function tryBuildTs(d: string, m: string): number | null {
     const dd = parseInt(d, 10), mm = parseInt(m, 10)
@@ -283,16 +291,14 @@ function EditableSentDate({
     return ts.isValid() ? ts.valueOf() : null
   }
 
-  function startEdit(field: 'day' | 'month') {
-    setDraft(field === 'day' ? displayDay : displayMonth)
-    setEditingField(field)
-  }
-
   function advanceToMonth(dayVal: string) {
-    const ts = tryBuildTs(dayVal, displayMonth)
+    const d = dayVal || localDay
+    setLocalDay(d)
+    const ts = tryBuildTs(d, localMonth)
     if (ts) onDateSave(ts)
+    skipBlurRef.current = true
+    setDraft(localMonth)
     setEditingField('month')
-    setDraft(displayMonth)
     setTimeout(() => monthRef.current?.focus(), 30)
   }
 
@@ -304,8 +310,12 @@ function EditableSentDate({
       <div className="flex items-center gap-2">
         <button
           onClick={() => {
-            if (isSent) { onSentChange(false); onDateSave(null) }
-            else        { onSentChange(true) }
+            if (isSent) {
+              onSentChange(false); onDateSave(null)
+              setLocalDay(''); setLocalMonth('')
+            } else {
+              onSentChange(true)
+            }
           }}
           className={cn(
             'w-[18px] h-[18px] flex-shrink-0 rounded border transition-colors flex items-center justify-center',
@@ -330,7 +340,9 @@ function EditableSentDate({
                 if (v.length === 2) advanceToMonth(v)
               }}
               onBlur={() => {
-                const ts = tryBuildTs(draft, displayMonth)
+                if (skipBlurRef.current) { skipBlurRef.current = false; return }
+                if (draft) setLocalDay(draft)
+                const ts = tryBuildTs(draft || localDay, localMonth)
                 if (ts) onDateSave(ts)
                 setEditingField(null)
               }}
@@ -345,15 +357,15 @@ function EditableSentDate({
           ) : (
             <button
               disabled={!isSent}
-              onClick={() => isSent && startEdit('day')}
+              onClick={() => { if (isSent) { setDraft(localDay); setEditingField('day') } }}
               className={cn(
                 'w-8 h-[22px] rounded border text-[11px] text-center transition-colors',
-                !isSent      ? 'border-slate-800 text-slate-700 cursor-default'
-                : displayDay ? 'border-slate-600 bg-slate-700/40 text-slate-200 hover:border-cyan-600 hover:text-cyan-300'
-                             : 'border-dashed border-slate-600 text-slate-600 hover:border-cyan-600'
+                !isSent    ? 'border-slate-800 text-slate-700 cursor-default'
+                : localDay  ? 'border-slate-600 bg-slate-700/40 text-slate-200 hover:border-cyan-600 hover:text-cyan-300'
+                            : 'border-dashed border-slate-600 text-slate-600 hover:border-cyan-600'
               )}
             >
-              {displayDay || 'DD'}
+              {localDay || 'DD'}
             </button>
           )}
 
@@ -370,14 +382,16 @@ function EditableSentDate({
               value={draft}
               onChange={(e) => setDraft(e.target.value.replace(/\D/g, '').slice(0, 2))}
               onBlur={() => {
-                const ts = tryBuildTs(displayDay, draft)
+                if (draft) setLocalMonth(draft)
+                const ts = tryBuildTs(localDay, draft || localMonth)
                 if (ts) onDateSave(ts)
                 setEditingField(null)
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
-                  const ts = tryBuildTs(displayDay, draft)
+                  if (draft) setLocalMonth(draft)
+                  const ts = tryBuildTs(localDay, draft || localMonth)
                   if (ts) onDateSave(ts)
                   setEditingField(null)
                 }
@@ -388,15 +402,15 @@ function EditableSentDate({
           ) : (
             <button
               disabled={!isSent}
-              onClick={() => isSent && startEdit('month')}
+              onClick={() => { if (isSent) { setDraft(localMonth); setEditingField('month') } }}
               className={cn(
                 'w-8 h-[22px] rounded border text-[11px] text-center transition-colors',
-                !isSent        ? 'border-slate-800 text-slate-700 cursor-default'
-                : displayMonth ? 'border-slate-600 bg-slate-700/40 text-slate-200 hover:border-cyan-600 hover:text-cyan-300'
-                               : 'border-dashed border-slate-600 text-slate-600 hover:border-cyan-600'
+                !isSent     ? 'border-slate-800 text-slate-700 cursor-default'
+                : localMonth ? 'border-slate-600 bg-slate-700/40 text-slate-200 hover:border-cyan-600 hover:text-cyan-300'
+                             : 'border-dashed border-slate-600 text-slate-600 hover:border-cyan-600'
               )}
             >
-              {displayMonth || 'MM'}
+              {localMonth || 'MM'}
             </button>
           )}
 
