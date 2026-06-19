@@ -375,8 +375,15 @@ function toGoogleEventResource(input: Partial<CalendarEventInput>): calendar_v3.
     event.end = { date: endDate.toISOString().slice(0, 10) }
   } else if (input.startAt !== undefined) {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-    event.start = { dateTime: new Date(input.startAt).toISOString(), timeZone: tz }
-    event.end = { dateTime: new Date(input.endAt ?? input.startAt).toISOString(), timeZone: tz }
+    // Local datetime string without Z — required when pairing with timeZone for RRULE expansion.
+    // A UTC "Z" string makes Google evaluate BYDAY in UTC instead of the specified timezone.
+    const fmtLocal = (ts: number): string => {
+      const d = new Date(ts)
+      const p = (n: number) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    }
+    event.start = { dateTime: fmtLocal(input.startAt), timeZone: tz }
+    event.end = { dateTime: fmtLocal(input.endAt ?? input.startAt), timeZone: tz }
   }
 
   if (input.reminderMinutes !== undefined) {
