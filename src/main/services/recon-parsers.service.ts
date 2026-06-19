@@ -43,9 +43,35 @@ export interface ParsedMLOp {
 function num(raw: unknown): number {
   if (raw === null || raw === undefined || raw === '') return 0
   if (typeof raw === 'number') return isNaN(raw) ? 0 : raw
-  // Formato español: "1.629.883,50" → 1629883.50
-  const s = String(raw).trim().replace(/\./g, '').replace(',', '.')
-  return parseFloat(s) || 0
+
+  const s = String(raw).trim().replace(/[$\s%]/g, '')
+  if (!s) return 0
+
+  const dotCount  = (s.match(/\./g) || []).length
+  const lastComma = s.lastIndexOf(',')
+  const lastDot   = s.lastIndexOf('.')
+
+  // Coma después del último punto → coma es decimal: "1.234,56", "269.900,00"
+  if (lastComma > lastDot) {
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  }
+
+  if (dotCount === 1 && lastDot > lastComma) {
+    const afterDot = s.slice(lastDot + 1)
+    // Un solo punto con ≤2 dígitos después → decimal estilo US: "269900.00"
+    if (afterDot.length <= 2) {
+      return parseFloat(s.replace(/,/g, '')) || 0
+    }
+    // Un solo punto con 3+ dígitos → separador de miles europeo: "269.900"
+    return parseFloat(s.replace(/\./g, '')) || 0
+  }
+
+  // Múltiples puntos → todos son miles: "1.234.567"
+  if (dotCount > 1) {
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  }
+
+  return parseFloat(s.replace(',', '.')) || 0
 }
 
 function str(raw: unknown): string {
