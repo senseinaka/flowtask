@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { BookOpen, ArrowLeftRight, Plus, Calendar } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { BookOpen, ArrowLeftRight, Plus, Trash2, ChevronRight } from 'lucide-react'
+import { useReconPeriods, useCreateReconPeriod, useDeleteReconPeriod } from '../../hooks/useRecon'
+import { useAuthSession } from '../../hooks/useCalendar'
+import {
+  RECON_STATUS_LABELS, RECON_STATUS_COLORS,
+  type ReconPeriodStatus
+} from '@shared/types'
 import { cn } from '../../components/ui/utils'
 
 const MONTH_NAMES = [
@@ -7,19 +14,61 @@ const MONTH_NAMES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ]
 
-const SOURCES = [
-  { label: 'Planilla Facturas + Clientes', detail: 'XLSX — fuente principal de facturas con desglose por medio de pago' },
-  { label: 'Cupones de tarjeta',           detail: 'CSV (Latin-1) o XLSX — cupones de las procesadoras' },
-  { label: 'Cobros ML Principal',          detail: 'XLS — operaciones de la cuenta principal de Mercado Pago' },
-  { label: 'Cobros ML Secundaria',         detail: 'XLS — operaciones de la cuenta secundaria de Mercado Pago' },
-]
+function StatusBadge({ status }: { status: ReconPeriodStatus }) {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold"
+      style={{
+        backgroundColor: RECON_STATUS_COLORS[status] + '25',
+        color: RECON_STATUS_COLORS[status],
+      }}
+    >
+      {RECON_STATUS_LABELS[status]}
+    </span>
+  )
+}
 
 export default function ReconDashboard() {
-  const [showSources, setShowSources] = useState(false)
+  const navigate  = useNavigate()
+  const { data: session } = useAuthSession()
+  const userId    = session?.userId ?? ''
 
-  const now  = new Date()
-  const year = now.getFullYear()
-  const mon  = now.getMonth() + 1
+  const { data: periods = [], isLoading } = useReconPeriods()
+  const createPeriod = useCreateReconPeriod()
+  const deletePeriod = useDeleteReconPeriod()
+
+  const [showModal, setShowModal]       = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  const now = new Date()
+  const [newMonth, setNewMonth] = useState(now.getMonth() + 1)
+  const [newYear,  setNewYear]  = useState(now.getFullYear())
+  const [creating, setCreating] = useState(false)
+
+  async function handleCreate() {
+    setCreating(true)
+    try {
+      const period = await createPeriod.mutateAsync({
+        data: { period_month: newMonth, period_year: newYear },
+        userId,
+      })
+      setShowModal(false)
+      navigate(`/contable/recon/${period.id}`)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleDelete(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (deleteConfirm !== id) { setDeleteConfirm(id); return }
+    await deletePeriod.mutateAsync(id)
+    setDeleteConfirm(null)
+  }
+
+  const duplicado = periods.some(
+    p => p.period_month === newMonth && p.period_year === newYear
+  )
 
   return (
     <div className="flex flex-col h-full bg-slate-900">
@@ -32,13 +81,14 @@ export default function ReconDashboard() {
           </div>
           <div>
             <h1 className="text-base font-semibold text-white">Conciliador Contable</h1>
-            <p className="text-xs text-slate-400">Naka Outdoors · Conciliación de ventas vs cobros reales</p>
+            <p className="text-xs text-slate-400">
+              Naka Outdoors · {periods.length} período{periods.length !== 1 ? 's' : ''}
+            </p>
           </div>
         </div>
         <button
-          disabled
-          className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          title="Disponible en próxima fase"
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors"
         >
           <Plus size={14} />
           Nuevo período
@@ -47,122 +97,129 @@ export default function ReconDashboard() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-
-        {/* Estado vacío */}
-        <div className="max-w-2xl mx-auto space-y-6">
-
-          {/* Estado */}
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center">
-            <div className="w-14 h-14 rounded-full bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
-              <ArrowLeftRight size={22} className="text-amber-400" />
+        {isLoading ? (
+          <div className="text-center text-slate-500 py-16 text-sm">Cargando períodos…</div>
+        ) : periods.length === 0 ? (
+          <div className="max-w-md mx-auto text-center py-20">
+            <div className="w-16 h-16 rounded-full bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+              <ArrowLeftRight size={24} className="text-amber-400" />
             </div>
-            <h2 className="text-white font-semibold mb-2">Sin períodos aún</h2>
-            <p className="text-sm text-slate-400 max-w-sm mx-auto">
-              Vas a poder conciliar las facturas de Naka Outdoors contra cupones de tarjeta
-              y cobros de Mercado Pago, por período mensual.
+            <h2 className="text-white font-semibold mb-2">Sin períodos todavía</h2>
+            <p className="text-sm text-slate-400 mb-6">
+              Cada período mensual agrupa los archivos de Flexxus, ML y cupones para conciliar.
             </p>
-          </div>
-
-          {/* Período sugerido */}
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar size={15} className="text-slate-400" />
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Período a conciliar</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-slate-700/50 rounded-lg px-4 py-3">
-                <p className="text-sm text-slate-300 font-medium">
-                  {MONTH_NAMES[mon - 2 < 0 ? 11 : mon - 2]} {mon - 2 < 0 ? year - 1 : year}
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5">Mes anterior — más común para conciliar</p>
-              </div>
-              <div className="flex-1 bg-slate-700/50 rounded-lg px-4 py-3">
-                <p className="text-sm text-slate-300 font-medium">
-                  {MONTH_NAMES[mon - 1]} {year}
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5">Mes actual</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Fuentes de datos */}
-          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
             <button
-              onClick={() => setShowSources((v) => !v)}
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-700/30 transition-colors"
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <ArrowLeftRight size={15} className="text-amber-400" />
-                <span className="text-sm font-medium text-white">Fuentes de datos</span>
-                <span className="text-xs text-slate-500">({SOURCES.length} archivos por período)</span>
-              </div>
-              <span className={cn(
-                'text-xs text-slate-400 transition-transform',
-                showSources && 'rotate-180'
-              )}>▼</span>
+              Crear primer período
             </button>
-
-            {showSources && (
-              <div className="border-t border-slate-700 divide-y divide-slate-700/50">
-                {SOURCES.map((s, i) => (
-                  <div key={i} className="px-5 py-3 flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-amber-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[10px] font-bold text-amber-400">{i + 1}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm text-white font-medium">{s.label}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{s.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* Estados posibles */}
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Estados del resultado</p>
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                ['conciliado',        '540 facturas — monto coincide exactamente'],
-                ['dif_menor',         '23 facturas — diferencia aceptable (<5%)'],
-                ['conciliado_monto',  '58 facturas — match por monto, no por nombre'],
-                ['diferencia_monto',  '55 facturas — diferencia significativa'],
-                ['rechazado_ml',      '12 facturas — pago rechazado en ML'],
-                ['no_cobrado_ml',     '273 facturas — sin match en ML (efectivo, CTA CTE, etc.)'],
-              ] as const).map(([estado, ejemplo]) => (
-                <div key={estado} className="flex items-start gap-2 p-2 rounded-lg bg-slate-700/30">
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
-                    style={{ backgroundColor: {
-                      conciliado: '#10b981', dif_menor: '#f59e0b',
-                      conciliado_monto: '#3b82f6', diferencia_monto: '#f97316',
-                      rechazado_ml: '#ef4444', no_cobrado_ml: '#94a3b8'
-                    }[estado] }}
-                  />
-                  <div>
-                    <p className="text-xs font-medium text-white">{estado.replace(/_/g, ' ')}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{ejemplo}</p>
-                  </div>
+        ) : (
+          <div className="max-w-2xl mx-auto space-y-2">
+            {periods.map(period => (
+              <div
+                key={period.id}
+                onClick={() => navigate(`/contable/recon/${period.id}`)}
+                className="bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 flex items-center gap-4 cursor-pointer hover:border-amber-700/50 hover:bg-slate-800/80 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-lg bg-amber-900/30 flex-shrink-0 flex flex-col items-center justify-center">
+                  <span className="text-[9px] font-bold text-amber-500 uppercase leading-none">
+                    {MONTH_NAMES[period.period_month - 1].slice(0, 3)}
+                  </span>
+                  <span className="text-xs font-bold text-amber-300 leading-none mt-0.5">
+                    {String(period.period_year).slice(2)}
+                  </span>
                 </div>
-              ))}
-            </div>
-            <p className="text-xs text-slate-600 mt-3">* Datos de ejemplo — mayo 2026</p>
-          </div>
 
-          {/* Próximos pasos */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Próximas fases</p>
-            <div className="space-y-2 text-xs text-slate-500">
-              <div className="flex items-center gap-2"><span className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">2</span><span>Parsers de archivos (Flexxus, Cupones CSV/XLSX, ML Principal/Secundaria)</span></div>
-              <div className="flex items-center gap-2"><span className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">3</span><span>Motor de conciliación + IPC handlers</span></div>
-              <div className="flex items-center gap-2"><span className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">4</span><span>UI de carga de archivos + tabla de resultados</span></div>
-              <div className="flex items-center gap-2"><span className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">5</span><span>Override manual + auditoría + export XLSX</span></div>
-            </div>
-          </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-white">
+                      {MONTH_NAMES[period.period_month - 1]} {period.period_year}
+                    </span>
+                    <StatusBadge status={period.status} />
+                  </div>
+                  {period.notes && (
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">{period.notes}</p>
+                  )}
+                </div>
 
-        </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={(e) => handleDelete(period.id, e)}
+                    className={cn(
+                      'p-1.5 rounded transition-colors',
+                      deleteConfirm === period.id
+                        ? 'bg-red-600 text-white'
+                        : 'text-slate-600 hover:text-red-400 hover:bg-slate-700'
+                    )}
+                    title={deleteConfirm === period.id ? 'Confirmar' : 'Eliminar'}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                  <ChevronRight
+                    size={16}
+                    className="text-slate-600 group-hover:text-amber-500 transition-colors"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Modal nuevo período */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl">
+            <h2 className="text-white font-semibold mb-4 text-sm">Nuevo período</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Mes</label>
+                <select
+                  value={newMonth}
+                  onChange={e => setNewMonth(Number(e.target.value))}
+                  className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500"
+                >
+                  {MONTH_NAMES.map((name, i) => (
+                    <option key={i + 1} value={i + 1}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Año</label>
+                <input
+                  type="number"
+                  value={newYear}
+                  onChange={e => setNewYear(Number(e.target.value))}
+                  min={2020} max={2099}
+                  className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              {duplicado && (
+                <p className="text-xs text-red-400">
+                  Ya existe un período para {MONTH_NAMES[newMonth - 1]} {newYear}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowModal(false)}
+                className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={creating || duplicado}
+                className="flex-1 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40"
+              >
+                {creating ? 'Creando…' : 'Crear'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
