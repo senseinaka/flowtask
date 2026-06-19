@@ -572,6 +572,8 @@ function EventModal({
       const idParts = modal.event.id.split(':')
       return {
         title: modal.event.title,
+        description: modal.event.description ?? '',
+        location: modal.event.location ?? '',
         allDay: modal.event.all_day,
         date: start.format('YYYY-MM-DD'),
         startTime: start.format('HH:mm'),
@@ -582,6 +584,8 @@ function EventModal({
     }
     return {
       title: '',
+      description: '',
+      location: '',
       allDay: false,
       date: modal.date.format('YYYY-MM-DD'),
       startTime: '09:00',
@@ -592,8 +596,8 @@ function EventModal({
   }, [modal, calendars])
 
   const [title, setTitle] = useState(initial.title)
-  const [description, setDescription] = useState('')
-  const [location, setLocation] = useState('')
+  const [description, setDescription] = useState(initial.description)
+  const [location, setLocation] = useState(initial.location)
   const [allDay, setAllDay] = useState(initial.allDay)
   const [date, setDate] = useState(initial.date)
   const [startTime, setStartTime] = useState(initial.startTime)
@@ -614,6 +618,17 @@ function EventModal({
   }, [personalContact?.whatsapp_number])
 
   const effectiveWaPhone = waPhone === '__custom__' ? waCustomPhone : waPhone
+
+  const waFeedback = useMemo(() => {
+    if (!effectiveWaPhone.trim() || waReminderMinutes === null) return null
+    const startAt = allDay
+      ? dayjs(date).startOf('day').valueOf()
+      : dayjs(`${date} ${startTime}`).valueOf()
+    const sendAt = startAt - waReminderMinutes * 60_000
+    if (sendAt <= Date.now()) return { ok: false, msg: 'El evento ya pasó, no se enviará el recordatorio WA' }
+    const sendTime = dayjs(sendAt).format('DD/MM HH:mm')
+    return { ok: true, msg: `WA se enviará el ${sendTime} a ${effectiveWaPhone}` }
+  }, [effectiveWaPhone, waReminderMinutes, allDay, date, startTime])
 
   const createEvent = useCreateManualEvent()
   const updateEvent = useUpdateManualEvent()
@@ -859,6 +874,11 @@ function EventModal({
                 placeholder="+54 9 11 1234 5678"
                 className="mt-1.5 w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60"
               />
+            )}
+            {waFeedback && (
+              <p className={cn('text-[11px] mt-1', waFeedback.ok ? 'text-emerald-400' : 'text-amber-400')}>
+                {waFeedback.msg}
+              </p>
             )}
           </div>
 

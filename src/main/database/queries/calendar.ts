@@ -113,7 +113,9 @@ export async function getUnifiedEvents(startDate: number, endDate: number): Prom
       end_at: ev.end_at,
       all_day: !!ev.all_day,
       category: ev.google_calendar_id,
-      link: null
+      link: null,
+      description: ev.description,
+      location: ev.location
     })
   }
 
@@ -213,7 +215,9 @@ export async function createManualEvent(
     end_at: input.endAt,
     all_day: input.allDay,
     category: googleCalendarId,
-    link: null
+    link: null,
+    description: input.description ?? null,
+    location: input.location ?? null
   }
 }
 

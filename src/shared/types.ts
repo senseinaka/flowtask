@@ -2173,6 +2173,8 @@ export interface UnifiedCalendarEvent {
   category: string
   /** Ruta interna de Summit para fuentes que no son Google (null para eventos de Google). */
   link: string | null
+  description?: string | null
+  location?: string | null
 }
 
 export interface GoogleCalendarInfo {
