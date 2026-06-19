@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List, Plus, Trash2, X, MapPin, Navigation, Copy } from 'lucide-react'
+import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List, Plus, Trash2, X, MapPin, Navigation, Copy, Maximize2, Minimize2 } from 'lucide-react'
 import dayjs, { Dayjs } from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
@@ -74,9 +74,11 @@ export default function Calendar() {
   const lastWheelRef = useRef(0)
   const calendarGridRef = useRef<HTMLDivElement>(null)
 
+  const navBlocked = modal?.mode === 'create' || modal?.mode === 'edit'
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (modal) return
+      if (navBlocked) return
       const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
       if (e.key === 'ArrowLeft')  { e.preventDefault(); goPrev() }
@@ -87,13 +89,13 @@ export default function Calendar() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [modal, view])
+  }, [navBlocked, view])
 
   useEffect(() => {
     const el = calendarGridRef.current
     if (!el) return
     function onWheel(e: WheelEvent) {
-      if (modal) return
+      if (navBlocked) return
       const now = Date.now()
       if (now - lastWheelRef.current < 300) return
       lastWheelRef.current = now
@@ -103,7 +105,7 @@ export default function Calendar() {
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [modal, view])
+  }, [navBlocked, view])
 
   const calendarColorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -686,6 +688,8 @@ function DayZoomModal({
   onCreateEvent: (date: Dayjs) => void
   onEventClick: (ev: UnifiedCalendarEvent) => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+
   const sorted = [...events].sort((a, b) => {
     const aAllDay = a.all_day ? 1 : 0
     const bAllDay = b.all_day ? 1 : 0
@@ -699,7 +703,12 @@ function DayZoomModal({
       onClick={onClose}
     >
       <div
-        className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
+        className={cn(
+          'bg-slate-800 border border-slate-700 rounded-xl shadow-2xl flex flex-col transition-all duration-200',
+          expanded
+            ? 'w-[calc(100vw-2rem)] h-[calc(100vh-2rem)]'
+            : 'w-full max-w-xl mx-4 max-h-[80vh]'
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
@@ -709,12 +718,21 @@ function DayZoomModal({
               {date.format('D [de] MMMM [de] YYYY')}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-700"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setExpanded(e => !e)}
+              className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-700"
+              title={expanded ? 'Reducir' : 'Ampliar'}
+            >
+              {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-700"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto divide-y divide-slate-700/50">
