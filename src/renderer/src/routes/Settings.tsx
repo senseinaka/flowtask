@@ -154,6 +154,8 @@ export default function Settings() {
   const [wapiUrl, setWapiUrl] = useState('https://evolution-api-production-d7fd.up.railway.app')
   const [wapiKey, setWapiKey] = useState('flowtask-secret')
   const [waConfigSaved, setWaConfigSaved] = useState(false)
+  const [waTestResult, setWaTestResult] = useState<{ ok: boolean; status?: number; body?: unknown; error?: string } | null>(null)
+  const [waTestLoading, setWaTestLoading] = useState(false)
 
   // Mis datos personales (para recibir notificaciones propias)
   const { data: personalContact } = usePersonalContact()
@@ -833,6 +835,39 @@ export default function Settings() {
               {whatsappError}
             </div>
           )}
+
+          {/* Botón de prueba de envío */}
+          <div className="mt-3 border-t border-slate-700/60 pt-3">
+            <button
+              onClick={async () => {
+                const phone = personalContact?.whatsapp_number
+                if (!phone) return
+                setWaTestLoading(true)
+                setWaTestResult(null)
+                const result = await window.api.whatsapp.testSend(phone, '🧪 Mensaje de prueba desde Summit')
+                setWaTestResult(result)
+                setWaTestLoading(false)
+              }}
+              disabled={waTestLoading || !personalContact?.whatsapp_number}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {waTestLoading ? <Loader2 size={12} className="animate-spin" /> : <MessageCircle size={12} />}
+              Enviar mensaje de prueba a {personalContact?.whatsapp_number || '(sin número configurado)'}
+            </button>
+            {waTestResult !== null && (
+              <div className={cn(
+                'mt-2 rounded-lg p-2.5 text-xs font-mono break-all',
+                waTestResult.ok ? 'bg-emerald-950/40 text-emerald-300' : 'bg-red-950/40 text-red-300'
+              )}>
+                <p className="font-sans font-medium mb-1">
+                  {waTestResult.ok ? 'OK — mensaje enviado' : `Error ${waTestResult.status ?? ''}`}
+                </p>
+                {!waTestResult.ok && (
+                  <p>{waTestResult.error ?? JSON.stringify(waTestResult.body)}</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {qrImage && (
             <div className="mt-4 flex flex-col items-center gap-2">

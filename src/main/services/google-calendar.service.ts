@@ -374,8 +374,9 @@ function toGoogleEventResource(input: Partial<CalendarEventInput>): calendar_v3.
     event.start = { date: startDate.toISOString().slice(0, 10) }
     event.end = { date: endDate.toISOString().slice(0, 10) }
   } else if (input.startAt !== undefined) {
-    event.start = { dateTime: new Date(input.startAt).toISOString() }
-    event.end = { dateTime: new Date(input.endAt ?? input.startAt).toISOString() }
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    event.start = { dateTime: new Date(input.startAt).toISOString(), timeZone: tz }
+    event.end = { dateTime: new Date(input.endAt ?? input.startAt).toISOString(), timeZone: tz }
   }
 
   if (input.reminderMinutes !== undefined) {

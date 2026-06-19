@@ -26,6 +26,10 @@ export function registerSyncIpc(): void {
     whatsappService.sendMessage(phone, message)
   )
 
+  ipcMain.handle('whatsapp:testSend', (_e, phone: string, message: string) =>
+    whatsappService.testSend(phone, message)
+  )
+
   /** Verifica si la conexión Drive es realmente válida (puede detectar invalid_grant) */
   ipcMain.handle('sync:testDriveConnection', () => driveService.testConnection())
 

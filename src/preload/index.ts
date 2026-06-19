@@ -502,6 +502,8 @@ const api = {
   whatsapp: {
     send:         (phone: string, message: string): Promise<boolean> =>
       ipcRenderer.invoke('whatsapp:send', phone, message),
+    testSend:     (phone: string, message: string): Promise<{ ok: boolean; status?: number; body?: unknown; error?: string }> =>
+      ipcRenderer.invoke('whatsapp:testSend', phone, message),
     sendToGroup:  (jid: string, message: string): Promise<boolean> =>
       ipcRenderer.invoke('whatsapp:sendToGroup', jid, message),
     fetchGroups:  (): Promise<Array<{ jid: string; name: string; size: number }>> =>

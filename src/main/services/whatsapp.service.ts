@@ -19,7 +19,7 @@ class WhatsappService {
     return { apikey: this.apiKey, 'Content-Type': 'application/json' }
   }
 
-  async connectInstance(): Promise<{ qr?: string; connected?: boolean }> {
+  async connectInstance(): Promise<{ qr?: string; connected?: boolean; error?: string }> {
     try {
       // Try to create instance (ignores error if already exists)
       await axios.post(
@@ -94,17 +94,41 @@ class WhatsappService {
     }
   }
 
+  private cleanPhone(phone: string): string {
+    // Remove +, spaces, dashes, parentheses — Evolution API expects only digits
+    return phone.replace(/[^\d]/g, '')
+  }
+
   async sendMessage(phone: string, text: string): Promise<boolean> {
+    const result = await this.testSend(phone, text)
+    return result.ok
+  }
+
+  async testSend(phone: string, text: string): Promise<{ ok: boolean; status?: number; body?: unknown; error?: string }> {
+    const number = this.cleanPhone(phone)
+    if (!number) return { ok: false, error: 'Número vacío después de limpiar' }
     try {
       const res = await axios.post(
         `${this.apiUrl}/message/sendText/${INSTANCE_NAME}`,
-        { number: phone, text },
+        // textMessage for v2, text for v1 — send both for compatibility
+        { number, text, textMessage: { text } },
         { headers: this.headers(), timeout: 10000 }
       )
-      return res.status === 201 || res.status === 200
-    } catch (err) {
-      console.error('[WhatsApp] sendMessage error:', err)
-      return false
+      const ok = res.status === 200 || res.status === 201
+      return { ok, status: res.status, body: res.data }
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status
+        const body = err.response?.data
+        const msg = typeof body === 'object' && body !== null
+          ? JSON.stringify(body)
+          : err.message
+        console.error(`[WhatsApp] sendMessage error ${status}:`, body ?? err.message)
+        return { ok: false, status, body, error: msg }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[WhatsApp] sendMessage error:', msg)
+      return { ok: false, error: msg }
     }
   }
 
