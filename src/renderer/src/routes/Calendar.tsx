@@ -46,6 +46,7 @@ function formatLastSync(ts: number | null): string {
 type ModalState =
   | { mode: 'create'; date: Dayjs }
   | { mode: 'edit'; event: UnifiedCalendarEvent }
+  | { mode: 'day-zoom'; date: Dayjs }
 
 export default function Calendar() {
   const navigate = useNavigate()
@@ -69,6 +70,40 @@ export default function Calendar() {
       googleCalendarsInitialized.current = true
     }
   }, [calendars])
+
+  const lastWheelRef = useRef(0)
+  const calendarGridRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (modal) return
+      const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); goPrev() }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goNext() }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); goPrev() }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); goNext() }
+      if (e.key === 't' || e.key === 'T') goToday()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [modal, view])
+
+  useEffect(() => {
+    const el = calendarGridRef.current
+    if (!el) return
+    function onWheel(e: WheelEvent) {
+      if (modal) return
+      const now = Date.now()
+      if (now - lastWheelRef.current < 300) return
+      lastWheelRef.current = now
+      e.preventDefault()
+      if (e.deltaY > 0) goNext()
+      else goPrev()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [modal, view])
 
   const calendarColorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -173,7 +208,7 @@ export default function Calendar() {
   }
 
   function handleDayClick(day: Dayjs) {
-    setModal({ mode: 'create', date: day })
+    setModal({ mode: 'day-zoom', date: day })
   }
 
   function goPrev() {
@@ -308,7 +343,7 @@ export default function Calendar() {
           onToggleFilter={toggleFilter}
           onSoloGoogleCalendar={soloGoogleCalendar}
         />
-        <div className="flex-1 overflow-auto">
+        <div ref={calendarGridRef} className="flex-1 overflow-auto">
           {eventsLoading ? (
             <div className="flex items-center justify-center h-40">
               <Loader2 size={20} className="animate-spin text-slate-500" />
@@ -321,7 +356,17 @@ export default function Calendar() {
         </div>
       </div>
 
-      {modal && (
+      {modal?.mode === 'day-zoom' && (
+        <DayZoomModal
+          date={modal.date}
+          events={eventsByDay.get(modal.date.format('YYYY-MM-DD')) ?? []}
+          calendarColorMap={calendarColorMap}
+          onClose={() => setModal(null)}
+          onCreateEvent={(d) => setModal({ mode: 'create', date: d })}
+          onEventClick={handleEventClick}
+        />
+      )}
+      {(modal?.mode === 'create' || modal?.mode === 'edit') && (
         <EventModal
           modal={modal}
           calendars={calendars}
@@ -625,6 +670,99 @@ function CalendarStrip({ startDate, endDate }: { startDate: string; endDate: str
       <p className="text-[10px] text-slate-400 mt-2">
         {totalDays} días · {start.format('D MMM')} → {end.format('D MMM')}
       </p>
+    </div>
+  )
+}
+
+// ── Modal zoom de día ───────────────────────────────────────────────────────
+
+function DayZoomModal({
+  date, events, calendarColorMap, onClose, onCreateEvent, onEventClick
+}: {
+  date: Dayjs
+  events: UnifiedCalendarEvent[]
+  calendarColorMap: Map<string, string>
+  onClose: () => void
+  onCreateEvent: (date: Dayjs) => void
+  onEventClick: (ev: UnifiedCalendarEvent) => void
+}) {
+  const sorted = [...events].sort((a, b) => {
+    const aAllDay = a.all_day ? 1 : 0
+    const bAllDay = b.all_day ? 1 : 0
+    if (aAllDay !== bAllDay) return bAllDay - aAllDay
+    return a.start_at - b.start_at
+  })
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+          <div>
+            <p className="text-xs text-slate-500 capitalize">{date.format('dddd')}</p>
+            <h2 className="text-lg font-semibold text-white capitalize">
+              {date.format('D [de] MMMM [de] YYYY')}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-700"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-700/50">
+          {sorted.length === 0 ? (
+            <p className="py-10 text-center text-slate-500 text-sm">Sin eventos para este día</p>
+          ) : sorted.map((ev) => {
+            const color = getEventColor(ev, calendarColorMap)
+            const time = ev.all_day ? 'Todo el día' : dayjs(ev.start_at).format('HH:mm')
+            const endTime = (!ev.all_day && ev.end_at) ? dayjs(ev.end_at).format('HH:mm') : null
+            const clickable = !!ev.link || ev.source === 'google'
+            return (
+              <button
+                key={ev.id}
+                disabled={!clickable}
+                onClick={() => { if (clickable) { onEventClick(ev); onClose() } }}
+                className="w-full text-left px-5 py-3.5 flex items-start gap-3 hover:bg-slate-700/40 transition-colors disabled:cursor-default"
+              >
+                <div
+                  className="flex-shrink-0 w-1 self-stretch rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-white leading-tight">{ev.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-xs text-slate-400">
+                      {time}{endTime ? ` - ${endTime}` : ''}
+                    </span>
+                    <span className="text-[10px] text-slate-500">{SOURCE_LABELS[ev.source]}</span>
+                  </div>
+                  {ev.description && (
+                    <p className="text-xs text-slate-500 mt-1 truncate">{ev.description}</p>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-700">
+          <button
+            onClick={() => onCreateEvent(date)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus size={15} />
+            Nuevo evento en este día
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
