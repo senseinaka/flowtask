@@ -384,6 +384,8 @@ function toGoogleEventResource(input: Partial<CalendarEventInput>): calendar_v3.
       : { useDefault: false, overrides: [] }
   }
 
+  if (input.recurrence?.length) event.recurrence = input.recurrence
+
   return event
 }
 

@@ -2213,6 +2213,7 @@ export interface CalendarEventInput {
   endAt: number | null
   allDay: boolean
   reminderMinutes?: number | null
+  recurrence?: string[]  // RFC 5545 RRULE strings, ej. ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=8']
 }
 
 /** Link entre un vencimiento/hito de Summit y un evento de Google Calendar. */

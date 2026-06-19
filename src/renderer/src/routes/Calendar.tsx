@@ -15,6 +15,7 @@ import { usePersonalContact } from '../hooks/useSettings'
 import { cn } from '../components/ui/utils'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] // 0=Lun … 6=Dom
 
 type ViewMode = 'month' | 'week' | 'day' | 'agenda'
 
@@ -133,10 +134,24 @@ export default function Calendar() {
   const eventsByDay = useMemo(() => {
     const map = new Map<string, UnifiedCalendarEvent[]>()
     for (const ev of filteredEvents) {
-      const key = dayjs(ev.start_at).format('YYYY-MM-DD')
-      const list = map.get(key) ?? []
-      list.push(ev)
-      map.set(key, list)
+      const startDay = dayjs(ev.start_at).startOf('day')
+      let endDay = startDay
+      if (ev.end_at) {
+        const raw = dayjs(ev.end_at)
+        // All-day events from Google use exclusive end (day after last), subtract 1
+        endDay = ev.all_day ? raw.startOf('day').subtract(1, 'day') : raw.startOf('day')
+        if (endDay.isBefore(startDay)) endDay = startDay
+      }
+      let cur = startDay
+      let safety = 0
+      while (!cur.isAfter(endDay) && safety < 60) {
+        const k = cur.format('YYYY-MM-DD')
+        const list = map.get(k) ?? []
+        list.push(ev)
+        map.set(k, list)
+        cur = cur.add(1, 'day')
+        safety++
+      }
     }
     return map
   }, [filteredEvents])
@@ -370,6 +385,8 @@ function MonthGrid({
               <div className="space-y-1">
                 {dayEvents.slice(0, view === 'day' ? undefined : 4).map((ev) => {
                   const clickable = !!ev.link || ev.source === 'google'
+                  const isStart = dayjs(ev.start_at).format('YYYY-MM-DD') === key
+                  const spansDays = !!ev.end_at && dayjs(ev.end_at).startOf('day').isAfter(dayjs(ev.start_at).startOf('day'))
                   return (
                     <button
                       key={ev.id}
@@ -378,12 +395,20 @@ function MonthGrid({
                       disabled={!clickable}
                       className={cn(
                         'block w-full text-left text-[11px] px-1.5 py-0.5 rounded truncate text-white',
-                        clickable && 'cursor-pointer hover:opacity-80'
+                        clickable && 'cursor-pointer hover:opacity-80',
+                        !isStart && spansDays && 'rounded-l-none opacity-75'
                       )}
                       style={{ backgroundColor: getEventColor(ev, calendarColorMap) }}
                     >
-                      {!ev.all_day && `${dayjs(ev.start_at).format('HH:mm')} `}
-                      {ev.title}
+                      {isStart ? (
+                        <>
+                          {!ev.all_day && `${dayjs(ev.start_at).format('HH:mm')} `}
+                          {ev.title}
+                          {spansDays && ' →'}
+                        </>
+                      ) : (
+                        `↦ ${ev.title}`
+                      )}
                     </button>
                   )
                 })}
@@ -555,6 +580,51 @@ function CalendarSidebar({
   )
 }
 
+// ── Mini calendario para previsualización multi-día ──────────────────────────
+
+function CalendarStrip({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const start = dayjs(startDate)
+  const end = dayjs(endDate)
+  if (!start.isValid() || !end.isValid()) return null
+  if (end.isBefore(start, 'day')) {
+    return <p className="text-xs text-red-400">La fecha fin debe ser igual o posterior al inicio</p>
+  }
+  const totalDays = end.diff(start, 'day') + 1
+  if (totalDays <= 1) return null
+
+  const daysInMonth = start.daysInMonth()
+  const firstDow = start.startOf('month').day() // 0=Dom
+  const DOW = ['D','L','M','X','J','V','S']
+
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
+      <p className="text-[11px] text-slate-400 mb-2 capitalize">{start.format('MMMM YYYY')}</p>
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {DOW.map(d => <div key={d} className="text-center text-[9px] text-slate-600">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDow }, (_, i) => <div key={`p${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const d = start.startOf('month').add(i, 'day')
+          const inRange = (d.isAfter(start, 'day') || d.isSame(start, 'day')) && (d.isBefore(end, 'day') || d.isSame(end, 'day'))
+          const isEdge = d.isSame(start, 'day') || d.isSame(end, 'day')
+          return (
+            <div key={i} className={cn(
+              'text-center text-[10px] py-0.5 rounded-sm',
+              isEdge ? 'bg-indigo-600 text-white font-medium' : inRange ? 'bg-indigo-900/40 text-indigo-300' : 'text-slate-600'
+            )}>
+              {i + 1}
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-slate-400 mt-2">
+        {totalDays} días · {start.format('D MMM')} → {end.format('D MMM')}
+      </p>
+    </div>
+  )
+}
+
 // ── Modal crear/editar/borrar evento manual ─────────────────────────────────
 
 function EventModal({
@@ -565,21 +635,27 @@ function EventModal({
   onClose: () => void
 }) {
   const isEdit = modal.mode === 'edit'
+  type EventMode = 'standard' | 'multiday' | 'recurring'
+
   const initial = useMemo(() => {
     if (modal.mode === 'edit') {
       const start = dayjs(modal.event.start_at)
       const end = modal.event.end_at ? dayjs(modal.event.end_at) : start.add(1, 'hour')
       const idParts = modal.event.id.split(':')
+      const startDateStr = start.format('YYYY-MM-DD')
+      const endDateStr = end.format('YYYY-MM-DD')
       return {
         title: modal.event.title,
         description: modal.event.description ?? '',
         location: modal.event.location ?? '',
         allDay: modal.event.all_day,
-        date: start.format('YYYY-MM-DD'),
+        date: startDateStr,
+        endDate: endDateStr,
         startTime: start.format('HH:mm'),
         endTime: end.format('HH:mm'),
         calendarId: modal.event.category,
-        googleEventId: idParts.slice(1).join(':')
+        googleEventId: idParts.slice(1).join(':'),
+        mode: (endDateStr !== startDateStr ? 'multiday' : 'standard') as EventMode
       }
     }
     return {
@@ -588,10 +664,12 @@ function EventModal({
       location: '',
       allDay: false,
       date: modal.date.format('YYYY-MM-DD'),
+      endDate: modal.date.format('YYYY-MM-DD'),
       startTime: '09:00',
       endTime: '10:00',
       calendarId: calendars.find((c) => c.primary)?.id ?? calendars[0]?.id ?? '',
-      googleEventId: ''
+      googleEventId: '',
+      mode: 'standard' as EventMode
     }
   }, [modal, calendars])
 
@@ -600,14 +678,23 @@ function EventModal({
   const [location, setLocation] = useState(initial.location)
   const [allDay, setAllDay] = useState(initial.allDay)
   const [date, setDate] = useState(initial.date)
+  const [endDate, setEndDate] = useState(initial.endDate)
   const [startTime, setStartTime] = useState(initial.startTime)
   const [endTime, setEndTime] = useState(initial.endTime)
   const [calendarId, setCalendarId] = useState(initial.calendarId)
   const [reminderMinutes, setReminderMinutes] = useState<number | null>(null)
-  const [waPhone, setWaPhone] = useState('') // phone number or '__custom__'
+  const [waPhone, setWaPhone] = useState('')
   const [waCustomPhone, setWaCustomPhone] = useState('')
   const [waReminderMinutes, setWaReminderMinutes] = useState<number | null>(null)
   const [existingWaReminder, setExistingWaReminder] = useState<CalendarWaReminder | null>(null)
+  const [eventMode, setEventMode] = useState<EventMode>(initial.mode)
+
+  // Estado modo recurrente
+  const [recDays, setRecDays] = useState<Set<number>>(new Set())
+  const [recStartTime, setRecStartTime] = useState('09:00')
+  const [recEndTime, setRecEndTime] = useState('18:00')
+  const [recFromDate, setRecFromDate] = useState(initial.date)
+  const [recWeeks, setRecWeeks] = useState(4)
 
   const { data: contacts = [] } = useContacts()
   const { data: personalContact } = usePersonalContact()
@@ -629,6 +716,29 @@ function EventModal({
     if (!isEdit || modal.mode !== 'edit') return
     window.api.calendar.getWaReminder(modal.event.id).then(setExistingWaReminder)
   }, [])
+
+  const recurringInstances = useMemo(() => {
+    if (recDays.size === 0) return []
+    const start = new Date(recFromDate + 'T00:00:00')
+    const end = new Date(start)
+    end.setDate(start.getDate() + recWeeks * 7)
+    const instances: Date[] = []
+    const cur = new Date(start)
+    while (cur < end) {
+      const od = (cur.getDay() + 6) % 7 // 0=Lun…6=Dom
+      if (recDays.has(od)) instances.push(new Date(cur))
+      cur.setDate(cur.getDate() + 1)
+    }
+    return instances
+  }, [recDays, recFromDate, recWeeks])
+
+  function toggleRecDay(i: number) {
+    setRecDays(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
+  }
 
   const effectiveWaPhone = waPhone === '__custom__' ? waCustomPhone : waPhone
 
@@ -656,7 +766,9 @@ function EventModal({
       : dayjs(`${date} ${startTime}`).valueOf()
     const endAt = allDay
       ? null
-      : dayjs(`${date} ${endTime}`).valueOf()
+      : eventMode === 'multiday'
+        ? dayjs(`${endDate} ${endTime}`).valueOf()
+        : dayjs(`${date} ${endTime}`).valueOf()
     return {
       summary: title.trim(),
       description: description.trim() || null,
@@ -670,6 +782,32 @@ function EventModal({
 
   async function handleSave() {
     if (!title.trim() || !calendarId) return
+
+    if (eventMode === 'recurring') {
+      if (recurringInstances.length === 0) return
+      const first = recurringInstances[0]
+      const [sh, sm] = recStartTime.split(':').map(Number)
+      const [eh, em] = recEndTime.split(':').map(Number)
+      const startAt = dayjs(first).hour(sh).minute(sm).second(0).valueOf()
+      const endAt = dayjs(first).hour(eh).minute(em).second(0).valueOf()
+      const RFC = ['MO','TU','WE','TH','FR','SA','SU']
+      const byday = [...recDays].sort().map(i => RFC[i]).join(',')
+      const rrule = `RRULE:FREQ=WEEKLY;BYDAY=${byday};COUNT=${recurringInstances.length}`
+      const input: CalendarEventInput = {
+        summary: title.trim(),
+        description: description.trim() || null,
+        location: location.trim() || null,
+        startAt,
+        endAt,
+        allDay: false,
+        reminderMinutes,
+        recurrence: [rrule]
+      }
+      await createEvent.mutateAsync({ calendarId, input })
+      onClose()
+      return
+    }
+
     const input = buildInput()
     if (isEdit && modal.mode === 'edit') {
       await updateEvent.mutateAsync({ calendarId, googleEventId: initial.googleEventId, input })
@@ -705,6 +843,9 @@ function EventModal({
     onClose()
   }
 
+  const isSaveDisabled = isSaving || !title.trim() || !calendarId
+    || (eventMode === 'recurring' && recurringInstances.length === 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -718,6 +859,26 @@ function EventModal({
         </div>
 
         <div className="p-4 space-y-3">
+          {/* Selector de modo — solo en crear */}
+          {!isEdit && (
+            <div className="flex gap-1 bg-slate-900 border border-slate-700 rounded-lg p-1">
+              {(['standard', 'multiday', 'recurring'] as EventMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setEventMode(m)}
+                  className={cn(
+                    'flex-1 px-2 py-1 text-xs font-medium rounded-md transition-colors',
+                    eventMode === m ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  {m === 'standard' ? 'Estándar' : m === 'multiday' ? 'Multi-día' : 'Recurrente'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Título */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Título</label>
             <input
@@ -730,6 +891,7 @@ function EventModal({
             />
           </div>
 
+          {/* Descripción */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Descripción</label>
             <textarea
@@ -740,6 +902,7 @@ function EventModal({
             />
           </div>
 
+          {/* Ubicación */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Ubicación</label>
             <input
@@ -779,57 +942,208 @@ function EventModal({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="event-allday"
-              checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
-              className="rounded border-slate-700 bg-slate-900"
-            />
-            <label htmlFor="event-allday" className="text-xs text-slate-300">Todo el día</label>
-          </div>
+          {/* ── Sección fecha/hora ── */}
+          {eventMode === 'recurring' ? (
+            <>
+              {/* Días de la semana */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2">Días de la semana</label>
+                <div className="flex gap-1.5">
+                  {DAY_LABELS.map((label, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleRecDay(i)}
+                      className={cn(
+                        'w-8 h-8 rounded-full text-xs font-medium transition-colors border',
+                        recDays.has(i)
+                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className={allDay ? 'col-span-3' : ''}>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Fecha</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            {!allDay && (
-              <>
+              {/* Hora inicio - fin */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Inicio</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Hora inicio</label>
                   <input
                     type="time"
-                    value={startTime}
-                    onChange={(e) => {
-                      const newStart = e.target.value
-                      setStartTime(newStart)
-                      const [h, m] = newStart.split(':').map(Number)
-                      const newEnd = dayjs().hour(h).minute(m).add(1, 'hour').format('HH:mm')
-                      setEndTime(newEnd)
-                    }}
+                    value={recStartTime}
+                    onChange={(e) => setRecStartTime(e.target.value)}
                     className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Fin</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Hora fin</label>
                   <input
                     type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
+                    value={recEndTime}
+                    onChange={(e) => setRecEndTime(e.target.value)}
                     className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
-              </>
-            )}
-          </div>
+              </div>
 
+              {/* Desde + semanas */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Desde</label>
+                  <input
+                    type="date"
+                    value={recFromDate}
+                    onChange={(e) => setRecFromDate(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Semanas</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={52}
+                    value={recWeeks}
+                    onChange={(e) => setRecWeeks(Math.max(1, Math.min(52, Number(e.target.value) || 1)))}
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Preview instancias */}
+              {recurringInstances.length > 0 ? (
+                <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
+                  <p className="text-xs font-medium text-slate-300 mb-1.5">
+                    Se crearán {recurringInstances.length} eventos en Google Calendar
+                  </p>
+                  <div className="space-y-0.5">
+                    {recurringInstances.slice(0, 6).map((d, i) => (
+                      <p key={i} className="text-[11px] text-slate-500 capitalize">
+                        {dayjs(d).format('dddd D [de] MMMM')}
+                      </p>
+                    ))}
+                    {recurringInstances.length > 6 && (
+                      <p className="text-[11px] text-slate-600">+{recurringInstances.length - 6} más</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-400">Seleccioná al menos un día de la semana.</p>
+              )}
+            </>
+          ) : (
+            // Estándar o Multi-día
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="event-allday"
+                  checked={allDay}
+                  onChange={(e) => setAllDay(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-900"
+                />
+                <label htmlFor="event-allday" className="text-xs text-slate-300">Todo el día</label>
+              </div>
+
+              {eventMode === 'standard' ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className={allDay ? 'col-span-3' : ''}>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Fecha</label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  {!allDay && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Inicio</label>
+                        <input
+                          type="time"
+                          value={startTime}
+                          onChange={(e) => {
+                            const newStart = e.target.value
+                            setStartTime(newStart)
+                            const [h, m] = newStart.split(':').map(Number)
+                            setEndTime(dayjs().hour(h).minute(m).add(1, 'hour').format('HH:mm'))
+                          }}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Fin</label>
+                        <input
+                          type="time"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                // Multi-día
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Fecha inicio</label>
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Fecha fin</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  {!allDay && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Hora inicio</label>
+                        <input
+                          type="time"
+                          value={startTime}
+                          onChange={(e) => {
+                            const newStart = e.target.value
+                            setStartTime(newStart)
+                            const [h, m] = newStart.split(':').map(Number)
+                            setEndTime(dayjs().hour(h).minute(m).add(1, 'hour').format('HH:mm'))
+                          }}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Hora fin</label>
+                        <input
+                          type="time"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <CalendarStrip startDate={date} endDate={endDate} />
+                </>
+              )}
+            </>
+          )}
+
+          {/* Recordatorio push — siempre */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Recordatorio</label>
             <div className="flex flex-wrap gap-1.5 mt-1">
@@ -858,101 +1172,105 @@ function EventModal({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Recordatorio WhatsApp
-              <span className="ml-1.5 text-slate-600 font-normal">(Evolution API)</span>
-            </label>
-            <div className="flex gap-2 mt-1">
-              <select
-                value={waPhone}
-                onChange={(e) => setWaPhone(e.target.value)}
-                className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60 truncate"
-              >
-                <option value="">— sin destinatario —</option>
-                {personalContact?.whatsapp_number && (
-                  <option value={personalContact.whatsapp_number}>
-                    Yo — {personalContact.name || personalContact.whatsapp_number}
-                  </option>
-                )}
-                {contacts
-                  .filter((c) => c.phone)
-                  .map((c) => (
-                    <option key={c.id} value={c.phone}>{c.name}</option>
-                  ))}
-                <option value="__custom__">Otro (ingresar número)...</option>
-              </select>
-              <select
-                value={waReminderMinutes ?? ''}
-                onChange={(e) => setWaReminderMinutes(e.target.value !== '' ? Number(e.target.value) : null)}
-                className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60"
-              >
-                <option value="">— sin recordatorio —</option>
-                <option value="0">En el evento</option>
-                <option value="30">30 min antes</option>
-                <option value="60">1 hora antes</option>
-                <option value="120">2 horas antes</option>
-                <option value="1440">1 día antes</option>
-              </select>
-            </div>
-            {waPhone === '__custom__' && (
-              <input
-                type="tel"
-                value={waCustomPhone}
-                onChange={(e) => setWaCustomPhone(e.target.value)}
-                placeholder="+54 9 11 1234 5678"
-                className="mt-1.5 w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60"
-              />
-            )}
-            {waFeedback && (
-              <p className={cn('text-[11px] mt-1', waFeedback.ok ? 'text-emerald-400' : 'text-amber-400')}>
-                {waFeedback.msg}
-              </p>
-            )}
-            {existingWaReminder && (existingWaReminder.sent_at !== null || !waFeedback) && (
-              <div className={cn(
-                'mt-2 px-3 py-2 rounded-lg border flex items-start justify-between gap-2',
-                existingWaReminder.sent_at === null
-                  ? 'bg-slate-900 border-amber-800/50'
-                  : existingWaReminder.success === 1
-                    ? 'bg-slate-900 border-emerald-800/50'
-                    : 'bg-slate-900 border-red-800/50'
-              )}>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="text-[11px] text-slate-300 font-medium">Recordatorio WA</p>
-                    {existingWaReminder.sent_at === null
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400">Pendiente</span>
-                      : existingWaReminder.success === 1
-                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-400">Enviado</span>
-                        : <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">Error al enviar</span>
-                    }
-                  </div>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    {waContactName} — {dayjs(existingWaReminder.send_at).format('DD/MM HH:mm')}
-                  </p>
-                  {existingWaReminder.sent_at !== null && (
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      {existingWaReminder.success === 1 ? 'Enviado' : 'Intentado'} a las {dayjs(existingWaReminder.sent_at).format('HH:mm')}
+          {/* Recordatorio WA — solo para estándar y multi-día */}
+          {eventMode !== 'recurring' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">
+                Recordatorio WhatsApp
+                <span className="ml-1.5 text-slate-600 font-normal">(Evolution API)</span>
+              </label>
+              <div className="flex gap-2 mt-1">
+                <select
+                  value={waPhone}
+                  onChange={(e) => setWaPhone(e.target.value)}
+                  className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60 truncate"
+                >
+                  <option value="">— sin destinatario —</option>
+                  {personalContact?.whatsapp_number && (
+                    <option value={personalContact.whatsapp_number}>
+                      Yo — {personalContact.name || personalContact.whatsapp_number}
+                    </option>
+                  )}
+                  {contacts
+                    .filter((c) => c.phone)
+                    .map((c) => (
+                      <option key={c.id} value={c.phone}>{c.name}</option>
+                    ))}
+                  <option value="__custom__">Otro (ingresar número)...</option>
+                </select>
+                <select
+                  value={waReminderMinutes ?? ''}
+                  onChange={(e) => setWaReminderMinutes(e.target.value !== '' ? Number(e.target.value) : null)}
+                  className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60"
+                >
+                  <option value="">— sin recordatorio —</option>
+                  <option value="0">En el evento</option>
+                  <option value="30">30 min antes</option>
+                  <option value="60">1 hora antes</option>
+                  <option value="120">2 horas antes</option>
+                  <option value="1440">1 día antes</option>
+                </select>
+              </div>
+              {waPhone === '__custom__' && (
+                <input
+                  type="tel"
+                  value={waCustomPhone}
+                  onChange={(e) => setWaCustomPhone(e.target.value)}
+                  placeholder="+54 9 11 1234 5678"
+                  className="mt-1.5 w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60"
+                />
+              )}
+              {waFeedback && (
+                <p className={cn('text-[11px] mt-1', waFeedback.ok ? 'text-emerald-400' : 'text-amber-400')}>
+                  {waFeedback.msg}
+                </p>
+              )}
+              {existingWaReminder && (existingWaReminder.sent_at !== null || !waFeedback) && (
+                <div className={cn(
+                  'mt-2 px-3 py-2 rounded-lg border flex items-start justify-between gap-2',
+                  existingWaReminder.sent_at === null
+                    ? 'bg-slate-900 border-amber-800/50'
+                    : existingWaReminder.success === 1
+                      ? 'bg-slate-900 border-emerald-800/50'
+                      : 'bg-slate-900 border-red-800/50'
+                )}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-[11px] text-slate-300 font-medium">Recordatorio WA</p>
+                      {existingWaReminder.sent_at === null
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400">Pendiente</span>
+                        : existingWaReminder.success === 1
+                          ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-400">Enviado</span>
+                          : <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">Error al enviar</span>
+                      }
+                    </div>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      {waContactName} — {dayjs(existingWaReminder.send_at).format('DD/MM HH:mm')}
                     </p>
+                    {existingWaReminder.sent_at !== null && (
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        {existingWaReminder.success === 1 ? 'Enviado' : 'Intentado'} a las {dayjs(existingWaReminder.sent_at).format('HH:mm')}
+                      </p>
+                    )}
+                  </div>
+                  {existingWaReminder.sent_at === null && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await window.api.calendar.cancelWaReminder(existingWaReminder.event_id)
+                        setExistingWaReminder(null)
+                      }}
+                      className="text-[11px] text-red-400 hover:text-red-300 shrink-0 mt-0.5"
+                    >
+                      Cancelar
+                    </button>
                   )}
                 </div>
-                {existingWaReminder.sent_at === null && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await window.api.calendar.cancelWaReminder(existingWaReminder.event_id)
-                      setExistingWaReminder(null)
-                    }}
-                    className="text-[11px] text-red-400 hover:text-red-300 shrink-0 mt-0.5"
-                  >
-                    Cancelar
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
+          {/* Calendario */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Calendario</label>
             <select
@@ -993,11 +1311,13 @@ function EventModal({
             </button>
             <button
               onClick={handleSave}
-              disabled={isSaving || !title.trim() || !calendarId}
+              disabled={isSaveDisabled}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               {isSaving && <Loader2 size={13} className="animate-spin" />}
-              Guardar
+              {eventMode === 'recurring'
+                ? `Crear ${recurringInstances.length} evento${recurringInstances.length !== 1 ? 's' : ''}`
+                : 'Guardar'}
             </button>
           </div>
         </div>
