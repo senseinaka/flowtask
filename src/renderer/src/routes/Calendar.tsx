@@ -765,8 +765,9 @@ function EventModal({
   const createEvent = useCreateManualEvent()
   const updateEvent = useUpdateManualEvent()
   const deleteEvent = useDeleteManualEvent()
+  const [isBatchCreating, setIsBatchCreating] = useState(false)
 
-  const isSaving = createEvent.isPending || updateEvent.isPending
+  const isSaving = createEvent.isPending || updateEvent.isPending || isBatchCreating
   const error = createEvent.error || updateEvent.error || deleteEvent.error
 
   function buildInput(): CalendarEventInput {
@@ -794,25 +795,29 @@ function EventModal({
 
     if (eventMode === 'recurring') {
       if (recurringInstances.length === 0) return
-      const first = recurringInstances[0]
       const [sh, sm] = recStartTime.split(':').map(Number)
       const [eh, em] = recEndTime.split(':').map(Number)
-      const startAt = dayjs(first).hour(sh).minute(sm).second(0).valueOf()
-      const endAt = dayjs(first).hour(eh).minute(em).second(0).valueOf()
-      const RFC = ['MO','TU','WE','TH','FR','SA','SU']
-      const byday = [...recDays].sort().map(i => RFC[i]).join(',')
-      const rrule = `RRULE:FREQ=WEEKLY;BYDAY=${byday};COUNT=${recurringInstances.length}`
-      const input: CalendarEventInput = {
-        summary: title.trim(),
-        description: description.trim() || null,
-        location: location.trim() || null,
-        startAt,
-        endAt,
-        allDay: false,
-        reminderMinutes,
-        recurrence: [rrule]
+      setIsBatchCreating(true)
+      try {
+        for (const inst of recurringInstances) {
+          const startAt = dayjs(inst).hour(sh).minute(sm).second(0).valueOf()
+          const endAt   = dayjs(inst).hour(eh).minute(em).second(0).valueOf()
+          await createEvent.mutateAsync({
+            calendarId,
+            input: {
+              summary: title.trim(),
+              description: description.trim() || null,
+              location: location.trim() || null,
+              startAt,
+              endAt,
+              allDay: false,
+              reminderMinutes
+            }
+          })
+        }
+      } finally {
+        setIsBatchCreating(false)
       }
-      await createEvent.mutateAsync({ calendarId, input })
       onClose()
       return
     }
@@ -1028,10 +1033,10 @@ function EventModal({
                   <p className="text-xs font-medium text-slate-300 mb-1.5">
                     Se crearán {recurringInstances.length} eventos en Google Calendar
                   </p>
-                  <div className="max-h-40 overflow-y-auto space-y-0.5 pr-1">
+                  <div className="max-h-64 overflow-y-auto space-y-0.5 pr-1">
                     {recurringInstances.map((d, i) => (
                       <p key={i} className="text-[11px] text-slate-500 capitalize">
-                        {dayjs(d).format('dddd D [de] MMMM')}
+                        {i + 1}. {dayjs(d).format('dddd D [de] MMMM')}
                       </p>
                     ))}
                   </div>
