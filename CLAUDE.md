@@ -407,6 +407,80 @@ Para agregar un nuevo nodo compuesto:
 
 ---
 
+## Módulo de Calendario — arquitectura específica
+
+### Archivos clave
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/services/google-calendar.service.ts` | Integración OAuth con Google Calendar API (leer, crear, editar, borrar eventos) |
+| `src/main/database/queries/calendar.ts` | Queries locales: `getUnifiedEvents`, `createManualEvent`, `updateManualEvent`, `deleteManualEvent`, links opt-in |
+| `src/main/database/queries/calendar-wa-reminders.ts` | CRUD de recordatorios WA persistentes: `upsertWaReminder`, `deleteWaReminder`, `getPendingWaReminders`, etc. |
+| `src/main/ipc/calendar.ipc.ts` | Handlers IPC del módulo calendario |
+| `src/main/services/scheduler.service.ts` | Timers in-memory para recordatorios WA + restore desde DB al arrancar |
+| `src/renderer/src/routes/Calendar.tsx` | UI principal del calendario |
+| `src/renderer/src/hooks/useCalendar.ts` | Hooks React Query para todos los handlers del calendario |
+
+### Tablas locales (flowtask.db — NO sincronizan)
+
+- **`calendar_events_cache`**: caché local de eventos de Google Calendar (columnas: `google_event_id`, `google_calendar_id`, `summary`, `description`, `location`, `start_at`, `end_at`, `all_day`). Se sincroniza periódicamente desde Google Calendar vía `syncEnabledCalendars()`. Las escrituras manuales (crear/editar evento) también actualizan esta caché via `upsertEventCache()`.
+
+- **`calendar_wa_reminders`**: recordatorios WA persistentes (migración 76). Columnas: `id` (UUID), `event_id` (ID unificado del evento, ej. `google:abc123`), `phone`, `message`, `send_at`, `sent_at`, `created_at`. Persiste los recordatorios para que sobrevivan reinicios de la app.
+
+- **`calendar_connections`**: configuración de conexión OAuth (tokens de acceso, calendarios habilitados).
+
+### Tablas sincronizadas via PowerSync
+
+- **`calendar_event_links`**: links opt-in entre eventos de Finanzas/Comex y Google Calendar. Sincroniza entre dispositivos (ej. distintos usuarios pueden ver qué ítems ya tienen evento en GCal). Tiene `owner_user_id` para restricciones de borrado.
+
+### Identificadores de eventos unificados
+
+El tipo `UnifiedCalendarEvent` tiene un campo `id` que sigue el patrón `{source}:{original_id}`:
+- `google:{googleEventId}` — evento de Google Calendar
+- `finance:{movementId}` — vencimiento de Finanzas Personal
+- `company_finance:{movementId}` — vencimiento de Finanzas Empresa
+- `comex_planning:{milestoneId}` — hito de Programación de Pedidos
+
+Este ID compuesto es el que se usa como `event_id` en `calendar_wa_reminders`.
+
+### Sistema de recordatorios WA
+
+**Flujo de creación:**
+1. `Calendar.tsx` llama `window.api.calendar.scheduleWaReminder(ev.id, phone, message, sendAt)`
+2. IPC → `schedulerService.scheduleDirectWaReminder(id, phone, message, sendAt)`
+3. El scheduler persiste en DB via `upsertWaReminder(id, phone, message, sendAt)` y luego crea un `setTimeout`
+4. Al disparar el timer: envía WA via Evolution API y llama `markWaReminderSent(eventId)`
+
+**Restore al arrancar:**
+- `schedulerService.start()` llama `loadPendingWaReminders()` que lee `getPendingWaReminders()` (filtro `sent_at IS NULL`) y recrea los timers en memoria.
+
+**Cancelación:**
+- `window.api.calendar.cancelWaReminder(eventId)` → `schedulerService.cancelDirectWaReminder(id)` → borra el timer + llama `deleteWaReminder(eventId)`
+
+### Evolution API (WhatsApp)
+
+- **URL por defecto:** `https://evolution-api-production-d7fd.up.railway.app`
+- **Instancia:** `flowtask`
+- **Endpoint de envío:** `POST /message/sendText/flowtask`
+- **Teléfono:** sin `+`, sin espacios (ej. `5491112345678`)
+- **Servicio:** `src/main/services/whatsapp.service.ts`
+
+### Contacto personal (Mis datos personales)
+
+- Hook: `usePersonalContact()` en `src/renderer/src/hooks/useSettings.ts`
+- Llamada IPC: `window.api.settings.getPersonalContact()` → devuelve `PersonalContactInfo`
+- Campos: `name`, `whatsapp_number` (con código de país, sin `+`), `email`, `other`
+- Configurado en Settings → "Mis datos personales"
+
+### Contactos (agenda)
+
+- Tabla `contacts` en `flowtask.db` (local-only, no sincroniza)
+- Campo `phone`: almacenado solo dígitos (strip de caracteres no-numéricos al guardar)
+- Hook: `useContacts()` en `src/renderer/src/hooks/useContacts.ts`
+- IPC: `window.api.contacts.list()`
+
+---
+
 ## Bugs corregidos — revisión de código (junio 2026)
 
 ### Seguridad: TLS global deshabilitado

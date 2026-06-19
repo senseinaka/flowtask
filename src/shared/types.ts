@@ -2193,6 +2193,16 @@ export interface CalendarConnectionStatus {
   lastSyncAt: number | null
 }
 
+export interface CalendarWaReminder {
+  id: string
+  event_id: string
+  phone: string
+  message: string
+  send_at: number
+  sent_at: number | null
+  created_at: number
+}
+
 /** Datos de un evento de Google Calendar para crear/editar (Fase 2). */
 export interface CalendarEventInput {
   summary: string

@@ -11,6 +11,7 @@ import {
   refreshLinkedEvent
 } from '../database/queries/calendar'
 import { schedulerService } from '../services/scheduler.service'
+import { getWaReminderForEvent } from '../database/queries/calendar-wa-reminders'
 import type { CalendarEventInput, CalendarEventLink, LinkEntityInput } from '@shared/types'
 
 export function registerCalendarIpc(): void {
@@ -74,5 +75,9 @@ export function registerCalendarIpc(): void {
 
   ipcMain.handle('calendar:cancelWaReminder', (_e, id: string) =>
     schedulerService.cancelDirectWaReminder(id)
+  )
+
+  ipcMain.handle('calendar:getWaReminder', (_e, eventId: string) =>
+    getWaReminderForEvent(eventId)
   )
 }

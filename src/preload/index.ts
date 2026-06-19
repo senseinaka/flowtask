@@ -41,7 +41,7 @@ import type {
   AuthSession, AuthLoginResult,
   UserPermission,
   CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent,
-  CalendarEventInput, CalendarEventLink, LinkEntityInput,
+  CalendarEventInput, CalendarEventLink, LinkEntityInput, CalendarWaReminder,
   Quote, QuoteActivity, QuoteCompany, QuoteContact, QuoteKPIs,
   CreateQuoteInput, UpdateQuoteInput,
   CreateQuoteCompanyInput, CreateQuoteContactInput,
@@ -871,7 +871,9 @@ const api = {
     scheduleWaReminder: (id: string, phone: string, message: string, sendAt: number): Promise<void> =>
       ipcRenderer.invoke('calendar:scheduleWaReminder', id, phone, message, sendAt),
     cancelWaReminder: (id: string): Promise<void> =>
-      ipcRenderer.invoke('calendar:cancelWaReminder', id)
+      ipcRenderer.invoke('calendar:cancelWaReminder', id),
+    getWaReminder: (eventId: string): Promise<CalendarWaReminder | null> =>
+      ipcRenderer.invoke('calendar:getWaReminder', eventId)
   },
 
   quotes: {

@@ -607,6 +607,7 @@ function EventModal({
   const [waPhone, setWaPhone] = useState('') // phone number or '__custom__'
   const [waCustomPhone, setWaCustomPhone] = useState('')
   const [waReminderMinutes, setWaReminderMinutes] = useState<number | null>(null)
+  const [existingWaReminder, setExistingWaReminder] = useState<{ event_id: string; phone: string; send_at: number } | null>(null)
 
   const { data: contacts = [] } = useContacts()
   const { data: personalContact } = usePersonalContact()
@@ -616,6 +617,11 @@ function EventModal({
       setWaPhone(personalContact.whatsapp_number)
     }
   }, [personalContact?.whatsapp_number])
+
+  useEffect(() => {
+    if (!isEdit || modal.mode !== 'edit') return
+    window.api.calendar.getWaReminder(modal.event.id).then(setExistingWaReminder)
+  }, [])
 
   const effectiveWaPhone = waPhone === '__custom__' ? waCustomPhone : waPhone
 
@@ -660,6 +666,16 @@ function EventModal({
     const input = buildInput()
     if (isEdit && modal.mode === 'edit') {
       await updateEvent.mutateAsync({ calendarId, googleEventId: initial.googleEventId, input })
+      if (effectiveWaPhone.trim() && waReminderMinutes !== null) {
+        const sendAt = input.startAt - waReminderMinutes * 60_000
+        const timeLabel = waReminderMinutes === 0
+          ? 'ahora'
+          : waReminderMinutes >= 60
+            ? `${waReminderMinutes / 60}h`
+            : `${waReminderMinutes}min`
+        const msg = `🗓 Recordatorio: *${title.trim()}*\nEn ${timeLabel}${location.trim() ? `\n📍 ${location.trim()}` : ''}`
+        await window.api.calendar.scheduleWaReminder(modal.event.id, effectiveWaPhone.trim(), msg, sendAt)
+      }
     } else {
       const ev = await createEvent.mutateAsync({ calendarId, input })
       if (effectiveWaPhone.trim() && waReminderMinutes !== null) {
@@ -879,6 +895,26 @@ function EventModal({
               <p className={cn('text-[11px] mt-1', waFeedback.ok ? 'text-emerald-400' : 'text-amber-400')}>
                 {waFeedback.msg}
               </p>
+            )}
+            {existingWaReminder && !waFeedback && (
+              <div className="mt-2 px-3 py-2 bg-slate-900 border border-emerald-800/40 rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-emerald-400 font-medium">Recordatorio WA pendiente</p>
+                  <p className="text-[11px] text-slate-400">
+                    {existingWaReminder.phone} — {dayjs(existingWaReminder.send_at).format('DD/MM HH:mm')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await window.api.calendar.cancelWaReminder(existingWaReminder.event_id)
+                    setExistingWaReminder(null)
+                  }}
+                  className="text-[11px] text-red-400 hover:text-red-300 ml-3 shrink-0"
+                >
+                  Cancelar
+                </button>
+              </div>
             )}
           </div>
 

@@ -2501,6 +2501,24 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         try { db.exec(sql) } catch { /* already exists */ }
       }
     }
+  },
+  {
+    version: 76,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS calendar_wa_reminders (
+          id         TEXT PRIMARY KEY,
+          event_id   TEXT NOT NULL,
+          phone      TEXT NOT NULL,
+          message    TEXT NOT NULL,
+          send_at    INTEGER NOT NULL,
+          sent_at    INTEGER,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_wa_reminders_event_id ON calendar_wa_reminders(event_id);
+        CREATE INDEX IF NOT EXISTS idx_wa_reminders_send_at  ON calendar_wa_reminders(send_at);
+      `)
+    }
   }
 ]
 

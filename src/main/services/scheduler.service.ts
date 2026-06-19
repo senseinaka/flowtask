@@ -7,8 +7,14 @@ import {
   getPendingScheduledMessages, markMessageSent,
   markMessagePartial, rescheduleRecurring
 } from '../database/queries/messages'
+import {
+  upsertWaReminder,
+  markWaReminderSent,
+  deleteWaReminder,
+  getPendingWaReminders
+} from '../database/queries/calendar-wa-reminders'
 import { whatsappService } from './whatsapp.service'
-import type { Reminder, ScheduledMessage } from '@shared/types'
+import type { Reminder, ScheduledMessage, CalendarWaReminder } from '@shared/types'
 
 type PushFn = (channel: string, data: unknown) => void
 
@@ -24,10 +30,12 @@ class SchedulerService {
     this.loadPendingReminders()
     this.loadPendingDelegatedReminders()
     this.loadPendingMessages()
+    this.loadPendingWaReminders()
     this.pollInterval = setInterval(() => {
       this.loadPendingReminders()
       this.loadPendingDelegatedReminders()
       this.loadPendingMessages()
+      this.loadPendingWaReminders()
     }, 60_000)
   }
 
@@ -167,7 +175,7 @@ class SchedulerService {
     this.pushFn?.('message:sent', { messageId: msg.id, success, partial, errors })
   }
 
-  // ─── Calendar WA reminders (in-memory, no DB) ────────────────────────────
+  // ─── Calendar WA reminders (persistidos en calendar_wa_reminders) ────────
 
   scheduleDirectWaReminder(id: string, phone: string, message: string, sendAt: number): void {
     const delay = sendAt - Date.now()
@@ -175,7 +183,8 @@ class SchedulerService {
       console.warn(`[WA Reminder] id=${id} ignorado: delay=${delay}ms (evento en el pasado o inmediato)`)
       return
     }
-    this.cancelDirectWaReminder(id)
+    upsertWaReminder(id, phone, message, sendAt)
+    this.cancelDirectWaReminderTimer(id)
     const mins = Math.round(delay / 60_000)
     console.log(`[WA Reminder] Programado id=${id} phone=${phone} en ${mins} min (${delay}ms)`)
     const timer = setTimeout(async () => {
@@ -183,14 +192,50 @@ class SchedulerService {
       console.log(`[WA Reminder] Enviando a ${phone}...`)
       const ok = await whatsappService.sendMessage(phone, message)
       console.log(`[WA Reminder] Resultado: ${ok ? 'OK' : 'FALLO'} phone=${phone}`)
+      markWaReminderSent(id)
       this.pushFn?.('calendar:wa-reminder:sent', { id, ok })
     }, delay)
     this.waTimers.set(id, timer)
   }
 
   cancelDirectWaReminder(id: string): void {
+    this.cancelDirectWaReminderTimer(id)
+    deleteWaReminder(id)
+  }
+
+  private cancelDirectWaReminderTimer(id: string): void {
     const t = this.waTimers.get(id)
     if (t) { clearTimeout(t); this.waTimers.delete(id) }
+  }
+
+  private loadPendingWaReminders(): void {
+    try {
+      const pending = getPendingWaReminders()
+      for (const r of pending) {
+        if (!this.waTimers.has(r.event_id)) this.scheduleWaReminderFromDb(r)
+      }
+    } catch (err) {
+      console.error('[WA Reminder] Error restaurando reminders pendientes:', err)
+    }
+  }
+
+  private scheduleWaReminderFromDb(r: CalendarWaReminder): void {
+    const delay = r.send_at - Date.now()
+    if (delay <= 0) {
+      markWaReminderSent(r.event_id)
+      return
+    }
+    const mins = Math.round(delay / 60_000)
+    console.log(`[WA Reminder] Restaurado event_id=${r.event_id} phone=${r.phone} en ${mins} min`)
+    const timer = setTimeout(async () => {
+      this.waTimers.delete(r.event_id)
+      console.log(`[WA Reminder] Enviando a ${r.phone}...`)
+      const ok = await whatsappService.sendMessage(r.phone, r.message)
+      console.log(`[WA Reminder] Resultado: ${ok ? 'OK' : 'FALLO'} phone=${r.phone}`)
+      markWaReminderSent(r.event_id)
+      this.pushFn?.('calendar:wa-reminder:sent', { id: r.event_id, ok })
+    }, delay)
+    this.waTimers.set(r.event_id, timer)
   }
 
   // ─── Shared ───────────────────────────────────────────────────────────────
