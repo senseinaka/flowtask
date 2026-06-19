@@ -61,18 +61,23 @@ export function registerReconIpc(): void {
   // ── Import principal (abre dialog → parsea → inserta) ────────────────────
 
   ipcMain.handle('recon:import',
-    async (e, periodId: string, source: ReconImportSource, importedBy: string) => {
-      const win = BrowserWindow.fromWebContents(e.sender)
-      if (!win) return { ok: false, error: 'No hay ventana activa' }
+    async (e, periodId: string, source: ReconImportSource, importedBy: string, preFilePath?: string) => {
+      let filePath: string
+      let filename: string
 
-      const filters = DIALOG_FILTERS[source] ?? [{ name: 'Todos', extensions: ['*'] }]
-      const title   = DIALOG_TITLES[source]  ?? 'Seleccionar archivo'
-      const dlg     = await dialog.showOpenDialog(win, { title, properties: ['openFile'], filters })
-
-      if (dlg.canceled || dlg.filePaths.length === 0) return { ok: false, canceled: true }
-
-      const filePath = dlg.filePaths[0]
-      const filename = basename(filePath)
+      if (preFilePath) {
+        filePath = preFilePath
+        filename = basename(preFilePath)
+      } else {
+        const win = BrowserWindow.fromWebContents(e.sender)
+        if (!win) return { ok: false, error: 'No hay ventana activa' }
+        const filters = DIALOG_FILTERS[source] ?? [{ name: 'Todos', extensions: ['*'] }]
+        const title   = DIALOG_TITLES[source]  ?? 'Seleccionar archivo'
+        const dlg     = await dialog.showOpenDialog(win, { title, properties: ['openFile'], filters })
+        if (dlg.canceled || dlg.filePaths.length === 0) return { ok: false, canceled: true }
+        filePath = dlg.filePaths[0]
+        filename = basename(filePath)
+      }
 
       try {
         const buffer = readFileSync(filePath)

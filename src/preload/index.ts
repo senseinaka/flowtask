@@ -975,9 +975,10 @@ const api = {
       importFile: (
         periodId: string,
         source: ReconImportSource,
-        importedBy: string
+        importedBy: string,
+        filePath?: string
       ): Promise<{ ok: boolean; count?: number; filename?: string; canceled?: boolean; error?: string }> =>
-        ipcRenderer.invoke('recon:import', periodId, source, importedBy),
+        ipcRenderer.invoke('recon:import', periodId, source, importedBy, filePath),
     },
     data: {
       invoices: (periodId: string): Promise<ReconInvoice[]> =>
