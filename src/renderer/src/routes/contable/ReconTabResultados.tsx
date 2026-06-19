@@ -194,22 +194,33 @@ function VistaCompacta({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-700">
-      <table className="w-full text-xs">
+      <table className="w-full text-xs table-fixed">
+        <colgroup>
+          <col style={{ width: 32 }} />
+          <col style={{ width: 110 }} />
+          <col style={{ width: 132 }} />
+          <col style={{ width: 92 }} />
+          <col style={{ width: 84 }} />
+          <col style={{ width: 84 }} />
+          <col style={{ width: 80 }} />
+          <col style={{ width: 96 }} />
+          <col /> {/* Notas — toma el espacio restante */}
+        </colgroup>
         <thead>
           <tr className="bg-slate-800 border-b border-slate-700">
-            <th className="px-2 py-2 w-8">
+            <th className="px-2 py-2">
               <button onClick={onToggleSelectAll} className="text-slate-400 hover:text-white">
                 {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
               </button>
             </th>
             <th className="text-left px-3 py-2 text-slate-400 font-medium">Comprobante</th>
-            <th className="text-left px-3 py-2 text-slate-400 font-medium max-w-[160px]">Concepto</th>
+            <th className="text-left px-3 py-2 text-slate-400 font-medium">Concepto</th>
             <th className="text-right px-3 py-2 text-slate-400 font-medium">Total</th>
-            <th className="text-right px-3 py-2 text-slate-400 font-medium">Tarjetas</th>
-            <th className="text-right px-3 py-2 text-slate-400 font-medium">ML monto</th>
+            <th className="text-right px-3 py-2 text-slate-400 font-medium">Tarj.</th>
+            <th className="text-right px-3 py-2 text-slate-400 font-medium">ML</th>
             <th className="text-right px-3 py-2 text-slate-400 font-medium">Dif.</th>
             <th className="text-left px-3 py-2 text-slate-400 font-medium">Estado</th>
-            <th className="text-left px-3 py-2 text-slate-400 font-medium max-w-[140px]">Notas</th>
+            <th className="text-left px-3 py-2 text-slate-400 font-medium">Notas</th>
           </tr>
         </thead>
         <tbody>
@@ -230,37 +241,37 @@ function VistaCompacta({
                     isExpanded ? 'border-b-0'        : ''
                   )}
                 >
-                  <td className="px-2 py-2 w-8" onClick={e => { e.stopPropagation(); onToggleSelect(r.id) }}>
+                  <td className="px-2 py-1.5" onClick={e => { e.stopPropagation(); onToggleSelect(r.id) }}>
                     <span className="text-slate-500 hover:text-white">
                       {isSelected ? <CheckSquare size={13} className="text-blue-400" /> : <Square size={13} />}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-300 font-mono text-[11px] whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-slate-300 font-mono text-[11px] truncate">
                     {r.invoice?.comprobante ?? r.mlOp?.operation_id ?? '—'}
                   </td>
-                  <td className="px-3 py-2 text-slate-400 max-w-[160px] truncate">
+                  <td className="px-3 py-1.5 text-slate-400 truncate">
                     {r.invoice?.concepto ?? r.mlOp?.counterpart_name ?? '—'}
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-300 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-right text-slate-300 tabular-nums whitespace-nowrap">
                     {r.invoice ? `$${fmt(r.invoice.total)}` : '—'}
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-300 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-right text-slate-300 tabular-nums whitespace-nowrap">
                     {r.invoice ? `$${fmt(r.invoice.importe_tarjetas)}` : '—'}
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-300 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-right text-slate-300 tabular-nums whitespace-nowrap">
                     {r.mlOp ? `$${fmt(r.mlOp.transaction_amount)}` : '—'}
                   </td>
                   <td className={cn(
-                    'px-3 py-2 text-right whitespace-nowrap font-mono',
+                    'px-3 py-1.5 text-right tabular-nums whitespace-nowrap',
                     r.diferencia === 0 ? 'text-slate-600'
                       : Math.abs(r.diferencia) < 1000 ? 'text-amber-400' : 'text-red-400'
                   )}>
                     {r.diferencia !== 0 ? `$${fmt(Math.abs(r.diferencia))}` : '—'}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5">
                     <EstadoBadge estado={r.estado} />
                   </td>
-                  <td className="px-3 py-2 text-slate-500 text-[11px] max-w-[140px] truncate">
+                  <td className={cn('px-3 py-1.5 text-[11px] truncate', r.notes ? 'text-slate-300' : 'text-slate-600')}>
                     {r.notes || '—'}
                   </td>
                 </tr>

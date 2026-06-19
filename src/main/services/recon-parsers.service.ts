@@ -129,8 +129,8 @@ function findCol(headers: string[], keywords: string[]): number {
 export function parseFlexxus(buffer: Buffer): ParsedInvoice[] {
   const wb = XLSX.read(buffer, { type: 'buffer' })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  // raw: false → números como strings con formato del archivo (ej "269.900,00")
-  const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, raw: false, defval: '' }) as string[][]
+  // raw: true → celdas numéricas retornan el número real (ej 269900, no "269.900,00")
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null }) as unknown[][]
 
   // Buscar sección "Ingresos Ventas" y luego su fila de header
   let headerRowIdx = -1

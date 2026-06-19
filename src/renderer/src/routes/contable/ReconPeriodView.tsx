@@ -167,21 +167,22 @@ export default function ReconPeriodView() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto">
-          {tab === 'importar' && (
-            <ReconTabImportar periodId={id!} userId={userId} />
-          )}
-          {tab === 'resultados' && (
-            <ReconTabResultados
-              periodId={id!}
-              userId={userId}
-              initialEstado={drillEstado}
-            />
-          )}
-          {tab === 'kpis' && (
-            <ReconTabKPIs periodId={id!} onDrillDown={handleDrillDown} />
-          )}
-        </div>
+        {tab === 'resultados' ? (
+          <ReconTabResultados
+            periodId={id!}
+            userId={userId}
+            initialEstado={drillEstado}
+          />
+        ) : (
+          <div className="max-w-4xl mx-auto">
+            {tab === 'importar' && (
+              <ReconTabImportar periodId={id!} userId={userId} />
+            )}
+            {tab === 'kpis' && (
+              <ReconTabKPIs periodId={id!} onDrillDown={handleDrillDown} />
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

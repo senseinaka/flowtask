@@ -15,6 +15,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Presupuestos / CRM:** generación de presupuestos y seguimiento comercial tipo CRM.
 - **Finanzas personales:** módulo para llevar todas las cuentas mensuales personales de Diego (movimientos, conceptos recurrentes, cargas múltiples).
 - **Finanzas empresa:** módulo equivalente para las cuentas mensuales de Naka Outdoors.
+- **Conciliador Contable:** conciliación mensual de ventas entre Flexxus (sistema de facturación), cupones de tarjetas (CSV/XLSX de procesadora) y Mercado Pago (principal y secundaria). Motor de matching en 4 niveles, KPIs visuales y edición manual de resultados.
 - **Email:** recepción y envío de correos electrónicos desde la app.
 - **Backup:** backup automático de código (GitHub) y datos (Google Drive) en la nube.
 - **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
@@ -132,6 +133,7 @@ Estas tablas viven únicamente en `flowtask.db` porque representan estado local 
 
 - `attachments` — archivos adjuntos de tareas (binarios locales)
 - `email_*` — módulo de correo (usa `email-db.ts`, caché local de IMAP)
+- `recon_*` — Conciliador Contable: `recon_periods`, `recon_imports`, `recon_invoices`, `recon_cupones`, `recon_ml_ops`, `recon_results`, `recon_audit` (solo el contador opera este módulo en su PC)
 - Tablas de caché y configuración de UI local
 
 ### Función `restoreComexLocalCache` / `restoreCompanyFinanceLocalCache`
@@ -258,10 +260,16 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 | `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (ver último entry del array para versión actual) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
+| `src/main/database/queries/recon.ts` | CRUD + motor del Conciliador Contable (solo `getDb()`) |
+| `src/main/services/recon-parsers.service.ts` | Parsers de archivos Flexxus, cupones y ML |
+| `src/main/ipc/recon.ipc.ts` | Handlers IPC del Conciliador |
 | `src/main/index.ts` | Punto de entrada main, registra handlers IPC |
 | `src/preload/index.ts` | Expone API al renderer via contextBridge |
+| `src/renderer/src/hooks/useRecon.ts` | Hooks React Query del Conciliador |
 | `src/renderer/src/routes/finance/FinanceDashboard.tsx` | UI finanzas personales (~4500 líneas) |
 | `src/renderer/src/routes/company-finance/CompanyFinanceDashboard.tsx` | UI finanzas empresa (~similar tamaño) |
+| `src/renderer/src/routes/contable/ReconPeriodView.tsx` | Shell del período con drill-down entre tabs |
+| `src/renderer/src/routes/contable/ReconTabResultados.tsx` | Tabla de resultados con 4 modos de vista |
 
 ---
 
@@ -271,6 +279,120 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 - **Auto-update:** `electron-updater` lee los releases de GitHub. El comando `npm run release` hace build + publica.
 - **AppId:** `com.flowtask.app`
 - **ProductName:** `Summit`
+
+---
+
+## Módulo Conciliador Contable — arquitectura específica
+
+### Propósito
+
+Conciliación mensual de ventas entre tres fuentes:
+1. **Flexxus** — sistema de facturación (exporta XLSX con sección "Ingresos Ventas")
+2. **Cupones de tarjetas** — procesadora de pagos (exporta CSV o XLSX)
+3. **Mercado Pago** — dos cuentas: principal y secundaria (exportan XLS)
+
+### CRÍTICO: módulo LOCAL-ONLY (NO usa PowerSync)
+
+**Todas las tablas del Conciliador usan `getDb()` (`flowtask.db`).** No sincronizan entre dispositivos. Esto es por diseño: los archivos fuente (Flexxus, ML, cupones) los importa solo el contador en su PC.
+
+**Nunca mover estas tablas a PowerSync** sin coordinar con Diego.
+
+### Migración v78 — 6 tablas en `flowtask.db`
+
+| Tabla | Contenido |
+|-------|-----------|
+| `recon_periods` | Períodos de conciliación (mes/año + estado) |
+| `recon_imports` | Log de cada archivo importado por período |
+| `recon_invoices` | Facturas parseadas de Flexxus |
+| `recon_cupones` | Cupones parseados de la procesadora de tarjetas |
+| `recon_ml_ops` | Operaciones parseadas de Mercado Pago |
+| `recon_results` | Resultados del motor de matching (uno por factura/operación) |
+| `recon_audit` | Historial de cambios manuales de estado |
+
+### Fuentes de importación (`ReconImportSource`)
+
+```typescript
+type ReconImportSource =
+  | 'flexxus_ventas'   // XLSX Flexxus — sección "Ingresos Ventas"
+  | 'cupones_csv'      // CSV de procesadora de tarjetas (Latin-1, separador `;`)
+  | 'cupones_xlsx'     // XLSX de cupones con sección "TARJETAS DE CREDITO"
+  | 'ml_principal'     // XLS Mercado Pago cuenta principal
+  | 'ml_secundaria'    // XLS Mercado Pago cuenta secundaria
+```
+
+### Estados de conciliación (`ReconEstado`)
+
+```typescript
+type ReconEstado =
+  | 'conciliado'         // match exacto por external_reference
+  | 'dif_menor'          // match por referencia con diferencia < 1%
+  | 'conciliado_monto'   // match por monto exacto (sin referencia)
+  | 'diferencia_monto'   // match fuzzy con diferencia ≤5%
+  | 'rechazado_ml'       // ML rechazó la operación
+  | 'no_cobrado_ml'      // no tiene contraparte en ML
+  | 'pendiente'          // sin match encontrado
+  | 'requiere_revision'  // marcado manualmente para revisar
+  | 'manual'             // asignado manualmente por el usuario
+```
+
+### Motor de conciliación (`runReconEngine`)
+
+Corre 4 niveles de matching en orden (greedy, sin reusar operaciones):
+
+1. **Nivel 1 — `external_reference == comprobante`**: ML.external_reference = número de comprobante Flexxus. Diferencia < 1% → `conciliado`, < 5% → `dif_menor`, resto → `diferencia_monto`.
+2. **Nivel 2 — monto exacto** (< 1% diferencia): sin match por referencia, busca monto similar.
+3. **Nivel 3 — monto fuzzy** (≤ 5% diferencia): candidato con menor diferencia proporcional.
+4. **Nivel 4 — sin match**: facturas no conciliadas → `no_cobrado_ml` (si tiene importe tarjetas > 0) o `pendiente`. Operaciones ML sin match → `rechazado_ml` (si status en REJECTED_STATUSES) o `pendiente`.
+
+El engine borra los resultados anteriores del período antes de insertar los nuevos.
+
+### Parsers de archivos (`src/main/services/recon-parsers.service.ts`)
+
+| Función | Fuente | Detalle |
+|---------|--------|---------|
+| `parseFlexxus(buffer)` | XLSX Flexxus | `raw: true` — celdas numéricas devuelven número real directo |
+| `parseCuponesCSV(buffer)` | CSV Latin-1 | Encoding ISO-8859-1, separador `;`, valores en `="..."` |
+| `parseCuponesXLSX(buffer)` | XLSX cupones | `raw: true`, busca header dinámicamente |
+| `parseML(buffer)` | XLS MercadoPago | `raw: true`, detecta columnas dinámicamente por nombre |
+
+**CRÍTICO — `parseFlexxus` usa `raw: true`:** Flexxus exporta celdas numéricas como números reales de JavaScript (ej. `269900`). Si se cambia a `raw: false`, SheetJS devuelve strings con punto decimal (`"269900.00"`), y la función `num()` original quitaba el punto → `26990000` (100× el valor real). El fix definitivo es `raw: true`.
+
+**Función `num(raw)` — detección inteligente de separadores:**
+
+```typescript
+// Prioridad: si hay coma DESPUÉS del último punto → coma es decimal ("1.234,56")
+// Si hay un solo punto con ≤2 dígitos después → punto es decimal ("269900.00")
+// Si hay un solo punto con 3+ dígitos después → punto es miles ("269.900")
+// Si hay múltiples puntos → todos son miles ("1.234.567")
+```
+
+### Archivos clave del módulo
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/database/queries/recon.ts` | CRUD completo: períodos, imports, invoices, cupones, ML ops, results, audit, KPIs, engine |
+| `src/main/services/recon-parsers.service.ts` | Parsers de los 5 tipos de archivo |
+| `src/main/ipc/recon.ipc.ts` | Handlers IPC (`recon:*`) incluyendo `recon:import` con soporte drag-drop |
+| `src/renderer/src/hooks/useRecon.ts` | Hooks React Query para todo el módulo |
+| `src/renderer/src/routes/contable/ReconDashboard.tsx` | Lista de períodos, crear nuevo período |
+| `src/renderer/src/routes/contable/ReconPeriodView.tsx` | Vista de un período con 3 tabs (shell liviano) |
+| `src/renderer/src/routes/contable/ReconTabImportar.tsx` | Tab de importación con drag & drop por fuente |
+| `src/renderer/src/routes/contable/ReconTabResultados.tsx` | Tab de resultados: 4 modos de vista, fullscreen, búsqueda, teclado, batch |
+| `src/renderer/src/routes/contable/ReconTabKPIs.tsx` | Tab de KPIs: 4 summary cards, barra apilada, desglose por estado |
+
+### Arquitectura UI del período
+
+`ReconPeriodView.tsx` es un shell que solo maneja estado de tab y drill-down. Los 3 sub-componentes son completamente independientes:
+
+- **ReconTabImportar**: 5 tarjetas drag & drop (una por fuente). Acepta drop de archivos con validación de extensión. Usa `(file as File & { path?: string }).path` para obtener el path nativo del SO y pasarlo al IPC via `preFilePath`.
+- **ReconTabResultados**: 4 modos de vista (`compact | grouped | dual | cards`). Vista compacta usa `table-fixed w-full` con `<colgroup>` de anchos fijos compactos para que Notas tome el espacio restante. La pestaña Resultados usa ancho completo (sin `max-w-4xl`).
+- **ReconTabKPIs**: drill-down → llama `onDrillDown(estado)` en el padre, que cambia tab a Resultados con filtro `initialEstado`.
+
+### Acceso al módulo
+
+Menú `Contable`, gateado por permiso `canRead('contable')` en `Sidebar.tsx`. Rutas:
+- `/contable/recon` → `ReconDashboard`
+- `/contable/recon/:id` → `ReconPeriodView`
 
 ---
 
@@ -601,6 +723,18 @@ Al hacer click en cualquier celda del grid se abre el `DayZoomModal` (en vez de 
 **Fix:** Todas las funciones de cargas (`addMovementEntry`, `updateMovementEntry`, `removeMovementEntry`, `listMovementEntries`, `attachEntriesCounts`, `deleteFinanceMovement`, `deleteCompanyFinanceMovement`, e `importMovements`) en `finance.ts` y `company-finance.ts` ahora usan exclusivamente `getPowerSyncDb()`. El `import { getDb }` fue eliminado de ambos archivos.
 
 **Patrón de transacción:** `addMovementEntry` y `updateMovementEntry` usan `writeTransaction(tx)` para INSERT/UPDATE + `recalcMovementFromEntries(tx, id)` en la misma transacción SQLite. Los reads del recalc dentro de la transacción ven sus propias escrituras aún no commiteadas (comportamiento estándar de SQLite).
+
+### Fix: Conciliador Contable — montos Flexxus 100× más grandes de lo real (resuelto — junio 2026)
+
+**Síntoma:** importar el archivo Flexxus mostraba montos como `$26.990.000` en lugar de `$269.900`.
+
+**Causa:** `parseFlexxus` usaba `raw: false` en SheetJS. Flexxus exporta celdas numéricas como `"269900.00"` (punto como decimal, formato US). La función `num()` original hacía `.replace(/\./g, '')` → `"26990000"` → 100× el valor real.
+
+**Fix:** `parseFlexxus` ahora usa `raw: true`. Las celdas numéricas devuelven el número JavaScript directamente (`269900`), sin parseo de string.
+
+**Nota sobre datos existentes:** si el archivo ya fue importado antes del fix, los valores incorrectos quedan guardados en `recon_invoices`. Solución: re-importar el archivo Flexxus desde la tab Importar del período.
+
+**Regla:** en `parseFlexxus`, no cambiar `raw: true` a `raw: false`. La función `num()` en `recon-parsers.service.ts` tiene detección inteligente de separadores como fallback, pero `raw: true` es la protección principal.
 
 ### IPC: drag-drop de archivos enviaba `number[]` (lento/crasheable para archivos grandes)
 
