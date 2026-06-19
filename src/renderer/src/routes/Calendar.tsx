@@ -78,12 +78,14 @@ export default function Calendar() {
     return map
   }, [calendars])
 
-  function toggleGoogleCalendar(calId: string) {
+  function soloGoogleCalendar(calId: string) {
+    if (!activeFilters.has('google')) {
+      setActiveFilters((prev) => { const n = new Set(prev); n.add('google'); return n })
+    }
     setActiveGoogleCalendars((prev) => {
-      const next = new Set(prev)
-      if (next.has(calId)) next.delete(calId)
-      else next.add(calId)
-      return next
+      // Already solo on this calendar → restore all
+      if (prev.size === 1 && prev.has(calId)) return new Set(calendars.map((c) => c.id))
+      return new Set([calId])
     })
   }
 
@@ -304,7 +306,7 @@ export default function Calendar() {
           activeFilters={activeFilters}
           activeGoogleCalendars={activeGoogleCalendars}
           onToggleFilter={toggleFilter}
-          onToggleGoogleCalendar={toggleGoogleCalendar}
+          onSoloGoogleCalendar={soloGoogleCalendar}
         />
         <div className="flex-1 overflow-auto">
           {eventsLoading ? (
@@ -495,13 +497,13 @@ function CalendarSidebar({
   activeFilters,
   activeGoogleCalendars,
   onToggleFilter,
-  onToggleGoogleCalendar,
+  onSoloGoogleCalendar,
 }: {
   calendars: GoogleCalendarInfo[]
   activeFilters: Set<CalendarEventSource>
   activeGoogleCalendars: Set<string>
   onToggleFilter: (source: CalendarEventSource) => void
-  onToggleGoogleCalendar: (calId: string) => void
+  onSoloGoogleCalendar: (calId: string) => void
 }) {
   return (
     <div className="w-44 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
@@ -513,28 +515,30 @@ function CalendarSidebar({
         <div className="space-y-1.5">
           {calendars.map((cal) => {
             const active = activeGoogleCalendars.has(cal.id) && activeFilters.has('google')
+            const isSolo = activeGoogleCalendars.size === 1 && activeGoogleCalendars.has(cal.id) && activeFilters.has('google')
             return (
               <button
                 key={cal.id}
-                onClick={() => {
-                  if (!activeFilters.has('google')) onToggleFilter('google')
-                  onToggleGoogleCalendar(cal.id)
-                }}
+                onClick={() => onSoloGoogleCalendar(cal.id)}
+                title={isSolo ? 'Click para mostrar todos' : 'Click para mostrar solo este'}
                 className="flex items-center gap-2 w-full text-left group"
               >
                 <span
                   className={cn(
                     'w-3 h-3 rounded-sm flex-shrink-0 border transition-opacity',
-                    active ? 'opacity-100' : 'opacity-30'
+                    active ? 'opacity-100' : 'opacity-20'
                   )}
                   style={{ backgroundColor: cal.backgroundColor ?? SOURCE_COLORS.google, borderColor: cal.backgroundColor ?? SOURCE_COLORS.google }}
                 />
                 <span className={cn(
-                  'text-xs truncate transition-colors',
+                  'text-xs truncate transition-colors flex-1',
                   active ? 'text-slate-200' : 'text-slate-500 group-hover:text-slate-400'
                 )}>
                   {cal.summary}{cal.primary ? ' ★' : ''}
                 </span>
+                {isSolo && (
+                  <span className="text-[9px] text-indigo-400 font-medium flex-shrink-0">SOLO</span>
+                )}
               </button>
             )
           })}
@@ -718,18 +722,23 @@ function EventModal({
   }, [])
 
   const recurringInstances = useMemo(() => {
-    if (recDays.size === 0) return []
-    const start = new Date(recFromDate + 'T00:00:00')
-    const end = new Date(start)
-    end.setDate(start.getDate() + recWeeks * 7)
+    if (recDays.size === 0 || recWeeks < 1) return []
+    // Use noon to avoid any midnight DST edge cases
+    const fromDate = new Date(recFromDate + 'T12:00:00')
+    const fromDow = (fromDate.getDay() + 6) % 7 // 0=Lun…6=Dom
     const instances: Date[] = []
-    const cur = new Date(start)
-    while (cur < end) {
-      const od = (cur.getDay() + 6) % 7 // 0=Lun…6=Dom
-      if (recDays.has(od)) instances.push(new Date(cur))
-      cur.setDate(cur.getDate() + 1)
+    for (const dayIndex of [...recDays].sort()) {
+      // Days until first occurrence of this weekday on or after recFromDate
+      const offset = (dayIndex - fromDow + 7) % 7
+      const first = new Date(fromDate)
+      first.setDate(fromDate.getDate() + offset)
+      for (let w = 0; w < recWeeks; w++) {
+        const d = new Date(first)
+        d.setDate(first.getDate() + w * 7)
+        instances.push(d)
+      }
     }
-    return instances
+    return instances.sort((a, b) => a.getTime() - b.getTime())
   }, [recDays, recFromDate, recWeeks])
 
   function toggleRecDay(i: number) {
@@ -1019,15 +1028,12 @@ function EventModal({
                   <p className="text-xs font-medium text-slate-300 mb-1.5">
                     Se crearán {recurringInstances.length} eventos en Google Calendar
                   </p>
-                  <div className="space-y-0.5">
-                    {recurringInstances.slice(0, 6).map((d, i) => (
+                  <div className="max-h-40 overflow-y-auto space-y-0.5 pr-1">
+                    {recurringInstances.map((d, i) => (
                       <p key={i} className="text-[11px] text-slate-500 capitalize">
                         {dayjs(d).format('dddd D [de] MMMM')}
                       </p>
                     ))}
-                    {recurringInstances.length > 6 && (
-                      <p className="text-[11px] text-slate-600">+{recurringInstances.length - 6} más</p>
-                    )}
                   </div>
                 </div>
               ) : (
