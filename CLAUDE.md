@@ -443,6 +443,36 @@ El tipo `UnifiedCalendarEvent` tiene un campo `id` que sigue el patrón `{source
 
 Este ID compuesto es el que se usa como `event_id` en `calendar_wa_reminders`.
 
+### Navegación del calendario (teclado + rueda)
+
+Implementado en `Calendar.tsx` via dos `useEffect` con listener nativo:
+
+**Teclado (`document` keydown):**
+- `ArrowLeft` / `ArrowRight` / `ArrowUp` / `ArrowDown` → período anterior / siguiente (respeta la vista activa: mes/semana/día)
+- `T` / `t` → hoy
+
+**Rueda del mouse (`onWheel` sobre el grid):**
+- Scroll hacia abajo → `goNext()`, scroll hacia arriba → `goPrev()`
+- Throttle de 300ms (`lastWheelRef`) para evitar saltos múltiples
+- Listener nativo con `{ passive: false }` para que `e.preventDefault()` funcione correctamente en el div `overflow-auto`
+
+**Guard `navBlocked`:**
+```typescript
+const navBlocked = modal?.mode === 'create' || modal?.mode === 'edit'
+```
+Ambos handlers (teclado y rueda) se bloquean **solo cuando hay un EventModal abierto** (create/edit). El `DayZoomModal` (mode `'day-zoom'`) **no bloquea** la navegación — el fondo puede seguir moviéndose mientras el zoom está abierto.
+
+### DayZoomModal
+
+Al hacer click en cualquier celda del grid se abre el `DayZoomModal` (en vez de abrir directamente el modal de creación):
+
+- Muestra todos los eventos del día ordenados: todo-el-día primero, luego por `start_at`
+- Cada evento muestra: barra de color de la fuente, título, rango horario, label de la fuente (`SOURCE_LABELS[ev.source]`), descripción truncada
+- Click en evento navega al `EventModal` de edición (solo para eventos `google` o con `link`)
+- Botón "Nuevo evento en este día" abre `EventModal` de create con la fecha prefijada → cierra el zoom
+- **Ampliar/minimizar:** botón `Maximize2`/`Minimize2` en el header, alterna entre tamaño normal (`max-w-xl, max-h-80vh`) y pantalla completa (`calc(100vw-2rem) × calc(100vh-2rem)`)
+- Estado `ModalState` ampliado: `{ mode: 'create' } | { mode: 'edit' } | { mode: 'day-zoom'; date: Dayjs }`
+
 ### Sistema de recordatorios WA
 
 **Flujo de creación:**
@@ -478,6 +508,39 @@ Este ID compuesto es el que se usa como `event_id` en `calendar_wa_reminders`.
 - Campo `phone`: almacenado solo dígitos (strip de caracteres no-numéricos al guardar)
 - Hook: `useContacts()` en `src/renderer/src/hooks/useContacts.ts`
 - IPC: `window.api.contacts.list()`
+
+---
+
+## Bugs corregidos — Calendario (junio 2026)
+
+### Fix: eventos recurrentes se creaban en fecha incorrecta y como un solo evento maestro (resuelto)
+
+**Síntoma:** al crear un evento recurrente de 9 semanas, Google Calendar mostraba 1 solo evento el día 23-06 en vez de 9 eventos a partir del 30-06.
+
+**Causa raíz 1 — RRULE:** el enfoque original creaba 1 evento de Google Calendar con `recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=...;COUNT=9']`. Google Calendar trata esto como 1 evento maestro con 9 ocurrencias virtuales — el usuario solo ve el primer evento en la vista de semana actual.
+
+**Causa raíz 2 — `toISOString()` con Z:** `new Date(ts).toISOString()` producía una cadena UTC con `Z` (ej. `"2026-06-30T00:00:00Z"`). Google Calendar evaluaba `BYDAY` en UTC → para eventos planificados pasada las 21:00 (Argentina UTC-3), el día en UTC era el día siguiente → evento creado un día antes de lo esperado.
+
+**Fix:**
+
+1. **Abandonado el enfoque RRULE.** Ahora se crean N eventos individuales (sin campo `recurrence`) via loop secuencial de `mutateAsync`:
+   ```typescript
+   for (const inst of recurringInstances) {
+     await createEvent.mutateAsync({ calendarId, input: { ...campos, startAt, endAt } })
+   }
+   ```
+2. **`fmtLocal(ts)` en `google-calendar.service.ts`:** produce `"YYYY-MM-DDTHH:mm:ss"` sin `Z`. Google Calendar usa el campo `timeZone` para interpretar la hora local. Ya no hay conversión UTC involuntaria.
+3. **`isBatchCreating` state:** previene que el botón "Guardar" se habilite brevemente entre calls secuenciales (`mutation.isPending` baja a false entre calls).
+
+**Regla:** nunca usar `new Date(ts).toISOString()` para enviar datetimes a la Google Calendar API. Usar siempre `fmtLocal(ts)` de `google-calendar.service.ts` combinado con el campo `timeZone`.
+
+### Fix: preview de instancias recurrentes mostraba N-1 eventos (resuelto)
+
+**Síntoma:** seleccionar 9 semanas mostraba solo 8 eventos en el preview.
+
+**Causa:** el contenedor tenía `max-h-40` (160px). 9 ítems de ~18px c/u = 162px > 160px → el ítem 9 quedaba visualmente cortado.
+
+**Fix:** cambiado a `max-h-64` (256px) + numeración `{i + 1}.` para contar fácilmente.
 
 ---
 

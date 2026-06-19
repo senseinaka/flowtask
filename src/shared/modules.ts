@@ -90,6 +90,14 @@ export const MODULES: ModuleDef[] = [
     routes: ['/email']
   },
   {
+    key: 'contable',
+    label: 'Contable',
+    routes: ['/contable'],
+    submodules: [
+      { key: 'recon', label: 'Conciliador Contable', routes: ['/contable/recon'] }
+    ]
+  },
+  {
     key: 'settings',
     label: 'Configuración',
     routes: ['/settings']

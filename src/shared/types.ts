@@ -2544,3 +2544,183 @@ export type EmailAICategory =
   | 'newsletter'
   | 'personal'
   | 'otro'
+
+// ── Conciliador Contable ──────────────────────────────────────────────────────
+
+export type ReconPeriodStatus = 'draft' | 'processing' | 'review' | 'closed'
+
+export type ReconImportSource =
+  | 'flexxus'
+  | 'planilla2'
+  | 'cupones_csv'
+  | 'cupones_xlsx'
+  | 'ml_principal'
+  | 'ml_secundaria'
+  | 'fondos'
+
+export type ReconEstado =
+  | 'conciliado'
+  | 'dif_menor'
+  | 'conciliado_monto'
+  | 'diferencia_monto'
+  | 'rechazado_ml'
+  | 'no_cobrado_ml'
+  | 'pendiente'
+  | 'requiere_revision'
+  | 'manual'
+
+export interface ReconPeriod {
+  id: string
+  workspace_id: string
+  period_month: number
+  period_year: number
+  status: ReconPeriodStatus
+  notes: string
+  created_by: string
+  closed_by: string
+  created_at: number
+  closed_at: number | null
+}
+
+export interface ReconImport {
+  id: string
+  period_id: string
+  source: ReconImportSource
+  filename: string
+  row_count: number
+  status: 'pending' | 'ok' | 'error' | 'warning'
+  error_msg: string
+  imported_at: number
+  imported_by: string
+}
+
+export interface ReconInvoice {
+  id: string
+  period_id: string
+  comprobante: string
+  tipo: string
+  concepto: string
+  total: number
+  importe_tarjetas: number
+  importe_efectivo: number
+  importe_transferencia: number
+  importe_cta_cte: number
+  importe_otros: number
+  source: string
+}
+
+export interface ReconCupon {
+  id: string
+  period_id: string
+  cupon: string
+  plan: string
+  total: number
+  nombre: string
+  condicion: string
+  fecha_ingreso: string
+  cuotas: number
+}
+
+export interface ReconMLOp {
+  id: string
+  period_id: string
+  operation_id: string
+  status: string
+  status_detail: string
+  transaction_amount: number
+  mp_fee: number
+  shipping_cost: number
+  counterpart_name: string
+  external_reference: string
+  reason: string
+  date_created: number | null
+  date_approved: number | null
+  cuenta: string
+}
+
+export interface ReconResult {
+  id: string
+  period_id: string
+  invoice_id: string | null
+  cupon_id: string | null
+  ml_op_id: string | null
+  estado: ReconEstado
+  diferencia: number
+  match_score: number
+  match_method: string
+  no_cobrado_razon: string
+  override_by: string
+  override_at: number | null
+  notes: string
+}
+
+export interface ReconAudit {
+  id: string
+  period_id: string
+  user_id: string
+  action: string
+  payload: string
+  created_at: number
+}
+
+export interface CreateReconPeriodInput {
+  period_month: number
+  period_year: number
+  notes?: string
+}
+
+export interface ReconKPIs {
+  total: number
+  byEstado: Partial<Record<ReconEstado, { count: number; monto: number }>>
+  totalMonto: number
+  conciliadoMonto: number
+  pendienteMonto: number
+}
+
+export const RECON_STATUS_LABELS: Record<ReconPeriodStatus, string> = {
+  draft:      'Borrador',
+  processing: 'Procesando',
+  review:     'En revisión',
+  closed:     'Cerrado'
+}
+
+export const RECON_STATUS_COLORS: Record<ReconPeriodStatus, string> = {
+  draft:      '#64748b',
+  processing: '#3b82f6',
+  review:     '#f59e0b',
+  closed:     '#10b981'
+}
+
+export const RECON_ESTADO_LABELS: Record<ReconEstado, string> = {
+  conciliado:        'Conciliado',
+  dif_menor:         'Dif. menor',
+  conciliado_monto:  'Conc. monto',
+  diferencia_monto:  'Dif. monto',
+  rechazado_ml:      'Rechazado ML',
+  no_cobrado_ml:     'No cobrado ML',
+  pendiente:         'Pendiente',
+  requiere_revision: 'Requiere revisión',
+  manual:            'Manual'
+}
+
+export const RECON_ESTADO_COLORS: Record<ReconEstado, string> = {
+  conciliado:        '#10b981',
+  dif_menor:         '#f59e0b',
+  conciliado_monto:  '#3b82f6',
+  diferencia_monto:  '#f97316',
+  rechazado_ml:      '#ef4444',
+  no_cobrado_ml:     '#94a3b8',
+  pendiente:         '#64748b',
+  requiere_revision: '#a855f7',
+  manual:            '#06b6d4'
+}
+
+export const RECON_SOURCE_LABELS: Record<ReconImportSource, string> = {
+  flexxus:       'Fondos Vtas Web (Flexxus)',
+  planilla2:     'Facturas + Clientes',
+  cupones_csv:   'Cupones CSV',
+  cupones_xlsx:  'Cupones XLSX',
+  ml_principal:  'ML Principal',
+  ml_secundaria: 'ML Secundaria',
+  fondos:        'Fondos / Banco'
+}

@@ -31,6 +31,7 @@ import Calendar from './routes/Calendar'
 import QuotesDashboard from './routes/quotes/QuotesDashboard'
 import QuoteDetail from './routes/quotes/QuoteDetail'
 import EmailDashboard from './routes/email/EmailDashboard'
+import ReconDashboard from './routes/contable/ReconDashboard'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -72,7 +73,8 @@ const router = createHashRouter([
       { path: 'calendario', element: <Calendar /> },
       { path: 'quotes', element: <QuotesDashboard /> },
       { path: 'quotes/:id', element: <QuoteDetail /> },
-      { path: 'email', element: <EmailDashboard /> }
+      { path: 'email', element: <EmailDashboard /> },
+      { path: 'contable/recon', element: <ReconDashboard /> }
     ]
   }
 ])

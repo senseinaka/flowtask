@@ -47,7 +47,9 @@ import type {
   CreateQuoteCompanyInput, CreateQuoteContactInput,
   AddQuoteActivityInput,
   EmailAccount, EmailMessage, EmailAttachment,
-  CreateEmailAccountInput, SendEmailInput, EmailListFilters
+  CreateEmailAccountInput, SendEmailInput, EmailListFilters,
+  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
+  CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -952,6 +954,51 @@ const api = {
     },
     send: (input: SendEmailInput): Promise<{ ok: boolean; messageId?: string; error?: string }> =>
       ipcRenderer.invoke('email:send', input)
+  },
+
+  recon: {
+    periods: {
+      list: (): Promise<ReconPeriod[]> =>
+        ipcRenderer.invoke('recon:periods:list'),
+      get: (id: string): Promise<ReconPeriod | null> =>
+        ipcRenderer.invoke('recon:periods:get', id),
+      create: (data: CreateReconPeriodInput, userId: string): Promise<ReconPeriod> =>
+        ipcRenderer.invoke('recon:periods:create', data, userId),
+      setStatus: (id: string, status: ReconPeriodStatus, closedBy?: string): Promise<void> =>
+        ipcRenderer.invoke('recon:periods:setStatus', id, status, closedBy),
+      delete: (id: string): Promise<void> =>
+        ipcRenderer.invoke('recon:periods:delete', id),
+    },
+    imports: {
+      list: (periodId: string): Promise<ReconImport[]> =>
+        ipcRenderer.invoke('recon:imports:list', periodId),
+      importFile: (
+        periodId: string,
+        source: ReconImportSource,
+        importedBy: string
+      ): Promise<{ ok: boolean; count?: number; filename?: string; canceled?: boolean; error?: string }> =>
+        ipcRenderer.invoke('recon:import', periodId, source, importedBy),
+    },
+    data: {
+      invoices: (periodId: string): Promise<ReconInvoice[]> =>
+        ipcRenderer.invoke('recon:data:invoices', periodId),
+      cupones: (periodId: string): Promise<ReconCupon[]> =>
+        ipcRenderer.invoke('recon:data:cupones', periodId),
+      mlops: (periodId: string): Promise<ReconMLOp[]> =>
+        ipcRenderer.invoke('recon:data:mlops', periodId),
+    },
+    run: (periodId: string): Promise<{ ok: boolean; inserted?: number; error?: string }> =>
+      ipcRenderer.invoke('recon:run', periodId),
+    results: {
+      list: (periodId: string, estado?: ReconEstado): Promise<ReconResult[]> =>
+        ipcRenderer.invoke('recon:results:list', periodId, estado),
+      update: (id: string, data: { estado?: ReconEstado; notes?: string; override_by?: string }): Promise<void> =>
+        ipcRenderer.invoke('recon:results:update', id, data),
+    },
+    kpis: {
+      get: (periodId: string): Promise<ReconKPIs> =>
+        ipcRenderer.invoke('recon:kpis:get', periodId),
+    },
   },
 
   on: (

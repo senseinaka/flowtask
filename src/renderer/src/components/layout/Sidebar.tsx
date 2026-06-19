@@ -4,7 +4,7 @@ import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet, Tag,
-  CalendarClock, LogOut, CalendarDays, FileText, Mail
+  CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -24,6 +24,10 @@ const tasksSubItems = [
 const teamSubItems = [
   { to: '/team',        icon: LayoutList, label: 'Lista',  exact: true },
   { to: '/team/kanban', icon: Columns3,   label: 'Kanban', exact: true }
+]
+
+const contableSubItems = [
+  { to: '/contable/recon', icon: ArrowLeftRight, label: 'Conciliador', exact: false }
 ]
 
 const comexSubItems = [
@@ -106,15 +110,17 @@ export default function Sidebar() {
   const { canRead } = usePermissions()
   const location = useLocation()
 
-  const isOnTasks  = location.pathname === '/tasks' || location.pathname === '/kanban'
-  const isOnTeam   = location.pathname.startsWith('/team')
-  const isOnComex  = location.pathname.startsWith('/comex')
+  const isOnTasks    = location.pathname === '/tasks' || location.pathname === '/kanban'
+  const isOnTeam     = location.pathname.startsWith('/team')
+  const isOnComex    = location.pathname.startsWith('/comex')
+  const isOnContable = location.pathname.startsWith('/contable')
 
   const visibleComexSubItems = comexSubItems.filter((item) => canRead('comex', item.subKey))
 
-  const [tasksOpen, setTasksOpen] = useState(isOnTasks)
-  const [teamOpen,  setTeamOpen]  = useState(isOnTeam)
-  const [comexOpen, setComexOpen] = useState(true)
+  const [tasksOpen,    setTasksOpen]    = useState(isOnTasks)
+  const [teamOpen,     setTeamOpen]     = useState(isOnTeam)
+  const [comexOpen,    setComexOpen]    = useState(true)
+  const [contableOpen, setContableOpen] = useState(isOnContable)
 
   const { data: syncStatus } = useQuery<SyncStatus>({
     queryKey: ['sync-status'],
@@ -333,6 +339,27 @@ export default function Sidebar() {
               <Building2 size={16} />
               Finanzas Empresa
             </NavLink>
+          </div>
+        )}
+
+        {/* ── Contable ──────────────────────────────────────────────────── */}
+        {canRead('contable') && (
+          <div className="pt-1">
+            <CollapsibleSection
+              icon={BookOpen}
+              label="Contable"
+              isActive={isOnContable}
+              open={contableOpen}
+              onToggle={() => setContableOpen((v) => !v)}
+              subItems={contableSubItems}
+              activeColor={{
+                bg:        'bg-amber-900/30',
+                text:      'text-amber-300',
+                iconColor: 'text-amber-400',
+                border:    'border-amber-800',
+                subActive: 'bg-amber-700/40 text-amber-200'
+              }}
+            />
           </div>
         )}
 

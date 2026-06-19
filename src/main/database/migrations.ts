@@ -2525,6 +2525,114 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
     up: (db) => {
       try { db.exec('ALTER TABLE calendar_wa_reminders ADD COLUMN success INTEGER') } catch { /* ya existe */ }
     }
+  },
+  {
+    version: 78,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS recon_periods (
+          id           TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          period_month INTEGER NOT NULL,
+          period_year  INTEGER NOT NULL,
+          status       TEXT NOT NULL DEFAULT 'draft',
+          notes        TEXT NOT NULL DEFAULT '',
+          created_by   TEXT NOT NULL DEFAULT '',
+          closed_by    TEXT NOT NULL DEFAULT '',
+          created_at   INTEGER NOT NULL,
+          closed_at    INTEGER,
+          UNIQUE(workspace_id, period_month, period_year)
+        );
+
+        CREATE TABLE IF NOT EXISTS recon_imports (
+          id           TEXT PRIMARY KEY,
+          period_id    TEXT NOT NULL REFERENCES recon_periods(id) ON DELETE CASCADE,
+          source       TEXT NOT NULL,
+          filename     TEXT NOT NULL DEFAULT '',
+          row_count    INTEGER NOT NULL DEFAULT 0,
+          status       TEXT NOT NULL DEFAULT 'pending',
+          error_msg    TEXT NOT NULL DEFAULT '',
+          imported_at  INTEGER NOT NULL,
+          imported_by  TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_imports_period ON recon_imports(period_id);
+
+        CREATE TABLE IF NOT EXISTS recon_invoices (
+          id                    TEXT PRIMARY KEY,
+          period_id             TEXT NOT NULL REFERENCES recon_periods(id) ON DELETE CASCADE,
+          comprobante           TEXT NOT NULL,
+          tipo                  TEXT NOT NULL DEFAULT '',
+          concepto              TEXT NOT NULL DEFAULT '',
+          total                 REAL NOT NULL DEFAULT 0,
+          importe_tarjetas      REAL NOT NULL DEFAULT 0,
+          importe_efectivo      REAL NOT NULL DEFAULT 0,
+          importe_transferencia REAL NOT NULL DEFAULT 0,
+          importe_cta_cte       REAL NOT NULL DEFAULT 0,
+          importe_otros         REAL NOT NULL DEFAULT 0,
+          source                TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_invoices_period ON recon_invoices(period_id);
+
+        CREATE TABLE IF NOT EXISTS recon_cupones (
+          id            TEXT PRIMARY KEY,
+          period_id     TEXT NOT NULL REFERENCES recon_periods(id) ON DELETE CASCADE,
+          cupon         TEXT NOT NULL DEFAULT '',
+          plan          TEXT NOT NULL DEFAULT '',
+          total         REAL NOT NULL DEFAULT 0,
+          nombre        TEXT NOT NULL DEFAULT '',
+          condicion     TEXT NOT NULL DEFAULT '',
+          fecha_ingreso TEXT NOT NULL DEFAULT '',
+          cuotas        INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_cupones_period ON recon_cupones(period_id);
+
+        CREATE TABLE IF NOT EXISTS recon_ml_ops (
+          id                 TEXT PRIMARY KEY,
+          period_id          TEXT NOT NULL REFERENCES recon_periods(id) ON DELETE CASCADE,
+          operation_id       TEXT NOT NULL DEFAULT '',
+          status             TEXT NOT NULL DEFAULT '',
+          status_detail      TEXT NOT NULL DEFAULT '',
+          transaction_amount REAL NOT NULL DEFAULT 0,
+          mp_fee             REAL NOT NULL DEFAULT 0,
+          shipping_cost      REAL NOT NULL DEFAULT 0,
+          counterpart_name   TEXT NOT NULL DEFAULT '',
+          external_reference TEXT NOT NULL DEFAULT '',
+          reason             TEXT NOT NULL DEFAULT '',
+          date_created       INTEGER,
+          date_approved      INTEGER,
+          cuenta             TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_ml_ops_period ON recon_ml_ops(period_id);
+
+        CREATE TABLE IF NOT EXISTS recon_results (
+          id               TEXT PRIMARY KEY,
+          period_id        TEXT NOT NULL REFERENCES recon_periods(id) ON DELETE CASCADE,
+          invoice_id       TEXT REFERENCES recon_invoices(id) ON DELETE SET NULL,
+          cupon_id         TEXT REFERENCES recon_cupones(id) ON DELETE SET NULL,
+          ml_op_id         TEXT REFERENCES recon_ml_ops(id) ON DELETE SET NULL,
+          estado           TEXT NOT NULL DEFAULT 'pendiente',
+          diferencia       REAL NOT NULL DEFAULT 0,
+          match_score      REAL NOT NULL DEFAULT 0,
+          match_method     TEXT NOT NULL DEFAULT '',
+          no_cobrado_razon TEXT NOT NULL DEFAULT '',
+          override_by      TEXT NOT NULL DEFAULT '',
+          override_at      INTEGER,
+          notes            TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_results_period ON recon_results(period_id);
+        CREATE INDEX IF NOT EXISTS idx_recon_results_estado ON recon_results(estado);
+
+        CREATE TABLE IF NOT EXISTS recon_audit (
+          id         TEXT PRIMARY KEY,
+          period_id  TEXT NOT NULL REFERENCES recon_periods(id) ON DELETE CASCADE,
+          user_id    TEXT NOT NULL DEFAULT '',
+          action     TEXT NOT NULL DEFAULT '',
+          payload    TEXT NOT NULL DEFAULT '{}',
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_audit_period ON recon_audit(period_id);
+      `)
+    }
   }
 ]
 
