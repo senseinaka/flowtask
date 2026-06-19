@@ -1131,6 +1131,10 @@ export interface ComexImport {
   docs_to_despachante_date: number | null    // Timestamp del envío (DD/MM año en curso)
   docs_to_compras:          0 | 1           // Docs enviados a compras
   docs_to_compras_date:     number | null    // Timestamp del envío
+  // ── Pago ─────────────────────────────────────────────────────────────────────
+  payment_terms:     'anticipado' | 'a_plazo' | null
+  payment_due_date:  number | null
+  payment_notes:     string
   // ── Campos del JOIN (solo en queries de lista) ─────────────────────────────
   _despacho_number?:        string | null
   _canal_despacho?:         string | null
@@ -2195,6 +2199,7 @@ export interface CalendarEventInput {
   startAt: number
   endAt: number | null
   allDay: boolean
+  reminderMinutes?: number | null
 }
 
 /** Link entre un vencimiento/hito de Summit y un evento de Google Calendar. */

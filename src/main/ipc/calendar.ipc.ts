@@ -10,6 +10,7 @@ import {
   unlinkEntity,
   refreshLinkedEvent
 } from '../database/queries/calendar'
+import { schedulerService } from '../services/scheduler.service'
 import type { CalendarEventInput, CalendarEventLink, LinkEntityInput } from '@shared/types'
 
 export function registerCalendarIpc(): void {
@@ -65,5 +66,13 @@ export function registerCalendarIpc(): void {
 
   ipcMain.handle('calendar:refreshLinkedEvent', async (_e, linkId: string, input: { title: string; dueAtMs: number }) =>
     refreshLinkedEvent(linkId, input)
+  )
+
+  ipcMain.handle('calendar:scheduleWaReminder', (_e, id: string, phone: string, message: string, sendAt: number) =>
+    schedulerService.scheduleDirectWaReminder(id, phone, message, sendAt)
+  )
+
+  ipcMain.handle('calendar:cancelWaReminder', (_e, id: string) =>
+    schedulerService.cancelDirectWaReminder(id)
   )
 }

@@ -43,7 +43,6 @@ Summit está instalado en **múltiples máquinas**. Todos los dispositivos acced
 **Nombre del producto:** Summit
 **Nombre técnico interno:** `flowtask` (paquete npm, repo GitHub `senseinaka/flowtask`, AppData, appId)
 **Stack:** Electron + React + TypeScript + Vite + React Query + PowerSync + better-sqlite3 + Supabase
-**Versión actual:** 1.0.3
 
 > **Nota sobre el nombre:** El producto se llama "Summit" pero el nombre técnico interno sigue siendo "flowtask". Esto es intencional — cambiarlo rompería el auto-update y las rutas de datos de usuarios existentes. En código se usan: `"name": "flowtask"`, `appId: "com.flowtask.app"`, `%APPDATA%\flowtask\`, `flowtask.db`, repo `senseinaka/flowtask`. El nombre visible al usuario ("Summit") vive en `"productName"` del `package.json`.
 
@@ -148,7 +147,7 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ```typescript
 // Cada migración es un objeto { version: number, up: (db) => void }
 // Se aplican en orden ascendente; la versión actual se guarda en PRAGMA user_version
-// Versión actual de la DB: 73
+// Versión actual: ver el último entry del array MIGRATIONS en migrations.ts
 ```
 
 **Reglas:**
@@ -185,6 +184,30 @@ En ambos archivos de queries. Lee `SUM(amount)` de las cargas, y actualiza `amou
 ### `entries_count` en movimientos
 
 El campo `entries_count` se calcula con `attachEntriesCounts()` (async), que consulta `getPowerSyncDb()` después de traer los movimientos. Ver función en `finance.ts` y `company-finance.ts`.
+
+---
+
+## Módulo de email — arquitectura específica
+
+El módulo de email es **completamente independiente de PowerSync**. No sincroniza entre dispositivos — cada instalación descarga su propio caché IMAP.
+
+- **DB local:** `flowtask.db` vía `src/main/database/email-db.ts` (`getEmailDb()`). Tablas: `email_accounts`, `email_messages`, `email_attachments`.
+- **Adjuntos:** `%APPDATA%\flowtask\email-attachments\` (binarios locales, nunca se suben a Supabase).
+- **IMAP:** `imapflow` para sync, envío via `nodemailer` (SMTP).
+- **Queries:** `src/main/database/queries/email.ts`
+- **Hooks:** `src/renderer/src/hooks/useEmail.ts`
+- **UI:** `src/renderer/src/routes/email/EmailDashboard.tsx`
+
+### Soft-delete y Papelera
+
+`email:messages:delete` mueve el mensaje a la carpeta `Trash` (campo `folder`) tanto en la DB local como en el servidor IMAP (`imapMoveToTrash`). **No borra físicamente.**
+
+- `email:messages:purge` — borrado permanente (solo desde Trash)
+- `email:messages:restore` — mueve de vuelta a INBOX (local + IMAP `imapRestoreFromTrash`)
+
+### Renderizado de emails HTML
+
+Los emails HTML se muestran dentro de un `<iframe srcDoc sandbox="allow-same-origin allow-popups">` (componente `EmailBody`). Esto aísla los `<style>` embebidos del email del CSS global de la app, evitando que el HTML del email cambie colores del sidebar u otros elementos de la UI.
 
 ---
 
@@ -232,7 +255,7 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 |---------|-----|
 | `src/main/database/db.ts` | Singleton de `flowtask.db` (better-sqlite3) |
 | `src/main/database/powersync.ts` | Singleton de PowerSync, schema, conexión, migraciones de datos |
-| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: 73) |
+| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (ver último entry del array para versión actual) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
 | `src/main/index.ts` | Punto de entrada main, registra handlers IPC |
@@ -253,17 +276,26 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 
 ## Bugs conocidos y sus fixes (historial relevante)
 
-### Fix: cargas no guardaban valores (resuelto — junio 2025)
+### Fix: cargas no guardaban valores — FK constraint (resuelto — junio 2025)
 
 **Problema:** al agregar una carga en un movimiento multi-entrada, el valor se perdía.
 
-**Causa raíz doble:**
-1. `finance_movement_entries` tenía FK `REFERENCES finance_movements(id)`, pero `finance_movements` vive en PowerSync, no en `flowtask.db` → `SQLITE_CONSTRAINT_FOREIGNKEY` al insertar.
-2. Flujo de dos pasos (crear con $0, editar inline): `invalidateFinanceMovements` re-renderizaba la tabla y descartaba el input en curso.
+**Causa:** `finance_movement_entries` tenía FK `REFERENCES finance_movements(id)`, pero `finance_movements` vive en PowerSync, no en `flowtask.db` → `SQLITE_CONSTRAINT_FOREIGNKEY` al insertar.
 
-**Fix:**
-- Migración 72: recreó las tablas de entradas sin la FK.
-- `MovementEntriesQuickList`: refactorizado a flujo de un solo paso (el usuario tipea el monto, confirma con Enter, la entrada se crea con el valor real directamente).
+**Fix:** Migración 72: recreó las tablas de entradas sin la FK.
+
+### Fix: valor de carga se reseteaba a $0 al agregar una segunda carga (resuelto — junio 2026)
+
+**Problema:** el usuario tipeaba un valor en "Supermercado 1" y al hacer click en "+ Agregar" (para crear "Supermercado 2"), el valor de Supermercado 1 volvía a $0.
+
+**Causa:** el flujo de `MovementEntriesQuickList` es de dos pasos: crear la carga con `amount=0`, luego editar el monto inline. Al hacer click en "+ Agregar", si `onBlur` no disparaba antes del click (o si `add.mutate` completaba antes que `update.mutate`), el refetch devolvía `amount=0` de la DB y el input perdía el valor escrito.
+
+**Fix:** `EntryAmountInput` (en `FinanceDashboard.tsx`) tiene ahora:
+1. **Autosave por debounce de 500ms** — cuando el usuario deja de tipear, el valor se guarda automáticamente sin necesitar blur ni Enter.
+2. **Sync del display cuando el servidor actualiza** — si el valor del servidor cambia y el input no está enfocado, `draft` se sincroniza al nuevo valor.
+3. **Refs `onSaveRef` y `valueRef`** — evitan closures stale en el timer del debounce.
+
+El mismo fix aplica a `CompanyFinanceDashboard.tsx` si tiene `EntryAmountInput` propio.
 
 ### Fix: badge del contador de cargas siempre en 0 (resuelto — junio 2025)
 

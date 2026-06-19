@@ -2488,6 +2488,19 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         try { db.exec(sql) } catch { /* already exists */ }
       }
     }
+  },
+  {
+    version: 75,
+    up: (db) => {
+      const cols = [
+        'ALTER TABLE comex_imports ADD COLUMN payment_terms TEXT',
+        'ALTER TABLE comex_imports ADD COLUMN payment_due_date INTEGER',
+        "ALTER TABLE comex_imports ADD COLUMN payment_notes TEXT NOT NULL DEFAULT ''",
+      ]
+      for (const sql of cols) {
+        try { db.exec(sql) } catch { /* already exists */ }
+      }
+    }
   }
 ]
 

@@ -378,6 +378,12 @@ function toGoogleEventResource(input: Partial<CalendarEventInput>): calendar_v3.
     event.end = { dateTime: new Date(input.endAt ?? input.startAt).toISOString() }
   }
 
+  if (input.reminderMinutes !== undefined) {
+    event.reminders = input.reminderMinutes
+      ? { useDefault: false, overrides: [{ method: 'popup', minutes: input.reminderMinutes }] }
+      : { useDefault: false, overrides: [] }
+  }
+
   return event
 }
 

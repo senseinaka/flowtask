@@ -867,7 +867,11 @@ const api = {
     unlinkEntity: (linkId: string): Promise<void> =>
       ipcRenderer.invoke('calendar:unlinkEntity', linkId),
     refreshLinkedEvent: (linkId: string, input: { title: string; dueAtMs: number }): Promise<CalendarEventLink> =>
-      ipcRenderer.invoke('calendar:refreshLinkedEvent', linkId, input)
+      ipcRenderer.invoke('calendar:refreshLinkedEvent', linkId, input),
+    scheduleWaReminder: (id: string, phone: string, message: string, sendAt: number): Promise<void> =>
+      ipcRenderer.invoke('calendar:scheduleWaReminder', id, phone, message, sendAt),
+    cancelWaReminder: (id: string): Promise<void> =>
+      ipcRenderer.invoke('calendar:cancelWaReminder', id)
   },
 
   quotes: {

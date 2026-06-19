@@ -488,12 +488,6 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
 
 // ── Import Timeline ───────────────────────────────────────────────────────────
 
-// Los pasos que aparecen como nodos en la línea principal
-const TIMELINE_STEPS: ImportStatus[] = [
-  'planning', 'ordered', 'paid', 'production', 'forwarder', 'shipped', 'transit',
-  'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered'
-]
-
 // Sub-estados del nodo "Proveedor" (production) — viven dentro del nodo 4
 const PROVEEDOR_SUB_STEPS: ImportStatus[] = ['production', 'carga_armada', 'esperando_embarcar']
 
@@ -507,9 +501,43 @@ function toMainStep(status: ImportStatus): ImportStatus {
   return status
 }
 
-// Índice en TIMELINE_STEPS considerando sub-estados
-function getMainStepIdx(status: ImportStatus): number {
-  return TIMELINE_STEPS.indexOf(toMainStep(status))
+// Construye el array de pasos posicionando 'paid' dinámicamente según payment_terms y payment_due_date
+function buildTimelineSteps(imp: ComexImport): ImportStatus[] {
+  const base: ImportStatus[] = [
+    'planning', 'ordered', 'production', 'forwarder', 'shipped', 'transit',
+    'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered'
+  ]
+
+  if (!imp.payment_terms || imp.payment_terms === 'anticipado') {
+    // Posición fija entre 'ordered' y 'production' (comportamiento original)
+    base.splice(2, 0, 'paid')
+    return base
+  }
+
+  // a_plazo: interpolar según payment_due_date
+  if (!imp.payment_due_date) {
+    base.push('paid') // sin fecha → al final
+    return base
+  }
+
+  const due = imp.payment_due_date
+  const shipDate    = imp.actual_ship_date ?? imp.ship_date
+  const arrivalDate = imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date)
+
+  if (shipDate && due <= shipDate) {
+    base.splice(base.indexOf('shipped'), 0, 'paid')
+  } else if (arrivalDate && due <= arrivalDate) {
+    base.splice(base.indexOf('transit'), 0, 'paid')
+  } else {
+    base.splice(base.indexOf('customs'), 0, 'paid')
+  }
+
+  return base
+}
+
+// Índice en el array de pasos considerando sub-estados
+function getMainStepIdx(status: ImportStatus, steps: ImportStatus[]): number {
+  return steps.indexOf(toMainStep(status))
 }
 
 // Fecha asociada a cada paso (incluyendo sub-estados del proveedor)
@@ -949,7 +977,8 @@ function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
   onChangeStatus: (s: ImportStatus) => void
   imp: ComexImport
 }) {
-  const currentMainIdx = getMainStepIdx(currentStatus)
+  const steps = buildTimelineSteps(imp)
+  const currentMainIdx = getMainStepIdx(currentStatus, steps)
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 pb-6">
@@ -966,13 +995,13 @@ function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
           style={{
             top: '14px',
             left: '5%',
-            width: currentMainIdx === 0 ? '0%' : `${(currentMainIdx / (TIMELINE_STEPS.length - 1)) * 90}%`
+            width: currentMainIdx === 0 ? '0%' : `${(currentMainIdx / (steps.length - 1)) * 90}%`
           }}
         />
 
         {/* Pasos */}
         <div className="relative flex">
-          {TIMELINE_STEPS.map((step, idx) => {
+          {steps.map((step, idx) => {
             // El nodo "production" se renderiza como nodo compuesto de proveedor
             if (step === 'production') {
               const mainDone   = currentMainIdx > idx
@@ -1536,10 +1565,10 @@ function DocumentsSection({
 
 // ── CollapsibleSection ────────────────────────────────────────────────────────
 
-type SectionKey = 'costos'|'datos'|'anmat'|'flete_int'|'despacho'|'tributos'|'deposito'|'despachante'|'flete_local'|'productos'|'presupuestos'|'proformas'|'facturas'|'pl'|'bl'
+type SectionKey = 'costos'|'datos'|'pago'|'anmat'|'flete_int'|'despacho'|'tributos'|'deposito'|'despachante'|'flete_local'|'productos'|'presupuestos'|'proformas'|'facturas'|'pl'|'bl'
 
 const ALL_SECTION_KEYS: SectionKey[] = [
-  'costos','datos','anmat','flete_int','despacho','tributos',
+  'costos','datos','pago','anmat','flete_int','despacho','tributos',
   'deposito','despachante','flete_local','productos','presupuestos','proformas','facturas','pl'
 ]
 
@@ -6441,33 +6470,62 @@ function QuotesSection({
   )
 }
 
-// ── Payments section ──────────────────────────────────────────────────────────
+// ── Payment section ──────────────────────────────────────────────────────────
 
-function PaymentsSection({ importId }: { importId: string }) {
+function PaymentSection({ imp, onUpdate }: {
+  imp: ComexImport
+  onUpdate: (data: Partial<ComexImport>) => void
+}) {
+  const importId = imp.id
   const { data: payments = [] } = useComexPayments(importId)
+  const { data: allDocs  = [] } = useComexDocuments(importId)
+  const createDoc = useCreateComexDocument(importId)
+  const uploadDoc = useUploadComexDocument(importId)
+  const deleteDoc = useDeleteComexDocument(importId)
+
+  const paymentDocs = allDocs.filter(d => d.type === 'payment_receipt')
+
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({
-    amount: '', currency: 'USD', exchange_rate: '',
-    payment_date: '', method: 'wire' as PaymentMethod,
-    bank: '', reference: '', notes: ''
+    amount: '', currency: 'USD',
+    payment_date: '', bank: '', reference: ''
   })
 
-  const handleAdd = async () => {
+  const handleAddPayment = async () => {
     if (!form.amount) return
     await window.api.comex.payments.create({
       import_id: importId,
       amount: Number(form.amount),
       currency: form.currency,
-      exchange_rate: form.exchange_rate ? Number(form.exchange_rate) : null,
+      exchange_rate: null,
       payment_date: form.payment_date ? dayjs(form.payment_date).valueOf() : null,
-      method: form.method,
+      method: 'wire',
       bank: form.bank,
       reference: form.reference,
       status: 'completed',
-      notes: form.notes
+      notes: ''
     })
-    setForm({ amount: '', currency: 'USD', exchange_rate: '', payment_date: '', method: 'wire', bank: '', reference: '', notes: '' })
+    if (!imp.payment_date && form.payment_date) {
+      onUpdate({ payment_date: dayjs(form.payment_date).valueOf() })
+    }
+    setForm({ amount: '', currency: 'USD', payment_date: '', bank: '', reference: '' })
     setAdding(false)
+  }
+
+  const handleAttachDoc = async () => {
+    const filePath = await window.api.comex.documents.selectFile()
+    if (!filePath) return
+    const name = filePath.split(/[/\\]/).pop() ?? 'Comprobante'
+    const doc = await window.api.comex.documents.create({
+      import_id: importId,
+      type: 'payment_receipt',
+      name,
+      drive_file_id: null,
+      status: 'received',
+      notes: '',
+      received_at: Date.now()
+    })
+    uploadDoc.mutate({ docId: doc.id, filePath, folderId: imp.drive_folder_id, importTitle: imp.title })
   }
 
   const totalUSD = payments.reduce((s, p) => {
@@ -6475,102 +6533,162 @@ function PaymentsSection({ importId }: { importId: string }) {
     return s + (p.currency === 'USD' ? p.amount : p.amount / fx)
   }, 0)
 
-  return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-      <SectionHeader
-        icon={DollarSign}
-        title="Pagos"
-        action={
-          <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
-            <Plus size={12} /> Registrar pago
-          </button>
-        }
-      />
+  const inputCls = 'bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500'
 
-      {payments.length === 0 && !adding ? (
-        <p className="text-xs text-slate-500">Sin pagos registrados.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {payments.map((p) => (
-            <div key={p.id} className="flex items-center gap-3 py-1.5 border-b border-slate-700/50 last:border-0">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-200">
-                  {p.currency} {p.amount.toLocaleString('es-AR')}
-                </p>
-                <p className="text-[10px] text-slate-500">
-                  {PAYMENT_METHOD_LABELS[p.method]}
-                  {p.payment_date ? ` · ${dayjs(p.payment_date).format('DD/MM/YY')}` : ''}
-                  {p.reference ? ` · Ref: ${p.reference}` : ''}
-                </p>
-              </div>
-              <button onClick={() => window.api.comex.payments.delete(p.id)} className="text-slate-600 hover:text-red-400 transition-colors">
-                <Trash2 size={12} />
-              </button>
-            </div>
+  return (
+    <div className="space-y-5 p-4">
+
+      {/* Condición de pago */}
+      <div>
+        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Condición de pago</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['anticipado', 'a_plazo'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => onUpdate({ payment_terms: imp.payment_terms === t ? null : t })}
+              className={cn(
+                'text-xs font-semibold px-3 py-1.5 rounded-md border transition-all',
+                imp.payment_terms === t
+                  ? t === 'anticipado'
+                    ? 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50'
+                    : 'bg-violet-900/40 text-violet-400 border-violet-700/50'
+                  : 'bg-transparent text-slate-500 border-slate-700 hover:border-slate-500'
+              )}
+            >
+              {t === 'anticipado' ? 'Anticipado' : 'A plazo'}
+            </button>
           ))}
-          {payments.length > 0 && (
-            <div className="flex justify-end pt-1">
-              <span className="text-xs text-cyan-400 font-semibold">
-                Total: ~USD {Math.round(totalUSD).toLocaleString('es-AR')}
-              </span>
+
+          {imp.payment_terms === 'a_plazo' && (
+            <div className="flex items-center gap-2 ml-2 pl-2 border-l border-slate-700">
+              <span className="text-[10px] text-slate-500">Vencimiento:</span>
+              <EditableDate label="" value={imp.payment_due_date} onSave={(v) => onUpdate({ payment_due_date: v })} />
             </div>
           )}
         </div>
+      </div>
+
+      {/* Fecha de pago efectivo */}
+      <div>
+        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Fecha de pago</p>
+        <EditableDate label="" value={imp.payment_date} onSave={(v) => onUpdate({ payment_date: v })} />
+      </div>
+
+      {/* Transferencias registradas */}
+      {payments.length > 0 && (
+        <div>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Transferencias</p>
+          <div className="space-y-1.5">
+            {payments.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 py-1.5 px-3 bg-slate-900/50 rounded-lg border border-slate-700/40 group">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-200">
+                    {p.currency} {p.amount.toLocaleString('es-AR')}
+                    {p.bank ? <span className="text-slate-400 font-normal"> · {p.bank}</span> : null}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {p.payment_date ? dayjs(p.payment_date).format('DD/MM/YY') : '—'}
+                    {p.reference ? ` · Ref: ${p.reference}` : ''}
+                  </p>
+                </div>
+                <button onClick={() => window.api.comex.payments.delete(p.id)} className="text-slate-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            ))}
+            {totalUSD > 0 && (
+              <div className="flex justify-end pt-1">
+                <span className="text-xs text-cyan-400 font-semibold">
+                  Total: ~USD {Math.round(totalUSD).toLocaleString('es-AR')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
+      {/* Comprobantes */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Comprobantes</p>
+          <div className="flex gap-3">
+            <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors">
+              <Plus size={10} /> Registrar pago
+            </button>
+            <button onClick={handleAttachDoc} className="flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors">
+              <Paperclip size={10} /> Adjuntar archivo
+            </button>
+          </div>
+        </div>
+
+        {paymentDocs.length === 0 ? (
+          <p className="text-xs text-slate-600 italic">Sin comprobantes adjuntos.</p>
+        ) : (
+          <div className="space-y-1">
+            {paymentDocs.map((doc) => (
+              <div key={doc.id} className="flex items-center gap-2 py-1.5 px-3 bg-slate-900/50 rounded-lg border border-slate-700/40 group">
+                <FileText size={11} className="text-slate-500 flex-shrink-0" />
+                <span className="text-xs text-slate-300 flex-1 truncate">{doc.name}</span>
+                {doc.drive_status === 'synced' && (
+                  <Cloud size={9} className="text-emerald-500 flex-shrink-0" />
+                )}
+                {doc.drive_file_id && (
+                  <button
+                    onClick={() => window.api.shell.open(`https://drive.google.com/file/d/${doc.drive_file_id}/view`)}
+                    className="text-slate-600 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all"
+                  ><ExternalLink size={10} /></button>
+                )}
+                <button
+                  onClick={() => deleteDoc.mutate(doc.id)}
+                  className="text-slate-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                ><X size={10} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notas de pago */}
+      <div>
+        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Notas</p>
+        <EditableText
+          label=""
+          value={imp.payment_notes ?? ''}
+          onSave={(v) => onUpdate({ payment_notes: v })}
+          placeholder="Sin notas — click para agregar"
+          multiline
+        />
+      </div>
+
+      {/* Formulario de registro de pago */}
       {adding && (
-        <div className="mt-3 p-3 bg-slate-900/50 rounded-lg space-y-2 border border-slate-600">
+        <div className="p-3 bg-slate-900/60 rounded-lg space-y-2 border border-slate-700">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Nueva transferencia</p>
           <div className="grid grid-cols-2 gap-2">
-            <input
-              autoFocus
-              type="number"
-              value={form.amount}
-              onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
-              placeholder="Monto"
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            />
-            <select
-              value={form.currency}
-              onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            >
+            <input autoFocus type="number" value={form.amount}
+              onChange={(e) => setForm(p => ({ ...p, amount: e.target.value }))}
+              placeholder="Monto" className={inputCls} />
+            <select value={form.currency}
+              onChange={(e) => setForm(p => ({ ...p, currency: e.target.value }))}
+              className={inputCls}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <select
-              value={form.method}
-              onChange={(e) => setForm((p) => ({ ...p, method: e.target.value as PaymentMethod }))}
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            >
-              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={form.payment_date}
-              onChange={(e) => setForm((p) => ({ ...p, payment_date: e.target.value }))}
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            />
+            <input type="date" value={form.payment_date}
+              onChange={(e) => setForm(p => ({ ...p, payment_date: e.target.value }))}
+              className={inputCls} />
+            <input value={form.bank}
+              onChange={(e) => setForm(p => ({ ...p, bank: e.target.value }))}
+              placeholder="Banco" className={inputCls} />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              value={form.bank}
-              onChange={(e) => setForm((p) => ({ ...p, bank: e.target.value }))}
-              placeholder="Banco"
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            />
-            <input
-              value={form.reference}
-              onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
-              placeholder="Referencia / número"
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            />
-          </div>
+          <input value={form.reference}
+            onChange={(e) => setForm(p => ({ ...p, reference: e.target.value }))}
+            placeholder="N° de operación / referencia"
+            className={cn(inputCls, 'w-full')} />
           <div className="flex justify-end gap-2">
             <button onClick={() => setAdding(false)} className="text-xs text-slate-400 hover:text-white px-2 py-1">Cancelar</button>
-            <button onClick={handleAdd} className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded">Registrar</button>
+            <button onClick={handleAddPayment} className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded">Registrar</button>
           </div>
         </div>
       )}
@@ -6604,6 +6722,7 @@ export default function ComexImportDetail() {
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     costos:      true,
     datos:       true,
+    pago:        true,
     anmat:       false,
     flete_int:   false,
     despacho:    false,
@@ -7081,7 +7200,6 @@ export default function ComexImportDetail() {
         {/* Row 4: Fechas operativas */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <EditableDate label="Fecha pedido enviado"        value={imp.order_date}   onSave={(v) => upd({ order_date: v })} />
-          <EditableDate label="Fecha de pago"               value={imp.payment_date} onSave={(v) => upd({ payment_date: v })} />
           <EditableDate label="ETD — Fecha salida estimada" value={imp.ship_date}    onSave={(v) => upd({ ship_date: v })} />
         </div>
 
@@ -7370,6 +7488,25 @@ export default function ComexImportDetail() {
       {/* ═══════════════════════════════════════════════════════════════════════
           SECCIONES COLAPSABLES — en el orden definido
       ════════════════════════════════════════════════════════════════════════ */}
+
+      {/* 0. Pago */}
+      {(() => {
+        const isPaid = !!imp.payment_date
+        const isDue  = !!imp.payment_due_date && !isPaid
+        const payoSummary = isPaid
+          ? sm.ok(`Pagado · ${dayjs(imp.payment_date!).format('DD/MM/YY')}`)
+          : isDue
+            ? sm.warn(`A plazo · vence ${dayjs(imp.payment_due_date!).format('DD/MM/YY')}`)
+            : imp.payment_terms === 'anticipado'
+              ? sm.info('Anticipado · sin fecha de pago')
+              : sm.none('Sin condición configurada')
+        return (
+          <CollapsibleSection label="Pago" icon={DollarSign} accentColor="border-l-emerald-600"
+            isOpen={sections.pago} onToggle={() => toggle('pago')} summary={payoSummary}>
+            <PaymentSection imp={imp} onUpdate={upd} />
+          </CollapsibleSection>
+        )
+      })()}
 
       {/* 1. Resumen de costos */}
       {(() => {

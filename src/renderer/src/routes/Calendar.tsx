@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List, Plus, Trash2, X } from 'lucide-react'
+import { CalendarDays, RefreshCw, Loader2, CalendarPlus, ChevronLeft, ChevronRight, List, Plus, Trash2, X, MapPin, Navigation, Copy } from 'lucide-react'
 import dayjs, { Dayjs } from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
@@ -350,14 +350,20 @@ function MonthGrid({
               onClick={() => onDayClick(day)}
               className={cn(
                 'border-b border-r border-slate-700/40 p-2 min-h-[100px] cursor-pointer hover:bg-slate-700/20',
-                !inMonth && 'bg-slate-900/40'
+                !inMonth && 'bg-slate-900/40',
+                isToday && 'ring-1 ring-inset ring-indigo-500/70 bg-indigo-950/25'
               )}
             >
-              <div className={cn(
-                'text-xs font-medium mb-1 inline-flex items-center justify-center',
-                isToday ? 'bg-indigo-600 text-white rounded-full w-5 h-5' : (inMonth ? 'text-slate-400' : 'text-slate-600')
-              )}>
-                {day.format('D')}
+              <div className="flex items-center justify-between mb-1">
+                <div className={cn(
+                  'text-xs font-semibold inline-flex items-center justify-center w-5 h-5 rounded-full',
+                  isToday ? 'bg-indigo-600 text-white' : (inMonth ? 'text-slate-400' : 'text-slate-600')
+                )}>
+                  {day.format('D')}
+                </div>
+                {isToday && (
+                  <span className="text-[9px] font-bold tracking-widest text-indigo-400 uppercase">HOY</span>
+                )}
               </div>
               <div className="space-y-1">
                 {dayEvents.slice(0, view === 'day' ? undefined : 4).map((ev) => {
@@ -591,6 +597,9 @@ function EventModal({
   const [startTime, setStartTime] = useState(initial.startTime)
   const [endTime, setEndTime] = useState(initial.endTime)
   const [calendarId, setCalendarId] = useState(initial.calendarId)
+  const [reminderMinutes, setReminderMinutes] = useState<number | null>(null)
+  const [waPhone, setWaPhone] = useState('')
+  const [waReminderMinutes, setWaReminderMinutes] = useState<number | null>(null)
 
   const createEvent = useCreateManualEvent()
   const updateEvent = useUpdateManualEvent()
@@ -612,7 +621,8 @@ function EventModal({
       location: location.trim() || null,
       startAt,
       endAt,
-      allDay
+      allDay,
+      reminderMinutes
     }
   }
 
@@ -622,7 +632,15 @@ function EventModal({
     if (isEdit && modal.mode === 'edit') {
       await updateEvent.mutateAsync({ calendarId, googleEventId: initial.googleEventId, input })
     } else {
-      await createEvent.mutateAsync({ calendarId, input })
+      const ev = await createEvent.mutateAsync({ calendarId, input })
+      if (waPhone.trim() && waReminderMinutes) {
+        const sendAt = input.startAt - waReminderMinutes * 60_000
+        const timeLabel = waReminderMinutes >= 60
+          ? `${waReminderMinutes / 60}h`
+          : `${waReminderMinutes}min`
+        const msg = `🗓 Recordatorio: *${title.trim()}*\nEn ${timeLabel}${location.trim() ? `\n📍 ${location.trim()}` : ''}`
+        await window.api.calendar.scheduleWaReminder(ev.id, waPhone.trim(), msg, sendAt)
+      }
     }
     onClose()
   }
@@ -676,6 +694,35 @@ function EventModal({
               onChange={(e) => setLocation(e.target.value)}
               className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
             />
+            {location.trim() && (
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => window.api.shell.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.trim())}`)}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 text-[11px] rounded-md transition-colors"
+                >
+                  <MapPin size={11} /> Google Maps
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.api.shell.open(`https://waze.com/ul?q=${encodeURIComponent(location.trim())}`)}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 text-[11px] rounded-md transition-colors"
+                >
+                  <Navigation size={11} /> Waze
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.trim())}`
+                    const waze = `https://waze.com/ul?q=${encodeURIComponent(location.trim())}`
+                    navigator.clipboard.writeText(`📍 ${location.trim()}\n🗺 Maps: ${maps}\n🔵 Waze: ${waze}`)
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 text-[11px] rounded-md transition-colors"
+                >
+                  <Copy size={11} /> Copiar para WA
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -721,6 +768,60 @@ function EventModal({
                 </div>
               </>
             )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Recordatorio</label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {[
+                { label: '10 min', value: 10 },
+                { label: '30 min', value: 30 },
+                { label: '1 hora', value: 60 },
+                { label: '2 horas', value: 120 },
+                { label: '1 día', value: 1440 },
+              ].map(({ label, value }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setReminderMinutes(reminderMinutes === value ? null : value)}
+                  className={cn(
+                    'px-2.5 py-1 text-xs rounded-full border transition-colors',
+                    reminderMinutes === value
+                      ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
+                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">
+              Recordatorio WhatsApp
+              <span className="ml-1.5 text-slate-600 font-normal">(Evolution API)</span>
+            </label>
+            <div className="flex gap-2 mt-1">
+              <input
+                type="tel"
+                value={waPhone}
+                onChange={(e) => setWaPhone(e.target.value)}
+                placeholder="+54 9 11 1234 5678"
+                className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60"
+              />
+              <select
+                value={waReminderMinutes ?? ''}
+                onChange={(e) => setWaReminderMinutes(e.target.value ? Number(e.target.value) : null)}
+                className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60"
+              >
+                <option value="">— sin recordatorio —</option>
+                <option value="30">30 min antes</option>
+                <option value="60">1 hora antes</option>
+                <option value="120">2 horas antes</option>
+                <option value="1440">1 día antes</option>
+              </select>
+            </div>
           </div>
 
           <div>

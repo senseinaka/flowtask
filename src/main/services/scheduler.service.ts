@@ -15,6 +15,7 @@ type PushFn = (channel: string, data: unknown) => void
 class SchedulerService {
   private timers          = new Map<string, ReturnType<typeof setTimeout>>()
   private delegatedTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private waTimers        = new Map<string, ReturnType<typeof setTimeout>>()
   private pushFn: PushFn | null = null
   private pollInterval: ReturnType<typeof setInterval> | null = null
 
@@ -34,8 +35,10 @@ class SchedulerService {
     if (this.pollInterval) clearInterval(this.pollInterval)
     this.timers.forEach((t) => clearTimeout(t))
     this.delegatedTimers.forEach((t) => clearTimeout(t))
+    this.waTimers.forEach((t) => clearTimeout(t))
     this.timers.clear()
     this.delegatedTimers.clear()
+    this.waTimers.clear()
   }
 
   // ─── Personal Reminders ───────────────────────────────────────────────────
@@ -162,6 +165,25 @@ class SchedulerService {
     }
 
     this.pushFn?.('message:sent', { messageId: msg.id, success, partial, errors })
+  }
+
+  // ─── Calendar WA reminders (in-memory, no DB) ────────────────────────────
+
+  scheduleDirectWaReminder(id: string, phone: string, message: string, sendAt: number): void {
+    const delay = sendAt - Date.now()
+    if (delay <= 0) return
+    this.cancelDirectWaReminder(id)
+    const timer = setTimeout(async () => {
+      this.waTimers.delete(id)
+      await whatsappService.sendMessage(phone, message)
+      this.pushFn?.('calendar:wa-reminder:sent', { id })
+    }, delay)
+    this.waTimers.set(id, timer)
+  }
+
+  cancelDirectWaReminder(id: string): void {
+    const t = this.waTimers.get(id)
+    if (t) { clearTimeout(t); this.waTimers.delete(id) }
   }
 
   // ─── Shared ───────────────────────────────────────────────────────────────

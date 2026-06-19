@@ -468,6 +468,9 @@ const comex_imports = new Table(
     docs_to_despachante_date: column.integer,
     docs_to_compras: column.integer,
     docs_to_compras_date: column.integer,
+    payment_terms: column.text,
+    payment_due_date: column.integer,
+    payment_notes: column.text,
     workspace_id: column.text
   },
   {

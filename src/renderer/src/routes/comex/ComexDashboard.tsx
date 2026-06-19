@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, DollarSign, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff } from 'lucide-react'
+import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, DollarSign, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff, ChevronDown } from 'lucide-react'
 import { useComexImports, useComexPlannings } from '../../hooks/useComex'
 import { PlanningDashboardPanel } from './ComexPlanningSummary'
 import { IMPORT_STATUS_LABELS, IMPORT_STATUS_COLORS } from '@shared/types'
@@ -14,8 +14,42 @@ dayjs.locale('es')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STATUS_ORDER: ImportStatus[] = [
-  'planning','ordered','paid','production','shipped','transit','customs','delivered'
+const PIPELINE_PHASES: Array<{
+  key: string
+  label: string
+  color: string
+  statuses: ImportStatus[]
+}> = [
+  {
+    key: 'pedido',
+    label: 'Pedido',
+    color: '#60a5fa',
+    statuses: ['planning', 'ordered', 'paid', 'production'],
+  },
+  {
+    key: 'pre_embarque',
+    label: 'Pre-embarque',
+    color: '#f97316',
+    statuses: ['carga_armada', 'esperando_embarcar', 'forwarder', 'cotizacion_pedida', 'forwarder_seleccionado'],
+  },
+  {
+    key: 'transito',
+    label: 'Tránsito',
+    color: '#8b5cf6',
+    statuses: ['shipped', 'transit', 'arrived'],
+  },
+  {
+    key: 'aduana',
+    label: 'Aduana',
+    color: '#06b6d4',
+    statuses: ['customs', 'oficializado', 'carga_deposito'],
+  },
+  {
+    key: 'entregado',
+    label: 'Entregado',
+    color: '#10b981',
+    statuses: ['delivered'],
+  },
 ]
 
 function getBestETA(imp: ComexImport): number | null {
@@ -36,8 +70,9 @@ function getOrderStart(imp: ComexImport): number {
 
 function PipelineCard({ imp }: { imp: ComexImport }) {
   const navigate = useNavigate()
-  const eta = getBestETA(imp)
-  const value = imp.actual_value ?? imp.estimated_value
+  const eta      = getBestETA(imp)
+  const value    = imp.actual_value ?? imp.estimated_value
+  const statusColor = IMPORT_STATUS_COLORS[imp.status]
 
   return (
     <button
@@ -62,20 +97,29 @@ function PipelineCard({ imp }: { imp: ComexImport }) {
           </span>
         )}
       </div>
-      <div className="flex items-center gap-1 mt-1 flex-wrap">
-        {imp.inal_required === 1 && (
-          <span className="text-[9px] font-semibold px-1 py-0.5 rounded-full bg-emerald-900/50 text-emerald-400 border border-emerald-800/50">
-            INAL
-          </span>
-        )}
-        {imp.cost_pct != null && (
-          <span className={cn('text-[9px] font-medium px-1 py-0.5 rounded-full',
-            imp.cost_pct < 20 ? 'bg-emerald-900/30 text-emerald-500' :
-            imp.cost_pct < 28 ? 'bg-amber-900/30 text-amber-500' : 'bg-red-900/30 text-red-500'
-          )}>
-            {imp.cost_pct.toFixed(1)}%
-          </span>
-        )}
+      <div className="flex items-center justify-between gap-1 mt-1.5">
+        <div className="flex items-center gap-1 flex-wrap">
+          {imp.inal_required === 1 && (
+            <span className="text-[9px] font-semibold px-1 py-0.5 rounded-full bg-emerald-900/50 text-emerald-400 border border-emerald-800/50">
+              INAL
+            </span>
+          )}
+          {imp.cost_pct != null && (
+            <span className={cn('text-[9px] font-medium px-1 py-0.5 rounded-full',
+              imp.cost_pct < 20 ? 'bg-emerald-900/30 text-emerald-500' :
+              imp.cost_pct < 28 ? 'bg-amber-900/30 text-amber-500' : 'bg-red-900/30 text-red-500'
+            )}>
+              {imp.cost_pct.toFixed(1)}%
+            </span>
+          )}
+        </div>
+        {/* Sub-estado exacto dentro de la fase */}
+        <span
+          className="text-[8px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
+          style={{ color: statusColor, background: statusColor + '18', border: `1px solid ${statusColor}40` }}
+        >
+          {IMPORT_STATUS_LABELS[imp.status]}
+        </span>
       </div>
     </button>
   )
@@ -84,56 +128,102 @@ function PipelineCard({ imp }: { imp: ComexImport }) {
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 
 function Pipeline({ imports }: { imports: ComexImport[] }) {
-  const byStatus = STATUS_ORDER.reduce<Record<string, ComexImport[]>>((acc, s) => {
-    acc[s] = imports.filter(i => i.status === s)
-    return acc
-  }, {})
+  const [deliveredOpen, setDeliveredOpen] = useState(false)
+
+  const phases = PIPELINE_PHASES.map(phase => ({
+    ...phase,
+    items: imports.filter(i => phase.statuses.includes(i.status)),
+    totalVal: imports
+      .filter(i => phase.statuses.includes(i.status))
+      .reduce((s, i) => s + (i.actual_value ?? i.estimated_value ?? 0), 0),
+  }))
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
       <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
         <TrendingUp size={14} className="text-cyan-400" />
         Pipeline de importaciones
+        <span className="ml-auto text-[10px] text-slate-500 font-normal">
+          {imports.filter(i => i.status !== 'delivered').length} activas
+        </span>
       </h2>
       <div className="overflow-x-auto -mx-1 px-1 pb-2">
-        <div className="flex gap-2.5" style={{ minWidth: `${STATUS_ORDER.length * 160}px` }}>
-          {STATUS_ORDER.map(status => {
-            const cols = byStatus[status] ?? []
-            const color = IMPORT_STATUS_COLORS[status]
-            const totalVal = cols.reduce((s, i) => s + (i.actual_value ?? i.estimated_value ?? 0), 0)
+        <div className="flex gap-2.5" style={{ minWidth: '760px' }}>
+          {phases.map(phase => {
+            const isDelivered = phase.key === 'entregado'
+            const expanded    = isDelivered ? deliveredOpen : true
 
             return (
-              <div key={status} className="flex-1" style={{ minWidth: '150px' }}>
-                {/* Column header */}
+              <div key={phase.key} className="flex-1" style={{ minWidth: '148px' }}>
+                {/* Phase header */}
                 <div
-                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg mb-2"
-                  style={{ backgroundColor: color + '18', borderLeft: `3px solid ${color}` }}
+                  className={cn(
+                    'rounded-lg mb-2 px-2.5 py-2',
+                    isDelivered && 'cursor-pointer hover:opacity-90 transition-opacity'
+                  )}
+                  style={{ backgroundColor: phase.color + '14', borderLeft: `3px solid ${phase.color}` }}
+                  onClick={isDelivered ? () => setDeliveredOpen(o => !o) : undefined}
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color }}>
-                    {IMPORT_STATUS_LABELS[status]}
-                  </span>
-                  {cols.length > 0 && (
-                    <span className="text-[10px] font-bold text-white bg-slate-700/80 px-1.5 py-0.5 rounded-full ml-1 flex-shrink-0">
-                      {cols.length}
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: phase.color }}
+                    >
+                      {phase.label}
                     </span>
+                    <div className="flex items-center gap-1">
+                      {phase.items.length > 0 && (
+                        <span className="text-[10px] font-bold text-white bg-slate-700/80 px-1.5 py-0.5 rounded-full">
+                          {phase.items.length}
+                        </span>
+                      )}
+                      {isDelivered && (
+                        <ChevronDown
+                          size={12}
+                          className="text-slate-500 transition-transform"
+                          style={{ transform: deliveredOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  {/* Sub-estado dots */}
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {phase.statuses.map(s => {
+                      const cnt = imports.filter(i => i.status === s).length
+                      return (
+                        <span
+                          key={s}
+                          className="text-[8px] font-medium px-1 py-0.5 rounded"
+                          style={{
+                            color:      IMPORT_STATUS_COLORS[s],
+                            background: IMPORT_STATUS_COLORS[s] + (cnt > 0 ? '20' : '0a'),
+                            border:     `1px solid ${IMPORT_STATUS_COLORS[s]}${cnt > 0 ? '50' : '20'}`,
+                            opacity:    cnt > 0 ? 1 : 0.4,
+                          }}
+                        >
+                          {cnt > 0 ? `${cnt} ` : ''}{IMPORT_STATUS_LABELS[s]}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  {/* Total valor */}
+                  {phase.totalVal > 0 && (
+                    <p className="text-[9px] mt-1.5" style={{ color: phase.color + 'aa' }}>
+                      USD {Math.round(phase.totalVal).toLocaleString('es-AR')}
+                    </p>
                   )}
                 </div>
 
                 {/* Cards */}
-                <div className="space-y-1.5 min-h-[50px]">
-                  {cols.map(imp => <PipelineCard key={imp.id} imp={imp} />)}
-                  {cols.length === 0 && (
-                    <div className="h-10 border border-dashed border-slate-700/40 rounded-lg flex items-center justify-center">
-                      <span className="text-[10px] text-slate-700">—</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer value */}
-                {totalVal > 0 && (
-                  <p className="mt-1.5 text-[10px] text-slate-600 text-right px-1">
-                    USD {Math.round(totalVal).toLocaleString('es-AR')}
-                  </p>
+                {expanded && (
+                  <div className="space-y-1.5 min-h-[40px]">
+                    {phase.items.map(imp => <PipelineCard key={imp.id} imp={imp} />)}
+                    {phase.items.length === 0 && (
+                      <div className="h-10 border border-dashed border-slate-700/40 rounded-lg flex items-center justify-center">
+                        <span className="text-[10px] text-slate-700">—</span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )

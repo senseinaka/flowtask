@@ -3,7 +3,7 @@ import {
   Package, Plus, Search, X, ChevronRight, Sparkles,
   LayoutGrid, List, Clock,
   FileX, Ship, Calendar, CheckCircle, Mail, ShieldCheck,
-  TrendingUp, ChevronDown, Anchor
+  TrendingUp, ChevronDown, Anchor, DollarSign
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -82,6 +82,57 @@ type DocState = 'ok' | 'missing' | 'na'
 function DocBadge({ label, state }: { label: string; state: DocState }) {
   if (state === 'ok')      return <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500"><CheckCircle size={9} />{label}</span>
   if (state === 'missing') return <span className="inline-flex items-center gap-0.5 text-[9px] text-rose-500"><FileX size={9} />{label}</span>
+  return null
+}
+
+function SentDocsPill({ sent, date, label }: { sent: 0 | 1; date: number | null | undefined; label: string }) {
+  const dateStr = date ? dayjs(date).format('D/M') : null
+  if (sent) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-emerald-900/40 text-emerald-400 border-emerald-700/30">
+        <CheckCircle size={8} />
+        {label}{dateStr && <span className="text-emerald-600 ml-0.5">{dateStr}</span>}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-orange-900/30 text-orange-400 border-orange-800/40">
+      <Clock size={8} />
+      {label}
+    </span>
+  )
+}
+
+function PaymentPill({ imp }: { imp: ComexImport }) {
+  if (imp.payment_date) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-emerald-900/40 text-emerald-400 border-emerald-700/30">
+        <DollarSign size={8} />
+        Pagado <span className="text-emerald-600 ml-0.5">{dayjs(imp.payment_date).format('D/M')}</span>
+      </span>
+    )
+  }
+  if (imp.payment_due_date) {
+    const isOverdue = imp.payment_due_date < Date.now()
+    return (
+      <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+        isOverdue
+          ? 'bg-red-900/30 text-red-400 border-red-800/40'
+          : 'bg-violet-900/30 text-violet-400 border-violet-800/40'
+      }`}>
+        <Clock size={8} />
+        {isOverdue ? 'Pago vencido' : 'A plazo'} <span className="ml-0.5 opacity-70">{dayjs(imp.payment_due_date).format('D/M')}</span>
+      </span>
+    )
+  }
+  if (imp.payment_terms === 'anticipado') {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-orange-900/30 text-orange-400 border-orange-800/40">
+        <Clock size={8} />
+        Anticipo pendiente
+      </span>
+    )
+  }
   return null
 }
 
@@ -398,6 +449,14 @@ function ImportCard({ imp }: { imp: ComexImport }) {
 
         {/* ── ZONA 3: Checklist documentos ── */}
         <DocChecklist imp={imp} />
+
+        {/* ── ZONA 3b: Docs enviados + estado de pago ── */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[8px] text-slate-600">Docs:</span>
+          <SentDocsPill sent={imp.docs_to_despachante ?? 0} date={imp.docs_to_despachante_date} label="Desp." />
+          <SentDocsPill sent={imp.docs_to_compras    ?? 0} date={imp.docs_to_compras_date}    label="Compras" />
+          <PaymentPill imp={imp} />
+        </div>
 
         {/* ── ZONA 4: Oficializada + ETA + Forwarder ── */}
         <div className="pt-1 border-t border-slate-700/40 space-y-1">

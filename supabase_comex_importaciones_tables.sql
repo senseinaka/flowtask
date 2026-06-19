@@ -437,3 +437,12 @@ begin
     execute format('grant select, insert, update, delete on public.%I to service_role', t);
   end loop;
 end $$;
+
+-- migrations.ts v74-v75: columnas nuevas en comex_imports
+alter table public.comex_imports add column if not exists docs_to_despachante      integer not null default 0;
+alter table public.comex_imports add column if not exists docs_to_despachante_date bigint;
+alter table public.comex_imports add column if not exists docs_to_compras          integer not null default 0;
+alter table public.comex_imports add column if not exists docs_to_compras_date     bigint;
+alter table public.comex_imports add column if not exists payment_terms            text;
+alter table public.comex_imports add column if not exists payment_due_date         bigint;
+alter table public.comex_imports add column if not exists payment_notes text not null default '';
