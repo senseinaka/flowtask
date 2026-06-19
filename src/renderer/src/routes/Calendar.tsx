@@ -10,6 +10,8 @@ import {
   useCalendarStatus, useCalendarEvents, useConnectGoogle, useSyncNow, useEnabledCalendars,
   useCreateManualEvent, useUpdateManualEvent, useDeleteManualEvent
 } from '../hooks/useCalendar'
+import { useContacts } from '../hooks/useContacts'
+import { usePersonalContact } from '../hooks/useSettings'
 import { cn } from '../components/ui/utils'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -598,8 +600,20 @@ function EventModal({
   const [endTime, setEndTime] = useState(initial.endTime)
   const [calendarId, setCalendarId] = useState(initial.calendarId)
   const [reminderMinutes, setReminderMinutes] = useState<number | null>(null)
-  const [waPhone, setWaPhone] = useState('')
+  const [waPhone, setWaPhone] = useState('') // phone number or '__custom__'
+  const [waCustomPhone, setWaCustomPhone] = useState('')
   const [waReminderMinutes, setWaReminderMinutes] = useState<number | null>(null)
+
+  const { data: contacts = [] } = useContacts()
+  const { data: personalContact } = usePersonalContact()
+
+  useEffect(() => {
+    if (personalContact?.whatsapp_number && !waPhone) {
+      setWaPhone(personalContact.whatsapp_number)
+    }
+  }, [personalContact?.whatsapp_number])
+
+  const effectiveWaPhone = waPhone === '__custom__' ? waCustomPhone : waPhone
 
   const createEvent = useCreateManualEvent()
   const updateEvent = useUpdateManualEvent()
@@ -633,13 +647,15 @@ function EventModal({
       await updateEvent.mutateAsync({ calendarId, googleEventId: initial.googleEventId, input })
     } else {
       const ev = await createEvent.mutateAsync({ calendarId, input })
-      if (waPhone.trim() && waReminderMinutes) {
+      if (effectiveWaPhone.trim() && waReminderMinutes !== null) {
         const sendAt = input.startAt - waReminderMinutes * 60_000
-        const timeLabel = waReminderMinutes >= 60
-          ? `${waReminderMinutes / 60}h`
-          : `${waReminderMinutes}min`
+        const timeLabel = waReminderMinutes === 0
+          ? 'ahora'
+          : waReminderMinutes >= 60
+            ? `${waReminderMinutes / 60}h`
+            : `${waReminderMinutes}min`
         const msg = `🗓 Recordatorio: *${title.trim()}*\nEn ${timeLabel}${location.trim() ? `\n📍 ${location.trim()}` : ''}`
-        await window.api.calendar.scheduleWaReminder(ev.id, waPhone.trim(), msg, sendAt)
+        await window.api.calendar.scheduleWaReminder(ev.id, effectiveWaPhone.trim(), msg, sendAt)
       }
     }
     onClose()
@@ -774,6 +790,7 @@ function EventModal({
             <label className="block text-xs font-medium text-slate-400 mb-1">Recordatorio</label>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {[
+                { label: 'En el evento', value: 0 },
                 { label: '10 min', value: 10 },
                 { label: '30 min', value: 30 },
                 { label: '1 hora', value: 60 },
@@ -803,25 +820,46 @@ function EventModal({
               <span className="ml-1.5 text-slate-600 font-normal">(Evolution API)</span>
             </label>
             <div className="flex gap-2 mt-1">
-              <input
-                type="tel"
+              <select
                 value={waPhone}
                 onChange={(e) => setWaPhone(e.target.value)}
-                placeholder="+54 9 11 1234 5678"
-                className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60"
-              />
+                className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60 truncate"
+              >
+                <option value="">— sin destinatario —</option>
+                {personalContact?.whatsapp_number && (
+                  <option value={personalContact.whatsapp_number}>
+                    Yo — {personalContact.name || personalContact.whatsapp_number}
+                  </option>
+                )}
+                {contacts
+                  .filter((c) => c.phone)
+                  .map((c) => (
+                    <option key={c.id} value={c.phone}>{c.name}</option>
+                  ))}
+                <option value="__custom__">Otro (ingresar número)...</option>
+              </select>
               <select
                 value={waReminderMinutes ?? ''}
-                onChange={(e) => setWaReminderMinutes(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setWaReminderMinutes(e.target.value !== '' ? Number(e.target.value) : null)}
                 className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-emerald-500/60"
               >
                 <option value="">— sin recordatorio —</option>
+                <option value="0">En el evento</option>
                 <option value="30">30 min antes</option>
                 <option value="60">1 hora antes</option>
                 <option value="120">2 horas antes</option>
                 <option value="1440">1 día antes</option>
               </select>
             </div>
+            {waPhone === '__custom__' && (
+              <input
+                type="tel"
+                value={waCustomPhone}
+                onChange={(e) => setWaCustomPhone(e.target.value)}
+                placeholder="+54 9 11 1234 5678"
+                className="mt-1.5 w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60"
+              />
+            )}
           </div>
 
           <div>

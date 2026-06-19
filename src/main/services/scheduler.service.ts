@@ -171,12 +171,19 @@ class SchedulerService {
 
   scheduleDirectWaReminder(id: string, phone: string, message: string, sendAt: number): void {
     const delay = sendAt - Date.now()
-    if (delay <= 0) return
+    if (delay <= 0) {
+      console.warn(`[WA Reminder] id=${id} ignorado: delay=${delay}ms (evento en el pasado o inmediato)`)
+      return
+    }
     this.cancelDirectWaReminder(id)
+    const mins = Math.round(delay / 60_000)
+    console.log(`[WA Reminder] Programado id=${id} phone=${phone} en ${mins} min (${delay}ms)`)
     const timer = setTimeout(async () => {
       this.waTimers.delete(id)
-      await whatsappService.sendMessage(phone, message)
-      this.pushFn?.('calendar:wa-reminder:sent', { id })
+      console.log(`[WA Reminder] Enviando a ${phone}...`)
+      const ok = await whatsappService.sendMessage(phone, message)
+      console.log(`[WA Reminder] Resultado: ${ok ? 'OK' : 'FALLO'} phone=${phone}`)
+      this.pushFn?.('calendar:wa-reminder:sent', { id, ok })
     }, delay)
     this.waTimers.set(id, timer)
   }
