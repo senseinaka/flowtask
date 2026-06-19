@@ -192,7 +192,7 @@ class SchedulerService {
       console.log(`[WA Reminder] Enviando a ${phone}...`)
       const ok = await whatsappService.sendMessage(phone, message)
       console.log(`[WA Reminder] Resultado: ${ok ? 'OK' : 'FALLO'} phone=${phone}`)
-      markWaReminderSent(id)
+      markWaReminderSent(id, ok)
       this.pushFn?.('calendar:wa-reminder:sent', { id, ok })
     }, delay)
     this.waTimers.set(id, timer)
@@ -222,7 +222,19 @@ class SchedulerService {
   private scheduleWaReminderFromDb(r: CalendarWaReminder): void {
     const delay = r.send_at - Date.now()
     if (delay <= 0) {
-      markWaReminderSent(r.event_id)
+      const lateMs = -delay
+      const TWO_HOURS = 2 * 60 * 60_000
+      if (lateMs <= TWO_HOURS) {
+        // Llegó tarde pero dentro de margen razonable — intentar de todas formas
+        console.log(`[WA Reminder] Tardío (${Math.round(lateMs / 60_000)} min), intentando enviar event_id=${r.event_id}`)
+        whatsappService.sendMessage(r.phone, r.message).then(ok => {
+          markWaReminderSent(r.event_id, ok)
+          this.pushFn?.('calendar:wa-reminder:sent', { id: r.event_id, ok })
+        }).catch(() => markWaReminderSent(r.event_id, false))
+      } else {
+        console.warn(`[WA Reminder] event_id=${r.event_id} expiró hace más de 2h — marcado como fallido sin enviar`)
+        markWaReminderSent(r.event_id, false)
+      }
       return
     }
     const mins = Math.round(delay / 60_000)
@@ -232,7 +244,7 @@ class SchedulerService {
       console.log(`[WA Reminder] Enviando a ${r.phone}...`)
       const ok = await whatsappService.sendMessage(r.phone, r.message)
       console.log(`[WA Reminder] Resultado: ${ok ? 'OK' : 'FALLO'} phone=${r.phone}`)
-      markWaReminderSent(r.event_id)
+      markWaReminderSent(r.event_id, ok)
       this.pushFn?.('calendar:wa-reminder:sent', { id: r.event_id, ok })
     }, delay)
     this.waTimers.set(r.event_id, timer)

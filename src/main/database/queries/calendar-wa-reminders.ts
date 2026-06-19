@@ -14,8 +14,11 @@ export function upsertWaReminder(eventId: string, phone: string, message: string
   return db.prepare('SELECT * FROM calendar_wa_reminders WHERE id = ?').get(id) as CalendarWaReminder
 }
 
-export function markWaReminderSent(eventId: string): void {
-  getDb().prepare('UPDATE calendar_wa_reminders SET sent_at = ? WHERE event_id = ?').run(Date.now(), eventId)
+/** Registra el intento de envío con su resultado real (ok=true/false). */
+export function markWaReminderSent(eventId: string, success: boolean): void {
+  getDb().prepare(
+    'UPDATE calendar_wa_reminders SET sent_at = ?, success = ? WHERE event_id = ?'
+  ).run(Date.now(), success ? 1 : 0, eventId)
 }
 
 export function deleteWaReminder(eventId: string): void {
@@ -28,8 +31,9 @@ export function getPendingWaReminders(): CalendarWaReminder[] {
   ).all() as CalendarWaReminder[]
 }
 
+/** Devuelve el reminder del evento (pendiente, enviado o fallido) para mostrarlo como log. */
 export function getWaReminderForEvent(eventId: string): CalendarWaReminder | null {
   return getDb().prepare(
-    'SELECT * FROM calendar_wa_reminders WHERE event_id = ? AND sent_at IS NULL'
+    'SELECT * FROM calendar_wa_reminders WHERE event_id = ? ORDER BY created_at DESC LIMIT 1'
   ).get(eventId) as CalendarWaReminder | null
 }

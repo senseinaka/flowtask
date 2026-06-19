@@ -5,7 +5,7 @@ import dayjs, { Dayjs } from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
 
-import type { UnifiedCalendarEvent, CalendarEventSource, CalendarEventInput, GoogleCalendarInfo } from '@shared/types'
+import type { UnifiedCalendarEvent, CalendarEventSource, CalendarEventInput, GoogleCalendarInfo, CalendarWaReminder } from '@shared/types'
 import {
   useCalendarStatus, useCalendarEvents, useConnectGoogle, useSyncNow, useEnabledCalendars,
   useCreateManualEvent, useUpdateManualEvent, useDeleteManualEvent
@@ -607,10 +607,17 @@ function EventModal({
   const [waPhone, setWaPhone] = useState('') // phone number or '__custom__'
   const [waCustomPhone, setWaCustomPhone] = useState('')
   const [waReminderMinutes, setWaReminderMinutes] = useState<number | null>(null)
-  const [existingWaReminder, setExistingWaReminder] = useState<{ event_id: string; phone: string; send_at: number } | null>(null)
+  const [existingWaReminder, setExistingWaReminder] = useState<CalendarWaReminder | null>(null)
 
   const { data: contacts = [] } = useContacts()
   const { data: personalContact } = usePersonalContact()
+
+  const waContactName = useMemo(() => {
+    if (!existingWaReminder) return null
+    const phone = existingWaReminder.phone
+    if (personalContact?.whatsapp_number === phone) return personalContact.name || phone
+    return contacts.find(c => c.phone === phone)?.name ?? phone
+  }, [existingWaReminder?.phone, contacts, personalContact])
 
   useEffect(() => {
     if (personalContact?.whatsapp_number && !waPhone) {
@@ -800,7 +807,13 @@ function EventModal({
                   <input
                     type="time"
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={(e) => {
+                      const newStart = e.target.value
+                      setStartTime(newStart)
+                      const [h, m] = newStart.split(':').map(Number)
+                      const newEnd = dayjs().hour(h).minute(m).add(1, 'hour').format('HH:mm')
+                      setEndTime(newEnd)
+                    }}
                     className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -896,24 +909,46 @@ function EventModal({
                 {waFeedback.msg}
               </p>
             )}
-            {existingWaReminder && !waFeedback && (
-              <div className="mt-2 px-3 py-2 bg-slate-900 border border-emerald-800/40 rounded-lg flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] text-emerald-400 font-medium">Recordatorio WA pendiente</p>
-                  <p className="text-[11px] text-slate-400">
-                    {existingWaReminder.phone} — {dayjs(existingWaReminder.send_at).format('DD/MM HH:mm')}
+            {existingWaReminder && (existingWaReminder.sent_at !== null || !waFeedback) && (
+              <div className={cn(
+                'mt-2 px-3 py-2 rounded-lg border flex items-start justify-between gap-2',
+                existingWaReminder.sent_at === null
+                  ? 'bg-slate-900 border-amber-800/50'
+                  : existingWaReminder.success === 1
+                    ? 'bg-slate-900 border-emerald-800/50'
+                    : 'bg-slate-900 border-red-800/50'
+              )}>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-[11px] text-slate-300 font-medium">Recordatorio WA</p>
+                    {existingWaReminder.sent_at === null
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400">Pendiente</span>
+                      : existingWaReminder.success === 1
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-400">Enviado</span>
+                        : <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">Error al enviar</span>
+                    }
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {waContactName} — {dayjs(existingWaReminder.send_at).format('DD/MM HH:mm')}
                   </p>
+                  {existingWaReminder.sent_at !== null && (
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {existingWaReminder.success === 1 ? 'Enviado' : 'Intentado'} a las {dayjs(existingWaReminder.sent_at).format('HH:mm')}
+                    </p>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await window.api.calendar.cancelWaReminder(existingWaReminder.event_id)
-                    setExistingWaReminder(null)
-                  }}
-                  className="text-[11px] text-red-400 hover:text-red-300 ml-3 shrink-0"
-                >
-                  Cancelar
-                </button>
+                {existingWaReminder.sent_at === null && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await window.api.calendar.cancelWaReminder(existingWaReminder.event_id)
+                      setExistingWaReminder(null)
+                    }}
+                    className="text-[11px] text-red-400 hover:text-red-300 shrink-0 mt-0.5"
+                  >
+                    Cancelar
+                  </button>
+                )}
               </div>
             )}
           </div>

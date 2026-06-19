@@ -2200,6 +2200,7 @@ export interface CalendarWaReminder {
   message: string
   send_at: number
   sent_at: number | null
+  success: number | null  // NULL=pendiente, 1=enviado OK, 0=falló
   created_at: number
 }
 

@@ -2519,6 +2519,12 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         CREATE INDEX IF NOT EXISTS idx_wa_reminders_send_at  ON calendar_wa_reminders(send_at);
       `)
     }
+  },
+  {
+    version: 77,
+    up: (db) => {
+      try { db.exec('ALTER TABLE calendar_wa_reminders ADD COLUMN success INTEGER') } catch { /* ya existe */ }
+    }
   }
 ]
 
