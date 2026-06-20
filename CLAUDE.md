@@ -19,6 +19,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Email:** recepción y envío de correos electrónicos desde la app.
 - **Backup:** backup automático de código (GitHub) y datos (Google Drive) en la nube.
 - **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
+- **Knowledge** *(en construcción — tablas y sync configurados, backend/UI pendientes)*: captura y organización de información (textos, archivos, imágenes) con resúmenes por IA y resúmenes globales por tema. Sincroniza vía PowerSync.
 
 ### Visión a futuro
 
@@ -115,7 +116,7 @@ Lecturas/escrituras solo-local             →  getDb()
 Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules en el servidor PowerSync con filtro `workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'`:
 
 - `projects`, `tasks`, `task_dependencies`
-- `user_permissions`
+- `user_permissions`, `user_profiles`
 - `finance_accounts`, `finance_categories`, `finance_payment_methods`
 - `finance_concepts`, `finance_movements`, `finance_month_insights`, `finance_movement_entries`
 - `calendar_event_links`
@@ -124,6 +125,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `company_finance_concepts`, `company_finance_movements`, `company_finance_month_insights`
 - `company_finance_movement_entries`
 - Todas las tablas `comex_*` e `import_order_*` (incluidas `comex_logistics_quotes`, `comex_quote_files`)
+- `knowledge_entries`, `knowledge_global_summaries`
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 
@@ -149,7 +151,9 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ```typescript
 // Cada migración es un objeto { version: number, up: (db) => void }
 // Se aplican en orden ascendente; la versión actual se guarda en PRAGMA user_version
-// Versión actual: ver el último entry del array MIGRATIONS en migrations.ts
+// Versión actual: v81 (user_profiles)
+// v80: knowledge_entries + knowledge_global_summaries
+// v81: user_profiles
 ```
 
 **Reglas:**
@@ -257,15 +261,20 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 |---------|-----|
 | `src/main/database/db.ts` | Singleton de `flowtask.db` (better-sqlite3) |
 | `src/main/database/powersync.ts` | Singleton de PowerSync, schema, conexión, migraciones de datos |
-| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (ver último entry del array para versión actual) |
+| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v81) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
 | `src/main/database/queries/recon.ts` | CRUD + motor del Conciliador Contable (solo `getDb()`) |
+| `src/main/database/queries/permissions.ts` | CRUD permisos + perfiles de usuario (`listUserProfiles`, `upsertUserProfile`, `adminSaveUserProfile`, `deleteUserProfile`) |
+| `src/main/services/auth.service.ts` | Login/logout/refresh Supabase Auth + upsert de user_profile en cada login |
 | `src/main/services/recon-parsers.service.ts` | Parsers de archivos Flexxus, cupones y ML |
+| `src/main/ipc/permissions.ipc.ts` | Handlers IPC de permisos y perfiles (`permissions:profiles:*`) |
 | `src/main/ipc/recon.ipc.ts` | Handlers IPC del Conciliador |
 | `src/main/index.ts` | Punto de entrada main, registra handlers IPC |
 | `src/preload/index.ts` | Expone API al renderer via contextBridge |
+| `src/shared/modules.ts` | Catálogo de módulos (MODULES array + ADMIN_USER_ID) |
 | `src/renderer/src/hooks/useRecon.ts` | Hooks React Query del Conciliador |
+| `src/renderer/src/components/settings/PermissionsAdmin.tsx` | Panel de administración de usuarios y permisos (two-panel) |
 | `src/renderer/src/routes/finance/FinanceDashboard.tsx` | UI finanzas personales (~4500 líneas) |
 | `src/renderer/src/routes/company-finance/CompanyFinanceDashboard.tsx` | UI finanzas empresa (~similar tamaño) |
 | `src/renderer/src/routes/contable/ReconPeriodView.tsx` | Shell del período con drill-down entre tabs |
@@ -393,6 +402,86 @@ El engine borra los resultados anteriores del período antes de insertar los nue
 Menú `Contable`, gateado por permiso `canRead('contable')` en `Sidebar.tsx`. Rutas:
 - `/contable/recon` → `ReconDashboard`
 - `/contable/recon/:id` → `ReconPeriodView`
+
+---
+
+## Sistema de permisos y usuarios
+
+### Arquitectura
+
+El sistema de acceso multi-usuario tiene dos tablas en PowerSync:
+
+| Tabla | Propósito |
+|-------|-----------|
+| `user_permissions` | Permisos por módulo/submódulo para cada usuario (`level`: `'none'` \| `'read'` \| `'write'`) |
+| `user_profiles` | Nombre y email legibles de cada usuario; se actualiza automáticamente al hacer login |
+
+Ambas sincronizan vía PowerSync → todos los dispositivos ven el mismo estado.
+
+### `user_permissions` (migración v64)
+
+- `user_id`, `module_key`, `submodule_key`, `level`, `workspace_id`
+- Gateada en el Sidebar por `canRead(moduleKey)` (hook `usePermissions`)
+- Admin puede setear permisos desde Settings → Permisos
+
+### `user_profiles` (migración v81)
+
+Columnas: `id`, `workspace_id`, `email`, `display_name`, `last_seen_at`.
+
+**Dos funciones distintas en `queries/permissions.ts`:**
+
+```typescript
+// Llamada en login (auth.service.ts → saveSession): actualiza email, display_name Y last_seen_at = now
+upsertUserProfile({ id, email, display_name })
+
+// Llamada por el admin desde UI: actualiza email y display_name, NO toca last_seen_at
+// Para usuarios nuevos crea con last_seen_at = 0 ("Nunca conectado")
+adminSaveUserProfile({ id, email, display_name })
+```
+
+**Regla:** nunca llamar `adminSaveUserProfile` desde un flujo de login — eso pisaría `last_seen_at` e impediría detectar si el usuario nunca se conectó.
+
+### Panel de administración (`PermissionsAdmin.tsx`)
+
+Panel de dos columnas en Settings → Permisos (solo visible para `ADMIN_USER_ID`):
+- **Columna izquierda (`w-64`):** lista de usuarios con avatar/iniciales, nombre, email, badge de estado online
+- **Columna derecha:** edición de nombre/email del usuario seleccionado, copia de UUID, permisos por módulo con presets (sin acceso / solo lectura / lectura+escritura), botón eliminar con confirmación inline
+- **Usuarios sin perfil:** al seleccionarlos aparece `CreateProfileInline` con inputs de nombre+email para asignarles identidad
+- **Nuevo usuario:** modal con UUID (con botón Paste), nombre, email, preset de permisos inicial
+
+**`key={selected.id}`** en el call site de `UserHeader` — fuerza remount al cambiar de usuario para resetear estado local de edición.
+
+### DDL pendiente en Supabase
+
+```sql
+CREATE TABLE IF NOT EXISTS user_profiles (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  last_seen_at BIGINT NOT NULL
+);
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "workspace" ON user_profiles
+  USING (workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5');
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_profiles TO service_role;
+CREATE INDEX ON user_profiles(workspace_id);
+```
+
+---
+
+## Módulo Knowledge — estado actual (junio 2026)
+
+**Tablas creadas (migración v80):** `knowledge_entries` + `knowledge_global_summaries`. PowerSync AppSchema y sync listeners ya configurados. Tipos en `src/shared/types.ts` ya definidos (`KnowledgeEntry`, `KnowledgeGlobalSummary`, etc.).
+
+**Pendiente de implementar:**
+- `src/main/database/queries/knowledge.ts` — CRUD
+- `src/main/services/knowledge-ai.service.ts` — resúmenes IA con claude-haiku-4-5
+- `src/main/ipc/knowledge.ipc.ts` — handlers IPC
+- `src/renderer/src/hooks/useKnowledge.ts` — hooks React Query
+- `src/renderer/src/routes/knowledge/KnowledgeDashboard.tsx` — UI
+
+**DDL Supabase también pendiente.** Ver el plan en `.claude/plans/` para el schema completo.
 
 ---
 

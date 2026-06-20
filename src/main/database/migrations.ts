@@ -2741,6 +2741,36 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       `)
       db.exec(`CREATE INDEX IF NOT EXISTS idx_up_workspace ON user_profiles(workspace_id)`)
     }
+  },
+  {
+    version: 82,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS knowledge_sources (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          icon TEXT NOT NULL DEFAULT 'Tag',
+          color TEXT NOT NULL DEFAULT '#64748b',
+          sort_order INTEGER NOT NULL DEFAULT 0
+        )
+      `)
+      const ins = db.prepare(
+        'INSERT OR IGNORE INTO knowledge_sources (id, name, icon, color, sort_order) VALUES (?, ?, ?, ?, ?)'
+      )
+      const defaults: [string, string, string, string, number][] = [
+        ['src-email',     'Email',         'Mail',          '#3b82f6',  10],
+        ['src-reunion',   'Reunión',       'Users',         '#8b5cf6',  20],
+        ['src-web',       'Web',           'Globe',         '#10b981',  30],
+        ['src-documento', 'Documento',     'FileText',      '#f59e0b',  40],
+        ['src-whatsapp',  'WhatsApp',      'MessageCircle', '#22c55e',  50],
+        ['src-video',     'Video',         'Video',         '#ef4444',  60],
+        ['src-imagen',    'Imagen',        'Image',         '#ec4899',  70],
+        ['src-pdf',       'PDF',           'File',          '#f97316',  80],
+        ['src-nota',      'Nota interna',  'StickyNote',    '#a78bfa',  90],
+        ['src-otro',      'Otro',          'Tag',           '#64748b', 100],
+      ]
+      for (const row of defaults) ins.run(...row)
+    }
   }
 ]
 

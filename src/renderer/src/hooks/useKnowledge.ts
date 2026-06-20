@@ -2,8 +2,49 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   KnowledgeEntry,
   KnowledgeGlobalSummary,
-  KnowledgeListFilters
+  KnowledgeListFilters,
+  KnowledgeSource
 } from '@shared/types'
+
+// ── Sources ───────────────────────────────────────────────────────────────────
+
+export function useKnowledgeSources() {
+  return useQuery({
+    queryKey: ['knowledge-sources'],
+    queryFn: (): Promise<KnowledgeSource[]> => window.api.knowledge.sources.list(),
+    staleTime: 60_000
+  })
+}
+
+export function useCreateKnowledgeSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; icon: string; color: string }): Promise<KnowledgeSource> =>
+      window.api.knowledge.sources.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['knowledge-sources'] }) }
+  })
+}
+
+export function useUpdateKnowledgeSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id, data
+    }: {
+      id: string
+      data: { name?: string; icon?: string; color?: string }
+    }): Promise<void> => window.api.knowledge.sources.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['knowledge-sources'] }) }
+  })
+}
+
+export function useDeleteKnowledgeSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string): Promise<void> => window.api.knowledge.sources.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['knowledge-sources'] }) }
+  })
+}
 
 // ── Entries ───────────────────────────────────────────────────────────────────
 
@@ -39,7 +80,7 @@ export function useCreateKnowledgeEntry() {
       data,
       userId
     }: {
-      data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string }
+      data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number }
       userId: string
     }): Promise<KnowledgeEntry> => window.api.knowledge.entries.create(data, userId),
     onSuccess: () => {
@@ -52,8 +93,13 @@ export function useCreateKnowledgeEntry() {
 export function useUpdateKnowledgeEntry() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<KnowledgeEntry> }): Promise<KnowledgeEntry> =>
-      window.api.knowledge.entries.update(id, data),
+    mutationFn: ({
+      id, data
+    }: {
+      id: string
+      data: Omit<Partial<KnowledgeEntry>, 'tags'> & { tags?: string[]; entry_date?: number | null }
+    }): Promise<KnowledgeEntry> =>
+      window.api.knowledge.entries.update(id, data as Partial<KnowledgeEntry>),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['knowledge'] })
       qc.setQueryData(['knowledge-entry', updated.id], updated)
@@ -92,6 +138,44 @@ export function useUploadKnowledgeFile() {
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['knowledge'] })
       qc.setQueryData(['knowledge-entry', updated.id], updated)
+    }
+  })
+}
+
+export function useKnowledgeSearch(query: string) {
+  return useQuery({
+    queryKey: ['knowledge-search', query],
+    queryFn: (): Promise<KnowledgeEntry[]> => window.api.knowledge.search(query),
+    enabled: query.trim().length >= 2,
+    staleTime: 15_000
+  })
+}
+
+// ── Topic AI analysis ─────────────────────────────────────────────────────────
+
+export function useTopicLatestSummary(topic: string | null) {
+  return useQuery({
+    queryKey: ['knowledge-topic-summary', topic],
+    queryFn: (): Promise<KnowledgeGlobalSummary | null> =>
+      window.api.knowledge.topic.latestSummary(topic!),
+    enabled: !!topic,
+    staleTime: 60_000
+  })
+}
+
+export function useAnalyzeTopic() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      topic,
+      userId
+    }: {
+      topic: string
+      userId: string
+    }): Promise<KnowledgeGlobalSummary> => window.api.knowledge.topic.analyze(topic, userId),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-topic-summary', vars.topic] })
+      qc.invalidateQueries({ queryKey: ['knowledge-summaries'] })
     }
   })
 }

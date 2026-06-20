@@ -50,7 +50,7 @@ import type {
   CreateEmailAccountInput, SendEmailInput, EmailListFilters,
   ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
   CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado,
-  KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters
+  KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1013,17 +1013,29 @@ const api = {
   },
 
   knowledge: {
-    entries: {
-      list:       (filters?: KnowledgeListFilters): Promise<KnowledgeEntry[]>        => ipcRenderer.invoke('knowledge:entries:list', filters),
-      get:        (id: string): Promise<KnowledgeEntry | null>                        => ipcRenderer.invoke('knowledge:entries:get', id),
-      create:     (data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string }, userId: string): Promise<KnowledgeEntry> => ipcRenderer.invoke('knowledge:entries:create', data, userId),
-      update:     (id: string, data: Partial<KnowledgeEntry>): Promise<KnowledgeEntry> => ipcRenderer.invoke('knowledge:entries:update', id, data),
-      delete:     (id: string): Promise<void>                                          => ipcRenderer.invoke('knowledge:entries:delete', id),
-      summarize:  (id: string): Promise<KnowledgeEntry>                               => ipcRenderer.invoke('knowledge:entries:summarize', id),
-      uploadFile: (id: string, filePath: string): Promise<KnowledgeEntry>             => ipcRenderer.invoke('knowledge:entries:uploadFile', id, filePath),
-      topics:     (): Promise<string[]>                                               => ipcRenderer.invoke('knowledge:entries:topics'),
-      selectFile: (): Promise<string | null>                                         => ipcRenderer.invoke('knowledge:entries:selectFile')
+    sources: {
+      list:   (): Promise<KnowledgeSource[]>                                                         => ipcRenderer.invoke('knowledge:sources:list'),
+      create: (data: { name: string; icon: string; color: string }): Promise<KnowledgeSource>       => ipcRenderer.invoke('knowledge:sources:create', data),
+      update: (id: string, data: { name?: string; icon?: string; color?: string }): Promise<void>  => ipcRenderer.invoke('knowledge:sources:update', id, data),
+      delete: (id: string): Promise<void>                                                           => ipcRenderer.invoke('knowledge:sources:delete', id),
     },
+    entries: {
+      list:               (filters?: KnowledgeListFilters): Promise<KnowledgeEntry[]>                                                                                          => ipcRenderer.invoke('knowledge:entries:list', filters),
+      get:                (id: string): Promise<KnowledgeEntry | null>                                                                                                         => ipcRenderer.invoke('knowledge:entries:get', id),
+      create:             (data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number }, userId: string): Promise<KnowledgeEntry> => ipcRenderer.invoke('knowledge:entries:create', data, userId),
+      update:             (id: string, data: Partial<KnowledgeEntry>): Promise<KnowledgeEntry>                                                                                 => ipcRenderer.invoke('knowledge:entries:update', id, data),
+      delete:             (id: string): Promise<void>                                                                                                                          => ipcRenderer.invoke('knowledge:entries:delete', id),
+      summarize:          (id: string): Promise<KnowledgeEntry>                                                                                                                => ipcRenderer.invoke('knowledge:entries:summarize', id),
+      uploadFile:         (id: string, filePath: string): Promise<KnowledgeEntry>                                                                                              => ipcRenderer.invoke('knowledge:entries:uploadFile', id, filePath),
+      saveClipboardImage: (buffer: ArrayBuffer, mimeType: string): Promise<{ localPath: string; fileName: string; mimeType: string }>                                          => ipcRenderer.invoke('knowledge:entries:saveClipboardImage', buffer, mimeType),
+      topics:             (): Promise<string[]>                                                                                                                                 => ipcRenderer.invoke('knowledge:entries:topics'),
+      selectFile:         (): Promise<string | null>                                                                                                                           => ipcRenderer.invoke('knowledge:entries:selectFile'),
+    },
+    topic: {
+      analyze:       (topic: string, userId: string): Promise<KnowledgeGlobalSummary>  => ipcRenderer.invoke('knowledge:topic:analyze', topic, userId),
+      latestSummary: (topic: string): Promise<KnowledgeGlobalSummary | null>           => ipcRenderer.invoke('knowledge:topic:latestSummary', topic),
+    },
+    search: (query: string): Promise<KnowledgeEntry[]> => ipcRenderer.invoke('knowledge:search', query),
     summaries: {
       list:     (): Promise<KnowledgeGlobalSummary[]>                                        => ipcRenderer.invoke('knowledge:summaries:list'),
       generate: (topic: string | null, userId: string): Promise<KnowledgeGlobalSummary>     => ipcRenderer.invoke('knowledge:summaries:generate', topic, userId),

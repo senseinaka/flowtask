@@ -11,10 +11,20 @@ import {
   listKnowledgeGlobalSummaries,
   createKnowledgeGlobalSummary,
   deleteKnowledgeGlobalSummary,
-  getKnowledgeTopics
+  getKnowledgeTopics,
+  searchKnowledge,
+  getLatestTopicSummary,
+  listKnowledgeSources,
+  createKnowledgeSource,
+  updateKnowledgeSource,
+  deleteKnowledgeSource
 } from '../database/queries/knowledge'
 import type { CreateKnowledgeEntryFields, UpdateKnowledgeEntryFields } from '../database/queries/knowledge'
-import { summarizeKnowledgeEntry, generateKnowledgeGlobalSummary } from '../services/knowledge-ai.service'
+import {
+  summarizeKnowledgeEntry,
+  generateKnowledgeGlobalSummary,
+  analyzeTopicEntries
+} from '../services/knowledge-ai.service'
 import { driveService } from '../services/drive.service'
 import type { KnowledgeListFilters } from '@shared/types'
 
@@ -26,28 +36,39 @@ function getKnowledgeFilesDir(): string {
 
 function mimeFromExt(ext: string): string {
   const map: Record<string, string> = {
-    pdf:  'application/pdf',
-    doc:  'application/msword',
+    pdf: 'application/pdf', doc: 'application/msword',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xls:  'application/vnd.ms-excel',
+    xls: 'application/vnd.ms-excel',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ppt:  'application/vnd.ms-powerpoint',
+    ppt: 'application/vnd.ms-powerpoint',
     pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    txt:  'text/plain',
-    csv:  'text/csv',
-    png:  'image/png',
-    jpg:  'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif:  'image/gif',
-    webp: 'image/webp',
-    svg:  'image/svg+xml',
-    zip:  'application/zip',
+    txt: 'text/plain', csv: 'text/csv', png: 'image/png',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    webp: 'image/webp', svg: 'image/svg+xml', zip: 'application/zip',
     json: 'application/json'
   }
   return map[ext.toLowerCase()] ?? 'application/octet-stream'
 }
 
 export function registerKnowledgeIpc(): void {
+  // ── Sources (local catalog) ───────────────────────────────────────────────
+
+  ipcMain.handle('knowledge:sources:list', () =>
+    listKnowledgeSources()
+  )
+
+  ipcMain.handle('knowledge:sources:create', (_e, data: { name: string; icon: string; color: string }) =>
+    createKnowledgeSource(data)
+  )
+
+  ipcMain.handle('knowledge:sources:update', (_e, id: string, data: { name?: string; icon?: string; color?: string }) =>
+    updateKnowledgeSource(id, data)
+  )
+
+  ipcMain.handle('knowledge:sources:delete', (_e, id: string) =>
+    deleteKnowledgeSource(id)
+  )
+
   // ── Entries ───────────────────────────────────────────────────────────────
 
   ipcMain.handle('knowledge:entries:list', async (_e, filters?: KnowledgeListFilters) =>
@@ -73,8 +94,9 @@ export function registerKnowledgeIpc(): void {
   ipcMain.handle('knowledge:entries:summarize', async (_e, id: string) => {
     const entry = await getKnowledgeEntry(id)
     if (!entry) throw new Error('Entrada no encontrada')
+    const bodyText = entry.body.replace(/<[^>]*>/g, '').trim()
     const summary = await summarizeKnowledgeEntry(
-      entry.title, entry.body, entry.content_type, entry.file_name ?? undefined
+      entry.title, bodyText, entry.content_type, entry.file_name ?? undefined
     )
     return updateKnowledgeEntry(id, { ai_summary: summary })
   })
@@ -92,11 +114,8 @@ export function registerKnowledgeIpc(): void {
     fs.copyFileSync(filePath, localPath)
 
     const entry = await updateKnowledgeEntry(id, {
-      file_name:      fileName,
-      file_size:      fileSize,
-      file_mime_type: mimeType,
-      local_path:     localPath,
-      drive_status:   'none'
+      file_name: fileName, file_size: fileSize,
+      file_mime_type: mimeType, local_path: localPath, drive_status: 'none'
     })
 
     if (!driveService.isAuthenticated()) return entry
@@ -106,13 +125,24 @@ export function registerKnowledgeIpc(): void {
       await updateKnowledgeEntry(id, { drive_status: 'uploading' })
       const driveFileId = await driveService.uploadFileToFolder(localPath, folderId, fileName, mimeType)
       return updateKnowledgeEntry(id, {
-        drive_file_id:   driveFileId,
-        drive_folder_id: folderId,
-        drive_status:    'synced'
+        drive_file_id: driveFileId, drive_folder_id: folderId, drive_status: 'synced'
       })
     } catch {
       return updateKnowledgeEntry(id, { drive_status: 'error' })
     }
+  })
+
+  ipcMain.handle('knowledge:entries:saveClipboardImage', async (
+    _e,
+    buffer: ArrayBuffer,
+    mimeType: string
+  ) => {
+    const ext       = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
+    const localName = `kn_${randomUUID()}.${ext}`
+    const localDir  = getKnowledgeFilesDir()
+    const localPath = path.join(localDir, localName)
+    fs.writeFileSync(localPath, Buffer.from(buffer))
+    return { localPath, fileName: localName, mimeType }
   })
 
   ipcMain.handle('knowledge:entries:topics', async () =>
@@ -128,6 +158,23 @@ export function registerKnowledgeIpc(): void {
     })
     return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
   })
+
+  ipcMain.handle('knowledge:search', async (_e, query: string) =>
+    searchKnowledge(query)
+  )
+
+  // ── Topic-level AI analysis ───────────────────────────────────────────────
+
+  ipcMain.handle('knowledge:topic:analyze', async (_e, topic: string, userId: string) => {
+    const entries = await listKnowledgeEntries({ topic })
+    if (entries.length === 0) throw new Error('No hay entradas para analizar')
+    const analysis = await analyzeTopicEntries(entries, topic)
+    return createKnowledgeGlobalSummary(topic, analysis, entries.length, userId)
+  })
+
+  ipcMain.handle('knowledge:topic:latestSummary', async (_e, topic: string) =>
+    getLatestTopicSummary(topic)
+  )
 
   // ── Summaries ─────────────────────────────────────────────────────────────
 

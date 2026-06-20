@@ -911,6 +911,7 @@ const knowledge_entries = new Table(
     created_by: column.text,
     created_at: column.integer,
     updated_at: column.integer,
+    entry_date: column.integer,
     workspace_id: column.text
   },
   { indexes: { workspace: ['workspace_id'], topic: ['topic'] } }

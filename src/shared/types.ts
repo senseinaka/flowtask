@@ -2759,6 +2759,15 @@ export interface KnowledgeEntry {
   created_by: string
   created_at: number
   updated_at: number
+  entry_date: number | null
+}
+
+export interface KnowledgeSource {
+  id: string
+  name: string
+  icon: string
+  color: string
+  sort_order: number
 }
 
 export interface KnowledgeGlobalSummary {
@@ -2778,6 +2787,7 @@ export interface CreateKnowledgeEntryInput {
   topic?: string
   tags?: string[]
   source?: string
+  entry_date?: number
 }
 
 export interface UpdateKnowledgeEntryInput {
@@ -2787,6 +2797,7 @@ export interface UpdateKnowledgeEntryInput {
   tags?: string[]
   source?: string
   ai_summary?: string
+  entry_date?: number | null
 }
 
 export interface KnowledgeListFilters {

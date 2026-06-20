@@ -1,16 +1,55 @@
 import { randomUUID } from 'crypto'
+import { getDb } from '../db'
 import { getPowerSyncDb } from '../powersync'
 import type {
   KnowledgeEntry,
   KnowledgeGlobalSummary,
   KnowledgeContentType,
   KnowledgeDriveStatus,
-  KnowledgeListFilters
+  KnowledgeListFilters,
+  KnowledgeSource
 } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 
-// ── Entries ───────────────────────────────────────────────────────────────────
+// ── Sources (flowtask.db — local catalog) ────────────────────────────────────
+
+export function listKnowledgeSources(): KnowledgeSource[] {
+  return getDb()
+    .prepare('SELECT * FROM knowledge_sources ORDER BY sort_order ASC')
+    .all() as KnowledgeSource[]
+}
+
+export function createKnowledgeSource(data: {
+  name: string; icon: string; color: string
+}): KnowledgeSource {
+  const db  = getDb()
+  const id  = randomUUID()
+  const max = (db.prepare('SELECT MAX(sort_order) as m FROM knowledge_sources').get() as { m: number | null }).m ?? 0
+  db.prepare('INSERT INTO knowledge_sources (id, name, icon, color, sort_order) VALUES (?, ?, ?, ?, ?)')
+    .run(id, data.name, data.icon, data.color, max + 10)
+  return db.prepare('SELECT * FROM knowledge_sources WHERE id = ?').get(id) as KnowledgeSource
+}
+
+export function updateKnowledgeSource(id: string, data: {
+  name?: string; icon?: string; color?: string; sort_order?: number
+}): void {
+  const sets: string[] = []
+  const vals: unknown[] = []
+  if (data.name       !== undefined) { sets.push('name = ?');       vals.push(data.name) }
+  if (data.icon       !== undefined) { sets.push('icon = ?');       vals.push(data.icon) }
+  if (data.color      !== undefined) { sets.push('color = ?');      vals.push(data.color) }
+  if (data.sort_order !== undefined) { sets.push('sort_order = ?'); vals.push(data.sort_order) }
+  if (sets.length === 0) return
+  vals.push(id)
+  getDb().prepare(`UPDATE knowledge_sources SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+}
+
+export function deleteKnowledgeSource(id: string): void {
+  getDb().prepare('DELETE FROM knowledge_sources WHERE id = ?').run(id)
+}
+
+// ── Entries (PowerSync) ───────────────────────────────────────────────────────
 
 export async function listKnowledgeEntries(
   filters?: KnowledgeListFilters
@@ -30,7 +69,7 @@ export async function listKnowledgeEntries(
   return getPowerSyncDb().getAll<KnowledgeEntry>(`
     SELECT * FROM knowledge_entries
     WHERE ${conditions.join(' AND ')}
-    ORDER BY created_at DESC
+    ORDER BY COALESCE(entry_date, created_at) DESC
   `, vals)
 }
 
@@ -47,6 +86,7 @@ export interface CreateKnowledgeEntryFields {
   topic?: string
   tags?: string[]
   source?: string
+  entry_date?: number
 }
 
 export async function createKnowledgeEntry(
@@ -62,8 +102,8 @@ export async function createKnowledgeEntry(
       id, workspace_id, title, content_type, body, topic, tags, source,
       ai_summary, drive_file_id, drive_folder_id, drive_status,
       file_name, file_size, file_mime_type, local_path,
-      created_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NULL, NULL, 'none', NULL, NULL, NULL, NULL, ?, ?, ?)
+      created_by, created_at, updated_at, entry_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NULL, NULL, 'none', NULL, NULL, NULL, NULL, ?, ?, ?, ?)
   `, [
     id, WORKSPACE_ID,
     data.title ?? '',
@@ -72,7 +112,8 @@ export async function createKnowledgeEntry(
     data.topic ?? '',
     JSON.stringify(data.tags ?? []),
     data.source ?? '',
-    userId, now, now
+    userId, now, now,
+    data.entry_date ?? null
   ])
 
   return (await db.getOptional<KnowledgeEntry>('SELECT * FROM knowledge_entries WHERE id = ?', [id]))!
@@ -85,6 +126,7 @@ export interface UpdateKnowledgeEntryFields {
   tags?: string[]
   source?: string
   ai_summary?: string
+  entry_date?: number | null
   drive_file_id?: string | null
   drive_folder_id?: string | null
   drive_status?: KnowledgeDriveStatus
@@ -109,6 +151,7 @@ export async function updateKnowledgeEntry(
   if (data.tags           !== undefined) { sets.push('tags = ?');           vals.push(JSON.stringify(data.tags)) }
   if (data.source         !== undefined) { sets.push('source = ?');         vals.push(data.source) }
   if (data.ai_summary     !== undefined) { sets.push('ai_summary = ?');     vals.push(data.ai_summary) }
+  if (data.entry_date     !== undefined) { sets.push('entry_date = ?');     vals.push(data.entry_date) }
   if (data.drive_file_id  !== undefined) { sets.push('drive_file_id = ?');  vals.push(data.drive_file_id) }
   if (data.drive_folder_id !== undefined) { sets.push('drive_folder_id = ?'); vals.push(data.drive_folder_id) }
   if (data.drive_status   !== undefined) { sets.push('drive_status = ?');   vals.push(data.drive_status) }
@@ -139,6 +182,16 @@ export async function getKnowledgeTopics(): Promise<string[]> {
   return rows.map(r => r.topic)
 }
 
+export async function searchKnowledge(query: string): Promise<KnowledgeEntry[]> {
+  const q = `%${query}%`
+  return getPowerSyncDb().getAll<KnowledgeEntry>(`
+    SELECT * FROM knowledge_entries
+    WHERE workspace_id = ? AND (title LIKE ? OR body LIKE ? OR topic LIKE ? OR ai_summary LIKE ?)
+    ORDER BY COALESCE(entry_date, created_at) DESC
+    LIMIT 20
+  `, [WORKSPACE_ID, q, q, q, q])
+}
+
 // ── Global Summaries ──────────────────────────────────────────────────────────
 
 export async function listKnowledgeGlobalSummaries(): Promise<KnowledgeGlobalSummary[]> {
@@ -147,6 +200,15 @@ export async function listKnowledgeGlobalSummaries(): Promise<KnowledgeGlobalSum
     WHERE workspace_id = ?
     ORDER BY created_at DESC
   `, [WORKSPACE_ID])
+}
+
+export async function getLatestTopicSummary(topic: string): Promise<KnowledgeGlobalSummary | null> {
+  return getPowerSyncDb().getOptional<KnowledgeGlobalSummary>(`
+    SELECT * FROM knowledge_global_summaries
+    WHERE workspace_id = ? AND topic = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [WORKSPACE_ID, topic])
 }
 
 export async function createKnowledgeGlobalSummary(
