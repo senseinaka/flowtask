@@ -68,9 +68,9 @@ export default function SyncStatusBadge() {
 
       {/* Tooltip con detalle del error */}
       {errorText && (
-        <div className="absolute bottom-full right-0 mb-2 w-96 bg-slate-950 border border-slate-700 rounded-xl p-3 text-[11px] text-slate-300 font-mono hidden group-hover:block z-50 shadow-2xl">
+        <div className="absolute bottom-full left-0 mb-2 w-[420px] bg-slate-950 border border-amber-800/40 rounded-xl p-3 text-[11px] text-slate-300 font-mono hidden group-hover:block z-[9999] shadow-2xl">
           <div className="flex items-start gap-2">
-            <p className="flex-1 break-all leading-relaxed whitespace-pre-wrap">{errorText}</p>
+            <p className="flex-1 break-words leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">{errorText}</p>
             <button
               onClick={copyLog}
               className="shrink-0 mt-0.5 p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
@@ -79,7 +79,7 @@ export default function SyncStatusBadge() {
               {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
             </button>
           </div>
-          <p className="text-slate-600 mt-2 text-[10px] font-sans">Click derecho en el badge para copiar</p>
+          <p className="text-slate-600 mt-2 text-[10px] font-sans">Click derecho en el badge para copiar · código: 22P02</p>
         </div>
       )}
     </div>

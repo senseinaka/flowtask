@@ -1092,6 +1092,16 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
         }
         case UpdateType.PATCH: {
           let patchData = (op.opData ?? {}) as Record<string, unknown>
+          // Sanitizar columnas float antes de enviar a Supabase para evitar error 22P02
+          const floatCols = TABLE_FLOAT_COLS[op.table]
+          if (floatCols) {
+            patchData = { ...patchData }
+            for (const col of floatCols) {
+              if (col in patchData && typeof patchData[col] === 'string') {
+                patchData[col] = coerceToFloat(patchData[col])
+              }
+            }
+          }
           res = await fetch(url, {
             method: 'PATCH',
             headers: { ...headers, Prefer: 'return=minimal' },
@@ -1453,27 +1463,51 @@ async function fixNullWorkspaceIds(psDb: PowerSyncDatabase): Promise<void> {
   }
 }
 
-// Columnas REAL/double en comex_import_extra_costs que pueden tener el string "null"
-const EXTRA_COST_DOUBLE_COLS = ['percepcion_caba', 'percepcion_bsas', 'importe_iva', 'importe', 'amount']
+// Columnas REAL/double en comex_import_extra_costs que pueden tener strings inválidos
+const EXTRA_COST_DOUBLE_COLS = [
+  'importe', 'importe_iva', 'importe_total', 'importe_ars',
+  'tipo_cambio', 'percepciones', 'percepcion_caba', 'percepcion_bsas'
+]
+
+// Mapa de tabla → columnas float para sanitización en uploadData
+const TABLE_FLOAT_COLS: Record<string, string[]> = {
+  comex_import_extra_costs: EXTRA_COST_DOUBLE_COLS
+}
+
+// Convierte cualquier valor a number válido para Postgres double precision.
+// Maneja: null/"null"/undefined → 0, formato español "26.827,50" → 26827.5
+function coerceToFloat(val: unknown): number {
+  if (val === null || val === undefined || val === '') return 0
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  const s = String(val).trim()
+  if (s === 'null' || s === '') return 0
+  const direct = Number(s)
+  if (!isNaN(direct)) return direct
+  // Formato español: "26.827,50" (punto = miles, coma = decimal)
+  const normalized = s.replace(/\./g, '').replace(',', '.')
+  const parsed = Number(normalized)
+  return isNaN(parsed) ? 0 : parsed
+}
 
 async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void> {
   const flowDb = getDb()
 
-  // 1. Corregir en flowtask.db y powersync.db todas las filas afectadas (no solo IDs hardcodeados)
+  // 1. Corregir en flowtask.db y powersync.db todas las filas con strings inválidos
   for (const col of EXTRA_COST_DOUBLE_COLS) {
     try {
       const affected = flowDb
-        .prepare(`SELECT id FROM comex_import_extra_costs WHERE ${col} = 'null'`)
-        .all() as { id: string }[]
-      for (const { id } of affected) {
-        flowDb.prepare(`UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ?`).run(id)
-        await psDb.execute(`UPDATE comex_import_extra_costs SET ${col} = 0 WHERE id = ?`, [id])
-        console.log(`[PowerSync] Corregido ${col} = "null" → 0 en comex_import_extra_costs`, id)
+        .prepare(`SELECT id, ${col} as val FROM comex_import_extra_costs WHERE typeof(${col}) = 'text' AND ${col} != ''`)
+        .all() as { id: string; val: string }[]
+      for (const { id, val } of affected) {
+        const fixed = coerceToFloat(val)
+        flowDb.prepare(`UPDATE comex_import_extra_costs SET ${col} = ? WHERE id = ?`).run(fixed, id)
+        await psDb.execute(`UPDATE comex_import_extra_costs SET ${col} = ? WHERE id = ?`, [fixed, id])
+        console.log(`[PowerSync] Corregido ${col} = "${val}" → ${fixed} en comex_import_extra_costs`, id)
       }
     } catch { /* columna puede no existir en versiones viejas */ }
   }
 
-  // 2. Corregir ps_crud pendiente para que no intente subir el string "null" a Supabase
+  // 2. Corregir ps_crud pendiente para que no intente subir strings inválidos a Supabase
   const crudRows = await psDb.getAll<{ id: number; data: string }>('SELECT id, data FROM ps_crud')
   for (const row of crudRows) {
     let parsed: { type?: string; id?: string; data?: Record<string, unknown> }
@@ -1482,8 +1516,9 @@ async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void
 
     let changed = false
     for (const col of EXTRA_COST_DOUBLE_COLS) {
-      if (parsed.data[col] === 'null') {
-        parsed.data[col] = 0
+      const raw = parsed.data[col]
+      if (raw !== undefined && typeof raw === 'string') {
+        parsed.data[col] = coerceToFloat(raw)
         changed = true
       }
     }
