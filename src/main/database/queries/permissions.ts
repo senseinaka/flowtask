@@ -39,6 +39,27 @@ export function upsertUserProfile(profile: {
   `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, now)
 }
 
+/** Admin: crea un perfil nuevo (last_seen_at = 0) o edita nombre/email sin tocar last_seen_at. */
+export function adminSaveUserProfile(profile: {
+  id: string
+  email: string
+  display_name: string
+}): void {
+  getDb().prepare(`
+    INSERT INTO user_profiles (id, workspace_id, email, display_name, last_seen_at)
+    VALUES (?, ?, ?, ?, 0)
+    ON CONFLICT(id) DO UPDATE SET
+      email = excluded.email,
+      display_name = excluded.display_name
+  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name)
+}
+
+export function deleteUserProfile(id: string): void {
+  const db = getDb()
+  db.prepare('DELETE FROM user_profiles WHERE id = ?').run(id)
+  db.prepare('DELETE FROM user_permissions WHERE user_id = ?').run(id)
+}
+
 /** Crea o actualiza el permiso de un usuario sobre un módulo/submódulo. */
 export function upsertPermission(input: {
   user_id: string

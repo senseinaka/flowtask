@@ -848,7 +848,11 @@ const api = {
     profiles: {
       list: (): Promise<UserProfile[]> => ipcRenderer.invoke('permissions:profiles:list'),
       upsert: (input: { id: string; email: string; display_name: string }): Promise<void> =>
-        ipcRenderer.invoke('permissions:profiles:upsert', input)
+        ipcRenderer.invoke('permissions:profiles:upsert', input),
+      save: (input: { id: string; email: string; display_name: string }): Promise<void> =>
+        ipcRenderer.invoke('permissions:profiles:save', input),
+      delete: (id: string): Promise<void> =>
+        ipcRenderer.invoke('permissions:profiles:delete', id)
     }
   },
 

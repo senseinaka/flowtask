@@ -4,7 +4,9 @@ import {
   listAllPermissions,
   upsertPermission,
   listUserProfiles,
-  upsertUserProfile
+  upsertUserProfile,
+  adminSaveUserProfile,
+  deleteUserProfile
 } from '../database/queries/permissions'
 import { getSession } from '../services/auth.service'
 import { invalidatePermissionsCache } from '../services/permissions.service'
@@ -41,6 +43,22 @@ export function registerPermissionsIpc(): void {
   ): Promise<void> => {
     await requireAdmin()
     upsertUserProfile(input)
+  })
+
+  ipcMain.handle('permissions:profiles:save', async (
+    _event,
+    input: { id: string; email: string; display_name: string }
+  ): Promise<void> => {
+    await requireAdmin()
+    adminSaveUserProfile(input)
+  })
+
+  ipcMain.handle('permissions:profiles:delete', async (
+    _event,
+    id: string
+  ): Promise<void> => {
+    await requireAdmin()
+    deleteUserProfile(id)
   })
 
   ipcMain.handle('permissions:setLevel', async (
