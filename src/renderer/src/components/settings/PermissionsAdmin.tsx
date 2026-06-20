@@ -170,7 +170,7 @@ function PermissionsAdminInner() {
         <div className="flex min-h-[420px]">
 
           {/* ── Columna izquierda: lista ── */}
-          <div className="w-56 shrink-0 border-r border-slate-700 flex flex-col">
+          <div className="w-64 shrink-0 border-r border-slate-700 flex flex-col">
             <div className="px-3 pt-3 pb-1">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wider px-1">
                 Usuarios ({profiles.length + unknownIds.length})
@@ -199,8 +199,8 @@ function PermissionsAdminInner() {
               {unknownIds.map((id) => (
                 <UserRow
                   key={id}
-                  label={`${id.slice(0, 8)}…`}
-                  sublabel="Sin perfil"
+                  label="Sin nombre"
+                  sublabel={id.slice(0, 18) + '…'}
                   active={false}
                   hasProfile={false}
                   selected={selectedId === id}
@@ -224,18 +224,18 @@ function PermissionsAdminInner() {
                 <div className="px-5 py-4 border-b border-slate-700">
                   {selected ? (
                     <UserHeader
+                      key={selected.id}
                       profile={selected}
                       onCopyUUID={copyUUID}
                       copied={copied}
                       onRefresh={() => qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })}
                     />
                   ) : (
-                    <div>
-                      <p className="text-xs font-mono text-slate-400 break-all">{selectedId}</p>
-                      <p className="text-xs text-slate-600 mt-1">
-                        Usuario sin perfil — crearás su perfil cuando le asignes un nombre
-                      </p>
-                    </div>
+                    <CreateProfileInline
+                      key={selectedId}
+                      userId={selectedId}
+                      onCreated={() => qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })}
+                    />
                   )}
                 </div>
 
@@ -465,6 +465,61 @@ function UserHeader({
             {relativeTime(profile.last_seen_at)}
           </span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Crear perfil inline (usuario sin perfil) ─────────────────────────────────
+
+function CreateProfileInline({ userId, onCreated }: { userId: string; onCreated: () => void }) {
+  const qc = useQueryClient()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+
+  const save = useMutation({
+    mutationFn: () => window.api.permissions.profiles.save({
+      id: userId,
+      display_name: name.trim(),
+      email: email.trim()
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })
+      onCreated()
+    }
+  })
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-[10px] font-mono text-slate-600 break-all leading-relaxed">{userId}</p>
+        <p className="text-xs text-amber-400 mt-1">
+          Este usuario no tiene perfil. Asignale un nombre para identificarlo.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nombre completo"
+          onKeyDown={(e) => e.key === 'Enter' && name.trim() && save.mutate()}
+          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          autoFocus
+        />
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email (opcional)"
+          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+        <button
+          onClick={() => save.mutate()}
+          disabled={!name.trim() || save.isPending}
+          className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
+        >
+          {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+          Guardar
+        </button>
       </div>
     </div>
   )
