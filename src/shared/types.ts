@@ -2760,6 +2760,7 @@ export interface KnowledgeEntry {
   created_at: number
   updated_at: number
   entry_date: number | null
+  parent_id: string | null
 }
 
 export interface KnowledgeSource {

@@ -1022,7 +1022,7 @@ const api = {
     entries: {
       list:               (filters?: KnowledgeListFilters): Promise<KnowledgeEntry[]>                                                                                          => ipcRenderer.invoke('knowledge:entries:list', filters),
       get:                (id: string): Promise<KnowledgeEntry | null>                                                                                                         => ipcRenderer.invoke('knowledge:entries:get', id),
-      create:             (data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number }, userId: string): Promise<KnowledgeEntry> => ipcRenderer.invoke('knowledge:entries:create', data, userId),
+      create:             (data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number; parent_id?: string | null }, userId: string): Promise<KnowledgeEntry> => ipcRenderer.invoke('knowledge:entries:create', data, userId),
       update:             (id: string, data: Partial<KnowledgeEntry>): Promise<KnowledgeEntry>                                                                                 => ipcRenderer.invoke('knowledge:entries:update', id, data),
       delete:             (id: string): Promise<void>                                                                                                                          => ipcRenderer.invoke('knowledge:entries:delete', id),
       summarize:          (id: string): Promise<KnowledgeEntry>                                                                                                                => ipcRenderer.invoke('knowledge:entries:summarize', id),
@@ -1030,6 +1030,8 @@ const api = {
       saveClipboardImage: (buffer: ArrayBuffer, mimeType: string): Promise<{ localPath: string; fileName: string; mimeType: string }>                                          => ipcRenderer.invoke('knowledge:entries:saveClipboardImage', buffer, mimeType),
       topics:             (): Promise<string[]>                                                                                                                                 => ipcRenderer.invoke('knowledge:entries:topics'),
       selectFile:         (): Promise<string | null>                                                                                                                           => ipcRenderer.invoke('knowledge:entries:selectFile'),
+      listChildren:       (parentId: string): Promise<KnowledgeEntry[]>                                                                                                        => ipcRenderer.invoke('knowledge:entries:listChildren', parentId),
+      generateDocument:   (entryId: string): Promise<{ synthesis: string; keyData: string[]; nextSteps: string[] }>                                                            => ipcRenderer.invoke('knowledge:entries:generateDocument', entryId),
     },
     topic: {
       analyze:       (topic: string, userId: string): Promise<KnowledgeGlobalSummary>  => ipcRenderer.invoke('knowledge:topic:analyze', topic, userId),

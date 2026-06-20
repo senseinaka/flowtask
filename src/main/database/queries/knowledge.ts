@@ -54,7 +54,7 @@ export function deleteKnowledgeSource(id: string): void {
 export async function listKnowledgeEntries(
   filters?: KnowledgeListFilters
 ): Promise<KnowledgeEntry[]> {
-  const conditions: string[] = ['workspace_id = ?']
+  const conditions: string[] = ['workspace_id = ?', '(parent_id IS NULL OR parent_id = \'\')']
   const vals: unknown[] = [WORKSPACE_ID]
 
   if (filters?.search) {
@@ -73,6 +73,14 @@ export async function listKnowledgeEntries(
   `, vals)
 }
 
+export async function listKnowledgeSubEntries(parentId: string): Promise<KnowledgeEntry[]> {
+  return getPowerSyncDb().getAll<KnowledgeEntry>(`
+    SELECT * FROM knowledge_entries
+    WHERE parent_id = ?
+    ORDER BY COALESCE(entry_date, created_at) ASC
+  `, [parentId])
+}
+
 export async function getKnowledgeEntry(id: string): Promise<KnowledgeEntry | null> {
   return getPowerSyncDb().getOptional<KnowledgeEntry>(
     'SELECT * FROM knowledge_entries WHERE id = ?', [id]
@@ -87,6 +95,7 @@ export interface CreateKnowledgeEntryFields {
   tags?: string[]
   source?: string
   entry_date?: number
+  parent_id?: string | null
 }
 
 export async function createKnowledgeEntry(
@@ -102,8 +111,8 @@ export async function createKnowledgeEntry(
       id, workspace_id, title, content_type, body, topic, tags, source,
       ai_summary, drive_file_id, drive_folder_id, drive_status,
       file_name, file_size, file_mime_type, local_path,
-      created_by, created_at, updated_at, entry_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NULL, NULL, 'none', NULL, NULL, NULL, NULL, ?, ?, ?, ?)
+      created_by, created_at, updated_at, entry_date, parent_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NULL, NULL, 'none', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?)
   `, [
     id, WORKSPACE_ID,
     data.title ?? '',
@@ -113,7 +122,8 @@ export async function createKnowledgeEntry(
     JSON.stringify(data.tags ?? []),
     data.source ?? '',
     userId, now, now,
-    data.entry_date ?? null
+    data.entry_date ?? null,
+    data.parent_id ?? null
   ])
 
   return (await db.getOptional<KnowledgeEntry>('SELECT * FROM knowledge_entries WHERE id = ?', [id]))!

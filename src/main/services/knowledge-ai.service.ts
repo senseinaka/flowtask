@@ -59,6 +59,74 @@ export async function generateKnowledgeGlobalSummary(
   return block?.type === 'text' ? block.text.trim() : ''
 }
 
+export interface EntryThreadDocument {
+  synthesis: string
+  keyData: string[]
+  nextSteps: string[]
+}
+
+export async function generateEntryThreadDocument(
+  main: KnowledgeEntry,
+  children: KnowledgeEntry[]
+): Promise<EntryThreadDocument> {
+  const client = getClient()
+  const allEntries = [main, ...children]
+
+  const entriesText = allEntries.map((e, i) => {
+    const date = e.entry_date ?? e.created_at
+    const d    = new Date(date)
+    const ds   = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getFullYear()}`
+    const content = e.ai_summary || stripHtml(e.body).slice(0, 400) || '(sin contenido)'
+    return `[${i === 0 ? 'ENTRADA PRINCIPAL' : `HILO ${i}`}] ${ds} | ${e.source || '—'} | ${e.title || '(sin título)'}\n${content}`
+  }).join('\n\n')
+
+  const resp = await client.messages.create({
+    model: MODEL_TOPIC,
+    max_tokens: 1200,
+    tools: [{
+      name: 'create_document',
+      description: 'Crear un documento resumen estructurado del hilo de conocimiento',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          synthesis: {
+            type: 'string',
+            description: '2-3 párrafos de síntesis en español. Sin markdown.'
+          },
+          keyData: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Lista de datos clave extraídos: precios, cantidades, fechas, specs, nombres propios. Máximo 8 ítems. Formato: "Concepto: Valor"'
+          },
+          nextSteps: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Lista de próximos pasos, pendientes o acciones a tomar. Máximo 6 ítems. Empezar con verbo en infinitivo.'
+          }
+        },
+        required: ['synthesis', 'keyData', 'nextSteps']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'create_document' },
+    messages: [{
+      role: 'user',
+      content: `Analizá el siguiente hilo de entradas de conocimiento (${allEntries.length} entradas en total) y generá un documento resumen estructurado:\n\n${entriesText}`
+    }]
+  })
+
+  const toolUse = resp.content.find(b => b.type === 'tool_use')
+  if (!toolUse || toolUse.type !== 'tool_use') {
+    return { synthesis: 'No se pudo generar el documento.', keyData: [], nextSteps: [] }
+  }
+
+  const input = toolUse.input as EntryThreadDocument
+  return {
+    synthesis:  input.synthesis  ?? '',
+    keyData:    Array.isArray(input.keyData)   ? input.keyData   : [],
+    nextSteps:  Array.isArray(input.nextSteps) ? input.nextSteps : []
+  }
+}
+
 export async function analyzeTopicEntries(
   entries: KnowledgeEntry[],
   topic: string

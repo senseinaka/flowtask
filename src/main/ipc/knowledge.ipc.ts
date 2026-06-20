@@ -4,6 +4,7 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import {
   listKnowledgeEntries,
+  listKnowledgeSubEntries,
   getKnowledgeEntry,
   createKnowledgeEntry,
   updateKnowledgeEntry,
@@ -23,6 +24,7 @@ import type { CreateKnowledgeEntryFields, UpdateKnowledgeEntryFields } from '../
 import {
   summarizeKnowledgeEntry,
   generateKnowledgeGlobalSummary,
+  generateEntryThreadDocument,
   analyzeTopicEntries
 } from '../services/knowledge-ai.service'
 import { driveService } from '../services/drive.service'
@@ -143,6 +145,17 @@ export function registerKnowledgeIpc(): void {
     const localPath = path.join(localDir, localName)
     fs.writeFileSync(localPath, Buffer.from(buffer))
     return { localPath, fileName: localName, mimeType }
+  })
+
+  ipcMain.handle('knowledge:entries:listChildren', async (_e, parentId: string) =>
+    listKnowledgeSubEntries(parentId)
+  )
+
+  ipcMain.handle('knowledge:entries:generateDocument', async (_e, entryId: string) => {
+    const main = await getKnowledgeEntry(entryId)
+    if (!main) throw new Error('Entrada no encontrada')
+    const children = await listKnowledgeSubEntries(entryId)
+    return generateEntryThreadDocument(main, children)
   })
 
   ipcMain.handle('knowledge:entries:topics', async () =>

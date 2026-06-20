@@ -2771,6 +2771,14 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       ]
       for (const row of defaults) ins.run(...row)
     }
+  },
+  {
+    version: 83,
+    up: (db) => {
+      try { db.exec(`ALTER TABLE knowledge_entries ADD COLUMN entry_date INTEGER`) } catch {}
+      try { db.exec(`ALTER TABLE knowledge_entries ADD COLUMN parent_id TEXT`) } catch {}
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_parent ON knowledge_entries(parent_id)`)
+    }
   }
 ]
 

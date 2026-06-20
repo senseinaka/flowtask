@@ -912,9 +912,10 @@ const knowledge_entries = new Table(
     created_at: column.integer,
     updated_at: column.integer,
     entry_date: column.integer,
+    parent_id: column.text,
     workspace_id: column.text
   },
-  { indexes: { workspace: ['workspace_id'], topic: ['topic'] } }
+  { indexes: { workspace: ['workspace_id'], topic: ['topic'], parent: ['parent_id'] } }
 )
 
 const knowledge_global_summaries = new Table(
