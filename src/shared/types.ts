@@ -2731,3 +2731,79 @@ export const RECON_SOURCE_LABELS: Record<ReconImportSource, string> = {
   ml_secundaria: 'ML Secundaria',
   fondos:        'Fondos / Banco'
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MÓDULO KNOWLEDGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type KnowledgeContentType = 'text' | 'file' | 'image'
+export type KnowledgeDriveStatus = 'none' | 'uploading' | 'synced' | 'error'
+
+export interface KnowledgeEntry {
+  id: string
+  workspace_id: string
+  title: string
+  content_type: KnowledgeContentType
+  body: string
+  topic: string
+  tags: string
+  source: string
+  ai_summary: string
+  drive_file_id: string | null
+  drive_folder_id: string | null
+  drive_status: KnowledgeDriveStatus
+  file_name: string | null
+  file_size: number | null
+  file_mime_type: string | null
+  local_path: string | null
+  created_by: string
+  created_at: number
+  updated_at: number
+}
+
+export interface KnowledgeGlobalSummary {
+  id: string
+  workspace_id: string
+  topic: string
+  summary: string
+  entry_count: number
+  created_at: number
+  generated_by: string
+}
+
+export interface CreateKnowledgeEntryInput {
+  title?: string
+  content_type: KnowledgeContentType
+  body?: string
+  topic?: string
+  tags?: string[]
+  source?: string
+}
+
+export interface UpdateKnowledgeEntryInput {
+  title?: string
+  body?: string
+  topic?: string
+  tags?: string[]
+  source?: string
+  ai_summary?: string
+}
+
+export interface KnowledgeListFilters {
+  search?: string
+  topic?: string
+  content_type?: KnowledgeContentType
+  source?: string
+}
+
+export const KNOWLEDGE_CONTENT_TYPE_LABELS: Record<KnowledgeContentType, string> = {
+  text:  'Texto',
+  file:  'Archivo',
+  image: 'Imagen'
+}
+
+export const KNOWLEDGE_CONTENT_TYPE_COLORS: Record<KnowledgeContentType, string> = {
+  text:  '#f59e0b',
+  file:  '#3b82f6',
+  image: '#8b5cf6'
+}

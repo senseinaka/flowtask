@@ -2683,6 +2683,49 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         )
       }
     }
+  },
+  {
+    version: 80,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS knowledge_entries (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL DEFAULT '',
+          title TEXT NOT NULL DEFAULT '',
+          content_type TEXT NOT NULL DEFAULT 'text',
+          body TEXT NOT NULL DEFAULT '',
+          topic TEXT NOT NULL DEFAULT '',
+          tags TEXT NOT NULL DEFAULT '[]',
+          source TEXT NOT NULL DEFAULT '',
+          ai_summary TEXT NOT NULL DEFAULT '',
+          drive_file_id TEXT,
+          drive_folder_id TEXT,
+          drive_status TEXT NOT NULL DEFAULT 'none',
+          file_name TEXT,
+          file_size INTEGER,
+          file_mime_type TEXT,
+          local_path TEXT,
+          created_by TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+      `)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_workspace ON knowledge_entries(workspace_id)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_topic ON knowledge_entries(topic)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_type ON knowledge_entries(content_type)`)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS knowledge_global_summaries (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL DEFAULT '',
+          topic TEXT NOT NULL DEFAULT '__all__',
+          summary TEXT NOT NULL DEFAULT '',
+          entry_count INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          generated_by TEXT NOT NULL DEFAULT ''
+        )
+      `)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_kgs_workspace ON knowledge_global_summaries(workspace_id)`)
+    }
   }
 ]
 

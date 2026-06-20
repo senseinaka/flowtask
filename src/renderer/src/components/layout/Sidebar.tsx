@@ -4,7 +4,7 @@ import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet,
-  CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight
+  CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight, Brain
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -265,6 +265,24 @@ export default function Sidebar() {
             >
               <FileText size={16} />
               Presupuestos
+            </NavLink>
+          </div>
+        )}
+
+        {/* ── Knowledge ─────────────────────────────────────────────────── */}
+        {canRead('knowledge') && (
+          <div className="pt-1">
+            <NavLink
+              to="/knowledge"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-teal-900/40 text-teal-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Brain size={16} />
+              Knowledge
             </NavLink>
           </div>
         )}

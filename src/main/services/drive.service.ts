@@ -281,6 +281,18 @@ class DriveService {
     return res.data.id!
   }
 
+  async getOrCreateKnowledgeFolder(): Promise<string> {
+    const cached = store.get('knowledgeFolderId', '') as string
+    if (cached) return cached
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+    const folderId = await this.getOrCreateFolder(drive, 'Summit Knowledge')
+    store.set('knowledgeFolderId', folderId)
+    return folderId
+  }
+
   // ── Backup completo de la base de datos ──────────────────────────────────
 
   getLastBackupStatus(): BackupStatus | null {

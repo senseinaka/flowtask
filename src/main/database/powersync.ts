@@ -892,6 +892,42 @@ const quote_activities = new Table(
   { indexes: { workspace: ['workspace_id'], quote: ['quote_id'] } }
 )
 
+const knowledge_entries = new Table(
+  {
+    title: column.text,
+    content_type: column.text,
+    body: column.text,
+    topic: column.text,
+    tags: column.text,
+    source: column.text,
+    ai_summary: column.text,
+    drive_file_id: column.text,
+    drive_folder_id: column.text,
+    drive_status: column.text,
+    file_name: column.text,
+    file_size: column.integer,
+    file_mime_type: column.text,
+    local_path: column.text,
+    created_by: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], topic: ['topic'] } }
+)
+
+const knowledge_global_summaries = new Table(
+  {
+    topic: column.text,
+    summary: column.text,
+    entry_count: column.integer,
+    created_at: column.integer,
+    generated_by: column.text,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -940,7 +976,9 @@ export const AppSchema = new Schema({
   quote_companies,
   quote_contacts,
   quotes,
-  quote_activities
+  quote_activities,
+  knowledge_entries,
+  knowledge_global_summaries
 })
 
 /**
@@ -1648,6 +1686,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries'], throttleMs: 1000 }
   )
 }

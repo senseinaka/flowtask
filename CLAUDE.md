@@ -736,6 +736,35 @@ Al hacer click en cualquier celda del grid se abre el `DayZoomModal` (en vez de 
 
 **Regla:** en `parseFlexxus`, no cambiar `raw: true` a `raw: false`. La función `num()` en `recon-parsers.service.ts` tiene detección inteligente de separadores como fallback, pero `raw: true` es la protección principal.
 
+### Comex: consolidación Marcas → Proveedores/Marcas (migración v79 — junio 2026)
+
+**Concepto central:** "un proveedor es una marca" — en Naka Outdoors cada proveedor representa una marca de producto. La tabla `comex_brands` era redundante con `comex_suppliers`.
+
+**Qué se hizo:**
+- Eliminado submenu "Marcas" del sidebar Comex (9 → 8 entradas). Renombrado "Proveedores" → "Proveedores / Marcas".
+- 6 nuevas columnas agregadas a `comex_suppliers` (y al schema PowerSync): `category`, `demand_annual`, `demand_monthly_json`, `current_stock`, `safety_stock`, `purchase_frequency_days`.
+- Migración v79: copia datos de `comex_brands` (con `primary_supplier_id`) a `comex_suppliers` via `PRAGMA table_info` + ALTER TABLE idempotente + UPDATE condicional.
+- `ComexBrands.tsx` y `ComexBrandDetail.tsx`: archivos conservados pero **desconectados del router** (ya no tienen ruta activa).
+- `import_order_plannings` ahora usa `supplier_id` como referencia principal. **Compat:** `brand_id = supplier_id` en plannings nuevos (supplier actúa como marca).
+- `ComexPlannings.tsx`: QuickCreateModal simplificado de 2 selectores (Marca + Proveedor) a 1 selector ("Proveedor / Marca"). Muestra `${s.brand} (${s.name})` cuando brand difiere del nombre de empresa.
+- `ComexPlanningDetail.tsx`: fallback de nombre de marca: `brand?.name ?? supplier?.brand ?? supplier?.name ?? 'Programación'` (soporta plannings viejos y nuevos).
+- `ComexSupplierDetail.tsx`: nueva sección "Marca & Demanda" con campos de demanda y grilla mensual (`MonthlyDemandGrid`).
+- `ComexPlanningAIReports.tsx`: selector unificado "Proveedor / Marca"; en lista de reportes, `brand_id || supplier_id` busca en suppliers.
+
+**Regla:** al crear nuevos plannings, siempre `brand_id = supplier_id`. No crear registros en `comex_brands` para marcas nuevas — usar el campo `brand` de `comex_suppliers`.
+
+**Pendiente en Supabase (aún no aplicado):** ejecutar en el SQL editor:
+```sql
+ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS demand_annual DOUBLE PRECISION;
+ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS demand_monthly_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS current_stock DOUBLE PRECISION;
+ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS safety_stock DOUBLE PRECISION;
+ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS purchase_frequency_days INTEGER;
+```
+
+---
+
 ### IPC: drag-drop de archivos enviaba `number[]` (lento/crasheable para archivos grandes)
 
 **Problema:** El renderer hacía `Array.from(new Uint8Array(buf))` antes de enviar por IPC, creando un array de millones de enteros para PDFs de > ~5MB. La serialización JSON podía bloquear el hilo main o crashear.

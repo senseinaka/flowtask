@@ -98,6 +98,11 @@ export const MODULES: ModuleDef[] = [
     ]
   },
   {
+    key: 'knowledge',
+    label: 'Knowledge',
+    routes: ['/knowledge']
+  },
+  {
     key: 'settings',
     label: 'Configuración',
     routes: ['/settings']
