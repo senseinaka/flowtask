@@ -2726,6 +2726,21 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       `)
       db.exec(`CREATE INDEX IF NOT EXISTS idx_kgs_workspace ON knowledge_global_summaries(workspace_id)`)
     }
+  },
+  {
+    version: 81,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_profiles (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL DEFAULT '',
+          email TEXT NOT NULL DEFAULT '',
+          display_name TEXT NOT NULL DEFAULT '',
+          last_seen_at INTEGER NOT NULL
+        )
+      `)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_up_workspace ON user_profiles(workspace_id)`)
+    }
   }
 ]
 

@@ -1,9 +1,15 @@
 import { ipcMain } from 'electron'
-import { listUserPermissions, listAllPermissions, upsertPermission } from '../database/queries/permissions'
+import {
+  listUserPermissions,
+  listAllPermissions,
+  upsertPermission,
+  listUserProfiles,
+  upsertUserProfile
+} from '../database/queries/permissions'
 import { getSession } from '../services/auth.service'
 import { invalidatePermissionsCache } from '../services/permissions.service'
 import { ADMIN_USER_ID, type PermissionLevel } from '@shared/modules'
-import type { UserPermission } from '@shared/types'
+import type { UserPermission, UserProfile } from '@shared/types'
 
 async function requireAdmin(): Promise<void> {
   const session = await getSession()
@@ -22,6 +28,19 @@ export function registerPermissionsIpc(): void {
   ipcMain.handle('permissions:listAll', async (): Promise<UserPermission[]> => {
     await requireAdmin()
     return listAllPermissions()
+  })
+
+  ipcMain.handle('permissions:profiles:list', async (): Promise<UserProfile[]> => {
+    await requireAdmin()
+    return listUserProfiles()
+  })
+
+  ipcMain.handle('permissions:profiles:upsert', async (
+    _event,
+    input: { id: string; email: string; display_name: string }
+  ): Promise<void> => {
+    await requireAdmin()
+    upsertUserProfile(input)
   })
 
   ipcMain.handle('permissions:setLevel', async (

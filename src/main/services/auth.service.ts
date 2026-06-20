@@ -10,6 +10,7 @@
 
 import ConfigStore from './config-store'
 import { readEnvLocal } from '../database/powersync'
+import { upsertUserProfile } from '../database/queries/permissions'
 import type { AuthSession, AuthLoginResult } from '@shared/types'
 
 const store = new ConfigStore('auth')
@@ -35,6 +36,16 @@ function saveSession(data: SupabaseTokenResponse): AuthSession {
     expiresAt: Math.floor(Date.now() / 1000) + data.expires_in
   }
   store.set(KEY_SESSION, session)
+  try {
+    const namePart = data.user.email.split('@')[0]
+    upsertUserProfile({
+      id: data.user.id,
+      email: data.user.email,
+      display_name: namePart
+    })
+  } catch {
+    // La tabla puede no existir todavía si la migración v81 aún no corrió
+  }
   return session
 }
 

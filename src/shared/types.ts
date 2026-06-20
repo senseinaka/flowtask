@@ -2807,3 +2807,11 @@ export const KNOWLEDGE_CONTENT_TYPE_COLORS: Record<KnowledgeContentType, string>
   file:  '#3b82f6',
   image: '#8b5cf6'
 }
+
+export interface UserProfile {
+  id: string
+  workspace_id: string
+  email: string
+  display_name: string
+  last_seen_at: number
+}

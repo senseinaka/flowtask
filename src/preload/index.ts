@@ -39,7 +39,7 @@ import type {
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus,
   AuthSession, AuthLoginResult,
-  UserPermission,
+  UserPermission, UserProfile,
   CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent,
   CalendarEventInput, CalendarEventLink, LinkEntityInput, CalendarWaReminder,
   Quote, QuoteActivity, QuoteCompany, QuoteContact, QuoteKPIs,
@@ -844,7 +844,12 @@ const api = {
     listMine: (): Promise<UserPermission[]> => ipcRenderer.invoke('permissions:listMine'),
     listAll: (): Promise<UserPermission[]> => ipcRenderer.invoke('permissions:listAll'),
     setLevel: (input: { user_id: string; module_key: string; submodule_key?: string | null; level: PermissionLevel }): Promise<UserPermission> =>
-      ipcRenderer.invoke('permissions:setLevel', input)
+      ipcRenderer.invoke('permissions:setLevel', input),
+    profiles: {
+      list: (): Promise<UserProfile[]> => ipcRenderer.invoke('permissions:profiles:list'),
+      upsert: (input: { id: string; email: string; display_name: string }): Promise<void> =>
+        ipcRenderer.invoke('permissions:profiles:upsert', input)
+    }
   },
 
   calendar: {

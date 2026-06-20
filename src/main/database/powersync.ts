@@ -928,6 +928,16 @@ const knowledge_global_summaries = new Table(
   { indexes: { workspace: ['workspace_id'] } }
 )
 
+const user_profiles = new Table(
+  {
+    workspace_id: column.text,
+    email: column.text,
+    display_name: column.text,
+    last_seen_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -978,7 +988,8 @@ export const AppSchema = new Schema({
   quotes,
   quote_activities,
   knowledge_entries,
-  knowledge_global_summaries
+  knowledge_global_summaries,
+  user_profiles
 })
 
 /**
@@ -1686,6 +1697,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles'], throttleMs: 1000 }
   )
 }
