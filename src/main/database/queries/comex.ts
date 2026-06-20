@@ -121,7 +121,17 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
       port_of_origin: (row._supplier_port_of_origin as string) ?? '',
       notes: row._supplier_notes as string,
       created_at: row._supplier_created_at as number,
-      updated_at: row._supplier_updated_at as number
+      updated_at: row._supplier_updated_at as number,
+      // Campos no presentes en el JOIN inline — se llenan con defaults
+      address: '', city: '', zip_code: '', tax_id: '', rex_number: '',
+      wechat: '', product_categories: '', lead_time_days: null,
+      pickup_address: '', reliability_notes: '', non_operational_periods_json: '[]',
+      production_days: null, preparation_days: null, transit_days: null,
+      customs_days: null, local_delivery_days: null, moq: null,
+      logo_stored_name: (row._supplier_logo as string) ?? null,
+      logo_data: (row._supplier_logo_data as string) ?? null,
+      category: '', demand_annual: null, demand_monthly_json: '{}',
+      current_stock: null, safety_stock: null, purchase_frequency_days: null
     }
   }
   // Campos del JOIN con customs

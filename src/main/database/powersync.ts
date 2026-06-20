@@ -208,6 +208,13 @@ const comex_suppliers = new Table(
     moq: column.integer,
     non_operational_periods_json: column.text,
     reliability_notes: column.text,
+    // Marca / Demanda (consolidado desde comex_brands en v79)
+    category: column.text,
+    demand_annual: column.real,
+    demand_monthly_json: column.text,
+    current_stock: column.real,
+    safety_stock: column.real,
+    purchase_frequency_days: column.integer,
     created_at: column.integer,
     updated_at: column.integer,
     workspace_id: column.text

@@ -2633,6 +2633,56 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         CREATE INDEX IF NOT EXISTS idx_recon_audit_period ON recon_audit(period_id);
       `)
     }
+  },
+
+  // v79 — Consolidar comex_brands en comex_suppliers
+  // El concepto "marca" se unifica con "proveedor": cada proveedor ES una marca.
+  // Se agregan los campos de demanda/stock de comex_brands a comex_suppliers
+  // y se migran los datos existentes usando primary_supplier_id.
+  {
+    version: 79,
+    up: (db) => {
+      const cols = (db.prepare("PRAGMA table_info(comex_suppliers)").all() as { name: string }[]).map(c => c.name)
+      if (!cols.includes('category'))               db.exec("ALTER TABLE comex_suppliers ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+      if (!cols.includes('demand_annual'))           db.exec('ALTER TABLE comex_suppliers ADD COLUMN demand_annual REAL')
+      if (!cols.includes('demand_monthly_json'))     db.exec("ALTER TABLE comex_suppliers ADD COLUMN demand_monthly_json TEXT NOT NULL DEFAULT '{}'")
+      if (!cols.includes('current_stock'))           db.exec('ALTER TABLE comex_suppliers ADD COLUMN current_stock REAL')
+      if (!cols.includes('safety_stock'))            db.exec('ALTER TABLE comex_suppliers ADD COLUMN safety_stock REAL')
+      if (!cols.includes('purchase_frequency_days')) db.exec('ALTER TABLE comex_suppliers ADD COLUMN purchase_frequency_days INTEGER')
+
+      // Migrar datos existentes de comex_brands al supplier primario
+      const brands = db.prepare('SELECT * FROM comex_brands WHERE primary_supplier_id IS NOT NULL').all() as {
+        primary_supplier_id: string; name: string; category: string;
+        demand_annual: number | null; demand_monthly_json: string;
+        current_stock: number | null; safety_stock: number | null;
+        purchase_frequency_days: number | null;
+      }[]
+
+      const updateStmt = db.prepare(`
+        UPDATE comex_suppliers SET
+          brand = CASE WHEN brand IS NULL OR brand = '' THEN ? ELSE brand END,
+          category               = ?,
+          demand_annual          = ?,
+          demand_monthly_json    = ?,
+          current_stock          = ?,
+          safety_stock           = ?,
+          purchase_frequency_days = ?
+        WHERE id = ?
+      `)
+
+      for (const b of brands) {
+        updateStmt.run(
+          b.name,
+          b.category ?? '',
+          b.demand_annual ?? null,
+          b.demand_monthly_json ?? '{}',
+          b.current_stock ?? null,
+          b.safety_stock ?? null,
+          b.purchase_frequency_days ?? null,
+          b.primary_supplier_id
+        )
+      }
+    }
   }
 ]
 

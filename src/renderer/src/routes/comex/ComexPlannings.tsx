@@ -9,7 +9,6 @@ import {
   useComexPlannings,
   useCreateComexPlanning,
   useDeleteComexPlanning,
-  useComexBrands,
   useComexSuppliers,
   useExportComexPlannings
 } from '../../hooks/useComex'
@@ -19,7 +18,7 @@ import {
   PLANNING_TYPES, PLANNING_TYPE_LABELS
 } from '@shared/types'
 import type {
-  ImportOrderPlanning, PlanningStatus, PlanningType, PlanningRiskStatus, ComexBrand
+  ImportOrderPlanning, PlanningStatus, PlanningType, PlanningRiskStatus, ComexSupplier
 } from '@shared/types'
 import { cn } from '../../components/ui/utils'
 import ComexPlanningCalendar from './ComexPlanningCalendar'
@@ -58,12 +57,10 @@ function DateCell({ ts }: { ts: number | null }) {
 
 // ── Quick-create modal ───────────────────────────────────────────────────────
 
-function QuickCreateModal({ onClose, brands }: { onClose: () => void; brands: ComexBrand[] }) {
+function QuickCreateModal({ onClose, suppliers }: { onClose: () => void; suppliers: ComexSupplier[] }) {
   const navigate = useNavigate()
   const createPlanning = useCreateComexPlanning()
-  const { data: suppliers = [] } = useComexSuppliers()
 
-  const [brandId, setBrandId] = useState('')
   const [supplierId, setSupplierId] = useState('')
   const [planningType, setPlanningType] = useState<PlanningType>('single')
   const [targetDate, setTargetDate] = useState('')
@@ -72,24 +69,17 @@ function QuickCreateModal({ onClose, brands }: { onClose: () => void; brands: Co
 
   useEffect(() => { selectRef.current?.focus() }, [])
 
-  const brand = brands.find((b) => b.id === brandId)
-
-  // Al elegir marca, precargar el proveedor primario por defecto
-  useEffect(() => {
-    if (brand?.primary_supplier_id && !supplierId) setSupplierId(brand.primary_supplier_id)
-  }, [brand]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const supplier = suppliers.find((s) => s.id === supplierId)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!brandId || saving) return
+    if (!supplierId || saving) return
     setSaving(true)
     try {
       const targetTs = targetDate ? dayjs(targetDate).valueOf() : null
       const planning = await createPlanning.mutateAsync({
-        brand_id: brandId,
-        supplier_id: supplierId || null,
+        brand_id: supplierId,   // brand_id = supplier_id (proveedor es la marca)
+        supplier_id: supplierId,
         country: supplier?.country ?? '',
         responsible_user_id: '',
         planning_type: planningType,
@@ -102,11 +92,11 @@ function QuickCreateModal({ onClose, brands }: { onClose: () => void; brands: Co
         recommended_order_date: null,
         approval_deadline_date: null,
         estimated_reception_date: null,
-        demand_annual_estimated: brand?.demand_annual ?? null,
+        demand_annual_estimated: supplier?.demand_annual ?? null,
         demand_monthly_estimated: null,
         demand_for_period: null,
-        current_stock: brand?.current_stock ?? null,
-        safety_stock: brand?.safety_stock ?? null,
+        current_stock: supplier?.current_stock ?? null,
+        safety_stock: supplier?.safety_stock ?? null,
         desired_coverage_months: null,
         internal_approval_days: 3,
         supplier_preparation_days: supplier?.preparation_days ?? 0,
@@ -150,30 +140,18 @@ function QuickCreateModal({ onClose, brands }: { onClose: () => void; brands: Co
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Marca *</label>
+            <label className="block text-xs text-slate-400 mb-1.5">Proveedor / Marca *</label>
             <select
               ref={selectRef}
-              value={brandId}
-              onChange={(e) => setBrandId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-            >
-              <option value="">— Seleccionar —</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Proveedor</label>
-            <select
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value)}
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
             >
-              <option value="">— Sin asignar —</option>
+              <option value="">— Seleccionar —</option>
               {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.brand && s.brand !== s.name ? `${s.brand} (${s.name})` : s.name}
+                </option>
               ))}
             </select>
           </div>
@@ -202,7 +180,7 @@ function QuickCreateModal({ onClose, brands }: { onClose: () => void; brands: Co
           </div>
 
           <p className="text-xs text-slate-500">
-            Se precargan los lead times del proveedor seleccionado. Se puede ajustar todo en la ficha completa.
+            Se precargan demanda, stock y lead times desde la ficha del proveedor. Ajustar todo en la ficha completa.
           </p>
 
           <div className="flex justify-end gap-3 pt-1">
@@ -215,7 +193,7 @@ function QuickCreateModal({ onClose, brands }: { onClose: () => void; brands: Co
             </button>
             <button
               type="submit"
-              disabled={saving || !brandId}
+              disabled={saving || !supplierId}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors"
             >
               {saving ? 'Creando...' : <>Crear y editar <ArrowRight size={14} /></>}
@@ -298,7 +276,6 @@ function PlanningRow({ planning }: { planning: ImportOrderPlanning }) {
 
 export default function ComexPlannings() {
   const navigate = useNavigate()
-  const [brandFilter, setBrandFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<PlanningStatus | ''>('')
   const [riskFilter, setRiskFilter] = useState<PlanningRiskStatus | ''>('')
   const [supplierFilter, setSupplierFilter] = useState('')
@@ -308,10 +285,8 @@ export default function ComexPlannings() {
   const [showCreate, setShowCreate] = useState(false)
   const [view, setView] = useState<ViewMode>('table')
 
-  const { data: brands = [] } = useComexBrands()
   const { data: suppliers = [] } = useComexSuppliers()
   const { data: plannings = [], isLoading } = useComexPlannings({
-    brandId: brandFilter || undefined,
     status: statusFilter || undefined
   })
   const exportPlannings = useExportComexPlannings()
@@ -337,9 +312,8 @@ export default function ComexPlannings() {
     [filtered]
   )
 
-  const hasFilters = !!(brandFilter || statusFilter || riskFilter || supplierFilter || planningTypeFilter || dateFrom || dateTo)
+  const hasFilters = !!(statusFilter || riskFilter || supplierFilter || planningTypeFilter || dateFrom || dateTo)
   const clearFilters = () => {
-    setBrandFilter('')
     setStatusFilter('')
     setRiskFilter('')
     setSupplierFilter('')
@@ -396,13 +370,15 @@ export default function ComexPlannings() {
       {/* Filters */}
       <div className="flex items-center gap-3">
         <select
-          value={brandFilter}
-          onChange={(e) => setBrandFilter(e.target.value)}
+          value={supplierFilter}
+          onChange={(e) => setSupplierFilter(e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
         >
-          <option value="">Todas las marcas</option>
-          {brands.map((b) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
+          <option value="">Todos los proveedores</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.brand && s.brand !== s.name ? `${s.brand} (${s.name})` : s.name}
+            </option>
           ))}
         </select>
         <select
@@ -423,16 +399,6 @@ export default function ComexPlannings() {
           <option value="">Todos los riesgos</option>
           {PLANNING_RISK_STATUSES.map((r) => (
             <option key={r} value={r}>{PLANNING_RISK_LABELS[r]}</option>
-          ))}
-        </select>
-        <select
-          value={supplierFilter}
-          onChange={(e) => setSupplierFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-        >
-          <option value="">Todos los proveedores</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
         <select
@@ -535,7 +501,7 @@ export default function ComexPlannings() {
       )}
 
       {showCreate && (
-        <QuickCreateModal onClose={() => setShowCreate(false)} brands={brands} />
+        <QuickCreateModal onClose={() => setShowCreate(false)} suppliers={suppliers} />
       )}
     </div>
   )

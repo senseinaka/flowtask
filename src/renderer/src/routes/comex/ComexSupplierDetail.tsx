@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Building2, MapPin, Globe, CreditCard, Users,
-  Plus, Trash2, X, Check, Mail, Phone, MessageCircle, Star,
-  Package, Anchor, Clock, Tag, Edit2
+  ArrowLeft, Building2, MapPin, CreditCard, Users,
+  Plus, Trash2, X, Check, Mail, Phone, MessageCircle,
+  Package, Anchor, Clock, Edit2, BarChart3
 } from 'lucide-react'
 import {
   useComexSupplier, useUpdateComexSupplier,
@@ -767,6 +767,21 @@ export default function ComexSupplierDetail() {
         </div>
       </Section>
 
+      {/* ── Marca & Demanda ──────────────────────────────────────────────────── */}
+      <Section icon={BarChart3} title="Marca & Demanda">
+        <FieldGrid>
+          <EText label="Categoría"                value={supplier.category ?? ''}               onSave={(v) => save({ category: v })}               placeholder="Ej: montañismo, trail running" />
+          <ENum  label="Demanda anual (unidades)"  value={supplier.demand_annual ?? null}         onSave={(v) => save({ demand_annual: v })}          placeholder="—" />
+          <ENum  label="Stock actual"              value={supplier.current_stock ?? null}         onSave={(v) => save({ current_stock: v })}          placeholder="—" />
+          <ENum  label="Stock de seguridad"        value={supplier.safety_stock ?? null}          onSave={(v) => save({ safety_stock: v })}           placeholder="—" />
+          <ENum  label="Frecuencia de compra (días)" value={supplier.purchase_frequency_days ?? null} onSave={(v) => save({ purchase_frequency_days: v !== null ? Math.round(v) : null })} placeholder="—" />
+        </FieldGrid>
+        <div className="mt-4">
+          <span className="block text-[10px] uppercase tracking-wider text-slate-500 mb-2">Demanda mensual estimada (unidades)</span>
+          <MonthlyDemandGrid value={supplier.demand_monthly_json ?? '{}'} onSave={(v) => save({ demand_monthly_json: v })} />
+        </div>
+      </Section>
+
       {/* ── Contactos ────────────────────────────────────────────────────────── */}
       <Section
         icon={Users}
@@ -826,6 +841,47 @@ export default function ComexSupplierDetail() {
           )}
         </div>
       </Section>
+    </div>
+  )
+}
+
+// ── Monthly demand grid ────────────────────────────────────────────────────────
+
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+function MonthlyDemandGrid({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  let parsed: Record<string, number> = {}
+  try { parsed = JSON.parse(value) || {} } catch { parsed = {} }
+
+  const setMonth = (month: number, raw: string) => {
+    const next = { ...parsed }
+    const n = parseFloat(raw)
+    if (raw === '' || isNaN(n)) {
+      delete next[String(month)]
+    } else {
+      next[String(month)] = n
+    }
+    onSave(JSON.stringify(next))
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      {MONTH_LABELS.map((label, i) => {
+        const month = i + 1
+        const v = parsed[String(month)]
+        return (
+          <div key={month} className="space-y-1">
+            <span className="block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
+            <input
+              type="number"
+              defaultValue={v !== undefined ? String(v) : ''}
+              onBlur={(e) => setMonth(month, e.target.value)}
+              placeholder="—"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+        )
+      })}
     </div>
   )
 }

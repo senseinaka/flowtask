@@ -33,7 +33,13 @@ function QuickCreateModal({ onClose }: { onClose: () => void }) {
         wechat: '', product_categories: '', payment_terms: '',
         incoterms_preferred: '', port_of_origin: '', lead_time_days: null,
         pickup_address: '', contact_name: '', contact_email: '',
-        contact_phone: '', notes: ''
+        contact_phone: '', notes: '', reliability_notes: '',
+        non_operational_periods_json: '[]', production_days: null,
+        preparation_days: null, transit_days: null, customs_days: null,
+        local_delivery_days: null, moq: null, logo_stored_name: null,
+        logo_data: null, category: '', demand_annual: null,
+        demand_monthly_json: '{}', current_stock: null,
+        safety_stock: null, purchase_frequency_days: null
       })
       onClose()
       navigate(`/comex/suppliers/${supplier.id}`)

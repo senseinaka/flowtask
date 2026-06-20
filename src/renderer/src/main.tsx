@@ -15,8 +15,6 @@ import ComexImports from './routes/comex/ComexImports'
 import ComexImportDetail from './routes/comex/ComexImportDetail'
 import ComexSuppliers from './routes/comex/ComexSuppliers'
 import ComexSupplierDetail from './routes/comex/ComexSupplierDetail'
-import ComexBrands from './routes/comex/ComexBrands'
-import ComexBrandDetail from './routes/comex/ComexBrandDetail'
 import ComexPlannings from './routes/comex/ComexPlannings'
 import ComexPlanningDetail from './routes/comex/ComexPlanningDetail'
 import ComexPlanningAIReports from './routes/comex/ComexPlanningAIReports'
@@ -59,8 +57,6 @@ const router = createHashRouter([
       { path: 'comex/imports/:id', element: <ComexImportDetail /> },
       { path: 'comex/suppliers', element: <ComexSuppliers /> },
       { path: 'comex/suppliers/:id', element: <ComexSupplierDetail /> },
-      { path: 'comex/brands', element: <ComexBrands /> },
-      { path: 'comex/brands/:id', element: <ComexBrandDetail /> },
       { path: 'comex/plannings', element: <ComexPlannings /> },
       { path: 'comex/plannings/reports', element: <ComexPlanningAIReports /> },
       { path: 'comex/plannings/:id', element: <ComexPlanningDetail /> },

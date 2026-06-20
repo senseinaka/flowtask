@@ -985,6 +985,13 @@ export interface ComexSupplier {
   reliability_notes: string
   // Pickup
   pickup_address: string  // Dirección de retiro de mercadería
+  // Marca / Demanda (consolidado desde comex_brands en v79)
+  category: string
+  demand_annual: number | null
+  demand_monthly_json: string             // JSON: { "1": 120, "2": 95, ... }
+  current_stock: number | null
+  safety_stock: number | null
+  purchase_frequency_days: number | null
   // Legacy (mantenidos por compatibilidad)
   contact_name: string
   contact_email: string

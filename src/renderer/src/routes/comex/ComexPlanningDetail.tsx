@@ -340,7 +340,7 @@ export default function ComexPlanningDetail() {
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-white flex items-center gap-2">
             <Tag size={15} className="text-cyan-400 shrink-0" />
-            {planning.brand?.name ?? 'Programación'}
+            {planning.brand?.name ?? planning.supplier?.brand ?? planning.supplier?.name ?? 'Programación'}
           </h1>
           {planning.supplier && (
             <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
@@ -457,7 +457,7 @@ export default function ComexPlanningDetail() {
               <div className="w-28 shrink-0">Fecha real</div>
             </div>
             {milestones.map((m) => (
-              <MilestoneRow key={m.id} milestone={m} planningId={planning.id} planningLabel={planning.brand?.name ?? 'Programación'} />
+              <MilestoneRow key={m.id} milestone={m} planningId={planning.id} planningLabel={planning.brand?.name ?? planning.supplier?.brand ?? planning.supplier?.name ?? 'Programación'} />
             ))}
           </div>
         )}

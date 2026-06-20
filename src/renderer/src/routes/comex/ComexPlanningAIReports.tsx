@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sparkles, FileText, Trash2, AlertTriangle, Lightbulb, ListChecks, Tag, Building2, Download } from 'lucide-react'
+import { ArrowLeft, Sparkles, FileText, Trash2, AlertTriangle, Lightbulb, ListChecks, Building2, Download } from 'lucide-react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
 
 import {
-  useComexBrands, useComexSuppliers,
+  useComexSuppliers,
   useComexPlanningAIReports, useGenerateComexPlanningAIReport, useDeleteComexPlanningAIReport,
   useExportComexPlanningAIReports
 } from '../../hooks/useComex'
@@ -17,12 +17,10 @@ export default function ComexPlanningAIReports() {
   const navigate = useNavigate()
 
   const [reportType, setReportType] = useState<PlanningAIReportType>(PLANNING_AI_REPORT_TYPES[0])
-  const [brandId, setBrandId] = useState('')
   const [supplierId, setSupplierId] = useState('')
   const [periodStart, setPeriodStart] = useState('')
   const [periodEnd, setPeriodEnd] = useState('')
 
-  const { data: brands = [] } = useComexBrands()
   const { data: suppliers = [] } = useComexSuppliers()
   const { data: reports = [], isLoading } = useComexPlanningAIReports({ reportType })
   const generateReport = useGenerateComexPlanningAIReport()
@@ -32,7 +30,7 @@ export default function ComexPlanningAIReports() {
   const handleGenerate = () => {
     generateReport.mutate({
       reportType,
-      brandId: brandId || null,
+      brandId: supplierId || null,
       supplierId: supplierId || null,
       periodStartDate: periodStart ? dayjs(periodStart).valueOf() : null,
       periodEndDate: periodEnd ? dayjs(periodEnd).endOf('day').valueOf() : null
@@ -82,20 +80,7 @@ export default function ComexPlanningAIReports() {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Marca (opcional)</label>
-            <select
-              value={brandId}
-              onChange={(e) => setBrandId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-            >
-              <option value="">Todas las marcas</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Proveedor (opcional)</label>
+            <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Proveedor / Marca (opcional)</label>
             <select
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value)}
@@ -103,7 +88,9 @@ export default function ComexPlanningAIReports() {
             >
               <option value="">Todos los proveedores</option>
               {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.brand && s.brand !== s.name ? `${s.brand} (${s.name})` : s.name}
+                </option>
               ))}
             </select>
           </div>
@@ -162,18 +149,17 @@ export default function ComexPlanningAIReports() {
                   <h3 className="text-sm font-semibold text-white">{PLANNING_AI_REPORT_TYPE_LABELS[report.report_type]}</h3>
                   <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
                     <span>{dayjs(report.created_at).format('DD/MM/YYYY HH:mm')}</span>
-                    {report.brand_id && (
-                      <span className="flex items-center gap-1">
-                        <Tag size={10} />
-                        {brands.find((b) => b.id === report.brand_id)?.name ?? '—'}
-                      </span>
-                    )}
-                    {report.supplier_id && (
-                      <span className="flex items-center gap-1">
-                        <Building2 size={10} />
-                        {suppliers.find((s) => s.id === report.supplier_id)?.name ?? '—'}
-                      </span>
-                    )}
+                    {(report.supplier_id || report.brand_id) && (() => {
+                      const sid = report.supplier_id || report.brand_id
+                      const s = suppliers.find((x) => x.id === sid)
+                      if (!s) return null
+                      return (
+                        <span className="flex items-center gap-1">
+                          <Building2 size={10} />
+                          {s.brand && s.brand !== s.name ? `${s.brand} (${s.name})` : s.name}
+                        </span>
+                      )
+                    })()}
                     {(report.period_start_date || report.period_end_date) && (
                       <span>
                         {report.period_start_date ? dayjs(report.period_start_date).format('DD/MM/YY') : '…'}

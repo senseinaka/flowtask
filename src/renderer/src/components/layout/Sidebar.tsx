@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
-  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet, Tag,
+  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -31,15 +31,14 @@ const contableSubItems = [
 ]
 
 const comexSubItems = [
-  { to: '/comex',            icon: LayoutDashboard, label: 'Dashboard',    exact: true, subKey: 'dashboard' },
-  { to: '/comex/imports',    icon: Package,          label: 'Importaciones', subKey: 'imports' },
-  { to: '/comex/suppliers',  icon: Building2,        label: 'Proveedores',   subKey: 'suppliers' },
-  { to: '/comex/brands',     icon: Tag,              label: 'Marcas',        subKey: 'brands' },
-  { to: '/comex/plannings',  icon: CalendarClock,    label: 'Programación Pedidos', subKey: 'plannings' },
-  { to: '/comex/operators',    icon: Truck,          label: 'Operadores',    subKey: 'operators' },
-  { to: '/comex/gestores',    icon: ShieldCheck,    label: 'Gestores INAL',  subKey: 'gestores' },
-  { to: '/comex/despachantes',icon: Briefcase,      label: 'Despachantes',   subKey: 'despachantes' },
-  { to: '/comex/logistics',  icon: Ship,             label: 'Logística',     subKey: 'logistics' }
+  { to: '/comex',             icon: LayoutDashboard, label: 'Dashboard',           exact: true, subKey: 'dashboard' },
+  { to: '/comex/imports',     icon: Package,         label: 'Importaciones',       subKey: 'imports' },
+  { to: '/comex/suppliers',   icon: Building2,       label: 'Proveedores / Marcas', subKey: 'suppliers' },
+  { to: '/comex/plannings',   icon: CalendarClock,   label: 'Programación Pedidos', subKey: 'plannings' },
+  { to: '/comex/operators',   icon: Truck,           label: 'Operadores',          subKey: 'operators' },
+  { to: '/comex/gestores',    icon: ShieldCheck,     label: 'Gestores INAL',       subKey: 'gestores' },
+  { to: '/comex/despachantes',icon: Briefcase,       label: 'Despachantes',        subKey: 'despachantes' },
+  { to: '/comex/logistics',   icon: Ship,            label: 'Logística',           subKey: 'logistics' }
 ]
 
 // ── Reusable collapsible section ──────────────────────────────────────────────
