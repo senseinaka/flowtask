@@ -283,6 +283,21 @@ export function registerKnowledgeIpc(): void {
     getThreadDoc(entryId)
   )
 
+  // ── Export Markdown ───────────────────────────────────────────────────────
+
+  ipcMain.handle('knowledge:exportMarkdown', async (event, defaultName: string, content: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Exportar como Markdown',
+      defaultPath: defaultName,
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    })
+    if (result.canceled || !result.filePath) return false
+    fs.writeFileSync(result.filePath, content, 'utf-8')
+    return true
+  })
+
   ipcMain.handle('knowledge:thread:save', (_e, entryId: string, data: {
     synthesis: string
     key_data: string

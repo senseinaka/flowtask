@@ -2,6 +2,8 @@
 
 > **Para Claude:** Al finalizar una sesión con cambios arquitecturales o fixes significativos, proponer al usuario actualizar este archivo con lo que cambió. Este archivo es el único contexto que persiste entre sesiones.
 
+> **Para Claude — antes de programar tareas grandes:** Para tareas estructurales, de riesgo medio/alto, o que toquen múltiples módulos, consultar Graphify o leer `graphify-out/GRAPH_REPORT.md` antes de editar código. Esto aplica especialmente a: módulos nuevos, cambios en Supabase/sync, autenticación, rutas, arquitectura, integraciones, dashboards de Finanzas/Empresa, Calendario, CRM y refactors. Antes de empezar, explicar: (1) archivos involucrados, (2) dependencias, (3) riesgos, (4) patrones existentes a reutilizar, (5) plan de implementación.
+
 ## Qué es Summit
 
 Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego Nakamura**. Centraliza en una sola aplicación de escritorio todo lo necesario para gestionar la empresa y la productividad personal:
@@ -20,6 +22,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Backup:** backup automático de código (GitHub) y datos (Google Drive) en la nube.
 - **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
 - **Knowledge** *(en construcción — tablas y sync configurados, backend/UI pendientes)*: captura y organización de información (textos, archivos, imágenes) con resúmenes por IA y resúmenes globales por tema. Sincroniza vía PowerSync.
+- **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
 
 ### Visión a futuro
 
@@ -851,6 +854,96 @@ ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS current_stock DOUBLE PRECIS
 ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS safety_stock DOUBLE PRECISION;
 ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS purchase_frequency_days INTEGER;
 ```
+
+---
+
+---
+
+## Módulo Cortex — Graphify (grafo de código)
+
+### Qué es
+
+Cortex es el módulo de Summit que expone el grafo de dependencias del código fuente generado por **Graphify** (`graphifyy` v0.8.44). Permite:
+- Consultas en lenguaje natural sobre la arquitectura (`graphify query`)
+- Rutas entre componentes (`graphify path`)
+- Descripción de nodos (`graphify explain`)
+- Visualización interactiva animada del grafo completo
+
+### Stats del grafo (generado junio 2026)
+
+| Métrica | Valor |
+|---------|-------|
+| Nodos | 2 650 |
+| Aristas | 5 621 |
+| Comunidades | 114 |
+| Archivos analizados | 189 |
+
+### Archivos
+
+```
+C:\Projects\flowtask\graphify-out\
+  graph.json         ← datos del grafo (fuente de verdad)
+  graph.html         ← visualización D3 interactiva (animada, arrastrable)
+  GRAPH_REPORT.md    ← reporte de texto con resumen de comunidades
+  manifest.json      ← metadata del último extract
+```
+
+`graphify-out/` está en `.gitignore` — no se versiona (es un artefacto derivado del código).
+
+### Binario y entorno
+
+```
+Binario:  C:\Users\Diego\.local\bin\graphify.exe
+Venv:     C:\Users\Diego\pipx\venvs\graphifyy\
+Python:   C:\Users\Diego\pipx\venvs\graphifyy\Scripts\python.exe
+```
+
+El comando `graphify` está en el PATH del usuario. Requiere `ANTHROPIC_API_KEY` para el subcomando `extract` (procesa archivos no-código con LLM). Los subcomandos `query`, `path`, `explain`, `cluster-only` NO requieren API key.
+
+**Para regenerar el grafo desde cero:**
+```powershell
+cd C:\Projects\flowtask
+$env:ANTHROPIC_API_KEY = "sk-ant-..."  # requerido para extract
+& "C:\Users\Diego\.local\bin\graphify.exe" extract .
+```
+
+### Git hooks instalados
+
+Los hooks en `C:\Projects\flowtask\.git\hooks\` actualizan el grafo automáticamente:
+
+| Hook | Qué hace |
+|------|----------|
+| `post-commit` | Corre `graphify cluster-only --no-label` tras cada commit |
+| `post-checkout` | Ídem tras cada checkout de rama |
+
+Esto mantiene `graph.json` y `graph.html` sincronizados con el estado actual del código **sin requerir LLM** (cluster-only no usa API key).
+
+### IPC handlers (`src/main/ipc/cortex.ipc.ts`)
+
+| Canal | Acción |
+|-------|--------|
+| `cortex:openGraph` | Abre `graph.html` en el navegador del sistema (`shell.openPath`) |
+| `cortex:openGraphWindow` | Abre `graph.html` en una ventana Electron dedicada (1440×900, D3 interactivo) |
+| `cortex:getReport` | Lee y devuelve `GRAPH_REPORT.md` como string |
+| `cortex:query` | Corre `graphify query <pregunta>` y devuelve texto |
+| `cortex:path` | Corre `graphify path <from> <to>` y devuelve texto |
+| `cortex:explain` | Corre `graphify explain <nodo>` y devuelve texto |
+
+### Archivos del módulo
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/ipc/cortex.ipc.ts` | Handlers IPC — llama al binario graphify via `child_process.exec` |
+| `src/renderer/src/routes/cortex/CortexDashboard.tsx` | UI con hero animado (SVG SMIL), stats, botones prominentes, 4 tabs |
+| `src/preload/index.ts` | Namespace `window.api.cortex` con 6 métodos |
+
+### ¿Claude usa el grafo automáticamente antes de programar?
+
+**No automáticamente.** El grafo existe y se mantiene actualizado via git hooks, pero Claude Code no lo consulta por defecto antes de escribir código.
+
+**Para usarlo:** Diego puede pedir explícitamente "consultá el grafo antes de empezar" o ejecutar `graphify query` desde Cortex para obtener contexto previo a una sesión de programación.
+
+**Para automatizarlo (opcional):** se pueden crear hooks de Claude Code en `.claude/hooks/` que lean `graphify-out/GRAPH_REPORT.md` e inyecten contexto antes de ciertas herramientas. No está configurado aún.
 
 ---
 

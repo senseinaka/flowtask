@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
+  LayoutList, Columns3, Settings, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
-  ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet,
-  CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight, Brain, Network
+  ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
+  CalendarClock, LogOut, CalendarDays, FileText, Mail,
+  ArrowLeftRight, Brain, Network, Cloud
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useUIStore } from '../../store/ui.store'
@@ -14,90 +16,108 @@ import type { SyncStatus } from '@shared/types'
 import { cn } from '../ui/utils'
 import SyncStatusBadge from './SyncStatusBadge'
 
-// ── Sub-item lists ─────────────────────────────────────────────────────────────
+// ── Workspace definitions ─────────────────────────────────────────────────────
 
-const tasksSubItems = [
-  { to: '/tasks',  icon: LayoutList, label: 'Lista',   exact: true },
-  { to: '/kanban', icon: Columns3,   label: 'Kanban',  exact: true }
+type WorkspaceKey = 'trabajo' | 'empresa' | 'finanzas' | 'agenda' | 'sistema'
+
+const WORKSPACES: Array<{
+  key: WorkspaceKey
+  label: string
+  Icon: LucideIcon
+  color: string
+  activeBg: string
+  paths: string[]
+}> = [
+  {
+    key: 'trabajo',
+    label: 'Trabajo',
+    Icon: LayoutList,
+    color: '#818cf8',
+    activeBg: 'rgba(129,140,248,.18)',
+    paths: ['/tasks', '/kanban', '/team', '/contacts', '/messages'],
+  },
+  {
+    key: 'empresa',
+    label: 'Empresa',
+    Icon: Globe2,
+    color: '#fb923c',
+    activeBg: 'rgba(251,146,60,.15)',
+    paths: ['/comex', '/quotes', '/knowledge'],
+  },
+  {
+    key: 'finanzas',
+    label: 'Finanzas',
+    Icon: Wallet,
+    color: '#34d399',
+    activeBg: 'rgba(52,211,153,.12)',
+    paths: ['/finance', '/company-finance', '/contable', '/expiry'],
+  },
+  {
+    key: 'agenda',
+    label: 'Agenda',
+    Icon: CalendarDays,
+    color: '#60a5fa',
+    activeBg: 'rgba(96,165,250,.12)',
+    paths: ['/calendario', '/email'],
+  },
+  {
+    key: 'sistema',
+    label: 'Sistema',
+    Icon: Settings,
+    color: '#a78bfa',
+    activeBg: 'rgba(167,139,250,.12)',
+    paths: ['/cortex', '/settings'],
+  },
 ]
 
-const teamSubItems = [
-  { to: '/team',        icon: LayoutList, label: 'Lista',  exact: true },
-  { to: '/team/kanban', icon: Columns3,   label: 'Kanban', exact: true }
-]
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const contableSubItems = [
-  { to: '/contable/recon', icon: ArrowLeftRight, label: 'Conciliador', exact: false }
-]
-
-const comexSubItems = [
-  { to: '/comex',             icon: LayoutDashboard, label: 'Dashboard',           exact: true, subKey: 'dashboard' },
-  { to: '/comex/imports',     icon: Package,         label: 'Importaciones',       subKey: 'imports' },
-  { to: '/comex/suppliers',   icon: Building2,       label: 'Proveedores / Marcas', subKey: 'suppliers' },
-  { to: '/comex/plannings',   icon: CalendarClock,   label: 'Programación Pedidos', subKey: 'plannings' },
-  { to: '/comex/operators',   icon: Truck,           label: 'Operadores',          subKey: 'operators' },
-  { to: '/comex/gestores',    icon: ShieldCheck,     label: 'Gestores INAL',       subKey: 'gestores' },
-  { to: '/comex/despachantes',icon: Briefcase,       label: 'Despachantes',        subKey: 'despachantes' },
-  { to: '/comex/logistics',   icon: Ship,            label: 'Logística',           subKey: 'logistics' }
-]
-
-// ── Reusable collapsible section ──────────────────────────────────────────────
-
-function CollapsibleSection({
+function PanelLink({
+  to,
   icon: Icon,
   label,
-  isActive,
-  activeColor,
-  subItems,
-  open,
-  onToggle
+  end,
+  color,
+  onClick,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  to: string
+  icon: LucideIcon
   label: string
-  isActive: boolean
-  activeColor: { bg: string; text: string; border: string; subActive: string; iconColor: string }
-  subItems: Array<{ to: string; icon: React.ComponentType<{ size?: number; className?: string }>; label: string; exact?: boolean }>
-  open: boolean
-  onToggle: () => void
+  end?: boolean
+  color: string
+  onClick: () => void
 }) {
   return (
-    <div>
-      <button
-        onClick={onToggle}
-        className={cn(
-          'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-          isActive ? `${activeColor.bg} ${activeColor.text}` : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-        )}
-      >
-        <Icon size={16} className={isActive ? activeColor.iconColor : ''} />
-        <span className="flex-1 text-left">{label}</span>
-        <ChevronDown
-          size={14}
-          className={cn('transition-transform duration-200 text-slate-500', open && 'rotate-180')}
-        />
-      </button>
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onClick}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+          isActive
+            ? 'text-slate-100'
+            : 'text-slate-400 hover:bg-slate-700/60 hover:text-slate-200'
+        )
+      }
+      style={({ isActive }) =>
+        isActive ? { background: `${color}22`, color } : {}
+      }
+    >
+      <Icon size={13} />
+      <span className="truncate">{label}</span>
+    </NavLink>
+  )
+}
 
-      {open && (
-        <div className={cn('mt-1 ml-3 pl-3 border-l space-y-0.5', activeColor.border)}>
-          {subItems.map(({ to, icon: SubIcon, label: subLabel, exact }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={exact}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  isActive ? activeColor.subActive : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-                )
-              }
-            >
-              <SubIcon size={13} />
-              {subLabel}
-            </NavLink>
-          ))}
-        </div>
-      )}
-    </div>
+function GroupLabel({ label, color }: { label: string; color: string }) {
+  return (
+    <p
+      className="px-2.5 pt-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider"
+      style={{ color: `${color}80` }}
+    >
+      {label}
+    </p>
   )
 }
 
@@ -108,381 +128,276 @@ export default function Sidebar() {
   const { filters, setFilter } = useUIStore()
   const { canRead } = usePermissions()
   const location = useLocation()
+  const asideRef = useRef<HTMLElement>(null)
 
-  const isOnTasks    = location.pathname === '/tasks' || location.pathname === '/kanban'
-  const isOnTeam     = location.pathname.startsWith('/team')
-  const isOnComex    = location.pathname.startsWith('/comex')
-  const isOnContable = location.pathname.startsWith('/contable')
+  const [openPanel, setOpenPanel] = useState<WorkspaceKey | null>(null)
 
-  const visibleComexSubItems = comexSubItems.filter((item) => canRead('comex', item.subKey))
-
-  const [tasksOpen,    setTasksOpen]    = useState(isOnTasks)
-  const [teamOpen,     setTeamOpen]     = useState(isOnTeam)
-  const [comexOpen,    setComexOpen]    = useState(true)
-  const [contableOpen, setContableOpen] = useState(isOnContable)
+  const comexSubItems: {
+    to: string
+    Icon: LucideIcon
+    label: string
+    end?: boolean
+    subKey: string
+  }[] = [
+    { to: '/comex',               Icon: LayoutDashboard, label: 'Dashboard',             end: true, subKey: 'dashboard' },
+    { to: '/comex/imports',       Icon: Package,         label: 'Importaciones',                    subKey: 'imports' },
+    { to: '/comex/suppliers',     Icon: Building2,       label: 'Proveedores / Marcas',             subKey: 'suppliers' },
+    { to: '/comex/plannings',     Icon: CalendarClock,   label: 'Prog. Pedidos',                    subKey: 'plannings' },
+    { to: '/comex/operators',     Icon: Truck,           label: 'Operadores',                       subKey: 'operators' },
+    { to: '/comex/gestores',      Icon: ShieldCheck,     label: 'Gestores INAL',                    subKey: 'gestores' },
+    { to: '/comex/despachantes',  Icon: Briefcase,       label: 'Despachantes',                     subKey: 'despachantes' },
+    { to: '/comex/logistics',     Icon: Ship,            label: 'Logística',                        subKey: 'logistics' },
+  ].filter((it) => canRead('comex', it.subKey))
 
   const { data: syncStatus } = useQuery<SyncStatus>({
     queryKey: ['sync-status'],
     queryFn: () => window.api.sync.getStatus(),
-    refetchInterval: 60_000
+    refetchInterval: 60_000,
   })
 
-  const syncMutation = useMutation({
-    mutationFn: () => window.api.sync.trigger()
-  })
+  const syncMutation = useMutation({ mutationFn: () => window.api.sync.trigger() })
+
+  // Close on navigation
+  useEffect(() => {
+    setOpenPanel(null)
+  }, [location.pathname])
+
+  // Close on click outside the aside
+  useEffect(() => {
+    if (!openPanel) return
+    function onMouseDown(e: MouseEvent) {
+      if (asideRef.current && !asideRef.current.contains(e.target as Node)) {
+        setOpenPanel(null)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [openPanel])
+
+  const activeWorkspace =
+    WORKSPACES.find((w) =>
+      w.paths.some(
+        (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+      )
+    )?.key ?? null
+
+  function toggle(key: WorkspaceKey) {
+    setOpenPanel((prev) => (prev === key ? null : key))
+  }
+
+  function close() {
+    setOpenPanel(null)
+  }
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col">
+    <aside
+      ref={asideRef}
+      className="flex-shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col relative"
+      style={{ width: 52 }}
+    >
       {/* Logo */}
-      <div className="px-4 py-5 flex items-center gap-2 border-b border-slate-700">
-        <CheckSquare size={20} className="text-indigo-400" />
-        <span className="font-bold text-lg tracking-tight">Summit</span>
+      <div className="flex items-center justify-center py-[18px] border-b border-slate-700">
+        <CheckSquare size={18} className="text-indigo-400" />
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-
-        {/* ── Tareas personales ─────────────────────────────────────────── */}
-        {canRead('tasks') && (
-          <CollapsibleSection
-            icon={LayoutList}
-            label="Tareas personales"
-            isActive={isOnTasks}
-            open={tasksOpen}
-            onToggle={() => setTasksOpen((v) => !v)}
-            subItems={tasksSubItems}
-            activeColor={{
-              bg:        'bg-indigo-900/30',
-              text:      'text-indigo-300',
-              iconColor: 'text-indigo-400',
-              border:    'border-indigo-800',
-              subActive: 'bg-indigo-700/40 text-indigo-200'
-            }}
-          />
-        )}
-
-        {/* ── Contactos ─────────────────────────────────────────────────── */}
-        {canRead('contacts') && (
-          <NavLink
-            to="/contacts"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-              )
-            }
-          >
-            <UserCircle2 size={16} />
-            Contactos
-          </NavLink>
-        )}
-
-        {/* ── Tareas asignadas ──────────────────────────────────────────── */}
-        {canRead('team') && (
-          <CollapsibleSection
-            icon={Users}
-            label="Tareas asignadas"
-            isActive={isOnTeam}
-            open={teamOpen}
-            onToggle={() => setTeamOpen((v) => !v)}
-            subItems={teamSubItems}
-            activeColor={{
-              bg:        'bg-violet-900/30',
-              text:      'text-violet-300',
-              iconColor: 'text-violet-400',
-              border:    'border-violet-800',
-              subActive: 'bg-violet-700/40 text-violet-200'
-            }}
-          />
-        )}
-
-        {/* ── Mensajes ──────────────────────────────────────────────────── */}
-        {canRead('messages') && (
-          <NavLink
-            to="/messages"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-              )
-            }
-          >
-            <Send size={16} />
-            Mensajes
-          </NavLink>
-        )}
-
-        {/* ── Comex ─────────────────────────────────────────────────────── */}
-        {visibleComexSubItems.length > 0 && (
-          <div className="pt-1">
-            <CollapsibleSection
-              icon={Globe2}
-              label="Comex"
-              isActive={isOnComex}
-              open={comexOpen}
-              onToggle={() => setComexOpen((v) => !v)}
-              subItems={visibleComexSubItems}
-              activeColor={{
-                bg:        'bg-cyan-900/30',
-                text:      'text-cyan-300',
-                iconColor: 'text-cyan-400',
-                border:    'border-slate-700',
-                subActive: 'bg-cyan-700/40 text-cyan-200'
-              }}
-            />
-          </div>
-        )}
-
-        {/* ── Calendario ────────────────────────────────────────────────── */}
-        {canRead('calendar') && (
-          <div className="pt-1">
-            <NavLink
-              to="/calendario"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-indigo-900/30 text-indigo-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <CalendarDays size={16} />
-              Calendario
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Presupuestos ──────────────────────────────────────────────── */}
-        {canRead('quotes') && (
-          <div className="pt-1">
-            <NavLink
-              to="/quotes"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-violet-900/40 text-violet-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <FileText size={16} />
-              Presupuestos
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Knowledge ─────────────────────────────────────────────────── */}
-        {canRead('knowledge') && (
-          <div className="pt-1">
-            <NavLink
-              to="/knowledge"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-teal-900/40 text-teal-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Brain size={16} />
-              Knowledge
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Cortex ────────────────────────────────────────────────────── */}
-        {canRead('cortex') && (
-          <div className="pt-1">
-            <NavLink
-              to="/cortex"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-fuchsia-900/40 text-fuchsia-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Network size={16} />
-              Cortex
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Correo ────────────────────────────────────────────────────── */}
-        {canRead('email') && (
-          <div className="pt-1">
-            <NavLink
-              to="/email"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-sky-900/40 text-sky-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Mail size={16} />
-              Correo
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Vencimientos ──────────────────────────────────────────────── */}
-        {canRead('expiry') && (
-          <div className="pt-1">
-            <NavLink
-              to="/expiry"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-amber-900/40 text-amber-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Clock size={16} />
-              Vencimientos
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Finanzas Personales ───────────────────────────────────────── */}
-        {canRead('finance') && (
-          <div className="pt-1">
-            <NavLink
-              to="/finance"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Wallet size={16} />
-              Finanzas
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Finanzas Empresa ──────────────────────────────────────────── */}
-        {canRead('company_finance') && (
-          <div className="pt-1">
-            <NavLink
-              to="/company-finance"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-emerald-900/40 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Building2 size={16} />
-              Finanzas Empresa
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Contable ──────────────────────────────────────────────────── */}
-        {canRead('contable') && (
-          <div className="pt-1">
-            <CollapsibleSection
-              icon={BookOpen}
-              label="Contable"
-              isActive={isOnContable}
-              open={contableOpen}
-              onToggle={() => setContableOpen((v) => !v)}
-              subItems={contableSubItems}
-              activeColor={{
-                bg:        'bg-amber-900/30',
-                text:      'text-amber-300',
-                iconColor: 'text-amber-400',
-                border:    'border-amber-800',
-                subActive: 'bg-amber-700/40 text-amber-200'
-              }}
-            />
-          </div>
-        )}
-
-        {/* ── Configuración ─────────────────────────────────────────────── */}
-        {canRead('settings') && (
-          <div className="pt-1">
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
-                )
-              }
-            >
-              <Settings size={16} />
-              Configuración
-            </NavLink>
-          </div>
-        )}
-
-        {/* ── Proyectos ─────────────────────────────────────────────────── */}
-        {projects && projects.length > 0 && (
-          <div className="pt-4">
-            <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              Proyectos
-            </p>
+      {/* Workspace buttons */}
+      <nav className="flex-1 flex flex-col items-center gap-1 py-3" aria-label="Navegación principal">
+        {WORKSPACES.map(({ key, label, Icon, color, activeBg }) => {
+          const highlighted = activeWorkspace === key || openPanel === key
+          return (
             <button
-              onClick={() => setFilter('project_id', undefined)}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors',
-                !filters.project_id ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-              )}
+              key={key}
+              title={label}
+              aria-label={label}
+              onClick={() => toggle(key)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-100"
+              style={{
+                color: highlighted ? color : '#64748b',
+                background: highlighted ? activeBg : 'transparent',
+              }}
             >
-              Todos
+              <Icon size={16} />
             </button>
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setFilter('project_id', p.id)}
-                className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors',
-                  filters.project_id === p.id ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                )}
-              >
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                <span className="truncate">{p.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
+          )
+        })}
       </nav>
 
-      {/* Sync */}
-      <div className="p-3 border-t border-slate-700 space-y-2">
-        <SyncStatusBadge />
+      {/* Bottom: Drive sync + logout */}
+      <div className="flex flex-col items-center gap-1 py-3 border-t border-slate-700">
         <button
           onClick={() => syncMutation.mutate()}
           disabled={syncMutation.isPending || !syncStatus?.isAuthenticated}
+          title={syncStatus?.isAuthenticated ? 'Sincronizar Google Drive' : 'Drive no conectado'}
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
+            'relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-100',
             syncStatus?.isAuthenticated
-              ? 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+              ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
               : 'text-slate-600 cursor-not-allowed'
           )}
-          title={syncStatus?.isAuthenticated ? 'Sincronizar con Google Drive' : 'Conectar Google Drive en Configuración'}
         >
-          {syncMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          <span>{syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar'}</span>
-          {syncStatus?.isAuthenticated && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+          {syncMutation.isPending
+            ? <Loader2 size={15} className="animate-spin" />
+            : <Cloud size={15} />
+          }
+          {syncStatus?.isAuthenticated && (
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          )}
         </button>
-        {syncStatus?.lastSync && (
-          <p className="text-xs text-slate-600 mt-1 text-center">
-            {new Date(syncStatus.lastSync).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-          </p>
-        )}
+
         <button
           onClick={() => {
             if (confirm('¿Salir de Summit? Se va a cerrar la aplicación por completo.')) {
               window.api.app.quit()
             }
           }}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
+          title="Salir"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-900/30 transition-all duration-100"
         >
-          <LogOut size={14} />
-          <span>Salir</span>
+          <LogOut size={15} />
         </button>
       </div>
+
+      {/* Floating panel */}
+      {openPanel && (
+        <div
+          className="absolute top-0 left-full h-full z-50 bg-slate-800 border-r border-slate-600 overflow-y-auto"
+          style={{ width: 148, boxShadow: '4px 0 20px rgba(0,0,0,.45)' }}
+        >
+
+          {openPanel === 'trabajo' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Trabajo" color="#818cf8" />
+              {canRead('tasks') && (
+                <>
+                  <PanelLink to="/tasks"   icon={LayoutList} label="Lista — Tareas"  end   color="#818cf8" onClick={close} />
+                  <PanelLink to="/kanban"  icon={Columns3}   label="Kanban — Tareas" end   color="#818cf8" onClick={close} />
+                </>
+              )}
+              {canRead('team') && (
+                <>
+                  <GroupLabel label="Equipo" color="#818cf8" />
+                  <PanelLink to="/team"        icon={Users}    label="Lista — Equipo"  end   color="#818cf8" onClick={close} />
+                  <PanelLink to="/team/kanban" icon={Columns3} label="Kanban — Equipo"       color="#818cf8" onClick={close} />
+                </>
+              )}
+              {canRead('contacts') && (
+                <PanelLink to="/contacts" icon={UserCircle2} label="Contactos" color="#818cf8" onClick={close} />
+              )}
+              {canRead('messages') && (
+                <PanelLink to="/messages" icon={Send} label="Mensajes" color="#818cf8" onClick={close} />
+              )}
+
+              {projects && projects.length > 0 && (
+                <>
+                  <div className="border-t border-slate-700 my-2" />
+                  <GroupLabel label="Proyectos" color="#818cf8" />
+                  <button
+                    onClick={() => { setFilter('project_id', undefined); close() }}
+                    className={cn(
+                      'w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      !filters.project_id
+                        ? 'text-slate-100'
+                        : 'text-slate-400 hover:bg-slate-700/60 hover:text-slate-200'
+                    )}
+                  >
+                    Todos
+                  </button>
+                  {projects.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setFilter('project_id', p.id); close() }}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                        filters.project_id === p.id
+                          ? 'text-slate-100'
+                          : 'text-slate-400 hover:bg-slate-700/60 hover:text-slate-200'
+                      )}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                      <span className="truncate">{p.name}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {openPanel === 'empresa' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Empresa" color="#fb923c" />
+              {canRead('knowledge') && (
+                <PanelLink to="/knowledge" icon={Brain} label="Knowledge" color="#fb923c" onClick={close} />
+              )}
+              {canRead('quotes') && (
+                <PanelLink to="/quotes" icon={FileText} label="Presupuestos" color="#fb923c" onClick={close} />
+              )}
+              {comexSubItems.length > 0 && (
+                <>
+                  <GroupLabel label="Comex" color="#fb923c" />
+                  {comexSubItems.map((it) => (
+                    <PanelLink
+                      key={it.to}
+                      to={it.to}
+                      icon={it.Icon}
+                      label={it.label}
+                      end={it.end}
+                      color="#fb923c"
+                      onClick={close}
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {openPanel === 'finanzas' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Finanzas" color="#34d399" />
+              {canRead('finance') && (
+                <PanelLink to="/finance"         icon={Wallet}          label="Fin. Personal" color="#34d399" onClick={close} />
+              )}
+              {canRead('company_finance') && (
+                <PanelLink to="/company-finance" icon={Building2}       label="Fin. Empresa"  color="#34d399" onClick={close} />
+              )}
+              {canRead('expiry') && (
+                <PanelLink to="/expiry"          icon={Clock}           label="Vencimientos"  color="#34d399" onClick={close} />
+              )}
+              {canRead('contable') && (
+                <PanelLink to="/contable/recon"  icon={ArrowLeftRight}  label="Conciliador"   color="#34d399" onClick={close} />
+              )}
+            </div>
+          )}
+
+          {openPanel === 'agenda' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Agenda" color="#60a5fa" />
+              {canRead('calendar') && (
+                <PanelLink to="/calendario" icon={CalendarDays} label="Calendario" color="#60a5fa" onClick={close} />
+              )}
+              {canRead('email') && (
+                <PanelLink to="/email" icon={Mail} label="Correo" color="#60a5fa" onClick={close} />
+              )}
+            </div>
+          )}
+
+          {openPanel === 'sistema' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Sistema" color="#a78bfa" />
+              {canRead('cortex') && (
+                <PanelLink to="/cortex"    icon={Network}  label="Cortex"         color="#a78bfa" onClick={close} />
+              )}
+              {canRead('settings') && (
+                <PanelLink to="/settings"  icon={Settings} label="Configuración"  color="#a78bfa" onClick={close} />
+              )}
+              <div className="border-t border-slate-700 mt-3 mb-2" />
+              <div className="px-1">
+                <SyncStatusBadge />
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
     </aside>
   )
 }

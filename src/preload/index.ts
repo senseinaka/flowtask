@@ -1056,7 +1056,9 @@ const api = {
       get:  (entryId: string): Promise<KnowledgeThreadDoc | null>                                                => ipcRenderer.invoke('knowledge:thread:get', entryId),
       save: (entryId: string, data: { synthesis: string; key_data: string; next_steps: string; checks: string; entry_count: number }): Promise<KnowledgeThreadDoc> =>
         ipcRenderer.invoke('knowledge:thread:save', entryId, data),
-    }
+    },
+    exportMarkdown: (defaultName: string, content: string): Promise<boolean> =>
+      ipcRenderer.invoke('knowledge:exportMarkdown', defaultName, content),
   },
 
   cortex: {

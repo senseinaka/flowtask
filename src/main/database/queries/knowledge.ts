@@ -196,10 +196,12 @@ export async function searchKnowledge(query: string): Promise<KnowledgeEntry[]> 
   const q = `%${query}%`
   return getPowerSyncDb().getAll<KnowledgeEntry>(`
     SELECT * FROM knowledge_entries
-    WHERE workspace_id = ? AND (title LIKE ? OR body LIKE ? OR topic LIKE ? OR ai_summary LIKE ?)
+    WHERE workspace_id = ?
+      AND (parent_id IS NULL OR parent_id = '')
+      AND (title LIKE ? OR body LIKE ? OR topic LIKE ? OR ai_summary LIKE ? OR tags LIKE ? OR source LIKE ?)
     ORDER BY COALESCE(entry_date, created_at) DESC
-    LIMIT 20
-  `, [WORKSPACE_ID, q, q, q, q])
+    LIMIT 50
+  `, [WORKSPACE_ID, q, q, q, q, q, q])
 }
 
 // ── Global Summaries ──────────────────────────────────────────────────────────
