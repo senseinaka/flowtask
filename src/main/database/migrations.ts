@@ -2779,6 +2779,24 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       try { db.exec(`ALTER TABLE knowledge_entries ADD COLUMN parent_id TEXT`) } catch {}
       db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_parent ON knowledge_entries(parent_id)`)
     }
+  },
+  {
+    version: 84,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS knowledge_entry_files (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        file_name TEXT NOT NULL DEFAULT '',
+        file_size INTEGER NOT NULL DEFAULT 0,
+        file_mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+        local_path TEXT NOT NULL DEFAULT '',
+        drive_file_id TEXT,
+        drive_folder_id TEXT,
+        drive_status TEXT NOT NULL DEFAULT 'none',
+        created_at INTEGER NOT NULL
+      )`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_kef_entry ON knowledge_entry_files(entry_id)`)
+    }
   }
 ]
 

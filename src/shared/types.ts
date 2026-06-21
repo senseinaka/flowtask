@@ -2771,6 +2771,19 @@ export interface KnowledgeSource {
   sort_order: number
 }
 
+export interface KnowledgeEntryFile {
+  id: string
+  entry_id: string
+  file_name: string
+  file_size: number
+  file_mime_type: string
+  local_path: string
+  drive_file_id: string | null
+  drive_folder_id: string | null
+  drive_status: KnowledgeDriveStatus
+  created_at: number
+}
+
 export interface KnowledgeGlobalSummary {
   id: string
   workspace_id: string

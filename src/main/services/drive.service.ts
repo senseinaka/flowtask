@@ -293,6 +293,27 @@ class DriveService {
     return folderId
   }
 
+  /**
+   * Returns the innermost Drive folder for an entry:
+   * Summit Knowledge / "Junio 2026" / "Entry Title"
+   */
+  async getOrCreateKnowledgeEntryFolder(entryDate: number, entryTitle: string): Promise<string> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+    const rootId = await this.getOrCreateKnowledgeFolder()
+
+    const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    const d = new Date(entryDate)
+    const monthYear = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    const monthId = await this.getOrCreateFolder(drive, monthYear, rootId)
+
+    const safeName = (entryTitle || 'Sin título').slice(0, 80).replace(/[/\\:*?"<>|]/g, '-').trim() || 'Entrada'
+    return this.getOrCreateFolder(drive, safeName, monthId)
+  }
+
   // ── Backup completo de la base de datos ──────────────────────────────────
 
   getLastBackupStatus(): BackupStatus | null {

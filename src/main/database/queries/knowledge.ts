@@ -244,3 +244,59 @@ export async function createKnowledgeGlobalSummary(
 export async function deleteKnowledgeGlobalSummary(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM knowledge_global_summaries WHERE id = ?', [id])
 }
+
+// ── Entry Files (flowtask.db — local) ─────────────────────────────────────────
+
+import type { KnowledgeEntryFile } from '@shared/types'
+
+export function listKnowledgeEntryFiles(entryId: string): KnowledgeEntryFile[] {
+  return getDb()
+    .prepare('SELECT * FROM knowledge_entry_files WHERE entry_id = ? ORDER BY created_at ASC')
+    .all(entryId) as KnowledgeEntryFile[]
+}
+
+export function createKnowledgeEntryFile(data: {
+  entry_id: string
+  file_name: string
+  file_size: number
+  file_mime_type: string
+  local_path: string
+  drive_file_id?: string | null
+  drive_folder_id?: string | null
+  drive_status?: string
+}): KnowledgeEntryFile {
+  const db  = getDb()
+  const id  = randomUUID()
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO knowledge_entry_files
+      (id, entry_id, file_name, file_size, file_mime_type, local_path, drive_file_id, drive_folder_id, drive_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, data.entry_id, data.file_name, data.file_size, data.file_mime_type,
+    data.local_path, data.drive_file_id ?? null, data.drive_folder_id ?? null,
+    data.drive_status ?? 'none', now
+  )
+  return db.prepare('SELECT * FROM knowledge_entry_files WHERE id = ?').get(id) as KnowledgeEntryFile
+}
+
+export function updateKnowledgeEntryFile(id: string, data: {
+  drive_file_id?: string
+  drive_folder_id?: string
+  drive_status?: string
+}): KnowledgeEntryFile {
+  const sets: string[] = []
+  const vals: unknown[] = []
+  if (data.drive_file_id   !== undefined) { sets.push('drive_file_id = ?');   vals.push(data.drive_file_id) }
+  if (data.drive_folder_id !== undefined) { sets.push('drive_folder_id = ?'); vals.push(data.drive_folder_id) }
+  if (data.drive_status    !== undefined) { sets.push('drive_status = ?');    vals.push(data.drive_status) }
+  if (sets.length > 0) {
+    vals.push(id)
+    getDb().prepare(`UPDATE knowledge_entry_files SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+  }
+  return getDb().prepare('SELECT * FROM knowledge_entry_files WHERE id = ?').get(id) as KnowledgeEntryFile
+}
+
+export function deleteKnowledgeEntryFile(id: string): void {
+  getDb().prepare('DELETE FROM knowledge_entry_files WHERE id = ?').run(id)
+}

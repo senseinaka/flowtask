@@ -18,7 +18,11 @@ import {
   listKnowledgeSources,
   createKnowledgeSource,
   updateKnowledgeSource,
-  deleteKnowledgeSource
+  deleteKnowledgeSource,
+  listKnowledgeEntryFiles,
+  createKnowledgeEntryFile,
+  updateKnowledgeEntryFile,
+  deleteKnowledgeEntryFile
 } from '../database/queries/knowledge'
 import type { CreateKnowledgeEntryFields, UpdateKnowledgeEntryFields } from '../database/queries/knowledge'
 import {
@@ -207,5 +211,63 @@ export function registerKnowledgeIpc(): void {
 
   ipcMain.handle('knowledge:summaries:delete', async (_e, id: string) =>
     deleteKnowledgeGlobalSummary(id)
+  )
+
+  // ── Entry Files ───────────────────────────────────────────────────────────
+
+  ipcMain.handle('knowledge:files:list', (_e, entryId: string) =>
+    listKnowledgeEntryFiles(entryId)
+  )
+
+  ipcMain.handle('knowledge:files:selectFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar archivo adjunto',
+      properties: ['openFile']
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('knowledge:files:upload', async (
+    _e,
+    entryId: string,
+    filePath: string,
+    rootEntryId?: string   // parent entry id (for sub-entries) — used for Drive folder path
+  ) => {
+    const fileName = path.basename(filePath)
+    const ext      = path.extname(fileName).replace('.', '')
+    const mimeType = mimeFromExt(ext)
+    const fileSize = fs.statSync(filePath).size
+
+    const localName = `kn_${randomUUID()}.${ext || 'bin'}`
+    const localPath = path.join(getKnowledgeFilesDir(), localName)
+    fs.copyFileSync(filePath, localPath)
+
+    const fileRecord = createKnowledgeEntryFile({
+      entry_id: entryId, file_name: fileName,
+      file_size: fileSize, file_mime_type: mimeType,
+      local_path: localPath, drive_status: 'none'
+    })
+
+    if (!driveService.isAuthenticated()) return fileRecord
+
+    try {
+      const rootId = rootEntryId ?? entryId
+      const rootEntry = await getKnowledgeEntry(rootId)
+      const folderDate  = rootEntry?.entry_date ?? rootEntry?.created_at ?? Date.now()
+      const folderTitle = rootEntry?.title || 'Sin título'
+      const folderId = await driveService.getOrCreateKnowledgeEntryFolder(folderDate, folderTitle)
+      const driveFileId = await driveService.uploadFileToFolder(localPath, folderId, fileName, mimeType)
+      return updateKnowledgeEntryFile(fileRecord.id, {
+        drive_file_id: driveFileId, drive_folder_id: folderId, drive_status: 'synced'
+      })
+    } catch {
+      return updateKnowledgeEntryFile(fileRecord.id, { drive_status: 'error' })
+    }
+  })
+
+  ipcMain.handle('knowledge:files:delete', (_e, id: string) =>
+    deleteKnowledgeEntryFile(id)
   )
 }

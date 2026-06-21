@@ -3,7 +3,8 @@ import type {
   KnowledgeEntry,
   KnowledgeGlobalSummary,
   KnowledgeListFilters,
-  KnowledgeSource
+  KnowledgeSource,
+  KnowledgeEntryFile
 } from '@shared/types'
 
 // ── Sources ───────────────────────────────────────────────────────────────────
@@ -73,6 +74,22 @@ export function useKnowledgeTopics() {
   })
 }
 
+export function useKnowledgeSubEntries(parentId: string | null) {
+  return useQuery({
+    queryKey: ['knowledge-children', parentId],
+    queryFn: (): Promise<KnowledgeEntry[]> => window.api.knowledge.entries.listChildren(parentId!),
+    enabled: !!parentId,
+    staleTime: 30_000
+  })
+}
+
+export function useGenerateEntryDocument() {
+  return useMutation({
+    mutationFn: (entryId: string): Promise<{ synthesis: string; keyData: string[]; nextSteps: string[] }> =>
+      window.api.knowledge.entries.generateDocument(entryId)
+  })
+}
+
 export function useCreateKnowledgeEntry() {
   const qc = useQueryClient()
   return useMutation({
@@ -80,12 +97,15 @@ export function useCreateKnowledgeEntry() {
       data,
       userId
     }: {
-      data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number }
+      data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number; parent_id?: string | null }
       userId: string
     }): Promise<KnowledgeEntry> => window.api.knowledge.entries.create(data, userId),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['knowledge'] })
       qc.invalidateQueries({ queryKey: ['knowledge-topics'] })
+      if (vars.data.parent_id) {
+        qc.invalidateQueries({ queryKey: ['knowledge-children', vars.data.parent_id] })
+      }
     }
   })
 }
@@ -212,6 +232,45 @@ export function useDeleteKnowledgeGlobalSummary() {
     mutationFn: (id: string): Promise<void> => window.api.knowledge.summaries.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['knowledge-summaries'] })
+    }
+  })
+}
+
+// ── Entry Files ───────────────────────────────────────────────────────────────
+
+export function useKnowledgeEntryFiles(entryId: string | null) {
+  return useQuery({
+    queryKey: ['knowledge-files', entryId],
+    queryFn: (): Promise<KnowledgeEntryFile[]> => window.api.knowledge.files.list(entryId!),
+    enabled: !!entryId,
+    staleTime: 30_000
+  })
+}
+
+export function useUploadEntryFile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      entryId, filePath, rootEntryId
+    }: {
+      entryId: string
+      filePath: string
+      rootEntryId?: string
+    }): Promise<KnowledgeEntryFile> =>
+      window.api.knowledge.files.upload(entryId, filePath, rootEntryId),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-files', vars.entryId] })
+    }
+  })
+}
+
+export function useDeleteEntryFile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, entryId: _entryId }: { id: string; entryId: string }): Promise<void> =>
+      window.api.knowledge.files.delete(id),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-files', vars.entryId] })
     }
   })
 }

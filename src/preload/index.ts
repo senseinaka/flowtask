@@ -50,7 +50,7 @@ import type {
   CreateEmailAccountInput, SendEmailInput, EmailListFilters,
   ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
   CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado,
-  KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource
+  KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1042,6 +1042,12 @@ const api = {
       list:     (): Promise<KnowledgeGlobalSummary[]>                                        => ipcRenderer.invoke('knowledge:summaries:list'),
       generate: (topic: string | null, userId: string): Promise<KnowledgeGlobalSummary>     => ipcRenderer.invoke('knowledge:summaries:generate', topic, userId),
       delete:   (id: string): Promise<void>                                                  => ipcRenderer.invoke('knowledge:summaries:delete', id)
+    },
+    files: {
+      list:       (entryId: string): Promise<KnowledgeEntryFile[]>                                               => ipcRenderer.invoke('knowledge:files:list', entryId),
+      selectFile: (): Promise<string | null>                                                                     => ipcRenderer.invoke('knowledge:files:selectFile'),
+      upload:     (entryId: string, filePath: string, rootEntryId?: string): Promise<KnowledgeEntryFile>        => ipcRenderer.invoke('knowledge:files:upload', entryId, filePath, rootEntryId),
+      delete:     (id: string): Promise<void>                                                                    => ipcRenderer.invoke('knowledge:files:delete', id)
     }
   },
 

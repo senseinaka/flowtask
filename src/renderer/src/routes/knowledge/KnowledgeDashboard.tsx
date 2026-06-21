@@ -2,8 +2,9 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   Brain, Plus, Search, X, Loader2, Sparkles, Trash2, Settings,
   Bold, Italic, Underline, List, Link2, Download, FileText,
-  Image, Clock, Pencil, ChevronDown, Tag,
-  Mail, Users, Globe, MessageCircle, Video, File, StickyNote
+  Image, Clock, Pencil, ChevronDown, Tag, GitBranch, CheckSquare, Square,
+  Mail, Users, Globe, MessageCircle, Video, File, StickyNote,
+  Paperclip, CloudUpload, CheckCircle2, AlertCircle
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import dayjs from 'dayjs'
@@ -13,9 +14,11 @@ import {
   useKnowledgeEntries, useKnowledgeTopics,
   useCreateKnowledgeEntry, useUpdateKnowledgeEntry, useDeleteKnowledgeEntry,
   useSummarizeKnowledgeEntry,
-  useAnalyzeTopic, useTopicLatestSummary
+  useKnowledgeSubEntries, useGenerateEntryDocument,
+  useAnalyzeTopic, useTopicLatestSummary,
+  useKnowledgeEntryFiles, useUploadEntryFile, useDeleteEntryFile
 } from '../../hooks/useKnowledge'
-import type { KnowledgeEntry, KnowledgeSource } from '@shared/types'
+import type { KnowledgeEntry, KnowledgeSource, KnowledgeEntryFile } from '@shared/types'
 
 // ── Icon registry ─────────────────────────────────────────────────────────────
 
@@ -27,6 +30,137 @@ const AVAILABLE_ICONS = Object.keys(ICON_MAP)
 function SourceIcon({ name, size = 14 }: { name: string; size?: number }) {
   const Ic = ICON_MAP[name] ?? Tag
   return <Ic size={size} />
+}
+
+// ── File helpers ──────────────────────────────────────────────────────────────
+
+function fmtFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function FileIcon({ mime, size = 12 }: { mime: string; size?: number }) {
+  if (mime.startsWith('image/')) return <Image size={size} />
+  if (mime.includes('pdf') || mime.includes('word') || mime.includes('text'))
+    return <FileText size={size} />
+  return <File size={size} />
+}
+
+function DriveStatusIcon({ status }: { status: string }) {
+  if (status === 'synced')    return <CheckCircle2 size={10} className="text-green-500" />
+  if (status === 'uploading') return <CloudUpload size={10} className="text-amber-400 animate-pulse" />
+  if (status === 'error')     return <AlertCircle size={10} className="text-red-500" />
+  return null
+}
+
+// ── AttachmentStrip — shared by main entries and sub-entries ──────────────────
+
+function AttachmentStrip({
+  entryId,
+  rootEntryId,
+  compact = false
+}: {
+  entryId: string
+  rootEntryId?: string    // for sub-entries: use parent's folder
+  compact?: boolean       // true = inline in thread row
+}) {
+  const { data: files = [], isLoading } = useKnowledgeEntryFiles(entryId)
+  const upload = useUploadEntryFile()
+  const remove = useDeleteEntryFile()
+
+  async function handleAttach() {
+    const filePath = await window.api.knowledge.files.selectFile()
+    if (!filePath) return
+    upload.mutate({ entryId, filePath, rootEntryId })
+  }
+
+  async function handleDelete(f: KnowledgeEntryFile, e: React.MouseEvent) {
+    e.stopPropagation()
+    remove.mutate({ id: f.id, entryId })
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1 flex-wrap mt-1" onClick={e => e.stopPropagation()}>
+        {files.map(f => (
+          <span key={f.id}
+            className="flex items-center gap-1 text-[10px] bg-slate-700/60 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 group">
+            <FileIcon mime={f.file_mime_type} size={10}/>
+            <span className="truncate max-w-[100px]">{f.file_name}</span>
+            <DriveStatusIcon status={f.drive_status}/>
+            <button
+              onClick={e => handleDelete(f, e)}
+              className="text-slate-600 hover:text-red-400 ml-0.5 hidden group-hover:inline">
+              <X size={9}/>
+            </button>
+          </span>
+        ))}
+        <button
+          onClick={e => { e.stopPropagation(); handleAttach() }}
+          disabled={upload.isPending}
+          className="flex items-center gap-0.5 text-[10px] text-slate-600 hover:text-teal-400 transition-colors px-1 py-0.5 rounded hover:bg-slate-800">
+          {upload.isPending ? <Loader2 size={10} className="animate-spin"/> : <Paperclip size={10}/>}
+          {files.length === 0 && !upload.isPending && <span>Adjuntar</span>}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 pt-2.5 border-t border-slate-800/60">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] uppercase tracking-widest text-slate-700 flex items-center gap-1">
+          <Paperclip size={9}/>Adjuntos{files.length > 0 && ` (${files.length})`}
+        </span>
+        <button
+          onClick={handleAttach}
+          disabled={upload.isPending}
+          className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-teal-400 transition-colors px-1.5 py-0.5 rounded hover:bg-slate-800">
+          {upload.isPending ? <Loader2 size={10} className="animate-spin"/> : <Plus size={10}/>}
+          {upload.isPending ? 'Subiendo...' : 'Adjuntar archivo'}
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="text-[10px] text-slate-700">Cargando...</div>
+      ) : files.length === 0 ? (
+        <button
+          onClick={handleAttach}
+          disabled={upload.isPending}
+          className="w-full flex flex-col items-center gap-1 py-3 border border-dashed border-slate-800 rounded-lg text-slate-700 hover:border-slate-600 hover:text-slate-500 transition-colors">
+          <Paperclip size={14}/>
+          <span className="text-[10px]">Arrastrá o hacé clic para adjuntar</span>
+        </button>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {files.map(f => (
+            <div key={f.id}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/50 border border-slate-800 group hover:border-slate-700 transition-colors">
+              <FileIcon mime={f.file_mime_type} size={13}/>
+              <span className="flex-1 text-[11px] text-slate-300 truncate">{f.file_name}</span>
+              <span className="text-[10px] text-slate-600 shrink-0">{fmtFileSize(f.file_size)}</span>
+              <DriveStatusIcon status={f.drive_status}/>
+              {f.drive_status === 'synced' && (
+                <span className="text-[9px] text-green-600 shrink-0">Drive</span>
+              )}
+              <button
+                onClick={e => handleDelete(f, e)}
+                className="text-slate-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                <X size={11}/>
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={handleAttach}
+            disabled={upload.isPending}
+            className="flex items-center gap-1.5 text-[10px] text-slate-600 hover:text-slate-400 mt-0.5 transition-colors px-1">
+            {upload.isPending ? <Loader2 size={10} className="animate-spin"/> : <Plus size={10}/>}
+            Adjuntar otro archivo
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -173,13 +307,14 @@ function RichTextEditor({ initialHtml, onChange }: { initialHtml: string; onChan
 // ── EntryEditorModal ──────────────────────────────────────────────────────────
 
 function EntryEditorModal({
-  entry, defaultTopic, userId, sources, existingTopics, onClose
+  entry, defaultTopic, userId, sources, existingTopics, parentId, onClose
 }: {
   entry: KnowledgeEntry | null
   defaultTopic: string
   userId: string
   sources: KnowledgeSource[]
   existingTopics: string[]
+  parentId?: string | null
   onClose: () => void
 }) {
   const [savedId, setSavedId]     = useState<string | null>(entry?.id ?? null)
@@ -212,7 +347,7 @@ function EntryEditorModal({
       setSaveStatus('saving')
       try {
         if (!sid) {
-          const e = await create.mutateAsync({ data: { title: t, content_type: 'text', body, topic: tp, tags, source: src, entry_date: ms ?? undefined }, userId: uid })
+          const e = await create.mutateAsync({ data: { title: t, content_type: 'text', body, topic: tp, tags, source: src, entry_date: ms ?? undefined, parent_id: parentId ?? null }, userId: uid })
           setSavedId(e.id)
           r.current.savedId = e.id
         } else {
@@ -249,10 +384,15 @@ function EntryEditorModal({
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
       {/* header */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-800 shrink-0">
+        {parentId && (
+          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 border border-violet-700/40 shrink-0">
+            <GitBranch size={10}/>Hilo
+          </span>
+        )}
         <input
           value={title}
           onChange={e => { setTitle(e.target.value); schedule() }}
-          placeholder="Título de la entrada..."
+          placeholder={parentId ? 'Título de esta entrada del hilo...' : 'Título de la entrada...'}
           className="flex-1 bg-transparent text-lg font-semibold text-slate-100 placeholder-slate-600 focus:outline-none"
         />
         <span className="text-[11px] w-20 text-right shrink-0 text-slate-600">
@@ -448,24 +588,274 @@ function AIAnalysisPanel({ topic, userId, onClose }: { topic: string; userId: st
   )
 }
 
+// ── Entry Document Modal ──────────────────────────────────────────────────────
+
+function EntryDocumentModal({
+  entry,
+  subEntries,
+  onClose
+}: {
+  entry: KnowledgeEntry
+  subEntries: KnowledgeEntry[]
+  onClose: () => void
+}) {
+  const generateDoc = useGenerateEntryDocument()
+  const [doc, setDoc] = useState<{ synthesis: string; keyData: string[]; nextSteps: string[] } | null>(null)
+  const [checks, setChecks] = useState<boolean[]>([])
+
+  useEffect(() => {
+    generateDoc.mutate(entry.id, {
+      onSuccess: (d) => {
+        setDoc(d)
+        setChecks(d.nextSteps.map(() => false))
+      }
+    })
+  }, [entry.id]) // run once on mount
+
+  const timeline = useMemo(() => {
+    return [entry, ...subEntries].sort(
+      (a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at)
+    )
+  }, [entry, subEntries])
+
+  const toggleCheck = (i: number) => setChecks(prev => prev.map((v, j) => j === i ? !v : v))
+
+  const DOT_COLORS = [
+    'bg-blue-200 border-blue-400',
+    'bg-green-200 border-green-400',
+    'bg-yellow-200 border-yellow-400',
+    'bg-purple-200 border-purple-400',
+    'bg-rose-200 border-rose-400',
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/60 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl my-4">
+
+        {/* doc header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
+          <div className="flex items-center gap-2">
+            <FileText size={14} className="text-violet-600"/>
+            <span className="text-sm font-medium text-slate-800">Documento resumen</span>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-violet-100 text-violet-700">IA · Sonnet 4.6</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {doc && (
+              <button
+                onClick={() => { setDoc(null); generateDoc.mutate(entry.id, { onSuccess: (d) => { setDoc(d); setChecks(d.nextSteps.map(() => false)) } }) }}
+                className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-lg transition-colors">
+                Regenerar
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 hover:border-slate-300 text-slate-400 hover:text-slate-600 transition-colors">
+              <X size={13}/>
+            </button>
+          </div>
+        </div>
+
+        <div className="px-8 py-7">
+
+          {/* title */}
+          <h1 className="text-xl font-medium text-slate-800 mb-1">{entry.title || '(sin título)'}</h1>
+          <div className="flex items-center gap-2 text-xs text-slate-400 mb-7 flex-wrap">
+            <span>{dayjs(entry.entry_date ?? entry.created_at).format('DD/MM/YYYY')} – {dayjs((subEntries[subEntries.length - 1]?.entry_date ?? subEntries[subEntries.length - 1]?.created_at) ?? (entry.entry_date ?? entry.created_at)).format('DD/MM/YYYY')}</span>
+            <span>·</span>
+            <span><GitBranch size={11} className="inline -mt-0.5 mr-0.5"/>{timeline.length} entrada{timeline.length !== 1 ? 's' : ''} en el hilo</span>
+          </div>
+
+          {generateDoc.isPending || !doc ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <Loader2 size={28} className="animate-spin text-violet-400 mb-3"/>
+              <p className="text-sm">Generando documento...</p>
+            </div>
+          ) : (
+            <>
+              {/* Síntesis */}
+              <div className="mb-7">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="w-0.5 h-4 bg-violet-500 rounded-full"/>
+                  <span className="text-[10px] font-semibold text-violet-600 uppercase tracking-wider">Síntesis</span>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{doc.synthesis}</p>
+              </div>
+
+              {/* Línea de tiempo */}
+              <div className="mb-7">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-0.5 h-4 bg-violet-500 rounded-full"/>
+                  <span className="text-[10px] font-semibold text-violet-600 uppercase tracking-wider">Línea de tiempo</span>
+                </div>
+                <div>
+                  {timeline.map((e, i) => (
+                    <div key={e.id} className="flex gap-3 items-start">
+                      <div className="text-[10px] font-medium text-slate-400 min-w-[42px] text-right pt-0.5">
+                        {dayjs(e.entry_date ?? e.created_at).format('DD MMM')}
+                      </div>
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className={`w-2 h-2 rounded-full border-[1.5px] mt-1 ${DOT_COLORS[i % DOT_COLORS.length]}`}/>
+                        {i < timeline.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1 mb-1 min-h-[20px]"/>}
+                      </div>
+                      <div className="flex-1 pb-3">
+                        <p className="text-xs text-slate-700 leading-relaxed">
+                          {e.source && <span className="font-medium text-slate-500">[{e.source}] </span>}
+                          {e.title || '(sin título)'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Datos clave */}
+              {doc.keyData.length > 0 && (
+                <div className="mb-7">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-0.5 h-4 bg-violet-500 rounded-full"/>
+                    <span className="text-[10px] font-semibold text-violet-600 uppercase tracking-wider">Datos clave</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {doc.keyData.map((item, i) => {
+                      const [label, ...rest] = item.split(':')
+                      const value = rest.join(':').trim()
+                      return (
+                        <div key={i} className="bg-slate-50 rounded-lg px-3 py-2.5">
+                          <div className="text-[10px] text-slate-400 mb-0.5">{label}</div>
+                          <div className="text-sm font-medium text-slate-700">{value || item}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Próximos pasos */}
+              {doc.nextSteps.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-0.5 h-4 bg-violet-500 rounded-full"/>
+                    <span className="text-[10px] font-semibold text-violet-600 uppercase tracking-wider">Próximos pasos</span>
+                  </div>
+                  <div className="space-y-2">
+                    {doc.nextSteps.map((step, i) => (
+                      <button
+                        key={i}
+                        onClick={() => toggleCheck(i)}
+                        className="flex items-start gap-2.5 w-full text-left group"
+                      >
+                        {checks[i]
+                          ? <CheckSquare size={14} className="mt-0.5 shrink-0 text-violet-500"/>
+                          : <Square size={14} className="mt-0.5 shrink-0 text-slate-300 group-hover:text-slate-400"/>
+                        }
+                        <span className={`text-xs leading-relaxed ${checks[i] ? 'line-through text-slate-400' : 'text-slate-600'}`}>
+                          {step}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Thread Sub-Entry Row — separate component so hooks work inside map ────────
+
+function ThreadSubEntry({
+  sub, dotClass, isLast, isExpanded, rootEntryId, onToggle
+}: {
+  sub: KnowledgeEntry
+  dotClass: string
+  isLast: boolean
+  isExpanded: boolean
+  rootEntryId: string   // parent entry id for Drive folder
+  onToggle: () => void
+}) {
+  const subDate    = sub.entry_date ?? sub.created_at
+  const subHasHtml = sub.body.startsWith('<')
+  const subPreview = subHasHtml ? stripHtml(sub.body).slice(0, 160) : sub.body.slice(0, 160)
+
+  return (
+    <div className="flex gap-2.5 mb-1">
+      <div className="flex flex-col items-center shrink-0 pt-1.5">
+        {isLast
+          ? <div className="w-px h-3 bg-slate-800"/>
+          : <div className="w-px flex-1 bg-slate-800 min-h-[28px]"/>
+        }
+        <div className={`w-2 h-2 rounded-full border-[1.5px] shrink-0 absolute mt-[2px] ml-[-3px] ${dotClass}`} style={{ position: 'relative' }}/>
+      </div>
+      <div className="flex-1 min-w-0 pb-2">
+        <button
+          onClick={onToggle}
+          className="w-full text-left px-2.5 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors border border-slate-800/0 hover:border-slate-700/60">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[10px] font-medium text-slate-600">{dayjs(subDate).format('DD MMM YY')}</span>
+            {sub.source && (
+              <span className="text-[10px] px-1.5 py-px rounded-full bg-slate-700 text-slate-400">{sub.source}</span>
+            )}
+            <span className="flex-1 text-xs text-slate-300 truncate">{sub.title || '(sin título)'}</span>
+            <ChevronDown size={11} className={`text-slate-600 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}/>
+          </div>
+          {isExpanded && (
+            <div className="mt-2 pt-2 border-t border-slate-700/60" onClick={e => e.stopPropagation()}>
+              {subHasHtml ? (
+                <div
+                  className="text-[12px] text-slate-400 leading-relaxed [&_img]:max-w-full [&_img]:rounded [&_ul]:list-disc [&_ul]:pl-4 [&_a]:text-teal-400"
+                  dangerouslySetInnerHTML={{ __html: sub.body }}
+                />
+              ) : (
+                <p className="text-[12px] text-slate-400 leading-relaxed whitespace-pre-wrap">{subPreview || '(sin contenido)'}</p>
+              )}
+              <AttachmentStrip entryId={sub.id} rootEntryId={rootEntryId} compact={true}/>
+            </div>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Entry Dossier Card ────────────────────────────────────────────────────────
 
 function EntryDossierCard({
-  entry, source, onEdit, onDelete
+  entry, source, onEdit, onDelete, onAddToThread, onShowDocument
 }: {
   entry: KnowledgeEntry
   source: KnowledgeSource | undefined
   onEdit: () => void
   onDelete: () => void
+  onAddToThread: () => void
+  onShowDocument: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded,     setExpanded]     = useState(false)
+  const [threadOpen,   setThreadOpen]   = useState(false)
+  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set())
+
+  const { data: subEntries = [] } = useKnowledgeSubEntries(entry.id)
+
   const date    = entry.entry_date ?? entry.created_at
   const tags    = parseTags(entry.tags)
   const hasHtml = entry.body.startsWith('<')
   const preview = hasHtml ? stripHtml(entry.body).slice(0, 200) : entry.body.slice(0, 200)
 
+  const toggleSub = (id: string) =>
+    setExpandedSubs(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+
+  const SUB_DOT = ['bg-green-200 border-green-400', 'bg-yellow-200 border-yellow-400', 'bg-blue-200 border-blue-400', 'bg-rose-200 border-rose-400', 'bg-purple-200 border-purple-400']
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors">
+      {/* ── main entry ─────────────────────────────────────────────────────── */}
       <div className="flex items-start gap-3 p-4">
         <div className="shrink-0 text-center w-12 pt-0.5">
           <div className="text-[11px] font-medium text-slate-400">{dayjs(date).format('DD/MM')}</div>
@@ -473,13 +863,22 @@ function EntryDossierCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          {source ? (
-            <span style={{ color: source.color }} className="flex items-center gap-1 text-[10px] font-medium mb-1.5">
-              <SourceIcon name={source.icon} size={10}/>{source.name}
-            </span>
-          ) : entry.source ? (
-            <span className="text-[10px] text-slate-600 mb-1.5 block">{entry.source}</span>
-          ) : null}
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            {source ? (
+              <span style={{ color: source.color }} className="flex items-center gap-1 text-[10px] font-medium">
+                <SourceIcon name={source.icon} size={10}/>{source.name}
+              </span>
+            ) : entry.source ? (
+              <span className="text-[10px] text-slate-600">{entry.source}</span>
+            ) : null}
+            {subEntries.length > 0 && (
+              <button
+                onClick={() => setThreadOpen(v => !v)}
+                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-violet-900/30 text-violet-400 border border-violet-800/40 hover:bg-violet-900/50 transition-colors">
+                <GitBranch size={9}/>{subEntries.length} en el hilo
+              </button>
+            )}
+          </div>
 
           <h3 className="text-sm font-medium text-slate-100 mb-1">{entry.title || '(sin título)'}</h3>
 
@@ -497,16 +896,21 @@ function EntryDossierCard({
             </div>
           )}
 
-          {entry.body && expanded && (
-            <div className="mt-3 pt-3 border-t border-slate-800">
-              {hasHtml ? (
-                <div
-                  className="text-[13px] text-slate-300 leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg [&_ul]:list-disc [&_ul]:pl-4 [&_a]:text-teal-400 [&_a]:underline"
-                  dangerouslySetInnerHTML={{ __html: entry.body }}
-                />
-              ) : (
-                <p className="text-[13px] text-slate-300 leading-relaxed whitespace-pre-wrap">{entry.body}</p>
+          {expanded && (
+            <div className="mt-3">
+              {entry.body && (
+                <div className="pt-3 border-t border-slate-800">
+                  {hasHtml ? (
+                    <div
+                      className="text-[13px] text-slate-300 leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg [&_ul]:list-disc [&_ul]:pl-4 [&_a]:text-teal-400 [&_a]:underline"
+                      dangerouslySetInnerHTML={{ __html: entry.body }}
+                    />
+                  ) : (
+                    <p className="text-[13px] text-slate-300 leading-relaxed whitespace-pre-wrap">{entry.body}</p>
+                  )}
+                </div>
               )}
+              <AttachmentStrip entryId={entry.id}/>
             </div>
           )}
         </div>
@@ -524,6 +928,60 @@ function EntryDossierCard({
           </button>
         </div>
       </div>
+
+      {/* ── thread section ──────────────────────────────────────────────────── */}
+      {threadOpen && (
+        <div className="px-4 pb-3 border-t border-slate-800/60 pt-3">
+          <div className="text-[9px] uppercase tracking-widest text-slate-700 mb-2.5 flex items-center gap-1.5">
+            <GitBranch size={9}/>HILO DE SEGUIMIENTO
+          </div>
+
+          {subEntries.map((sub, i) => (
+            <ThreadSubEntry
+              key={sub.id}
+              sub={sub}
+              dotClass={SUB_DOT[i % SUB_DOT.length]}
+              isLast={i === subEntries.length - 1}
+              isExpanded={expandedSubs.has(sub.id)}
+              rootEntryId={entry.id}
+              onToggle={() => toggleSub(sub.id)}
+            />
+          ))}
+
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/60">
+            <button
+              onClick={onAddToThread}
+              className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors border border-slate-800 hover:border-slate-700">
+              <Plus size={11}/>Agregar al hilo
+            </button>
+            {subEntries.length > 0 && (
+              <button
+                onClick={onShowDocument}
+                className="flex items-center gap-1.5 text-[11px] text-violet-400 bg-violet-900/20 hover:bg-violet-900/40 px-2.5 py-1.5 rounded-lg transition-colors border border-violet-800/30 hover:border-violet-700/50">
+                <Sparkles size={11}/>Generar documento resumen
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* "Agregar al hilo" shortcut when thread is closed */}
+      {!threadOpen && (
+        <div className="flex items-center gap-1 px-4 pb-2 pt-0">
+          <button
+            onClick={onAddToThread}
+            className="flex items-center gap-1 text-[10px] text-slate-700 hover:text-slate-400 transition-colors">
+            <Plus size={10}/>Agregar al hilo
+          </button>
+          {subEntries.length > 0 && (
+            <button
+              onClick={onShowDocument}
+              className="ml-auto flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-400 transition-colors">
+              <Sparkles size={10}/>Generar documento
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -542,10 +1000,13 @@ export default function KnowledgeDashboard() {
   const [topicSearch, setTopicSearch]       = useState('')
   const [editorOpen, setEditorOpen]         = useState(false)
   const [editingEntry, setEditingEntry]     = useState<KnowledgeEntry | null>(null)
+  const [addingToThread, setAddingToThread] = useState<KnowledgeEntry | null>(null)
+  const [documentEntry, setDocumentEntry]   = useState<KnowledgeEntry | null>(null)
   const [showSources, setShowSources]       = useState(false)
   const [showAIPanel, setShowAIPanel]       = useState(false)
 
   const del = useDeleteKnowledgeEntry()
+  const { data: documentSubEntries = [] } = useKnowledgeSubEntries(documentEntry?.id ?? null)
 
   const topicCounts = useMemo(() => {
     const c: Record<string, number> = {}
@@ -570,9 +1031,10 @@ export default function KnowledgeDashboard() {
     return m
   }, [sources])
 
-  const openNewEntry = () => { setEditingEntry(null); setEditorOpen(true) }
-  const openEditEntry = (e: KnowledgeEntry) => { setEditingEntry(e); setEditorOpen(true) }
-  const closeEditor = () => { setEditorOpen(false); setEditingEntry(null) }
+  const openNewEntry = () => { setEditingEntry(null); setAddingToThread(null); setEditorOpen(true) }
+  const openEditEntry = (e: KnowledgeEntry) => { setEditingEntry(e); setAddingToThread(null); setEditorOpen(true) }
+  const openAddToThread = (parent: KnowledgeEntry) => { setEditingEntry(null); setAddingToThread(parent); setEditorOpen(true) }
+  const closeEditor = () => { setEditorOpen(false); setEditingEntry(null); setAddingToThread(null) }
   const handleDelete = (id: string) => { if (confirm('¿Eliminar esta entrada?')) del.mutate(id) }
 
   return (
@@ -674,6 +1136,8 @@ export default function KnowledgeDashboard() {
                 source={sourceByName[e.source]}
                 onEdit={() => openEditEntry(e)}
                 onDelete={() => handleDelete(e.id)}
+                onAddToThread={() => openAddToThread(e)}
+                onShowDocument={() => setDocumentEntry(e)}
               />
             ))
           )}
@@ -685,11 +1149,20 @@ export default function KnowledgeDashboard() {
       {editorOpen && (
         <EntryEditorModal
           entry={editingEntry}
-          defaultTopic={selectedTopic ?? ''}
+          defaultTopic={addingToThread?.topic ?? selectedTopic ?? ''}
           userId={userId}
           sources={sources}
           existingTopics={topics}
+          parentId={addingToThread?.id ?? null}
           onClose={closeEditor}
+        />
+      )}
+
+      {documentEntry && (
+        <EntryDocumentModal
+          entry={documentEntry}
+          subEntries={documentSubEntries}
+          onClose={() => setDocumentEntry(null)}
         />
       )}
 
