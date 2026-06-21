@@ -2797,6 +2797,21 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       )`)
       db.exec(`CREATE INDEX IF NOT EXISTS idx_kef_entry ON knowledge_entry_files(entry_id)`)
     }
+  },
+  {
+    version: 85,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS knowledge_thread_docs (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL UNIQUE,
+        synthesis TEXT NOT NULL DEFAULT '',
+        key_data TEXT NOT NULL DEFAULT '[]',
+        next_steps TEXT NOT NULL DEFAULT '[]',
+        checks TEXT NOT NULL DEFAULT '[]',
+        generated_at INTEGER NOT NULL,
+        entry_count INTEGER NOT NULL DEFAULT 1
+      )`)
+    }
   }
 ]
 

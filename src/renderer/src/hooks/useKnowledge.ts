@@ -4,7 +4,8 @@ import type {
   KnowledgeGlobalSummary,
   KnowledgeListFilters,
   KnowledgeSource,
-  KnowledgeEntryFile
+  KnowledgeEntryFile,
+  KnowledgeThreadDoc
 } from '@shared/types'
 
 // ── Sources ───────────────────────────────────────────────────────────────────
@@ -271,6 +272,43 @@ export function useDeleteEntryFile() {
       window.api.knowledge.files.delete(id),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['knowledge-files', vars.entryId] })
+    }
+  })
+}
+
+// ── Thread Docs ───────────────────────────────────────────────────────────────
+
+export function useThreadDoc(entryId: string | null) {
+  return useQuery({
+    queryKey: ['knowledge-thread-doc', entryId],
+    queryFn: (): Promise<KnowledgeThreadDoc | null> => window.api.knowledge.thread.get(entryId!),
+    enabled: !!entryId,
+    staleTime: 60_000
+  })
+}
+
+export function useSaveThreadDoc() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      entryId, synthesis, keyData, nextSteps, checks, entryCount
+    }: {
+      entryId: string
+      synthesis: string
+      keyData: string[]
+      nextSteps: string[]
+      checks: boolean[]
+      entryCount: number
+    }): Promise<KnowledgeThreadDoc> =>
+      window.api.knowledge.thread.save(entryId, {
+        synthesis,
+        key_data: JSON.stringify(keyData),
+        next_steps: JSON.stringify(nextSteps),
+        checks: JSON.stringify(checks),
+        entry_count: entryCount
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-thread-doc', vars.entryId] })
     }
   })
 }

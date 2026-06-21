@@ -300,3 +300,41 @@ export function updateKnowledgeEntryFile(id: string, data: {
 export function deleteKnowledgeEntryFile(id: string): void {
   getDb().prepare('DELETE FROM knowledge_entry_files WHERE id = ?').run(id)
 }
+
+// ── Thread Docs (flowtask.db — local) ─────────────────────────────────────────
+
+import type { KnowledgeThreadDoc } from '@shared/types'
+
+export function getThreadDoc(entryId: string): KnowledgeThreadDoc | null {
+  return (getDb()
+    .prepare('SELECT * FROM knowledge_thread_docs WHERE entry_id = ?')
+    .get(entryId) as KnowledgeThreadDoc | undefined) ?? null
+}
+
+export function upsertThreadDoc(entryId: string, data: {
+  synthesis: string
+  key_data: string
+  next_steps: string
+  checks: string
+  entry_count: number
+}): KnowledgeThreadDoc {
+  const db  = getDb()
+  const now = Date.now()
+  const existing = db.prepare('SELECT id FROM knowledge_thread_docs WHERE entry_id = ?').get(entryId) as { id: string } | undefined
+
+  if (existing) {
+    db.prepare(`
+      UPDATE knowledge_thread_docs
+      SET synthesis = ?, key_data = ?, next_steps = ?, checks = ?, generated_at = ?, entry_count = ?
+      WHERE entry_id = ?
+    `).run(data.synthesis, data.key_data, data.next_steps, data.checks, now, data.entry_count, entryId)
+    return db.prepare('SELECT * FROM knowledge_thread_docs WHERE entry_id = ?').get(entryId) as KnowledgeThreadDoc
+  }
+
+  const id = randomUUID()
+  db.prepare(`
+    INSERT INTO knowledge_thread_docs (id, entry_id, synthesis, key_data, next_steps, checks, generated_at, entry_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, entryId, data.synthesis, data.key_data, data.next_steps, data.checks, now, data.entry_count)
+  return db.prepare('SELECT * FROM knowledge_thread_docs WHERE entry_id = ?').get(entryId) as KnowledgeThreadDoc
+}

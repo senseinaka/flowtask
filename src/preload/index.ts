@@ -50,7 +50,8 @@ import type {
   CreateEmailAccountInput, SendEmailInput, EmailListFilters,
   ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
   CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado,
-  KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile
+  KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile,
+  KnowledgeThreadDoc
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1044,10 +1045,17 @@ const api = {
       delete:   (id: string): Promise<void>                                                  => ipcRenderer.invoke('knowledge:summaries:delete', id)
     },
     files: {
-      list:       (entryId: string): Promise<KnowledgeEntryFile[]>                                               => ipcRenderer.invoke('knowledge:files:list', entryId),
-      selectFile: (): Promise<string | null>                                                                     => ipcRenderer.invoke('knowledge:files:selectFile'),
-      upload:     (entryId: string, filePath: string, rootEntryId?: string): Promise<KnowledgeEntryFile>        => ipcRenderer.invoke('knowledge:files:upload', entryId, filePath, rootEntryId),
-      delete:     (id: string): Promise<void>                                                                    => ipcRenderer.invoke('knowledge:files:delete', id)
+      list:         (entryId: string): Promise<KnowledgeEntryFile[]>                                             => ipcRenderer.invoke('knowledge:files:list', entryId),
+      selectFile:   (): Promise<string | null>                                                                   => ipcRenderer.invoke('knowledge:files:selectFile'),
+      upload:       (entryId: string, filePath: string, rootEntryId?: string): Promise<KnowledgeEntryFile>      => ipcRenderer.invoke('knowledge:files:upload', entryId, filePath, rootEntryId),
+      delete:       (id: string): Promise<void>                                                                  => ipcRenderer.invoke('knowledge:files:delete', id),
+      openInDrive:  (fileId: string): Promise<void>                                                              => ipcRenderer.invoke('knowledge:files:openInDrive', fileId),
+      getFilePath:  (file: File): string                                                                         => webUtils.getPathForFile(file),
+    },
+    thread: {
+      get:  (entryId: string): Promise<KnowledgeThreadDoc | null>                                                => ipcRenderer.invoke('knowledge:thread:get', entryId),
+      save: (entryId: string, data: { synthesis: string; key_data: string; next_steps: string; checks: string; entry_count: number }): Promise<KnowledgeThreadDoc> =>
+        ipcRenderer.invoke('knowledge:thread:save', entryId, data),
     }
   },
 

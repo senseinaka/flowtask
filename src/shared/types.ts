@@ -2784,6 +2784,17 @@ export interface KnowledgeEntryFile {
   created_at: number
 }
 
+export interface KnowledgeThreadDoc {
+  id: string
+  entry_id: string
+  synthesis: string
+  key_data: string        // JSON string[]
+  next_steps: string      // JSON string[]
+  checks: string          // JSON boolean[] — checkbox state
+  generated_at: number
+  entry_count: number
+}
+
 export interface KnowledgeGlobalSummary {
   id: string
   workspace_id: string

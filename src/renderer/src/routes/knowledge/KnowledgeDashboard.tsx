@@ -4,7 +4,7 @@ import {
   Bold, Italic, Underline, List, Link2, Download, FileText,
   Image, Clock, Pencil, ChevronDown, Tag, GitBranch, CheckSquare, Square,
   Mail, Users, Globe, MessageCircle, Video, File, StickyNote,
-  Paperclip, CloudUpload, CheckCircle2, AlertCircle
+  Paperclip, CloudUpload, CheckCircle2, AlertCircle, ExternalLink, RefreshCw
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import dayjs from 'dayjs'
@@ -16,7 +16,8 @@ import {
   useSummarizeKnowledgeEntry,
   useKnowledgeSubEntries, useGenerateEntryDocument,
   useAnalyzeTopic, useTopicLatestSummary,
-  useKnowledgeEntryFiles, useUploadEntryFile, useDeleteEntryFile
+  useKnowledgeEntryFiles, useUploadEntryFile, useDeleteEntryFile,
+  useThreadDoc, useSaveThreadDoc
 } from '../../hooks/useKnowledge'
 import type { KnowledgeEntry, KnowledgeSource, KnowledgeEntryFile } from '@shared/types'
 
@@ -62,12 +63,13 @@ function AttachmentStrip({
   compact = false
 }: {
   entryId: string
-  rootEntryId?: string    // for sub-entries: use parent's folder
-  compact?: boolean       // true = inline in thread row
+  rootEntryId?: string
+  compact?: boolean
 }) {
   const { data: files = [], isLoading } = useKnowledgeEntryFiles(entryId)
   const upload = useUploadEntryFile()
   const remove = useDeleteEntryFile()
+  const [isDragging, setIsDragging] = useState(false)
 
   async function handleAttach() {
     const filePath = await window.api.knowledge.files.selectFile()
@@ -75,17 +77,49 @@ function AttachmentStrip({
     upload.mutate({ entryId, filePath, rootEntryId })
   }
 
-  async function handleDelete(f: KnowledgeEntryFile, e: React.MouseEvent) {
+  function handleDelete(f: KnowledgeEntryFile, e: React.MouseEvent) {
     e.stopPropagation()
     remove.mutate({ id: f.id, entryId })
   }
 
+  function handleOpenInDrive(f: KnowledgeEntryFile, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (f.drive_file_id && f.drive_status === 'synced') {
+      window.api.knowledge.files.openInDrive(f.drive_file_id)
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    if (!isDragging) setIsDragging(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false)
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    for (const file of Array.from(e.dataTransfer.files)) {
+      const filePath = window.api.knowledge.files.getFilePath(file)
+      if (filePath) upload.mutate({ entryId, filePath, rootEntryId })
+    }
+  }
+
   if (compact) {
     return (
-      <div className="flex items-center gap-1 flex-wrap mt-1" onClick={e => e.stopPropagation()}>
+      <div
+        className="flex items-center gap-1 flex-wrap mt-1"
+        onClick={e => e.stopPropagation()}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}>
         {files.map(f => (
           <span key={f.id}
-            className="flex items-center gap-1 text-[10px] bg-slate-700/60 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 group">
+            onClick={e => handleOpenInDrive(f, e)}
+            title={f.drive_status === 'synced' ? 'Abrir en Drive' : f.file_name}
+            className={`flex items-center gap-1 text-[10px] bg-slate-700/60 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 group ${f.drive_status === 'synced' ? 'cursor-pointer hover:border-teal-700 hover:text-teal-300' : ''}`}>
             <FileIcon mime={f.file_mime_type} size={10}/>
             <span className="truncate max-w-[100px]">{f.file_name}</span>
             <DriveStatusIcon status={f.drive_status}/>
@@ -124,24 +158,32 @@ function AttachmentStrip({
       {isLoading ? (
         <div className="text-[10px] text-slate-700">Cargando...</div>
       ) : files.length === 0 ? (
-        <button
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           onClick={handleAttach}
-          disabled={upload.isPending}
-          className="w-full flex flex-col items-center gap-1 py-3 border border-dashed border-slate-800 rounded-lg text-slate-700 hover:border-slate-600 hover:text-slate-500 transition-colors">
+          className={`w-full flex flex-col items-center gap-1 py-3 border border-dashed rounded-lg cursor-pointer transition-colors ${isDragging ? 'border-teal-600 bg-teal-900/10 text-teal-400' : 'border-slate-800 text-slate-700 hover:border-slate-600 hover:text-slate-500'}`}>
           <Paperclip size={14}/>
-          <span className="text-[10px]">Arrastrá o hacé clic para adjuntar</span>
-        </button>
+          <span className="text-[10px]">{isDragging ? 'Soltá para adjuntar' : 'Arrastrá o hacé clic para adjuntar'}</span>
+        </div>
       ) : (
-        <div className="flex flex-col gap-1">
+        <div
+          className={`flex flex-col gap-1 rounded-lg transition-colors ${isDragging ? 'bg-teal-900/10 ring-1 ring-teal-700' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}>
           {files.map(f => (
             <div key={f.id}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/50 border border-slate-800 group hover:border-slate-700 transition-colors">
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/50 border border-slate-800 group transition-colors ${f.drive_status === 'synced' ? 'hover:border-teal-800 cursor-pointer' : 'hover:border-slate-700'}`}
+              onClick={e => handleOpenInDrive(f, e)}
+              title={f.drive_status === 'synced' ? 'Abrir en Google Drive' : undefined}>
               <FileIcon mime={f.file_mime_type} size={13}/>
               <span className="flex-1 text-[11px] text-slate-300 truncate">{f.file_name}</span>
               <span className="text-[10px] text-slate-600 shrink-0">{fmtFileSize(f.file_size)}</span>
               <DriveStatusIcon status={f.drive_status}/>
               {f.drive_status === 'synced' && (
-                <span className="text-[9px] text-green-600 shrink-0">Drive</span>
+                <ExternalLink size={9} className="text-slate-700 group-hover:text-teal-500 transition-colors shrink-0"/>
               )}
               <button
                 onClick={e => handleDelete(f, e)}
@@ -600,6 +642,7 @@ function EntryDocumentModal({
   onClose: () => void
 }) {
   const generateDoc = useGenerateEntryDocument()
+  const saveDoc     = useSaveThreadDoc()
   const [doc, setDoc] = useState<{ synthesis: string; keyData: string[]; nextSteps: string[] } | null>(null)
   const [checks, setChecks] = useState<boolean[]>([])
 
@@ -610,7 +653,20 @@ function EntryDocumentModal({
         setChecks(d.nextSteps.map(() => false))
       }
     })
-  }, [entry.id]) // run once on mount
+  }, [entry.id])
+
+  async function handleSave() {
+    if (!doc) return
+    await saveDoc.mutateAsync({
+      entryId:    entry.id,
+      synthesis:  doc.synthesis,
+      keyData:    doc.keyData,
+      nextSteps:  doc.nextSteps,
+      checks:     checks,
+      entryCount: subEntries.length + 1
+    })
+    onClose()
+  }
 
   const timeline = useMemo(() => {
     return [entry, ...subEntries].sort(
@@ -641,11 +697,20 @@ function EntryDocumentModal({
           </div>
           <div className="flex items-center gap-2">
             {doc && (
-              <button
-                onClick={() => { setDoc(null); generateDoc.mutate(entry.id, { onSuccess: (d) => { setDoc(d); setChecks(d.nextSteps.map(() => false)) } }) }}
-                className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-lg transition-colors">
-                Regenerar
-              </button>
+              <>
+                <button
+                  onClick={() => { setDoc(null); generateDoc.mutate(entry.id, { onSuccess: (d) => { setDoc(d); setChecks(d.nextSteps.map(() => false)) } }) }}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-lg transition-colors">
+                  <RefreshCw size={11}/>Regenerar
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saveDoc.isPending}
+                  className="flex items-center gap-1.5 text-xs text-violet-700 bg-violet-100 hover:bg-violet-200 border border-violet-200 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  {saveDoc.isPending ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>}
+                  Guardar en la entrada
+                </button>
+              </>
             )}
             <button
               onClick={onClose}
@@ -768,14 +833,15 @@ function EntryDocumentModal({
 // ── Thread Sub-Entry Row — separate component so hooks work inside map ────────
 
 function ThreadSubEntry({
-  sub, dotClass, isLast, isExpanded, rootEntryId, onToggle
+  sub, dotClass, isLast, isExpanded, rootEntryId, onToggle, onEdit
 }: {
   sub: KnowledgeEntry
   dotClass: string
   isLast: boolean
   isExpanded: boolean
-  rootEntryId: string   // parent entry id for Drive folder
+  rootEntryId: string
   onToggle: () => void
+  onEdit: () => void
 }) {
   const subDate    = sub.entry_date ?? sub.created_at
   const subHasHtml = sub.body.startsWith('<')
@@ -800,6 +866,11 @@ function ThreadSubEntry({
               <span className="text-[10px] px-1.5 py-px rounded-full bg-slate-700 text-slate-400">{sub.source}</span>
             )}
             <span className="flex-1 text-xs text-slate-300 truncate">{sub.title || '(sin título)'}</span>
+            <button
+              onClick={e => { e.stopPropagation(); onEdit() }}
+              className="text-slate-700 hover:text-teal-400 p-0.5 rounded transition-colors shrink-0">
+              <Pencil size={9}/>
+            </button>
             <ChevronDown size={11} className={`text-slate-600 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}/>
           </div>
           {isExpanded && (
@@ -824,7 +895,7 @@ function ThreadSubEntry({
 // ── Entry Dossier Card ────────────────────────────────────────────────────────
 
 function EntryDossierCard({
-  entry, source, onEdit, onDelete, onAddToThread, onShowDocument
+  entry, source, onEdit, onDelete, onAddToThread, onShowDocument, onEditSub
 }: {
   entry: KnowledgeEntry
   source: KnowledgeSource | undefined
@@ -832,12 +903,14 @@ function EntryDossierCard({
   onDelete: () => void
   onAddToThread: () => void
   onShowDocument: () => void
+  onEditSub: (sub: KnowledgeEntry) => void
 }) {
   const [expanded,     setExpanded]     = useState(false)
   const [threadOpen,   setThreadOpen]   = useState(false)
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set())
 
   const { data: subEntries = [] } = useKnowledgeSubEntries(entry.id)
+  const { data: savedDoc }        = useThreadDoc(entry.id)
 
   const date    = entry.entry_date ?? entry.created_at
   const tags    = parseTags(entry.tags)
@@ -873,7 +946,11 @@ function EntryDossierCard({
             ) : null}
             {subEntries.length > 0 && (
               <button
-                onClick={() => setThreadOpen(v => !v)}
+                onClick={() => {
+                  const next = !threadOpen
+                  setThreadOpen(next)
+                  if (next) setExpandedSubs(new Set(subEntries.map(s => s.id)))
+                }}
                 className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-violet-900/30 text-violet-400 border border-violet-800/40 hover:bg-violet-900/50 transition-colors">
                 <GitBranch size={9}/>{subEntries.length} en el hilo
               </button>
@@ -882,7 +959,21 @@ function EntryDossierCard({
 
           <h3 className="text-sm font-medium text-slate-100 mb-1">{entry.title || '(sin título)'}</h3>
 
-          {entry.ai_summary ? (
+          {savedDoc ? (
+            <div className="mb-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-900/30 text-violet-400 border border-violet-800/40">
+                  <FileText size={8}/>Documento IA guardado
+                </span>
+                <button
+                  onClick={onShowDocument}
+                  className="text-[9px] text-violet-500 hover:text-violet-300 transition-colors">
+                  Ver documento completo
+                </button>
+              </div>
+              <p className="text-[12px] text-slate-400 line-clamp-2">{savedDoc.synthesis}</p>
+            </div>
+          ) : entry.ai_summary ? (
             <p className="text-[12px] text-teal-200/70 line-clamp-2 mb-1.5">{entry.ai_summary}</p>
           ) : preview ? (
             <p className="text-[12px] text-slate-500 line-clamp-2 mb-1.5">{preview}</p>
@@ -945,6 +1036,7 @@ function EntryDossierCard({
               isExpanded={expandedSubs.has(sub.id)}
               rootEntryId={entry.id}
               onToggle={() => toggleSub(sub.id)}
+              onEdit={() => onEditSub(sub)}
             />
           ))}
 
@@ -957,8 +1049,8 @@ function EntryDossierCard({
             {subEntries.length > 0 && (
               <button
                 onClick={onShowDocument}
-                className="flex items-center gap-1.5 text-[11px] text-violet-400 bg-violet-900/20 hover:bg-violet-900/40 px-2.5 py-1.5 rounded-lg transition-colors border border-violet-800/30 hover:border-violet-700/50">
-                <Sparkles size={11}/>Generar documento resumen
+                className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors border ${savedDoc ? 'text-violet-300 bg-violet-900/30 border-violet-700/40 hover:bg-violet-900/50' : 'text-violet-400 bg-violet-900/20 border-violet-800/30 hover:bg-violet-900/40 hover:border-violet-700/50'}`}>
+                {savedDoc ? <><RefreshCw size={11}/>Regenerar documento</> : <><Sparkles size={11}/>Generar documento resumen</>}
               </button>
             )}
           </div>
@@ -977,7 +1069,7 @@ function EntryDossierCard({
             <button
               onClick={onShowDocument}
               className="ml-auto flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-400 transition-colors">
-              <Sparkles size={10}/>Generar documento
+              {savedDoc ? <><RefreshCw size={10}/>Regenerar</> : <><Sparkles size={10}/>Generar documento</>}
             </button>
           )}
         </div>
@@ -1138,6 +1230,7 @@ export default function KnowledgeDashboard() {
                 onDelete={() => handleDelete(e.id)}
                 onAddToThread={() => openAddToThread(e)}
                 onShowDocument={() => setDocumentEntry(e)}
+                onEditSub={sub => openEditEntry(sub)}
               />
             ))
           )}

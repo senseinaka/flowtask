@@ -1,4 +1,4 @@
-import { ipcMain, app, dialog, BrowserWindow } from 'electron'
+import { ipcMain, app, dialog, BrowserWindow, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
@@ -22,7 +22,9 @@ import {
   listKnowledgeEntryFiles,
   createKnowledgeEntryFile,
   updateKnowledgeEntryFile,
-  deleteKnowledgeEntryFile
+  deleteKnowledgeEntryFile,
+  getThreadDoc,
+  upsertThreadDoc
 } from '../database/queries/knowledge'
 import type { CreateKnowledgeEntryFields, UpdateKnowledgeEntryFields } from '../database/queries/knowledge'
 import {
@@ -270,4 +272,22 @@ export function registerKnowledgeIpc(): void {
   ipcMain.handle('knowledge:files:delete', (_e, id: string) =>
     deleteKnowledgeEntryFile(id)
   )
+
+  ipcMain.handle('knowledge:files:openInDrive', (_e, fileId: string) =>
+    shell.openExternal(`https://drive.google.com/file/d/${fileId}/view`)
+  )
+
+  // ── Thread Docs ───────────────────────────────────────────────────────────
+
+  ipcMain.handle('knowledge:thread:get', (_e, entryId: string) =>
+    getThreadDoc(entryId)
+  )
+
+  ipcMain.handle('knowledge:thread:save', (_e, entryId: string, data: {
+    synthesis: string
+    key_data: string
+    next_steps: string
+    checks: string
+    entry_count: number
+  }) => upsertThreadDoc(entryId, data))
 }
