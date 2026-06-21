@@ -641,19 +641,47 @@ function EntryDocumentModal({
   subEntries: KnowledgeEntry[]
   onClose: () => void
 }) {
-  const generateDoc = useGenerateEntryDocument()
-  const saveDoc     = useSaveThreadDoc()
-  const [doc, setDoc] = useState<{ synthesis: string; keyData: string[]; nextSteps: string[] } | null>(null)
-  const [checks, setChecks] = useState<boolean[]>([])
+  const { data: savedDocData, isLoading: loadingSaved } = useThreadDoc(entry.id)
+  const generateDoc  = useGenerateEntryDocument()
+  const saveDoc      = useSaveThreadDoc()
+  const [doc, setDoc]         = useState<{ synthesis: string; keyData: string[]; nextSteps: string[] } | null>(null)
+  const [checks, setChecks]   = useState<boolean[]>([])
+  const [initialized, setInitialized] = useState(false)
 
+  // On first load: if there's a saved doc, show it; otherwise generate
   useEffect(() => {
+    if (loadingSaved || initialized) return
+    setInitialized(true)
+
+    if (savedDocData) {
+      try {
+        setDoc({
+          synthesis: savedDocData.synthesis,
+          keyData:   JSON.parse(savedDocData.key_data) as string[],
+          nextSteps: JSON.parse(savedDocData.next_steps) as string[]
+        })
+        setChecks(JSON.parse(savedDocData.checks) as boolean[])
+      } catch {
+        triggerGenerate()
+      }
+    } else {
+      triggerGenerate()
+    }
+  }, [loadingSaved, initialized]) // eslint-disable-line
+
+  function triggerGenerate() {
     generateDoc.mutate(entry.id, {
       onSuccess: (d) => {
         setDoc(d)
         setChecks(d.nextSteps.map(() => false))
       }
     })
-  }, [entry.id])
+  }
+
+  function handleRegenerate() {
+    setDoc(null)
+    triggerGenerate()
+  }
 
   async function handleSave() {
     if (!doc) return
@@ -699,8 +727,9 @@ function EntryDocumentModal({
             {doc && (
               <>
                 <button
-                  onClick={() => { setDoc(null); generateDoc.mutate(entry.id, { onSuccess: (d) => { setDoc(d); setChecks(d.nextSteps.map(() => false)) } }) }}
-                  className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-lg transition-colors">
+                  onClick={handleRegenerate}
+                  disabled={generateDoc.isPending}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50">
                   <RefreshCw size={11}/>Regenerar
                 </button>
                 <button
@@ -730,7 +759,7 @@ function EntryDocumentModal({
             <span><GitBranch size={11} className="inline -mt-0.5 mr-0.5"/>{timeline.length} entrada{timeline.length !== 1 ? 's' : ''} en el hilo</span>
           </div>
 
-          {generateDoc.isPending || !doc ? (
+          {loadingSaved || generateDoc.isPending || !doc ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Loader2 size={28} className="animate-spin text-violet-400 mb-3"/>
               <p className="text-sm">Generando documento...</p>
