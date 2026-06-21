@@ -51,6 +51,7 @@ import { registerPermissionsIpc } from './ipc/permissions.ipc'
 import { registerCalendarIpc } from './ipc/calendar.ipc'
 import { registerQuotesIpc } from './ipc/quotes.ipc'
 import { registerKnowledgeIpc } from './ipc/knowledge.ipc'
+import { registerCortexIpc } from './ipc/cortex.ipc'
 import { registerEmailIpc } from './ipc/email.ipc'
 import { registerReconIpc } from './ipc/recon.ipc'
 import { startEmailAutoSync } from './services/email.service'
@@ -156,6 +157,7 @@ app.whenReady().then(() => {
   registerCalendarIpc()
   registerQuotesIpc()
   registerKnowledgeIpc()
+  registerCortexIpc()
   registerEmailIpc()
   registerReconIpc()
   startEmailAutoSync()

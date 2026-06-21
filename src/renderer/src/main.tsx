@@ -32,6 +32,7 @@ import EmailDashboard from './routes/email/EmailDashboard'
 import ReconDashboard from './routes/contable/ReconDashboard'
 import ReconPeriodView from './routes/contable/ReconPeriodView'
 import KnowledgeDashboard from './routes/knowledge/KnowledgeDashboard'
+import CortexDashboard from './routes/cortex/CortexDashboard'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -72,6 +73,7 @@ const router = createHashRouter([
       { path: 'quotes', element: <QuotesDashboard /> },
       { path: 'quotes/:id', element: <QuoteDetail /> },
       { path: 'knowledge', element: <KnowledgeDashboard /> },
+      { path: 'cortex', element: <CortexDashboard /> },
       { path: 'email', element: <EmailDashboard /> },
       { path: 'contable/recon', element: <ReconDashboard /> },
       { path: 'contable/recon/:id', element: <ReconPeriodView /> }

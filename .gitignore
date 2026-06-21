@@ -39,3 +39,6 @@ desktop.ini
 # Temporales
 *.tmp
 *.temp
+
+# Graphify — grafo de código generado localmente
+graphify-out/

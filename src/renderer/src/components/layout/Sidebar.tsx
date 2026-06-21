@@ -4,7 +4,7 @@ import {
   LayoutList, Columns3, Settings, RefreshCw, Loader2, CheckSquare,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, ChevronDown, LayoutDashboard, Clock, Wallet,
-  CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight, Brain
+  CalendarClock, LogOut, CalendarDays, FileText, Mail, BookOpen, ArrowLeftRight, Brain, Network
 } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -283,6 +283,24 @@ export default function Sidebar() {
             >
               <Brain size={16} />
               Knowledge
+            </NavLink>
+          </div>
+        )}
+
+        {/* ── Cortex ────────────────────────────────────────────────────── */}
+        {canRead('cortex') && (
+          <div className="pt-1">
+            <NavLink
+              to="/cortex"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isActive ? 'bg-fuchsia-900/40 text-fuchsia-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                )
+              }
+            >
+              <Network size={16} />
+              Cortex
             </NavLink>
           </div>
         )}

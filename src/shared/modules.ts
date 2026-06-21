@@ -103,6 +103,11 @@ export const MODULES: ModuleDef[] = [
     routes: ['/knowledge']
   },
   {
+    key: 'cortex',
+    label: 'Cortex',
+    routes: ['/cortex']
+  },
+  {
     key: 'settings',
     label: 'Configuración',
     routes: ['/settings']

@@ -1059,6 +1059,15 @@ const api = {
     }
   },
 
+  cortex: {
+    openGraph:       ():                              Promise<void>          => ipcRenderer.invoke('cortex:openGraph'),
+    openGraphWindow: ():                              Promise<void>          => ipcRenderer.invoke('cortex:openGraphWindow'),
+    getReport:       ():                              Promise<string | null> => ipcRenderer.invoke('cortex:getReport'),
+    query:           (question: string):              Promise<string>        => ipcRenderer.invoke('cortex:query', question),
+    path:            (from: string, to: string):      Promise<string>        => ipcRenderer.invoke('cortex:path', from, to),
+    explain:         (node: string):                  Promise<string>        => ipcRenderer.invoke('cortex:explain', node),
+  },
+
   on: (
     channel: 'sync:complete' | 'reminder:sent' | 'task:updated' | 'message:sent' | 'question:answered' | 'comex:import:folderReady' | 'backup:complete' | 'backup:local:complete' | 'drive:sessionExpired' | 'chat:chunk' | 'chat:done' | 'chat:error' | 'chat:dataChanged' | 'chat:proactiveAlerts' | 'powersync:status' | 'powersync:dataChanged' | 'auth:sessionChanged',
     callback: (data: unknown) => void
