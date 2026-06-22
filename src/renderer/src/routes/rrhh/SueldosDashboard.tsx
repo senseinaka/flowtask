@@ -202,7 +202,7 @@ function UploadZone({ onFilePath }: { onFilePath: (p: string) => void }) {
     setDragOver(false)
     const file = e.dataTransfer.files[0]
     if (!file?.name.toLowerCase().endsWith('.pdf')) return
-    const p = (file as File & { path?: string }).path ?? ''
+    const p = window.api.utils.getFilePath(file)
     if (p) onFilePath(p)
   }
 

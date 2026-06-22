@@ -2894,6 +2894,8 @@ export interface PayrollEmployee {
   tareaDesempenada: string
   totalNeto: string
   totalNetoRaw: number
+  legajo: string
+  fechaIngreso: string
 }
 
 export interface PayrollValidation {
@@ -2919,6 +2921,8 @@ export interface RrhhColaborador {
   cuil: string
   nombre: string
   tarea_habitual: string
+  legajo: string | null
+  fecha_ingreso: string | null
   activo: number
   created_at: number
   updated_at: number
@@ -2949,6 +2953,7 @@ export interface RrhhSueldo {
   total_neto: number
   tarea: string
   periodo_abonado: string
+  notas: string | null
   created_at: number
   updated_at: number
 }

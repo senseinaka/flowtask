@@ -1098,7 +1098,9 @@ const api = {
     },
     sueldos: {
       list:                  (periodoId: string): Promise<RrhhSueldoConColaborador[]>              => ipcRenderer.invoke('rrhh:sueldos:list', periodoId),
+      updateNotas:           (id: string, notas: string | null): Promise<void>                     => ipcRenderer.invoke('rrhh:sueldos:updateNotas', id, notas),
     },
+    exportXls:               (periodoLabel: string, defaultFileName: string, rows: Record<string, unknown>[]): Promise<string | null> => ipcRenderer.invoke('rrhh:exportXls', periodoLabel, defaultFileName, rows),
     drive: {
       openFolder:            (folderId: string): Promise<void>                                     => ipcRenderer.invoke('rrhh:drive:openFolder', folderId),
       openFile:              (fileId: string): Promise<void>                                       => ipcRenderer.invoke('rrhh:drive:openFile', fileId),
@@ -1115,7 +1117,11 @@ const api = {
 
   off: (channel: string) => {
     ipcRenderer.removeAllListeners(channel)
-  }
+  },
+
+  utils: {
+    getFilePath: (file: File): string => webUtils.getPathForFile(file),
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

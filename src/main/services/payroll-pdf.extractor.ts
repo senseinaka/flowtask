@@ -17,6 +17,10 @@ const COORDS = {
   totalNetoValue: { y: 59,  x: 361 },
 }
 
+// Labels to search for legajo and fecha de ingreso (case-insensitive)
+const LEGAJO_LABELS    = ['LEGAJO', 'LEG.', 'NRO.LEG', 'NRO. LEG', 'N°LEG', 'NROLEG', 'LEG']
+const INGRESO_LABELS   = ['F.INGRESO', 'FEC.ING', 'FECHA ING', 'F. ING', 'INGRESO', 'F.ING.', 'FECINGR', 'ANT.']
+
 function near(a: number, b: number, tol: number): boolean {
   return Math.abs(a - b) <= tol
 }
@@ -58,6 +62,24 @@ function findTextAtOrAfterX(rows: Map<number, PdfTextItem[]>, targetY: number, m
   return ''
 }
 
+// Search all rows for a label, return the first non-empty token immediately after it
+function findValueByLabel(rows: Map<number, PdfTextItem[]>, labels: string[]): string {
+  for (const [_y, items] of rows) {
+    const sorted = [...items].sort((a, b) => a.x - b.x)
+    for (let i = 0; i < sorted.length; i++) {
+      const text = sorted[i].str.trim().toUpperCase().replace(/\s+/g, '')
+      if (labels.some(l => text === l.replace(/\s+/g, '') || text.startsWith(l.replace(/\s+/g, '')))) {
+        // Return next non-empty token on the same row
+        for (let j = i + 1; j < sorted.length; j++) {
+          const val = sorted[j].str.trim()
+          if (val) return val
+        }
+      }
+    }
+  }
+  return ''
+}
+
 function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatted: string } {
   // Find "TOTAL NETO" label row, then grab the numeric value to its right
   for (const [rowY, items] of rows) {
@@ -85,15 +107,20 @@ function formatNeto(n: number): string {
 
 function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: number): PayrollEmployee | null {
   const leftItems = items.filter(i => i.x < pageWidth / 2)
-  const rows = groupByRow(leftItems)
+  const leftRows  = groupByRow(leftItems)
+  const allRows   = groupByRow(items)   // full page for label search
 
-  const apellido = findNearestStr(rows, COORDS.apellido.y, COORDS.apellido.x)
-  const documento = findNearestStr(rows, COORDS.documento.y, COORDS.documento.x)
-  const cuil = findNearestStr(rows, COORDS.cuil.y, COORDS.cuil.x)
-  const fecha = findNearestStr(rows, COORDS.fecha.y, COORDS.fecha.x)
-  const tarea = findTextAtOrAfterX(rows, COORDS.tarea.y, COORDS.tarea.x)
-  const periodo = findTextAtOrAfterX(rows, COORDS.periodo.y, COORDS.periodo.x)
-  const { raw: totalNetoRaw, formatted: totalNeto } = findTotalNeto(rows)
+  const apellido = findNearestStr(leftRows, COORDS.apellido.y, COORDS.apellido.x)
+  const documento = findNearestStr(leftRows, COORDS.documento.y, COORDS.documento.x)
+  const cuil = findNearestStr(leftRows, COORDS.cuil.y, COORDS.cuil.x)
+  const fecha = findNearestStr(leftRows, COORDS.fecha.y, COORDS.fecha.x)
+  const tarea = findTextAtOrAfterX(leftRows, COORDS.tarea.y, COORDS.tarea.x)
+  const periodo = findTextAtOrAfterX(leftRows, COORDS.periodo.y, COORDS.periodo.x)
+  const { raw: totalNetoRaw, formatted: totalNeto } = findTotalNeto(leftRows)
+
+  // Label-based extraction (searches full page)
+  const legajo       = findValueByLabel(allRows, LEGAJO_LABELS)
+  const fechaIngreso = findValueByLabel(allRows, INGRESO_LABELS)
 
   // If we can't find a name this page is probably blank/invalid
   if (!apellido) return null
@@ -108,6 +135,8 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
     tareaDesempenada: tarea,
     totalNeto,
     totalNetoRaw,
+    legajo,
+    fechaIngreso,
   }
 }
 

@@ -77,6 +77,8 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
       cuil: emp.cuil,
       nombre: emp.apellidoYNombres,
       tarea_habitual: emp.tareaDesempenada,
+      legajo: emp.legajo || undefined,
+      fecha_ingreso: emp.fechaIngreso || undefined,
     })
     // Track if was new (no id means fresh insert — but upsertColaborador always returns existing or new)
     // We detect "nuevo" by checking if we inserted vs updated: count both

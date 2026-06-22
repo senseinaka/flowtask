@@ -30,24 +30,30 @@ export async function upsertColaborador(data: {
   cuil: string
   nombre: string
   tarea_habitual: string
+  legajo?: string
+  fecha_ingreso?: string
 }): Promise<RrhhColaborador> {
   const db = getPowerSyncDb()
   const existing = await getColaboradorByDocumento(data.documento)
   const now = Date.now()
 
   if (existing) {
+    // Only update fecha_ingreso if it's not set yet (don't overwrite with empty)
+    const fechaIngreso = data.fecha_ingreso || existing.fecha_ingreso
+    const legajo = data.legajo || existing.legajo
     await db.execute(
-      `UPDATE rrhh_colaboradores SET cuil = ?, nombre = ?, tarea_habitual = ?, updated_at = ? WHERE id = ?`,
-      [data.cuil, data.nombre, data.tarea_habitual, now, existing.id]
+      `UPDATE rrhh_colaboradores SET cuil = ?, nombre = ?, tarea_habitual = ?, legajo = ?, fecha_ingreso = ?, updated_at = ? WHERE id = ?`,
+      [data.cuil, data.nombre, data.tarea_habitual, legajo, fechaIngreso, now, existing.id]
     )
-    return { ...existing, ...data, updated_at: now }
+    return { ...existing, ...data, legajo: legajo ?? null, fecha_ingreso: fechaIngreso ?? null, updated_at: now }
   }
 
   const id = randomUUID()
   await db.execute(
-    `INSERT INTO rrhh_colaboradores (id, workspace_id, documento, cuil, nombre, tarea_habitual, activo, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [id, WORKSPACE_ID, data.documento, data.cuil, data.nombre, data.tarea_habitual, now, now]
+    `INSERT INTO rrhh_colaboradores (id, workspace_id, documento, cuil, nombre, tarea_habitual, legajo, fecha_ingreso, activo, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [id, WORKSPACE_ID, data.documento, data.cuil, data.nombre, data.tarea_habitual,
+     data.legajo ?? null, data.fecha_ingreso ?? null, now, now]
   )
   return db.getOptional<RrhhColaborador>(`SELECT * FROM rrhh_colaboradores WHERE id = ?`, [id]) as Promise<RrhhColaborador>
 }
@@ -125,6 +131,13 @@ export async function updatePeriodoStats(id: string, data: {
 export async function clearSueldosByPeriodo(periodoId: string): Promise<void> {
   await getPowerSyncDb().execute(
     `DELETE FROM rrhh_sueldos WHERE periodo_id = ?`, [periodoId]
+  )
+}
+
+export async function updateSueldoNotas(id: string, notas: string | null): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_sueldos SET notas = ?, updated_at = ? WHERE id = ?`,
+    [notas, Date.now(), id]
   )
 }
 

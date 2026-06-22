@@ -52,3 +52,22 @@ export function useDeletePeriodo() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:periodos'] }),
   })
 }
+
+export function useUpdateSueldoNotas(periodoId: string) {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { id: string; notas: string | null }>({
+    mutationFn: ({ id, notas }) => window.api.rrhh.sueldos.updateNotas(id, notas),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:sueldos', periodoId] }),
+  })
+}
+
+export function useExportXls() {
+  return useMutation<string | null, Error, {
+    periodoLabel: string
+    defaultFileName: string
+    rows: Record<string, unknown>[]
+  }>({
+    mutationFn: ({ periodoLabel, defaultFileName, rows }) =>
+      window.api.rrhh.exportXls(periodoLabel, defaultFileName, rows),
+  })
+}
