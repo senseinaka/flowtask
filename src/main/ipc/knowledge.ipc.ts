@@ -31,8 +31,10 @@ import {
   summarizeKnowledgeEntry,
   generateKnowledgeGlobalSummary,
   generateEntryThreadDocument,
-  analyzeTopicEntries
+  analyzeTopicEntries,
+  transformKnowledgeText
 } from '../services/knowledge-ai.service'
+import type { AITransformAction } from '../services/knowledge-ai.service'
 import { driveService } from '../services/drive.service'
 import type { KnowledgeListFilters } from '@shared/types'
 
@@ -305,4 +307,10 @@ export function registerKnowledgeIpc(): void {
     checks: string
     entry_count: number
   }) => upsertThreadDoc(entryId, data))
+
+  // ── AI Text Transform ─────────────────────────────────────────────────────
+
+  ipcMain.handle('knowledge:entries:transformText', async (
+    _e, text: string, action: AITransformAction
+  ) => transformKnowledgeText(text, action))
 }

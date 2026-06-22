@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
-import { Node as TiptapNode, mergeAttributes } from '@tiptap/core'
+import { TiptapNode as _TiptapNode, mergeAttributes } from '@tiptap/core'
+import { TiptapNode, mergeAttributes } from '@tiptap/core'
 import type { Editor, NodeViewProps } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -16,13 +17,16 @@ import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import Placeholder from '@tiptap/extension-placeholder'
+import TextStyle, { FontFamily, FontSize } from '@tiptap/extension-text-style'
 import {
   Bold, Italic, Underline as UIcon, Strikethrough, Highlighter,
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, ListChecks, Quote, Code2,
   Table as TableIcon, Link2, Minus, Undo2, Redo2,
-  Heading1, Heading2, Heading3, Type, ChevronDown, Film
+  Heading1, Heading2, Heading3, Type, ChevronDown, Film,
+  Sparkles, Loader2, LayoutTemplate, ALargeSmall
 } from 'lucide-react'
+import { useTransformKnowledgeText } from '../../hooks/useKnowledge'
 
 interface Props {
   initialHtml: string
@@ -55,6 +59,8 @@ function VideoEmbedView({ node }: NodeViewProps) {
   )
 }
 
+import { Node as TiptapNode } from '@tiptap/core'
+
 const VideoEmbed = TiptapNode.create({
   name: 'videoEmbed',
   group: 'block',
@@ -72,6 +78,93 @@ const VideoEmbed = TiptapNode.create({
     return ReactNodeViewRenderer(VideoEmbedView)
   },
 })
+
+// ── Font families ───────────────────────────────────────────────────
+const FONTS = [
+  { label: 'Sistema',       value: '' },
+  { label: 'Arial',         value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Georgia',       value: 'Georgia, serif' },
+  { label: 'Times New Roman', value: "'Times New Roman', Times, serif" },
+  { label: 'Trebuchet MS',  value: "'Trebuchet MS', Tahoma, sans-serif" },
+  { label: 'Monoespaciada', value: "'Cascadia Code', Consolas, monospace" },
+]
+
+// ── Templates ───────────────────────────────────────────────────────
+const TEMPLATES = [
+  {
+    label: 'Reunión',
+    html: `<h2>Reunión</h2>
+<p><strong>Fecha:</strong> </p>
+<p><strong>Participantes:</strong> </p>
+<h3>Agenda</h3>
+<ul><li></li></ul>
+<h3>Puntos tratados</h3>
+<ul><li></li></ul>
+<h3>Decisiones</h3>
+<ul><li></li></ul>
+<h3>Próximos pasos</h3>
+<ul data-type="taskList"><li data-checked="false"><div></div></li></ul>`,
+  },
+  {
+    label: 'Proveedor',
+    html: `<h2>Ficha de Proveedor</h2>
+<p><strong>Empresa:</strong> </p>
+<p><strong>Contacto:</strong> </p>
+<p><strong>Email / Tel:</strong> </p>
+<h3>Condiciones comerciales</h3>
+<ul><li><strong>Moneda:</strong> </li><li><strong>Plazo de pago:</strong> </li><li><strong>Lead time:</strong> </li><li><strong>MOQ:</strong> </li></ul>
+<h3>Productos / Categorías</h3>
+<ul><li></li></ul>
+<h3>Observaciones</h3>
+<p></p>`,
+  },
+  {
+    label: 'Nota técnica',
+    html: `<h2>Nota Técnica</h2>
+<h3>Contexto</h3>
+<p></p>
+<h3>Problema / Objetivo</h3>
+<p></p>
+<h3>Análisis</h3>
+<p></p>
+<h3>Solución / Propuesta</h3>
+<p></p>
+<h3>Conclusión</h3>
+<p></p>`,
+  },
+  {
+    label: 'Informe',
+    html: `<h2>Informe</h2>
+<h3>Resumen ejecutivo</h3>
+<p></p>
+<h3>Antecedentes</h3>
+<p></p>
+<h3>Hallazgos</h3>
+<ul><li></li></ul>
+<h3>Recomendaciones</h3>
+<ol><li></li></ol>`,
+  },
+  {
+    label: 'Seguimiento',
+    html: `<h2>Nota de Seguimiento</h2>
+<p><strong>Contexto:</strong> </p>
+<h3>Estado actual</h3>
+<p></p>
+<h3>Pendientes</h3>
+<ul data-type="taskList"><li data-checked="false"><div></div></li></ul>
+<h3>Próxima revisión</h3>
+<p></p>`,
+  },
+]
+
+// ── AI actions ──────────────────────────────────────────────────────
+const AI_ACTIONS = [
+  { id: 'rewrite',      label: 'Reescribir' },
+  { id: 'expand',       label: 'Expandir' },
+  { id: 'shorten',      label: 'Acortar' },
+  { id: 'translate_en', label: 'Traducir al inglés' },
+  { id: 'bullets',      label: 'Extraer puntos clave' },
+]
 
 // ── Slash commands ──────────────────────────────────────────────────
 type SlashCmd = {
@@ -184,6 +277,115 @@ function HeadingDrop({ editor }: { editor: Editor }) {
   )
 }
 
+// ── Font family dropdown ────────────────────────────────────────────
+function FontDrop({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const current = editor.getAttributes('textStyle').fontFamily as string | undefined
+  const label = FONTS.find(f => f.value === (current ?? ''))?.label ?? 'Fuente'
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(v => !v)} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        height: 27, padding: '0 7px', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)',
+        color: 'var(--text-body)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 110,
+      }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        <ChevronDown size={10} style={{ flexShrink: 0 }}/>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 3, zIndex: 200,
+          background: 'var(--surface-card)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+          minWidth: 160, overflow: 'hidden',
+        }}>
+          {FONTS.map(f => (
+            <button key={f.label} type="button"
+              onClick={() => {
+                if (f.value) editor.chain().focus().setFontFamily(f.value).run()
+                else editor.chain().focus().unsetFontFamily().run()
+                setOpen(false)
+              }}
+              style={{
+                display: 'block', width: '100%', padding: '6px 12px', border: 'none',
+                textAlign: 'left', background: 'transparent', color: 'var(--text-body)',
+                fontSize: 12, cursor: 'pointer', fontFamily: f.value || 'inherit',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--slate-700)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Template dropdown ───────────────────────────────────────────────
+function TemplDrop({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(v => !v)} title="Plantillas" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        height: 27, padding: '0 7px', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)',
+        color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+      }}>
+        <LayoutTemplate size={11}/> <ChevronDown size={9}/>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 3, zIndex: 200,
+          background: 'var(--surface-card)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+          minWidth: 160, overflow: 'hidden',
+        }}>
+          {TEMPLATES.map(t => (
+            <button key={t.label} type="button"
+              onClick={() => {
+                editor.chain().focus().setContent(t.html).run()
+                setOpen(false)
+              }}
+              style={{
+                display: 'block', width: '100%', padding: '6px 12px', border: 'none',
+                textAlign: 'left', background: 'transparent', color: 'var(--text-body)',
+                fontSize: 12, cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--slate-700)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OptBtn({ label, onClick }: { label: string; onClick: () => void }) {
   const [hov, setHov] = useState(false)
   return (
@@ -197,6 +399,14 @@ function OptBtn({ label, onClick }: { label: string; onClick: () => void }) {
       {label}
     </button>
   )
+}
+
+// ── Font size helper ────────────────────────────────────────────────
+function adjustFontSize(editor: Editor, delta: number) {
+  const raw = editor.getAttributes('textStyle').fontSize as string | undefined
+  const current = raw ? parseInt(raw) : 15
+  const next = Math.max(8, Math.min(60, current + delta))
+  editor.chain().focus().setFontSize(`${next}px`).run()
 }
 
 // ── Main toolbar ────────────────────────────────────────────────────
@@ -217,6 +427,15 @@ function Toolbar({ editor }: { editor: Editor }) {
       background: 'var(--surface-card)', flexShrink: 0,
     }}>
       <HeadingDrop editor={e} />
+      <FontDrop editor={e} />
+      <Sep />
+      {/* Font size */}
+      <TBtn active={false} title="Reducir tamaño" onClick={() => adjustFontSize(e, -2)}>
+        <span style={{ fontSize: 9, fontWeight: 700 }}>A</span>
+      </TBtn>
+      <TBtn active={false} title="Aumentar tamaño" onClick={() => adjustFontSize(e, 2)}>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>A</span>
+      </TBtn>
       <Sep />
       <TBtn active={e.isActive('bold')}      title="Negrita (Ctrl+B)"   onClick={() => e.chain().focus().toggleBold().run()}><Bold size={12}/></TBtn>
       <TBtn active={e.isActive('italic')}    title="Cursiva (Ctrl+I)"   onClick={() => e.chain().focus().toggleItalic().run()}><Italic size={12}/></TBtn>
@@ -228,15 +447,17 @@ function Toolbar({ editor }: { editor: Editor }) {
       <TBtn active={e.isActive({ textAlign: 'center' })} title="Centrar"      onClick={() => e.chain().focus().setTextAlign('center').run()}><AlignCenter size={12}/></TBtn>
       <TBtn active={e.isActive({ textAlign: 'right' })}  title="Alinear der." onClick={() => e.chain().focus().setTextAlign('right').run()}><AlignRight size={12}/></TBtn>
       <Sep />
-      <TBtn active={e.isActive('bulletList')}  title="Lista (/ + lista)"          onClick={() => e.chain().focus().toggleBulletList().run()}><List size={12}/></TBtn>
-      <TBtn active={e.isActive('orderedList')} title="Lista numerada"             onClick={() => e.chain().focus().toggleOrderedList().run()}><ListOrdered size={12}/></TBtn>
-      <TBtn active={e.isActive('taskList')}    title="Checklist"                  onClick={() => e.chain().focus().toggleTaskList().run()}><ListChecks size={12}/></TBtn>
-      <TBtn active={e.isActive('blockquote')}  title="Cita"                       onClick={() => e.chain().focus().toggleBlockquote().run()}><Quote size={12}/></TBtn>
-      <TBtn active={e.isActive('codeBlock')}   title="Bloque de código"           onClick={() => e.chain().focus().toggleCodeBlock().run()}><Code2 size={12}/></TBtn>
+      <TBtn active={e.isActive('bulletList')}  title="Lista"             onClick={() => e.chain().focus().toggleBulletList().run()}><List size={12}/></TBtn>
+      <TBtn active={e.isActive('orderedList')} title="Lista numerada"    onClick={() => e.chain().focus().toggleOrderedList().run()}><ListOrdered size={12}/></TBtn>
+      <TBtn active={e.isActive('taskList')}    title="Checklist"         onClick={() => e.chain().focus().toggleTaskList().run()}><ListChecks size={12}/></TBtn>
+      <TBtn active={e.isActive('blockquote')}  title="Cita"              onClick={() => e.chain().focus().toggleBlockquote().run()}><Quote size={12}/></TBtn>
+      <TBtn active={e.isActive('codeBlock')}   title="Bloque de código"  onClick={() => e.chain().focus().toggleCodeBlock().run()}><Code2 size={12}/></TBtn>
       <Sep />
       <TBtn active={false} title="Insertar tabla" onClick={() => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon size={12}/></TBtn>
-      <TBtn active={e.isActive('link')}  title="Enlace" onClick={setLink}><Link2 size={12}/></TBtn>
+      <TBtn active={e.isActive('link')} title="Enlace" onClick={setLink}><Link2 size={12}/></TBtn>
       <TBtn active={false} title="Separador" onClick={() => e.chain().focus().setHorizontalRule().run()}><Minus size={12}/></TBtn>
+      <Sep />
+      <TemplDrop editor={e} />
       <div style={{ flex: 1 }} />
       <TBtn active={false} disabled={!e.can().undo()} title="Deshacer (Ctrl+Z)" onClick={() => e.chain().focus().undo().run()}><Undo2 size={12}/></TBtn>
       <TBtn active={false} disabled={!e.can().redo()} title="Rehacer (Ctrl+Y)" onClick={() => e.chain().focus().redo().run()}><Redo2 size={12}/></TBtn>
@@ -251,7 +472,9 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
   const slashRef  = useRef<SlashState>(null)
   const [slash, setSlash]   = useState<SlashState>(null)
   const [slashXY, setSlashXY] = useState<{ x: number; y: number } | null>(null)
+  const [aiMenu, setAiMenu] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const transformAI = useTransformKnowledgeText()
 
   const closeSlash = useCallback(() => {
     slashRef.current = null
@@ -275,6 +498,9 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
       TableHeader,
       Placeholder.configure({ placeholder: 'Escribí, pegá contenido o usá "/" para comandos...' }),
       VideoEmbed,
+      TextStyle,
+      FontFamily,
+      FontSize,
     ],
     content: initialHtml || '',
     editable: !readOnly,
@@ -309,6 +535,14 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
 
   // Sync readOnly
   useEffect(() => { editor?.setEditable(!readOnly) }, [editor, readOnly])
+
+  // Close AI menu on click outside
+  useEffect(() => {
+    if (!aiMenu) return
+    const close = () => setAiMenu(false)
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [aiMenu])
 
   // Capture-phase keyboard handler for slash menu navigation
   useEffect(() => {
@@ -369,6 +603,17 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
     closeSlash()
   }, [editor, closeSlash])
 
+  // AI inline transform
+  const handleAIAction = useCallback(async (actionId: string) => {
+    if (!editor) return
+    setAiMenu(false)
+    const { from, to } = editor.state.selection
+    const text = editor.state.doc.textBetween(from, to, ' ')
+    if (!text.trim()) return
+    const result = await transformAI.mutateAsync({ text, action: actionId })
+    editor.chain().focus().insertContentAt({ from, to }, result).run()
+  }, [editor, transformAI])
+
   return (
     <div ref={wrapRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
       {!readOnly && editor && <Toolbar editor={editor} />}
@@ -393,6 +638,54 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
               if (!url) { editor.chain().focus().unsetLink().run(); return }
               editor.chain().focus().setLink({ href: url }).run()
             }}><Link2 size={11}/></TBtn>
+            <Sep/>
+            {/* AI inline actions */}
+            <div style={{ position: 'relative' }} onMouseDown={e => e.stopPropagation()}>
+              <button
+                type="button"
+                title="Acciones IA"
+                disabled={transformAI.isPending}
+                onClick={() => setAiMenu(v => !v)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  height: 27, padding: '0 6px', border: 'none', borderRadius: 'var(--radius-md)',
+                  background: aiMenu ? 'rgba(20,184,166,.15)' : 'transparent',
+                  color: '#2dd4bf', cursor: transformAI.isPending ? 'wait' : 'pointer',
+                  fontSize: 10, fontWeight: 600,
+                }}
+              >
+                {transformAI.isPending
+                  ? <Loader2 size={10} className="animate-spin"/>
+                  : <Sparkles size={10}/>
+                }
+                IA
+              </button>
+              {aiMenu && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 400,
+                  background: 'var(--surface-card)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,.5)',
+                  minWidth: 160, overflow: 'hidden',
+                }}>
+                  {AI_ACTIONS.map(a => (
+                    <button key={a.id} type="button"
+                      onClick={() => void handleAIAction(a.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        width: '100%', padding: '6px 12px', border: 'none',
+                        background: 'transparent', color: 'var(--text-body)',
+                        fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--slate-700)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <Sparkles size={10} style={{ color: '#2dd4bf', flexShrink: 0 }}/>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </BubbleMenu>
       )}

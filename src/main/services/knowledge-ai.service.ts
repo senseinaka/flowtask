@@ -127,6 +127,31 @@ export async function generateEntryThreadDocument(
   }
 }
 
+export type AITransformAction = 'rewrite' | 'expand' | 'shorten' | 'translate_en' | 'bullets'
+
+const TRANSFORM_PROMPTS: Record<AITransformAction, string> = {
+  rewrite:      'Reescribí el siguiente texto en español de forma más clara y concisa, manteniendo todas las ideas originales. Devolvé solo el texto reescrito, sin explicaciones ni encabezados.',
+  expand:       'Expandí el siguiente texto en español añadiendo más detalle, contexto o ejemplos relevantes. Devolvé solo el texto expandido, sin explicaciones.',
+  shorten:      'Acortá el siguiente texto en español manteniendo solo las ideas y datos más importantes. Devolvé solo el texto acortado, sin explicaciones.',
+  translate_en: 'Translate the following text to English. Return only the translated text, no explanations or headings.',
+  bullets:      'Convertí el siguiente texto en una lista de puntos clave en español (máximo 8 puntos). Usá "• " al inicio de cada punto. Devolvé solo la lista, sin encabezado ni explicaciones.',
+}
+
+export async function transformKnowledgeText(
+  text: string,
+  action: AITransformAction
+): Promise<string> {
+  const client = getClient()
+  const resp = await client.messages.create({
+    model: MODEL_ENTRY,
+    max_tokens: 600,
+    system: TRANSFORM_PROMPTS[action],
+    messages: [{ role: 'user', content: text }]
+  })
+  const block = resp.content.find(b => b.type === 'text')
+  return block?.type === 'text' ? block.text.trim() : text
+}
+
 export async function analyzeTopicEntries(
   entries: KnowledgeEntry[],
   topic: string

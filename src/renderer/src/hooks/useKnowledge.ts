@@ -201,6 +201,13 @@ export function useAnalyzeTopic() {
   })
 }
 
+export function useTransformKnowledgeText() {
+  return useMutation({
+    mutationFn: ({ text, action }: { text: string; action: string }): Promise<string> =>
+      window.api.knowledge.entries.transformText(text, action),
+  })
+}
+
 // ── Global Summaries ──────────────────────────────────────────────────────────
 
 export function useKnowledgeGlobalSummaries() {

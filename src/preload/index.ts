@@ -1033,6 +1033,7 @@ const api = {
       selectFile:         (): Promise<string | null>                                                                                                                           => ipcRenderer.invoke('knowledge:entries:selectFile'),
       listChildren:       (parentId: string): Promise<KnowledgeEntry[]>                                                                                                        => ipcRenderer.invoke('knowledge:entries:listChildren', parentId),
       generateDocument:   (entryId: string): Promise<{ synthesis: string; keyData: string[]; nextSteps: string[] }>                                                            => ipcRenderer.invoke('knowledge:entries:generateDocument', entryId),
+      transformText:      (text: string, action: string): Promise<string>                                                                                                        => ipcRenderer.invoke('knowledge:entries:transformText', text, action),
     },
     topic: {
       analyze:       (topic: string, userId: string): Promise<KnowledgeGlobalSummary>  => ipcRenderer.invoke('knowledge:topic:analyze', topic, userId),
