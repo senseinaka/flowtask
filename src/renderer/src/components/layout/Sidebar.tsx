@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  LayoutList, Columns3, Settings, Loader2, CheckSquare,
+  LayoutList, Columns3, Settings, Loader2,
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
@@ -195,9 +195,13 @@ export default function Sidebar() {
       className="flex-shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col relative"
       style={{ width: 52 }}
     >
-      {/* Logo */}
+      {/* Logo — ascending bar-chart mark (bars-only on dark rail) */}
       <div className="flex items-center justify-center py-[18px] border-b border-slate-700">
-        <CheckSquare size={18} className="text-indigo-400" />
+        <svg width="26" height="26" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <rect x="9"  y="29" width="8" height="11" rx="2.5" fill="#4b566a" />
+          <rect x="19" y="20" width="8" height="20" rx="2.5" fill="#0e88b6" />
+          <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
+        </svg>
       </div>
 
       {/* Workspace buttons */}

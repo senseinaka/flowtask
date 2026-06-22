@@ -2,12 +2,185 @@
 
 @layer base {
   :root {
-    --color-bg: #0f172a;
-    --color-surface: #1e293b;
-    --color-border: #334155;
-    --color-text: #f1f5f9;
-    --color-muted: #94a3b8;
-    --color-accent: #6366f1;
+    /* ── Neutral surfaces (slate scale) ──────────────────────────────────── */
+    --slate-950: #020617;
+    --slate-900: #0f172a;
+    --slate-850: #16213b;
+    --slate-800: #1e293b;
+    --slate-750: #233047;
+    --slate-700: #334155;
+    --slate-600: #475569;
+    --slate-500: #64748b;
+    --slate-400: #94a3b8;
+    --slate-300: #cbd5e1;
+    --slate-200: #e2e8f0;
+    --slate-100: #f1f5f9;
+    --white:     #ffffff;
+
+    /* ── Semantic surface aliases ─────────────────────────────────────────── */
+    --bg-app:         var(--slate-900);
+    --bg-rail:        var(--slate-800);
+    --surface-card:   var(--slate-800);
+    --surface-sunken: var(--slate-900);
+    --surface-raised: var(--slate-700);
+    --surface-modal:  var(--slate-800);
+
+    /* ── Borders ──────────────────────────────────────────────────────────── */
+    --border:         var(--slate-700);
+    --border-strong:  var(--slate-600);
+    --border-subtle:  #334155cc;
+
+    /* ── Text ────────────────────────────────────────────────────────────── */
+    --text-strong: var(--white);
+    --text-body:   var(--slate-100);
+    --text-muted:  var(--slate-400);
+    --text-faint:  var(--slate-500);
+    --text-ghost:  var(--slate-600);
+
+    /* ── Primary (indigo) ─────────────────────────────────────────────────── */
+    --indigo-700: #4338ca;
+    --indigo-600: #4f46e5;
+    --indigo-500: #6366f1;
+    --indigo-400: #818cf8;
+    --indigo-300: #a5b4fc;
+    --primary:        var(--indigo-600);
+    --primary-hover:  var(--indigo-500);
+    --primary-ring:   #6366f14d;
+    --focus-border:   var(--indigo-500);
+
+    /* ── Workspace accents ────────────────────────────────────────────────── */
+    --ws-trabajo:  #818cf8;
+    --ws-empresa:  #fb923c;
+    --ws-finanzas: #34d399;
+    --ws-agenda:   #60a5fa;
+    --ws-sistema:  #a78bfa;
+    --comex-accent:#22d3ee;
+    --ai-accent:   #7c3aed;
+
+    /* ── Semantic / status ────────────────────────────────────────────────── */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger:  #ef4444;
+    --info:    #3b82f6;
+    --neutral: #64748b;
+
+    --success-400: #34d399;
+    --warning-400: #fbbf24;
+    --danger-400:  #f87171;
+    --info-400:    #60a5fa;
+
+    /* ── Priority scale ───────────────────────────────────────────────────── */
+    --priority-critico:  #ef4444;
+    --priority-alto:     #f97316;
+    --priority-medio:    #eab308;
+    --priority-bajo:     #3b82f6;
+    --priority-algunDia: #9ca3af;
+
+    /* ── Typography ───────────────────────────────────────────────────────── */
+    --font-sans: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+    --text-9:    9px;
+    --text-10:  10px;
+    --text-11:  11px;
+    --text-xs:  12px;
+    --text-sm:  14px;
+    --text-base:15px;
+    --text-lg:  18px;
+    --text-xl:  20px;
+    --text-2xl: 24px;
+    --text-3xl: 30px;
+
+    --weight-normal:   400;
+    --weight-medium:   500;
+    --weight-semibold: 600;
+    --weight-bold:     700;
+
+    --leading-tight:   1.2;
+    --leading-snug:    1.35;
+    --leading-normal:  1.5;
+    --leading-relaxed: 1.6;
+
+    --tracking-wider:  0.05em;
+    --tracking-normal: 0;
+
+    --type-kpi-size:    var(--text-3xl);
+    --type-kpi-weight:  var(--weight-bold);
+    --type-h1-size:     var(--text-lg);
+    --type-h1-weight:   var(--weight-bold);
+    --type-label-size:  var(--text-10);
+    --type-label-weight:var(--weight-semibold);
+    --type-body-size:   var(--text-sm);
+    --type-badge-size:  var(--text-11);
+
+    /* ── Spacing (4px grid) ───────────────────────────────────────────────── */
+    --space-0:   0;
+    --space-0-5: 2px;
+    --space-1:   4px;
+    --space-1-5: 6px;
+    --space-2:   8px;
+    --space-2-5: 10px;
+    --space-3:   12px;
+    --space-4:   16px;
+    --space-5:   20px;
+    --space-6:   24px;
+    --space-8:   32px;
+
+    /* ── Radii ────────────────────────────────────────────────────────────── */
+    --radius-sm:   4px;
+    --radius-md:   6px;
+    --radius-lg:   8px;
+    --radius-xl:   12px;
+    --radius-2xl:  16px;
+    --radius-full: 9999px;
+
+    /* ── Fixed layout sizes ───────────────────────────────────────────────── */
+    --rail-width:       52px;
+    --rail-panel-width: 148px;
+    --rail-btn:         36px;
+    --fab-size:         48px;
+    --hit-min:          36px;
+    --avatar-sm:        28px;
+    --avatar-md:        36px;
+
+    /* ── Border widths ────────────────────────────────────────────────────── */
+    --border-width:        1px;
+    --border-width-accent: 3px;
+    --border-width-tab:    2px;
+
+    /* ── Shadows ──────────────────────────────────────────────────────────── */
+    --shadow-none:   none;
+    --shadow-sm:     0 1px 2px rgba(0,0,0,.30);
+    --shadow-md:     0 4px 12px rgba(0,0,0,.35);
+    --shadow-flyout: 4px 0 20px rgba(0,0,0,.45);
+    --shadow-lg:     0 10px 25px rgba(0,0,0,.45);
+    --shadow-2xl:    0 25px 50px -12px rgba(0,0,0,.70);
+    --shadow-fab:    0 8px 20px rgba(76,29,149,.50);
+    --shadow-toast:  0 25px 50px -12px rgba(0,0,0,.70);
+
+    /* ── Backdrop ─────────────────────────────────────────────────────────── */
+    --scrim: rgba(0,0,0,.70);
+
+    /* ── Focus rings ──────────────────────────────────────────────────────── */
+    --ring-focus:      0 0 0 1px var(--indigo-500);
+    --ring-focus-soft: 0 0 0 3px var(--primary-ring);
+
+    /* ── Motion ───────────────────────────────────────────────────────────── */
+    --ease-out:  cubic-bezier(0, 0, 0.2, 1);
+    --dur-fast:  100ms;
+    --dur-base:  150ms;
+    --dur-slow:  200ms;
+    --transition-colors: color var(--dur-base) var(--ease-out),
+                         background-color var(--dur-base) var(--ease-out),
+                         border-color var(--dur-base) var(--ease-out);
+
+    /* ── Legacy aliases (backward compatibility) ──────────────────────────── */
+    --color-bg:      var(--bg-app);
+    --color-surface: var(--surface-card);
+    --color-border:  var(--border);
+    --color-text:    var(--text-body);
+    --color-muted:   var(--text-muted);
+    --color-accent:  var(--primary-hover);
   }
 
   * {
@@ -18,11 +191,16 @@
     height: 100%;
     margin: 0;
     padding: 0;
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    font-size: 14px;
+    background-color: var(--bg-app);
+    color: var(--text-body);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
     -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--primary-ring);
+    color: var(--text-strong);
   }
 
   ::-webkit-scrollbar {
@@ -31,10 +209,10 @@
   }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: var(--slate-700);
     border-radius: 3px;
   }
-  ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--slate-600); }
 }
 
 @keyframes slideInRight {

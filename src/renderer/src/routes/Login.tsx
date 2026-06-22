@@ -34,9 +34,18 @@ export default function Login({ onSuccess }: LoginProps) {
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8 flex flex-col gap-4"
+        style={{ animation: 'scaleIn .2s var(--ease-out)' }}
       >
         <div className="text-center mb-2">
-          <h1 className="text-xl font-semibold text-white">Summit</h1>
+          <span className="inline-flex mb-3">
+            <svg width="52" height="52" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <rect width="48" height="48" rx="12" fill="#0f1826" />
+              <rect x="9"  y="29" width="8" height="11" rx="2.5" fill="#4b566a" />
+              <rect x="19" y="20" width="8" height="20" rx="2.5" fill="#0e88b6" />
+              <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
+            </svg>
+          </span>
+          <h1 className="text-xl font-bold text-white">Summit</h1>
           <p className="text-sm text-slate-400 mt-1">Iniciá sesión para continuar</p>
         </div>
 
