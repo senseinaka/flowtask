@@ -22,6 +22,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Backup:** backup automático de código (GitHub) y datos (Google Drive) en la nube.
 - **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
 - **Knowledge** *(en construcción — tablas y sync configurados, backend/UI pendientes)*: captura y organización de información (textos, archivos, imágenes) con resúmenes por IA y resúmenes globales por tema. Sincroniza vía PowerSync.
+- **RRHH — Sueldos:** administración mensual de sueldos por colaborador. Extrae datos de PDFs de recibos de sueldo, los guarda en Supabase via PowerSync, genera alertas inteligentes (nuevos, ausentes, variaciones), compara con el mes anterior y exporta planillas XLS. Los PDFs se almacenan en Google Drive (`Summit RRHH/Sueldos/MM-YYYY/`).
 - **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
 
 ### Visión a futuro
@@ -129,6 +130,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `company_finance_movement_entries`
 - Todas las tablas `comex_*` e `import_order_*` (incluidas `comex_logistics_quotes`, `comex_quote_files`)
 - `knowledge_entries`, `knowledge_global_summaries`
+- `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 
@@ -856,6 +858,156 @@ ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS purchase_frequency_days INT
 ```
 
 ---
+
+---
+
+## Módulo RRHH — Sueldos (junio 2026)
+
+### Propósito
+
+Carga mensual de recibos de sueldo en PDF → extracción de datos por colaborador → almacenamiento en Supabase → seguimiento histórico con comparación mes a mes → export a XLS.
+
+### Tablas (PowerSync ↔ Supabase — 3 tablas)
+
+| Tabla | Contenido |
+|-------|-----------|
+| `rrhh_colaboradores` | Un registro por empleado (documento es PK lógica). Campos: `nombre`, `documento`, `cuil`, `tarea_habitual`, `legajo`, `fecha_ingreso`, `activo` |
+| `rrhh_periodos` | Un registro por mes/año procesado. Campos: `anio`, `mes`, `label`, `total_neto`, `cantidad_colaboradores`, `pdf_nombre`, `pdf_drive_file_id`, `pdf_drive_folder_id`, `fecha_pago`, `estado` ('borrador'/'confirmado') |
+| `rrhh_sueldos` | Un registro por colaborador por período. Campos: `periodo_id`, `colaborador_id`, `total_neto`, `tarea`, `periodo_abonado`, `notas` |
+
+**SQL aplicado en Supabase (junio 2026):**
+
+```sql
+-- Tablas base (creadas desde el inicio)
+CREATE TABLE rrhh_colaboradores (...);
+CREATE TABLE rrhh_periodos (...);
+CREATE TABLE rrhh_sueldos (...);
+
+-- Columnas agregadas posteriormente
+ALTER TABLE rrhh_sueldos ADD COLUMN notas TEXT;
+ALTER TABLE rrhh_colaboradores ADD COLUMN legajo TEXT;
+ALTER TABLE rrhh_colaboradores ADD COLUMN fecha_ingreso TEXT;
+```
+
+Las tres tablas están en las sync-rules de PowerSync con `workspace_id = 'd61a4071-...'`.
+
+### Lógica de re-upload (crítico)
+
+Al subir un PDF para un período que ya existe (`getPeriodoByMes` devuelve resultado), el sistema:
+1. **Actualiza** `total_neto`, `cantidad_colaboradores`, `pdf_nombre`, `fecha_pago` en el período
+2. **Borra todos los `rrhh_sueldos`** del período (`clearSueldosByPeriodo`)
+3. Re-inserta los sueldos del PDF nuevo
+4. Borra el archivo anterior de Drive y sube el nuevo
+
+Esto garantiza que re-subir un PDF (ej. borrador → definitivo) reemplaza todo correctamente.
+
+### Sistema de lectura de PDFs
+
+#### Infraestructura (`pdf-reader.service.ts`)
+
+Usa **`pdfjs-dist`** (build legacy: `pdfjs-dist/legacy/build/pdf.mjs`) via `await import()` dinámico con `// @ts-ignore`. Devuelve para cada página:
+- `pageNum`: número de página (= número de recibo, 1 recibo por página)
+- `width`, `height`: dimensiones en puntos (A4 landscape = 842×595)
+- `items`: array de `PdfTextItem` — cada ítem tiene `str` (texto), `x`, `y` (coordenadas desde la esquina inferior izquierda)
+
+**Importante:** `pdfjs-dist` no se puede importar con `import` estático en el main process de Electron — usar siempre `await import('pdfjs-dist/legacy/build/pdf.mjs')` con `// @ts-ignore`.
+
+#### Extractor de recibos (`payroll-pdf.extractor.ts`)
+
+Dos estrategias de extracción para el formato de recibo de Naka Outdoors (A4 landscape, 1 recibo = 1 página):
+
+**1. Coordenadas hardcodeadas** (para campos con posición fija en el recibo):
+
+```typescript
+const COORDS = {
+  apellido:  { y: 499, x: 28  },   // Apellido y Nombres
+  documento: { y: 499, x: 163 },   // Número de documento
+  cuil:      { y: 527, x: 333 },   // CUIL
+  fecha:     { y: 450, x: 205 },   // Fecha de pago
+  tarea:     { y: 450, x: 256 },   // Tarea desempeñada
+  periodo:   { y: 436, x: 77  },   // Período abonado
+  totalNeto: { y: 60,  x: 283 },   // Total neto (label)
+}
+```
+
+Solo se procesa la **mitad izquierda** de cada página (`x < pageWidth / 2`) porque los recibos de esta empresa tienen el contenido informativo a la izquierda.
+
+El `Y_TOL = 5` permite agrupar ítems en la misma fila aunque no estén en exactamente el mismo y. `X_TOL = 15` para matching de columna.
+
+**2. Búsqueda por etiqueta** (para campos con posición variable):
+
+```typescript
+const LEGAJO_LABELS  = ['LEGAJO', 'LEG.', 'NRO.LEG', ...]
+const INGRESO_LABELS = ['F.INGRESO', 'FEC.ING', 'FECHA ING', 'INGRESO', ...]
+```
+
+`findValueByLabel()` recorre **toda la página** (no solo mitad izquierda), busca la etiqueta y devuelve el primer token no-vacío a su derecha en la misma fila. Usado para `legajo` y `fecha_ingreso` porque su posición varía por modelo de recibo.
+
+**Para ajustar la extracción a un nuevo modelo de recibo:** imprimir todas las coordenadas con un script de debug (`console.log(items)` del `pdf-reader`) y ajustar `COORDS`. Si el campo tiene posición variable, agregar su etiqueta a `LEGAJO_LABELS`/`INGRESO_LABELS` o crear una nueva lista.
+
+#### Parseo del período abonado
+
+Los recibos contienen texto como `"5 - 2026 Haberes normales"`. El regex `/(\d{1,2})\s*[-–]\s*(\d{4})/` extrae `mes=5, anio=2026`. Fallback: parsear desde el campo `fecha` (DD/MM/YYYY).
+
+### Carpetas de Drive
+
+```
+Summit RRHH/
+  Sueldos/
+    05-2026/
+      sueldos_05-2026.pdf   ← PDF original subido
+    06-2026/
+      sueldos_06-2026.pdf
+```
+
+La carpeta raíz `Summit RRHH` se cachea en `electron-store` como `rrhhRootFolderId` para evitar buscarla en cada upload.
+
+### Alertas inteligentes (post-upload)
+
+Generadas automáticamente al cargar un período:
+- `nuevo`: colaborador que no existía en el período anterior
+- `ausente`: colaborador del período anterior que no aparece en el actual
+- `aumento`: variación ≥ +5% vs mes anterior
+- `baja`: variación ≤ -5% vs mes anterior
+
+### Archivos clave
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/services/pdf-reader.service.ts` | Wrapper de pdfjs-dist — extrae ítems de texto con coordenadas |
+| `src/main/services/payroll-pdf.extractor.ts` | Extractor específico de recibos — coordenadas + búsqueda por etiqueta |
+| `src/main/services/rrhh.service.ts` | Orquestador: PDF → extracción → DB → Drive → alertas |
+| `src/main/database/queries/rrhh.ts` | CRUD: colaboradores, períodos, sueldos, historial, ausentes |
+| `src/main/ipc/rrhh.ipc.ts` | Handlers IPC (`rrhh:*`) incluyendo export XLS |
+| `src/renderer/src/hooks/useRrhh.ts` | Hooks React Query para todo el módulo |
+| `src/renderer/src/routes/rrhh/SueldosDashboard.tsx` | Dashboard: upload PDF, KPIs, gráfico evolución, cards por período |
+| `src/renderer/src/routes/rrhh/PeriodoDetail.tsx` | Detalle: tabla completa con legajo/doc/cuil/tarea/antigüedad/notas, buscador, filtro por tarea, export XLS, historial por colaborador (slide-over) |
+
+### Fix: drag-and-drop de PDFs en Electron
+
+`(file as File & { path?: string }).path` no funciona en Electron con contextIsolation. El fix correcto es exponer `webUtils.getPathForFile` desde el preload:
+
+```typescript
+// preload/index.ts
+utils: {
+  getFilePath: (file: File): string => webUtils.getPathForFile(file),
+}
+```
+
+Y en el renderer usar `window.api.utils.getFilePath(file)` en el handler `onDrop`. Aplicado en `SueldosDashboard.tsx`. **Este patrón debe replicarse en cualquier otro componente que reciba archivos via drag-drop.**
+
+El selector de archivo (clic) usa `dialog.showOpenDialog` via IPC (`rrhh:selectPdf`), igual que el módulo Knowledge. No usar `<input type="file">` para selección de archivos nativos en Electron.
+
+### Export XLS
+
+El export usa la librería **`xlsx`** (SheetJS, ya en `package.json`). Arquitectura:
+
+1. El **renderer** prepara el array de filas (con los datos ya filtrados/ordenados tal como se ven en pantalla)
+2. Lo envía al **main process** via IPC `rrhh:exportXls` junto con `periodoLabel` y `defaultFileName`
+3. El main process corre `XLSX.utils.json_to_sheet(rows)` y abre el diálogo `dialog.showSaveDialog`
+4. Guarda el `.xlsx` en la ruta elegida
+
+**Crítico:** el renderer siempre manda las filas ya procesadas — el main process no refetch data. Esto garantiza que el XLS refleja exactamente la vista (con filtros aplicados). Usar `require('xlsx')` en el main (no `await import()`).
 
 ---
 

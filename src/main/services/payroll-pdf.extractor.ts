@@ -69,7 +69,6 @@ function findValueByLabel(rows: Map<number, PdfTextItem[]>, labels: string[]): s
     for (let i = 0; i < sorted.length; i++) {
       const text = sorted[i].str.trim().toUpperCase().replace(/\s+/g, '')
       if (labels.some(l => text === l.replace(/\s+/g, '') || text.startsWith(l.replace(/\s+/g, '')))) {
-        // Return next non-empty token on the same row
         for (let j = i + 1; j < sorted.length; j++) {
           const val = sorted[j].str.trim()
           if (val) return val
@@ -78,6 +77,29 @@ function findValueByLabel(rows: Map<number, PdfTextItem[]>, labels: string[]): s
     }
   }
   return ''
+}
+
+const PERIODO_PATTERN = /\d{1,2}\s*[-–]\s*\d{4}/
+const PERIODO_LABELS  = ['PERIODOABONADO', 'PERÍODO', 'PERIODO', 'PER.', 'PERABONADO']
+
+// Extrae el período abonado usando 3 estrategias en cascada
+function findPeriodoAbonado(allRows: Map<number, PdfTextItem[]>, coordResult: string): string {
+  // 1. La coordenada ya tiene el patrón esperado
+  if (PERIODO_PATTERN.test(coordResult)) return coordResult
+
+  // 2. Búsqueda por etiqueta "PERIODO ABONADO" y similares
+  const byLabel = findValueByLabel(allRows, PERIODO_LABELS)
+  if (byLabel && PERIODO_PATTERN.test(byLabel)) return byLabel
+
+  // 3. Escanear toda la página buscando el primer texto que coincida con "N - YYYY"
+  //    (ordenado por y desc para leer de arriba a abajo)
+  const allItems = [...allRows.values()].flat()
+    .sort((a, b) => b.y - a.y)
+  for (const item of allItems) {
+    if (PERIODO_PATTERN.test(item.str)) return item.str.trim()
+  }
+
+  return coordResult
 }
 
 function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatted: string } {
@@ -115,7 +137,8 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
   const cuil = findNearestStr(leftRows, COORDS.cuil.y, COORDS.cuil.x)
   const fecha = findNearestStr(leftRows, COORDS.fecha.y, COORDS.fecha.x)
   const tarea = findTextAtOrAfterX(leftRows, COORDS.tarea.y, COORDS.tarea.x)
-  const periodo = findTextAtOrAfterX(leftRows, COORDS.periodo.y, COORDS.periodo.x)
+  const periodoRaw = findTextAtOrAfterX(leftRows, COORDS.periodo.y, COORDS.periodo.x)
+  const periodo    = findPeriodoAbonado(allRows, periodoRaw)
   const { raw: totalNetoRaw, formatted: totalNeto } = findTotalNeto(leftRows)
 
   // Label-based extraction (searches full page)
