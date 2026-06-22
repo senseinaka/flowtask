@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
-  ChevronDown, Pencil, Trash2, Plus, GitBranch, Sparkles, FileText, RefreshCw
+  ChevronDown, Pencil, Trash2, Plus, GitBranch, Sparkles, Paperclip
 } from 'lucide-react'
 import dayjs from 'dayjs'
-import { useKnowledgeSubEntries, useThreadDoc } from '../../hooks/useKnowledge'
+import { useKnowledgeSubEntries, useThreadDoc, useKnowledgeEntryFiles } from '../../hooks/useKnowledge'
 import KnowledgeAttachmentStrip from './KnowledgeAttachmentStrip'
 import { parseTags, stripHtml, SourceIcon } from './KnowledgeHelpers'
 import type { KnowledgeEntry, KnowledgeSource } from '@shared/types'
@@ -87,9 +87,11 @@ export default function KnowledgeEntryCard({
   const [expanded,     setExpanded]     = useState(false)
   const [threadOpen,   setThreadOpen]   = useState(false)
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set())
+  const [showFiles,    setShowFiles]    = useState(false)
 
   const { data: subEntries = [] } = useKnowledgeSubEntries(entry.id)
   const { data: savedDoc }        = useThreadDoc(entry.id)
+  const { data: files = [] }      = useKnowledgeEntryFiles(entry.id)
 
   const date    = entry.entry_date ?? entry.created_at
   const tags    = parseTags(entry.tags)
@@ -144,19 +146,15 @@ export default function KnowledgeEntryCard({
           <h3 className="text-sm font-medium text-slate-100 mb-1">{entry.title || '(sin título)'}</h3>
 
           {savedDoc ? (
-            <div className="mb-1.5">
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-900/30 text-violet-400 border border-violet-800/40">
-                  <FileText size={8}/>Documento IA guardado
-                </span>
-                <button onClick={onShowDocument} className="text-[9px] text-violet-500 hover:text-violet-300 transition-colors">
-                  Ver documento completo
-                </button>
-              </div>
-              <p className="text-[12px] text-slate-400 line-clamp-2">{savedDoc.synthesis}</p>
-            </div>
+            <p className="text-[12px] text-slate-400 line-clamp-2 mb-1.5 flex items-start gap-1">
+              <Sparkles size={9} className="shrink-0 mt-[3px] text-violet-500/70"/>
+              <span>{savedDoc.synthesis}</span>
+            </p>
           ) : entry.ai_summary ? (
-            <p className="text-[12px] text-teal-200/70 line-clamp-2 mb-1.5">{entry.ai_summary}</p>
+            <p className="text-[12px] text-teal-200/70 line-clamp-2 mb-1.5 flex items-start gap-1">
+              <Sparkles size={9} className="shrink-0 mt-[3px] text-teal-500/70"/>
+              <span>{entry.ai_summary}</span>
+            </p>
           ) : preview ? (
             <p className="text-[12px] text-slate-500 line-clamp-2 mb-1.5">{preview}</p>
           ) : null}
@@ -191,6 +189,12 @@ export default function KnowledgeEntryCard({
         </div>
       </div>
 
+      {showFiles && !expanded && (
+        <div className="px-4 pb-3 border-t border-slate-800/50" onClick={e => e.stopPropagation()}>
+          <KnowledgeAttachmentStrip entryId={entry.id} compact/>
+        </div>
+      )}
+
       {threadOpen && (
         <div className="px-4 pb-3 border-t border-slate-800/60 pt-3">
           <div className="text-[9px] uppercase tracking-widest text-slate-700 mb-2.5 flex items-center gap-1.5">
@@ -211,14 +215,15 @@ export default function KnowledgeEntryCard({
             {subEntries.length > 0 && (
               <button onClick={onShowDocument}
                 className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors border ${savedDoc ? 'text-violet-300 bg-violet-900/30 border-violet-700/40 hover:bg-violet-900/50' : 'text-violet-400 bg-violet-900/20 border-violet-800/30 hover:bg-violet-900/40 hover:border-violet-700/50'}`}>
-                {savedDoc ? <><RefreshCw size={11}/>Regenerar documento</> : <><Sparkles size={11}/>Generar documento resumen</>}
+                <Sparkles size={11}/>
+                {savedDoc ? 'Ver resumen con IA' : 'Hacer resumen con IA'}
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* ── Action footer bar (Opción A) ────────────────────────── */}
+      {/* ── Action footer bar ─────────────────────────────────── */}
       <div className="flex items-center gap-1 px-3 pb-2.5 pt-1 border-t border-slate-800/50">
         <button
           onClick={e => { e.stopPropagation(); onEdit() }}
@@ -230,12 +235,20 @@ export default function KnowledgeEntryCard({
           className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-400 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
           <Plus size={10}/>Agregar al hilo
         </button>
+        {files.length > 0 && (
+          <button
+            onClick={e => { e.stopPropagation(); setShowFiles(v => !v) }}
+            className={`flex items-center gap-1 text-[10px] px-2 py-1.5 rounded-lg transition-colors ${showFiles ? 'text-teal-300 bg-teal-900/20' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-800'}`}>
+            <Paperclip size={10}/>{files.length}
+          </button>
+        )}
         <div className="flex-1"/>
-        {subEntries.length > 0 && !threadOpen && (
+        {(savedDoc || subEntries.length > 0) && (
           <button
             onClick={e => { e.stopPropagation(); onShowDocument() }}
-            className="flex items-center gap-1 text-[11px] text-violet-600 hover:text-violet-400 px-2 py-1.5 rounded-lg hover:bg-violet-900/20 transition-colors">
-            {savedDoc ? <><RefreshCw size={10}/>Regenerar</> : <><Sparkles size={10}/>Generar doc</>}
+            className={`flex items-center gap-1 text-[11px] px-2 py-1.5 rounded-lg transition-colors ${savedDoc ? 'text-violet-400 hover:text-violet-300 hover:bg-violet-900/20' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-800'}`}>
+            <Sparkles size={10}/>
+            {savedDoc ? 'Ver resumen con IA' : 'Hacer resumen con IA'}
           </button>
         )}
         <button
