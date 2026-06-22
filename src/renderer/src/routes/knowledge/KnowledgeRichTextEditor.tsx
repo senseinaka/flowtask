@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
-import { TiptapNode as _TiptapNode, mergeAttributes } from '@tiptap/core'
-import { TiptapNode, mergeAttributes } from '@tiptap/core'
+import { Node as TiptapNode, mergeAttributes } from '@tiptap/core'
 import type { Editor, NodeViewProps } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -17,14 +16,14 @@ import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import Placeholder from '@tiptap/extension-placeholder'
-import TextStyle, { FontFamily, FontSize } from '@tiptap/extension-text-style'
+import { TextStyle, FontFamily, FontSize } from '@tiptap/extension-text-style'
 import {
   Bold, Italic, Underline as UIcon, Strikethrough, Highlighter,
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, ListChecks, Quote, Code2,
   Table as TableIcon, Link2, Minus, Undo2, Redo2,
   Heading1, Heading2, Heading3, Type, ChevronDown, Film,
-  Sparkles, Loader2, LayoutTemplate, ALargeSmall
+  Sparkles, Loader2, LayoutTemplate
 } from 'lucide-react'
 import { useTransformKnowledgeText } from '../../hooks/useKnowledge'
 
@@ -58,8 +57,6 @@ function VideoEmbedView({ node }: NodeViewProps) {
     </NodeViewWrapper>
   )
 }
-
-import { Node as TiptapNode } from '@tiptap/core'
 
 const VideoEmbed = TiptapNode.create({
   name: 'videoEmbed',
