@@ -2812,6 +2812,13 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         entry_count INTEGER NOT NULL DEFAULT 1
       )`)
     }
+  },
+  {
+    version: 86,
+    up: (db) => {
+      try { db.exec(`ALTER TABLE knowledge_entries ADD COLUMN quote_id TEXT`) } catch {}
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_quote ON knowledge_entries(quote_id)`)
+    }
   }
 ]
 

@@ -54,7 +54,7 @@ export function deleteKnowledgeSource(id: string): void {
 export async function listKnowledgeEntries(
   filters?: KnowledgeListFilters
 ): Promise<KnowledgeEntry[]> {
-  const conditions: string[] = ['workspace_id = ?', '(parent_id IS NULL OR parent_id = \'\')']
+  const conditions: string[] = ['workspace_id = ?', '(parent_id IS NULL OR parent_id = \'\')', '(quote_id IS NULL OR quote_id = \'\')']
   const vals: unknown[] = [WORKSPACE_ID]
 
   if (filters?.search) {
@@ -96,6 +96,7 @@ export interface CreateKnowledgeEntryFields {
   source?: string
   entry_date?: number
   parent_id?: string | null
+  quote_id?: string | null
 }
 
 export async function createKnowledgeEntry(
@@ -111,8 +112,8 @@ export async function createKnowledgeEntry(
       id, workspace_id, title, content_type, body, topic, tags, source,
       ai_summary, drive_file_id, drive_folder_id, drive_status,
       file_name, file_size, file_mime_type, local_path,
-      created_by, created_at, updated_at, entry_date, parent_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NULL, NULL, 'none', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?)
+      created_by, created_at, updated_at, entry_date, parent_id, quote_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NULL, NULL, 'none', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?)
   `, [
     id, WORKSPACE_ID,
     data.title ?? '',
@@ -123,10 +124,19 @@ export async function createKnowledgeEntry(
     data.source ?? '',
     userId, now, now,
     data.entry_date ?? null,
-    data.parent_id ?? null
+    data.parent_id ?? null,
+    data.quote_id ?? null
   ])
 
   return (await db.getOptional<KnowledgeEntry>('SELECT * FROM knowledge_entries WHERE id = ?', [id]))!
+}
+
+export async function listKnowledgeEntriesByQuote(quoteId: string): Promise<KnowledgeEntry[]> {
+  return getPowerSyncDb().getAll<KnowledgeEntry>(`
+    SELECT * FROM knowledge_entries
+    WHERE workspace_id = ? AND quote_id = ? AND (parent_id IS NULL OR parent_id = '')
+    ORDER BY COALESCE(entry_date, created_at) DESC
+  `, [WORKSPACE_ID, quoteId])
 }
 
 export interface UpdateKnowledgeEntryFields {

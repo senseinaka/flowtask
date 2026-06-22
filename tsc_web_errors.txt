@@ -1,0 +1,105 @@
+﻿src/renderer/src/App.tsx(29,5): error TS6133: 'setSelectedTask' is declared but its value is never read.
+src/renderer/src/components/tasks/DelegatedTaskDetail.tsx(8,15): error TS6196: 'DelegatedTask' is declared but never used.
+src/renderer/src/components/tasks/DelegatedTaskDetail.tsx(9,27): error TS6133: 'PRIORITY_COLORS' is declared but its value is never read.
+src/renderer/src/components/tasks/QuestionPanel.tsx(3,26): error TS6133: 'Plus' is declared but its value is never read.
+src/renderer/src/components/tasks/TaskCard.tsx(1,20): error TS6133: 'Paperclip' is declared but its value is never read.
+src/renderer/src/components/tasks/TaskDetail.tsx(11,15): error TS6196: 'Task' is declared but never used.
+src/renderer/src/hooks/useComex.ts(5,61): error TS6196: 'ComexInalCert' is declared but never used.
+src/renderer/src/hooks/useComex.ts(252,24): error TS6133: 'supplierId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(263,24): error TS6133: 'supplierId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(295,24): error TS6133: 'supplierId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(306,24): error TS6133: 'supplierId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(488,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(499,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(538,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(538,34): error TS6133: 'tipo' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(549,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(549,34): error TS6133: 'tipo' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(560,42): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(560,52): error TS6133: 'tipo' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(589,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(598,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(607,38): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(634,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(643,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(783,24): error TS6133: 'operatorId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(794,24): error TS6133: 'operatorId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(815,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/hooks/useComex.ts(837,24): error TS6133: 'importId' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(8,16): error TS6133: 'Shield' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(43,1): error TS6133: 'CostsSection' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(49,3): error TS6133: 'PAYMENT_METHOD_LABELS' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(57,3): error TS6196: 'PaymentMethod' is declared but never used.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(59,3): error TS6196: 'ComexFreightOperator' is declared but never used.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(79,52): error TS6196: 'ECL' is declared but never used.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1268,93): error TS2322: Type '{ size: number; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1269,105): error TS2322: Type '{ size: number; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1270,95): error TS2322: Type '{ size: number; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1271,66): error TS2322: Type '{ size: number; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1284,10): error TS6133: 'DocumentsSection' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1627,9): error TS6133: 'updatePf' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1665,45): error TS2345: Argument of type '{ import_id: string; numero: number; fecha_proforma: null; importe: null; moneda: string; nro_proforma: string; descripcion: string; incluir_en_total: 1; stored_name: null; original_name: null; drive_file_id: null; drive_folder_id: null; drive_status: "none"; }' is not assignable to parameter of type 'CreateComexProformaInput'.
+  Property 'tipo' is missing in type '{ import_id: string; numero: number; fecha_proforma: null; importe: null; moneda: string; nro_proforma: string; descripcion: string; incluir_en_total: 1; stored_name: null; original_name: null; drive_file_id: null; drive_folder_id: null; drive_status: "none"; }' but required in type 'CreateComexProformaInput'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(1695,36): error TS2345: Argument of type '{ import_id: string; numero: number; fecha_proforma: null; importe: null; moneda: string; nro_proforma: string; descripcion: string; incluir_en_total: 1; stored_name: null; original_name: null; drive_file_id: null; drive_folder_id: null; drive_status: "none"; }' is not assignable to parameter of type 'CreateComexProformaInput'.
+  Property 'tipo' is missing in type '{ import_id: string; numero: number; fecha_proforma: null; importe: null; moneda: string; nro_proforma: string; descripcion: string; incluir_en_total: 1; stored_name: null; original_name: null; drive_file_id: null; drive_folder_id: null; drive_status: "none"; }' but required in type 'CreateComexProformaInput'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(2089,9): error TS6133: 'updatePf' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(2798,9): error TS6133: 'fmtInt' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3011,15): error TS6133: 'netoLabel' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3106,9): error TS6133: 'updateCost' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3110,9): error TS6133: 'extras' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3624,17): error TS6133: 'netoLabel' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3838,34): error TS2345: Argument of type '{ import_id: string; categoria: "flete_internacional" | "flete_local"; concepto: string; proveedor: string; nro_factura: string; fecha_factura: null; importe: number; moneda: "ARS" | "USD"; ... 13 more ...; importe_ars: null; }' is not assignable to parameter of type 'CreateComexImportExtraCostInput'.
+  Type '{ import_id: string; categoria: "flete_internacional" | "flete_local"; concepto: string; proveedor: string; nro_factura: string; fecha_factura: null; importe: number; moneda: "ARS" | "USD"; ... 13 more ...; importe_ars: null; }' is missing the following properties from type 'CreateComexImportExtraCostInput': percepciones, percepcion_caba, percepcion_bsas, fecha_ingreso, and 3 more.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3901,10): error TS6133: 'ExtraCostsSection' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3925,25): error TS2345: Argument of type '{ import_id: string; categoria: ExtraCostCategory; concepto: string; proveedor: string; nro_factura: string; fecha_factura: null; importe: number; moneda: "ARS" | "USD"; stored_name: null; ... 17 more ...; canal_deposito: null; }' is not assignable to parameter of type 'CreateComexImportExtraCostInput'.
+  Type '{ import_id: string; categoria: "otro" | "despachante" | "deposito_fiscal" | "flete_internacional" | "flete_local" | "libre_circulacion" | "gastos_bancarios"; concepto: string; ... 23 more ...; canal_deposito: null; }' is missing the following properties from type 'CreateComexImportExtraCostInput': percepcion_caba, percepcion_bsas
+src/renderer/src/routes/comex/ComexImportDetail.tsx(3960,34): error TS2345: Argument of type '{ import_id: string; categoria: "otro" | "despachante" | "deposito_fiscal" | "flete_internacional" | "flete_local" | "libre_circulacion" | "gastos_bancarios"; concepto: string; ... 10 more ...; sort_order: number; }' is not assignable to parameter of type 'CreateComexImportExtraCostInput'.
+  Type '{ import_id: string; categoria: "otro" | "despachante" | "deposito_fiscal" | "flete_internacional" | "flete_local" | "libre_circulacion" | "gastos_bancarios"; concepto: string; ... 10 more ...; sort_order: number; }' is missing the following properties from type 'CreateComexImportExtraCostInput': cae, referencia_despacho, importe_iva, importe_total, and 11 more.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(5706,92): error TS6133: 'importTitle' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(6482,9): error TS6133: 'createDoc' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(6742,9): error TS6133: 'allOpen' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7726,33): error TS18048: 'depositoCost.importe' is possibly 'undefined'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7727,22): error TS18048: 'depositoCost' is possibly 'undefined'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7727,81): error TS18048: 'depositoCost' is possibly 'undefined'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7746,36): error TS18048: 'despachanteCost.importe' is possibly 'undefined'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7747,22): error TS18048: 'despachanteCost' is possibly 'undefined'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7747,84): error TS18048: 'despachanteCost' is possibly 'undefined'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7859,9): error TS6133: 'facturas' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(7958,9): error TS6133: 'advanceLCStatus' is declared but its value is never read.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(8043,17): error TS2304: Cannot find name 'qc'.
+src/renderer/src/routes/comex/ComexImportDetail.tsx(8055,15): error TS2304: Cannot find name 'qc'.
+src/renderer/src/routes/comex/ComexImports.tsx(753,30): error TS2345: Argument of type '{ title: string; supplier_id: string | null; status: ImportStatus; incoterm: string; origin_country: string; currency: string; estimated_value: number | null; actual_value: null; ... 9 more ...; notes: string; }' is not assignable to parameter of type 'CreateComexImportInput'.
+  Type '{ title: string; supplier_id: string | null; status: ImportStatus; incoterm: string; origin_country: string; currency: string; estimated_value: number | null; actual_value: null; ... 9 more ...; notes: string; }' is missing the following properties from type 'CreateComexImportInput': despachante, gestor_id, payment_terms, origin_port, and 64 more.
+src/renderer/src/routes/comex/ComexOperators.tsx(23,7): error TS2741: Property 'logo_stored_name' is missing in type '{ name: string; company_type: "agente"; contact_name: string; email: string; phone: string; whatsapp: string; services: string; notes: string; }' but required in type 'CreateComexFreightOperatorInput'.
+src/renderer/src/routes/comex/CostsSection.tsx(256,9): error TS6133: 'createCost' is declared but its value is never read.
+src/renderer/src/routes/comex/CostsSection.tsx(259,10): error TS6133: 'quickAddCategory' is declared but its value is never read.
+src/renderer/src/routes/comex/CustomsSection.tsx(247,25): error TS2339: Property 'fob_currency' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(265,22): error TS2339: Property 'fob_currency' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(271,22): error TS2339: Property 'fob_invoice' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(277,22): error TS2339: Property 'fob_declared' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(283,22): error TS2339: Property 'dolar_aduana' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(296,22): error TS2339: Property 'despacho_number' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(302,22): error TS2339: Property 'despachante' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(308,22): error TS2339: Property 'oficializacion_date' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(320,22): error TS2339: Property 'bl_number' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(326,22): error TS2339: Property 'naviera_ref' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(333,22): error TS2339: Property 'carrier' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(339,22): error TS2339: Property 'canal' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(349,55): error TS2339: Property 'peso_bruto_kg' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(350,56): error TS2339: Property 'volumen_m3' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(351,56): error TS2339: Property 'cant_pallets' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(359,58): error TS2339: Property 'mulc_date' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(360,59): error TS2339: Property 'fecha_pago_banco' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(361,59): error TS2339: Property 'cierre_banco_date' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(371,22): error TS2339: Property 'listas_despachante_date' does not exist on type '{}'.
+src/renderer/src/routes/comex/CustomsSection.tsx(376,22): error TS2339: Property 'listas_oscar_andrea_date' does not exist on type '{}'.
+src/renderer/src/routes/expiry/ExpiryDashboard.tsx(21,31): error TS6196: 'ExpiryAlert' is declared but never used.
+src/renderer/src/routes/expiry/ExpiryDashboard.tsx(58,7): error TS6133: 'DEFAULT_ALERT_DAYS' is declared but its value is never read.
+src/renderer/src/routes/expiry/ExpiryDashboard.tsx(878,37): error TS6133: 'onUnrenew' is declared but its value is never read.
+src/renderer/src/routes/expiry/ExpiryDashboard.tsx(1730,10): error TS6133: 'deletingId' is declared but its value is never read.
+src/renderer/src/routes/expiry/ExpiryDashboard.tsx(1730,24): error TS6133: 'setDeletingId' is declared but its value is never read.
+src/renderer/src/routes/Settings.tsx(4,59): error TS6133: 'X' is declared but its value is never read.

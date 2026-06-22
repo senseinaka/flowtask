@@ -4,6 +4,7 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import {
   listKnowledgeEntries,
+  listKnowledgeEntriesByQuote,
   listKnowledgeSubEntries,
   getKnowledgeEntry,
   createKnowledgeEntry,
@@ -159,6 +160,10 @@ export function registerKnowledgeIpc(): void {
     listKnowledgeSubEntries(parentId)
   )
 
+  ipcMain.handle('knowledge:entries:listByQuote', async (_e, quoteId: string) =>
+    listKnowledgeEntriesByQuote(quoteId)
+  )
+
   ipcMain.handle('knowledge:entries:generateDocument', async (_e, entryId: string) => {
     const main = await getKnowledgeEntry(entryId)
     if (!main) throw new Error('Entrada no encontrada')
@@ -259,9 +264,14 @@ export function registerKnowledgeIpc(): void {
     try {
       const rootId = rootEntryId ?? entryId
       const rootEntry = await getKnowledgeEntry(rootId)
-      const folderDate  = rootEntry?.entry_date ?? rootEntry?.created_at ?? Date.now()
-      const folderTitle = rootEntry?.title || 'Sin título'
-      const folderId = await driveService.getOrCreateKnowledgeEntryFolder(folderDate, folderTitle)
+      let folderId: string
+      if (rootEntry?.quote_id) {
+        folderId = await driveService.getOrCreateQuoteFolder(rootEntry.title || 'Presupuesto')
+      } else {
+        const folderDate  = rootEntry?.entry_date ?? rootEntry?.created_at ?? Date.now()
+        const folderTitle = rootEntry?.title || 'Sin título'
+        folderId = await driveService.getOrCreateKnowledgeEntryFolder(folderDate, folderTitle)
+      }
       const driveFileId = await driveService.uploadFileToFolder(localPath, folderId, fileName, mimeType)
       return updateKnowledgeEntryFile(fileRecord.id, {
         drive_file_id: driveFileId, drive_folder_id: folderId, drive_status: 'synced'

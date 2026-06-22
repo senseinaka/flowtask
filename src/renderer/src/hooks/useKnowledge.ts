@@ -319,3 +319,64 @@ export function useSaveThreadDoc() {
     }
   })
 }
+
+// ── Quote Notes ───────────────────────────────────────────────────────────────
+
+export function useQuoteNotes(quoteId: string | null) {
+  return useQuery({
+    queryKey: ['knowledge-quote-notes', quoteId],
+    queryFn: (): Promise<KnowledgeEntry[]> => window.api.knowledge.entries.listByQuote(quoteId!),
+    enabled: !!quoteId,
+    staleTime: 30_000
+  })
+}
+
+export function useCreateQuoteNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      quoteId, title, body, userId
+    }: {
+      quoteId: string
+      title?: string
+      body: string
+      userId: string
+    }): Promise<KnowledgeEntry> =>
+      window.api.knowledge.entries.create(
+        { content_type: 'text', title: title ?? '', body, quote_id: quoteId },
+        userId
+      ),
+    onSuccess: (entry) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-quote-notes', entry.quote_id] })
+    }
+  })
+}
+
+export function useDeleteQuoteNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }: { id: string; quoteId: string }): Promise<void> =>
+      window.api.knowledge.entries.delete(id),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-quote-notes', vars.quoteId] })
+    }
+  })
+}
+
+export function useUpdateQuoteNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id, title, body
+    }: {
+      id: string
+      quoteId: string
+      title?: string
+      body: string
+    }): Promise<KnowledgeEntry> =>
+      window.api.knowledge.entries.update(id, { title: title ?? '', body } as Partial<KnowledgeEntry>),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['knowledge-quote-notes', vars.quoteId] })
+    }
+  })
+}

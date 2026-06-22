@@ -314,6 +314,23 @@ class DriveService {
     return this.getOrCreateFolder(drive, safeName, monthId)
   }
 
+  async getOrCreateQuoteFolder(quoteTitle: string): Promise<string> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+    const cached = store.get('quoteFolderId', '') as string
+    let rootId = cached
+    if (!rootId) {
+      rootId = await this.getOrCreateFolder(drive, 'Summit Presupuestos')
+      store.set('quoteFolderId', rootId)
+    }
+
+    const safeName = (quoteTitle || 'Sin título').slice(0, 80).replace(/[/\\:*?"<>|]/g, '-').trim() || 'Presupuesto'
+    return this.getOrCreateFolder(drive, safeName, rootId)
+  }
+
   // ── Backup completo de la base de datos ──────────────────────────────────
 
   getLastBackupStatus(): BackupStatus | null {

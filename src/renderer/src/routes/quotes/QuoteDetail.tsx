@@ -16,6 +16,7 @@ import {
   useQuoteContacts
 } from '../../hooks/useQuotes'
 import { useAuthSession } from '../../hooks/useCalendar'
+import QuoteNotePanel from './QuoteNotePanel'
 import type {
   Quote,
   QuoteStatus,
@@ -337,6 +338,7 @@ export default function QuoteDetail() {
   const [showLostModal, setShowLostModal]   = useState(false)
   const [confirmDelete, setConfirmDelete]   = useState(false)
   const [pendingStatus, setPendingStatus]   = useState<QuoteStatus | null>(null)
+  const [rightTab, setRightTab]             = useState<'activity' | 'notes'>('activity')
 
   const activitiesEndRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -592,52 +594,66 @@ export default function QuoteDetail() {
           </div>
         </div>
 
-        {/* Right panel — timeline */}
+        {/* Right panel — tabs */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-800 flex-shrink-0">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <Clock size={12} /> Actividad
-            </h3>
+          {/* Tab bar */}
+          <div className="flex border-b border-slate-800 flex-shrink-0">
+            <button
+              onClick={() => setRightTab('activity')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${rightTab === 'activity' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+              <Clock size={11}/> Actividad
+            </button>
+            <button
+              onClick={() => setRightTab('notes')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${rightTab === 'notes' ? 'border-teal-500 text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+              <FileText size={11}/> Notas y archivos
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-            {activities.map((a) => (
-              <ActivityItem
-                key={a.id}
-                type={a.type as QuoteActivityType}
-                payload={a.payload}
-                createdAt={a.created_at}
-                userId={a.user_id}
-              />
-            ))}
-            {activities.length === 0 && (
-              <p className="text-center text-slate-600 text-sm py-8">Sin actividad aún</p>
-            )}
-            <div ref={activitiesEndRef} />
-          </div>
+          {rightTab === 'notes' ? (
+            <QuoteNotePanel quoteId={quote.id} userId={userId}/>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                {activities.map((a) => (
+                  <ActivityItem
+                    key={a.id}
+                    type={a.type as QuoteActivityType}
+                    payload={a.payload}
+                    createdAt={a.created_at}
+                    userId={a.user_id}
+                  />
+                ))}
+                {activities.length === 0 && (
+                  <p className="text-center text-slate-600 text-sm py-8">Sin actividad aún</p>
+                )}
+                <div ref={activitiesEndRef} />
+              </div>
 
-          {/* Comment input */}
-          <div className="px-5 py-3 border-t border-slate-800 flex-shrink-0">
-            <div className="flex gap-2">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleComment()
-                }}
-                placeholder="Agregar comentario (Ctrl+Enter para enviar)..."
-                rows={2}
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none"
-              />
-              <button
-                onClick={handleComment}
-                disabled={!commentText.trim() || sendingComment}
-                className="self-end p-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-colors"
-              >
-                <Send size={15} />
-              </button>
-            </div>
-          </div>
+              {/* Comment input */}
+              <div className="px-5 py-3 border-t border-slate-800 flex-shrink-0">
+                <div className="flex gap-2">
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleComment()
+                    }}
+                    placeholder="Agregar comentario (Ctrl+Enter para enviar)..."
+                    rows={2}
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none"
+                  />
+                  <button
+                    onClick={handleComment}
+                    disabled={!commentText.trim() || sendingComment}
+                    className="self-end p-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-colors"
+                  >
+                    <Send size={15} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
