@@ -1084,6 +1084,7 @@ const api = {
 
   rrhh: {
     savePayroll:             (filePath: string): Promise<SavePayrollResult>                        => ipcRenderer.invoke('rrhh:savePayroll', filePath),
+    selectPdf:               (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectPdf'),
     colaboradores: {
       list:                  (): Promise<RrhhColaborador[]>                                        => ipcRenderer.invoke('rrhh:colaboradores:list'),
       historial:             (colaboradorId: string): Promise<RrhhHistorialEntry[]>               => ipcRenderer.invoke('rrhh:colaboradores:historial', colaboradorId),

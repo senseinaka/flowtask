@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { savePayroll } from '../services/rrhh.service'
 import {
   listColaboradores, listPeriodos, getPeriodo,
@@ -55,4 +55,15 @@ export function registerRrhhIpc(): void {
   ipcMain.handle('rrhh:drive:isAuthenticated', () =>
     driveService.isAuthenticated()
   )
+
+  ipcMain.handle('rrhh:selectPdf', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar recibo de sueldos',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      properties: ['openFile'],
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
 }

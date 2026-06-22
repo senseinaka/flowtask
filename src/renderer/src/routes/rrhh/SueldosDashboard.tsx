@@ -206,23 +206,24 @@ function UploadZone({ onFilePath }: { onFilePath: (p: string) => void }) {
     if (p) onFilePath(p)
   }
 
+  async function onClick() {
+    const p = await window.api.rrhh.selectPdf()
+    if (p) onFilePath(p)
+  }
+
   return (
     <div
       onDragOver={e => { e.preventDefault(); setDragOver(true) }}
       onDragLeave={e => { const r = e.relatedTarget as Element | null; if (!r || !(e.currentTarget as Element).contains(r)) setDragOver(false) }}
       onDrop={onDrop}
+      onClick={onClick}
       className={cn(
         'flex items-center justify-center gap-3 rounded-xl border-2 border-dashed p-5 transition-all duration-150 cursor-pointer',
         dragOver
           ? 'border-pink-500 bg-pink-950/10 scale-[1.01]'
           : 'border-slate-700 hover:border-slate-600 bg-slate-800/40'
       )}
-      onClick={() => document.getElementById('rrhh-upload-input')?.click()}
     >
-      <input
-        id="rrhh-upload-input" type="file" accept=".pdf" className="sr-only"
-        onChange={e => { const f = e.target.files?.[0]; if (f) { const p = (f as File & { path?: string }).path ?? ''; if (p) onFilePath(p) }; e.target.value = '' }}
-      />
       <Upload size={16} className={dragOver ? 'text-pink-400' : 'text-slate-500'} />
       <span className="text-xs text-slate-400">
         {dragOver ? 'Soltá el PDF aquí' : 'Arrastrá o hacé clic para subir sueldos del mes'}
