@@ -110,6 +110,24 @@ export async function updatePeriodoDrive(id: string, driveFileId: string, driveF
   )
 }
 
+export async function updatePeriodoStats(id: string, data: {
+  total_neto: number
+  cantidad_colaboradores: number
+  pdf_nombre: string
+  fecha_pago: string
+}): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_periodos SET total_neto = ?, cantidad_colaboradores = ?, pdf_nombre = ?, fecha_pago = ?, updated_at = ? WHERE id = ?`,
+    [data.total_neto, data.cantidad_colaboradores, data.pdf_nombre, data.fecha_pago, Date.now(), id]
+  )
+}
+
+export async function clearSueldosByPeriodo(periodoId: string): Promise<void> {
+  await getPowerSyncDb().execute(
+    `DELETE FROM rrhh_sueldos WHERE periodo_id = ?`, [periodoId]
+  )
+}
+
 export async function confirmarPeriodo(id: string): Promise<void> {
   await getPowerSyncDb().execute(
     `UPDATE rrhh_periodos SET estado = 'confirmado', updated_at = ? WHERE id = ?`,

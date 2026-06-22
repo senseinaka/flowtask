@@ -3,7 +3,7 @@ import path from 'path'
 import { driveService } from './drive.service'
 import { extractPayroll } from './payroll-pdf.extractor'
 import {
-  getPeriodoByMes, createPeriodo, updatePeriodoDrive,
+  getPeriodoByMes, createPeriodo, updatePeriodoDrive, updatePeriodoStats, clearSueldosByPeriodo,
   upsertColaborador, upsertSueldo, listSueldosByPeriodo, getAusentesEnPeriodo
 } from '../database/queries/rrhh'
 import type { SavePayrollResult, RrhhSmartAlert } from '@shared/types'
@@ -45,6 +45,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
   let periodo = await getPeriodoByMes(anio, mes)
   const totalNeto = employees.reduce((s, e) => s + e.totalNetoRaw, 0)
   const pdfNombre = path.basename(filePath)
+  const isReplace = !!periodo
 
   if (!periodo) {
     periodo = await createPeriodo({
@@ -53,6 +54,16 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
       pdf_nombre: pdfNombre,
       fecha_pago: first.fecha,
     })
+  } else {
+    // Re-upload: actualizar totales y borrar sueldos anteriores
+    await updatePeriodoStats(periodo.id, {
+      total_neto: totalNeto,
+      cantidad_colaboradores: employees.length,
+      pdf_nombre: pdfNombre,
+      fecha_pago: first.fecha,
+    })
+    await clearSueldosByPeriodo(periodo.id)
+    periodo = { ...periodo, total_neto: totalNeto, cantidad_colaboradores: employees.length, pdf_nombre: pdfNombre, fecha_pago: first.fecha }
   }
 
   // Upsert colaboradores + sueldos
@@ -81,9 +92,13 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
     })
   }
 
-  // Upload PDF to Drive
+  // Upload PDF to Drive (replace old file if exists)
   if (driveService.isAuthenticated()) {
     try {
+      // Delete previous Drive file if this is a re-upload
+      if (isReplace && periodo.pdf_drive_file_id) {
+        try { await driveService.deleteFile(periodo.pdf_drive_file_id) } catch { /* ignorar si ya no existe */ }
+      }
       const folderName = `${String(mes).padStart(2, '0')}-${anio}`
       const folderId = await driveService.getOrCreateRrhhSueldosMesFolder(mes, anio)
       const fileName = `sueldos_${folderName}.pdf`
