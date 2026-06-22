@@ -111,6 +111,14 @@ export const MODULES: ModuleDef[] = [
     key: 'settings',
     label: 'Configuración',
     routes: ['/settings']
+  },
+  {
+    key: 'rrhh',
+    label: 'RRHH',
+    routes: ['/rrhh'],
+    submodules: [
+      { key: 'sueldos', label: 'Sueldos', routes: ['/rrhh/sueldos'] }
+    ]
   }
 ]
 

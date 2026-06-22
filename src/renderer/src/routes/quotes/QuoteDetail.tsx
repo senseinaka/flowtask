@@ -151,15 +151,23 @@ function ActivityItem({
             <span className="text-emerald-400">{formatValue(payload.to as number)}</span>
           </p>
         )
-      case 'follow_up_set':
+      case 'follow_up_set': {
+        const targetMs  = payload.date as number | undefined
+        const daysAhead = targetMs ? Math.round((targetMs - createdAt) / (24 * 60 * 60 * 1000)) : null
         return (
-          <p className="text-xs text-slate-400">
-            Próximo seguimiento:{' '}
-            <span className="text-slate-300">
-              {payload.date ? dayjs(payload.date as number).format('DD/MM/YYYY') : '—'}
-            </span>
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-slate-400">Seguimiento programado</p>
+            {daysAhead != null && (
+              <span className="text-[10px] font-medium text-teal-400 bg-teal-900/20 px-1.5 py-0.5 rounded border border-teal-800/30">
+                +{daysAhead}d
+              </span>
+            )}
+            {targetMs && (
+              <span className="text-xs text-slate-300">{dayjs(targetMs).format('DD/MM/YYYY')}</span>
+            )}
+          </div>
         )
+      }
       case 'lost_reason_set':
         return (
           <p className="text-xs text-slate-400">
@@ -404,9 +412,10 @@ function FollowUpDaysField({
   }
 
   const now       = Date.now()
-  const isOverdue = value != null && value < now
+  const isOverdue  = value != null && value < now
   const isDueToday = value != null && value >= now && value < now + 24 * 60 * 60 * 1000
   const isDueSoon  = value != null && !isOverdue && !isDueToday && value < now + 3 * 24 * 60 * 60 * 1000
+  const diffDays   = value != null ? Math.round((value - now) / (24 * 60 * 60 * 1000)) : 0
 
   return (
     <div>
@@ -445,8 +454,22 @@ function FollowUpDaysField({
       </div>
 
       {value != null ? (
-        <div className="flex items-center gap-2">
-          <p className={`text-[12px] ${isOverdue ? 'text-red-400' : isDueToday ? 'text-amber-400' : 'text-slate-400'}`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded border ${
+            isOverdue
+              ? 'text-red-400 bg-red-900/20 border-red-800/30'
+              : isDueToday
+              ? 'text-amber-400 bg-amber-900/20 border-amber-800/30'
+              : 'text-teal-400 bg-teal-900/20 border-teal-800/30'
+          }`}>
+            {isOverdue
+              ? `hace ${Math.abs(diffDays)}d`
+              : isDueToday
+              ? 'hoy'
+              : `+${diffDays}d`
+            }
+          </span>
+          <p className={`text-[12px] ${isOverdue ? 'text-red-400' : isDueToday ? 'text-amber-400' : 'text-slate-300'}`}>
             {dayjs(value).format('DD/MM/YYYY')}
           </p>
           <button

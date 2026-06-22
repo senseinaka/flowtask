@@ -51,7 +51,8 @@ import type {
   ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
   CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado,
   KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile,
-  KnowledgeThreadDoc
+  KnowledgeThreadDoc,
+  PayrollExtractionResult
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1070,6 +1071,12 @@ const api = {
     query:           (question: string):              Promise<string>        => ipcRenderer.invoke('cortex:query', question),
     path:            (from: string, to: string):      Promise<string>        => ipcRenderer.invoke('cortex:path', from, to),
     explain:         (node: string):                  Promise<string>        => ipcRenderer.invoke('cortex:explain', node),
+  },
+
+  pdf: {
+    readPayroll:  (filePath: string): Promise<PayrollExtractionResult>                                                                      => ipcRenderer.invoke('pdf:readPayroll', filePath),
+    clearCache:   (hash?: string): Promise<void>                                                                                             => ipcRenderer.invoke('pdf:clearCache', hash),
+    getCacheInfo: (): Promise<{ count: number; entries: Array<{ hash: string; filePath: string; pageCount: number; cachedAt: number }> }>    => ipcRenderer.invoke('pdf:getCacheInfo'),
   },
 
   on: (

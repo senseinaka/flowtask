@@ -2825,6 +2825,18 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
     up: (db) => {
       try { db.exec(`ALTER TABLE quotes ADD COLUMN budgeted_value REAL`) } catch {}
     }
+  },
+  {
+    version: 88,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS pdf_cache (
+        hash        TEXT PRIMARY KEY,
+        file_path   TEXT NOT NULL,
+        page_count  INTEGER NOT NULL DEFAULT 0,
+        pages_json  TEXT NOT NULL DEFAULT '[]',
+        cached_at   INTEGER NOT NULL
+      )`)
+    }
   }
 ]
 

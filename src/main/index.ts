@@ -54,6 +54,7 @@ import { registerKnowledgeIpc } from './ipc/knowledge.ipc'
 import { registerCortexIpc } from './ipc/cortex.ipc'
 import { registerEmailIpc } from './ipc/email.ipc'
 import { registerReconIpc } from './ipc/recon.ipc'
+import { registerPdfIpc } from './ipc/pdf.ipc'
 import { startEmailAutoSync } from './services/email.service'
 import { syncEnabledCalendars } from './services/google-calendar.service'
 import cron from 'node-cron'
@@ -160,6 +161,7 @@ app.whenReady().then(() => {
   registerCortexIpc()
   registerEmailIpc()
   registerReconIpc()
+  registerPdfIpc()
   startEmailAutoSync()
 
   // ── Calendario: sync automático cada 10 minutos (si hay conexión activa) ──

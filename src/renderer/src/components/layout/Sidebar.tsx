@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud
+  ArrowLeftRight, Brain, Network, Cloud, Receipt
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -18,7 +18,7 @@ import SyncStatusBadge from './SyncStatusBadge'
 
 // ── Workspace definitions ─────────────────────────────────────────────────────
 
-type WorkspaceKey = 'trabajo' | 'empresa' | 'finanzas' | 'agenda' | 'sistema'
+type WorkspaceKey = 'trabajo' | 'empresa' | 'finanzas' | 'agenda' | 'rrhh' | 'sistema'
 
 const WORKSPACES: Array<{
   key: WorkspaceKey
@@ -59,6 +59,14 @@ const WORKSPACES: Array<{
     color: '#60a5fa',
     activeBg: 'rgba(96,165,250,.12)',
     paths: ['/calendario', '/email'],
+  },
+  {
+    key: 'rrhh',
+    label: 'RRHH',
+    Icon: Receipt,
+    color: '#f472b6',
+    activeBg: 'rgba(244,114,182,.12)',
+    paths: ['/rrhh'],
   },
   {
     key: 'sistema',
@@ -380,6 +388,15 @@ export default function Sidebar() {
               )}
               {canRead('email') && (
                 <PanelLink to="/email" icon={Mail} label="Correo" color="#60a5fa" onClick={close} />
+              )}
+            </div>
+          )}
+
+          {openPanel === 'rrhh' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="RRHH" color="#f472b6" />
+              {canRead('rrhh', 'sueldos') && (
+                <PanelLink to="/rrhh/sueldos" icon={Receipt} label="Sueldos" color="#f472b6" onClick={close} />
               )}
             </div>
           )}

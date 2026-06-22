@@ -2854,3 +2854,58 @@ export interface UserProfile {
   display_name: string
   last_seen_at: number
 }
+
+// ── PDF Reader ────────────────────────────────────────────────────────────────
+
+export interface PdfTextItem {
+  str: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface PdfPageResult {
+  pageNum: number
+  width: number
+  height: number
+  items: PdfTextItem[]
+  confidence: number
+  warnings: string[]
+}
+
+export interface PdfReadResult {
+  filePath: string
+  hash: string
+  pageCount: number
+  pages: PdfPageResult[]
+  cachedAt?: number
+}
+
+// ── Payroll (RRHH / Sueldos) ──────────────────────────────────────────────────
+
+export interface PayrollEmployee {
+  pageNum: number
+  apellidoYNombres: string
+  documento: string
+  cuil: string
+  fecha: string
+  periodoAbonado: string
+  tareaDesempenada: string
+  totalNeto: string
+  totalNetoRaw: number
+}
+
+export interface PayrollValidation {
+  field: string
+  message: string
+  severity: 'error' | 'warning'
+}
+
+export interface PayrollExtractionResult {
+  filePath: string
+  hash: string
+  employees: PayrollEmployee[]
+  validations: PayrollValidation[]
+  processedAt: number
+}
