@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Loader2, LogIn } from 'lucide-react'
+import { Loader2, LogIn, Mail } from 'lucide-react'
 import type { AuthSession } from '@shared/types'
+import { Input, Button, Card } from '../components/ui'
 
 interface LoginProps {
   onSuccess: (session: AuthSession) => void
@@ -30,64 +31,101 @@ export default function Login({ onSuccess }: LoginProps) {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-900 text-slate-100">
+    <div
+      style={{
+        display: 'flex',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-app)',
+        color: 'var(--text-body)',
+      }}
+    >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8 flex flex-col gap-4"
-        style={{ animation: 'scaleIn .2s var(--ease-out)' }}
+        style={{
+          width: '100%',
+          maxWidth: 360,
+          animation: 'scaleIn .2s var(--ease-out)',
+        }}
       >
-        <div className="text-center mb-2">
-          <span className="inline-flex mb-3">
-            <svg width="52" height="52" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-              <rect width="48" height="48" rx="12" fill="#0f1826" />
-              <rect x="9"  y="29" width="8" height="11" rx="2.5" fill="#4b566a" />
-              <rect x="19" y="20" width="8" height="20" rx="2.5" fill="#0e88b6" />
-              <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
-            </svg>
-          </span>
-          <h1 className="text-xl font-bold text-white">Summit</h1>
-          <p className="text-sm text-slate-400 mt-1">Iniciá sesión para continuar</p>
-        </div>
+        <Card
+          padding="var(--space-8)"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            boxShadow: 'var(--shadow-2xl)',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: 4 }}>
+            <span style={{ display: 'inline-flex', marginBottom: 12 }}>
+              <svg width="52" height="52" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                <rect width="48" height="48" rx="12" fill="#0f1826" />
+                <rect x="9" y="29" width="8" height="11" rx="2.5" fill="#4b566a" />
+                <rect x="19" y="20" width="8" height="20" rx="2.5" fill="#0e88b6" />
+                <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
+              </svg>
+            </span>
+            <h1 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-strong)' }}>
+              Summit
+            </h1>
+            <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+              Iniciá sesión para continuar
+            </p>
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-400">Email</label>
-          <input
+          <Input
+            label="Email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
-            autoFocus
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             placeholder="tu@email.com"
+            icon={Mail}
+            autoFocus
+            required
           />
-        </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-400">Contraseña</label>
-          <input
+          <Input
+            label="Contraseña"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             placeholder="••••••••"
+            required
           />
-        </div>
 
-        {error && (
-          <p className="text-xs text-rose-400 bg-rose-950/40 border border-rose-900/60 rounded-lg px-3 py-2">
-            {error}
+          {error && (
+            <div
+              style={{
+                fontSize: 'var(--text-11)',
+                color: 'var(--danger-400)',
+                background: 'color-mix(in srgb, var(--danger) 15%, var(--slate-900))',
+                border: '1px solid color-mix(in srgb, var(--danger) 45%, transparent)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-3)',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            icon={loading ? Loader2 : LogIn}
+            style={{ marginTop: 6 }}
+          >
+            {loading ? 'Ingresando…' : 'Ingresar'}
+          </Button>
+
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 'var(--text-11)', color: 'var(--text-ghost)' }}>
+            Naka Outdoors · sistema operativo interno
           </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex items-center justify-center gap-2 mt-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
-          {loading ? 'Ingresando...' : 'Ingresar'}
-        </button>
+        </Card>
       </form>
     </div>
   )

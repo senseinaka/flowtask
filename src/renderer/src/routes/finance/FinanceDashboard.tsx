@@ -148,13 +148,18 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
   color?: string; icon?: React.ElementType
 }) {
   return (
-    <div className="rounded-xl p-3.5 bg-slate-800/60 border border-slate-700/70">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        {Icon && <Icon size={12} className="text-slate-500" />}
-        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{label}</p>
+    <div style={{
+      borderRadius: 'var(--radius-xl)',
+      padding: '14px',
+      background: 'var(--surface-card)',
+      border: '1px solid var(--border)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        {Icon && <Icon size={12} style={{ color: 'var(--text-faint)' }} />}
+        <p style={{ fontSize: 'var(--text-10)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-wider)', fontWeight: 'var(--weight-semibold)' }}>{label}</p>
       </div>
-      <p className="text-xl font-bold" style={{ color: color ?? '#e2e8f0' }}>{value}</p>
-      {sub && <div className="mt-1 text-[11px] text-slate-400">{sub}</div>}
+      <p style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-bold)', color: color ?? 'var(--text-strong)' }}>{value}</p>
+      {sub && <div style={{ marginTop: 4, fontSize: 'var(--text-11)', color: 'var(--text-muted)' }}>{sub}</div>}
     </div>
   )
 }

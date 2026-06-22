@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Loader2, Sparkles, X, Clock, GitBranch } from 'lucide-react'
+import { Loader2, Sparkles, X, Clock, GitBranch, Eye, Pencil, Brain } from 'lucide-react'
 import dayjs from 'dayjs'
 import {
   useCreateKnowledgeEntry, useUpdateKnowledgeEntry, useDeleteKnowledgeEntry, useSummarizeKnowledgeEntry
 } from '../../hooks/useKnowledge'
 import KnowledgeRichTextEditor from './KnowledgeRichTextEditor'
+import KnowledgeAIPanel from './KnowledgeAIPanel'
 import KnowledgeAttachmentStrip from './KnowledgeAttachmentStrip'
 import { parseTags } from './KnowledgeHelpers'
 import type { KnowledgeEntry, KnowledgeSource } from '@shared/types'
@@ -17,6 +18,22 @@ interface Props {
   existingTopics: string[]
   parentId?: string | null
   onClose: () => void
+}
+
+// ── Inline style helpers ────────────────────────────────────────────
+const metaInput: React.CSSProperties = {
+  background: 'var(--surface-sunken)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-md)',
+  padding: '3px 8px',
+  fontSize: 12,
+  color: 'var(--text-body)',
+  outline: 'none',
+}
+const metaSelect: React.CSSProperties = {
+  ...metaInput,
+  cursor: 'pointer',
+  paddingRight: 4,
 }
 
 export default function KnowledgeEntryEditor({
@@ -32,6 +49,8 @@ export default function KnowledgeEntryEditor({
   )
   const [htmlBody, setHtmlBody]   = useState(entry?.body ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [mode, setMode]           = useState<'edit' | 'read'>('edit')
+  const [panelOpen, setPanelOpen] = useState(false)
 
   const create    = useCreateKnowledgeEntry()
   const update    = useUpdateKnowledgeEntry()
@@ -84,77 +103,217 @@ export default function KnowledgeEntryEditor({
     onClose()
   }
 
+  // Latest ai_summary from the live entry (if summarize mutated it)
+  const aiSummary = summarize.data?.ai_summary ?? entry?.ai_summary ?? ''
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-800 shrink-0">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
+
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px',
+        borderBottom: '1px solid var(--border)', background: 'var(--surface-card)',
+        flexShrink: 0,
+      }}>
         {parentId && (
-          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-900/40 text-violet-300 border border-violet-700/40 shrink-0">
-            <GitBranch size={10}/>Hilo
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 10, fontWeight: 600, padding: '2px 8px',
+            borderRadius: 999, background: 'rgba(139,92,246,.15)',
+            color: '#a78bfa', border: '1px solid rgba(139,92,246,.3)', flexShrink: 0,
+          }}>
+            <GitBranch size={9}/> Hilo
           </span>
         )}
+
         <input
           value={title}
           onChange={e => { setTitle(e.target.value); schedule() }}
           placeholder={parentId ? 'Título de esta entrada del hilo...' : 'Título de la entrada...'}
-          className="flex-1 bg-transparent text-lg font-semibold text-slate-100 placeholder-slate-600 focus:outline-none"
+          style={{
+            flex: 1, background: 'transparent', border: 'none', outline: 'none',
+            fontSize: 17, fontWeight: 700, color: 'var(--text-strong)',
+          }}
         />
-        <span className="text-[11px] w-20 text-right shrink-0 text-slate-600">
-          {saveStatus === 'saving' && <span className="flex items-center gap-1 justify-end"><Loader2 size={10} className="animate-spin"/>Guardando</span>}
-          {saveStatus === 'saved'  && <span className="text-teal-600">Guardado</span>}
+
+        {/* Save status */}
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', minWidth: 64, textAlign: 'right', flexShrink: 0 }}>
+          {saveStatus === 'saving' && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <Loader2 size={9} className="animate-spin"/> Guardando
+            </span>
+          )}
+          {saveStatus === 'saved' && <span style={{ color: 'var(--success)' }}>Guardado</span>}
         </span>
+
+        {/* Mode toggle */}
+        <div style={{
+          display: 'flex', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)', overflow: 'hidden', flexShrink: 0,
+        }}>
+          <ModeBtn active={mode === 'edit'} onClick={() => setMode('edit')} icon={<Pencil size={11}/>} label="Editar"/>
+          <ModeBtn active={mode === 'read'} onClick={() => setMode('read')} icon={<Eye size={11}/>}    label="Leer"/>
+        </div>
+
+        {/* AI panel toggle */}
+        <button
+          onClick={() => setPanelOpen(v => !v)}
+          title={panelOpen ? 'Cerrar panel IA' : 'Abrir análisis IA del tema'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', padding: '4px 9px', gap: 4,
+            border: panelOpen ? '1px solid rgba(45,212,191,.4)' : '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)', background: panelOpen ? 'rgba(45,212,191,.1)' : 'transparent',
+            color: panelOpen ? '#2dd4bf' : 'var(--text-muted)', cursor: 'pointer', fontSize: 11, flexShrink: 0,
+          }}
+        >
+          <Brain size={11}/> IA
+        </button>
+
+        {/* AI summarize */}
         {savedId && (
-          <button onClick={() => summarize.mutate(savedId)} disabled={summarize.isPending}
-            className="flex items-center gap-1.5 text-xs text-teal-400 bg-teal-900/30 hover:bg-teal-900/50 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50">
-            {summarize.isPending ? <Loader2 size={11} className="animate-spin"/> : <Sparkles size={11}/>}
-            {entry?.ai_summary ? 'Re-resumir' : 'Resumir IA'}
+          <button
+            onClick={() => summarize.mutate(savedId)}
+            disabled={summarize.isPending}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 11, padding: '4px 10px', border: '1px solid rgba(20,184,166,.3)',
+              borderRadius: 'var(--radius-lg)', background: 'rgba(20,184,166,.1)',
+              color: '#2dd4bf', cursor: 'pointer', opacity: summarize.isPending ? 0.6 : 1, flexShrink: 0,
+            }}
+          >
+            {summarize.isPending ? <Loader2 size={10} className="animate-spin"/> : <Sparkles size={10}/>}
+            {aiSummary ? 'Re-resumir' : 'Resumir IA'}
           </button>
         )}
-        <button onClick={handleClose}
-          className="text-sm text-teal-300 bg-teal-900/40 hover:bg-teal-900/60 border border-teal-700 px-3 py-1.5 rounded-lg transition-colors">
+
+        <button
+          onClick={handleClose}
+          style={{
+            fontSize: 11, padding: '5px 12px', borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-strong)', background: 'var(--slate-700)',
+            color: 'var(--text-body)', cursor: 'pointer', flexShrink: 0,
+          }}
+        >
           Guardar y cerrar
         </button>
-        <button onClick={handleDiscard} className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-900/20 transition-colors">
-          <X size={16}/>
+
+        <button
+          onClick={handleDiscard}
+          style={{
+            display: 'inline-flex', alignItems: 'center', padding: 5,
+            border: 'none', background: 'transparent',
+            color: 'var(--text-faint)', cursor: 'pointer', borderRadius: 'var(--radius-md)',
+            flexShrink: 0,
+          }}
+          title="Descartar"
+        >
+          <X size={15}/>
         </button>
       </div>
 
-      <div className="flex items-center gap-4 px-5 py-2.5 border-b border-slate-800 shrink-0 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <Clock size={11} className="text-slate-600"/>
+      {/* ── Metadata bar ───────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        padding: '6px 16px', borderBottom: '1px solid var(--border)',
+        background: 'var(--surface-card)', flexShrink: 0,
+      }}>
+        <MetaField label="Fecha" icon={<Clock size={10}/>}>
           <input type="date" value={entryDate}
             onChange={e => { setEntryDate(e.target.value); schedule() }}
-            className="bg-transparent text-xs text-slate-400 focus:outline-none cursor-pointer"/>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-slate-600">Tema</span>
+            style={{ ...metaInput, cursor: 'pointer' }}/>
+        </MetaField>
+
+        <MetaField label="Tema">
           <input value={topic} onChange={e => { setTopic(e.target.value); schedule() }}
-            list="ke-topics" placeholder="Tema"
-            className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 w-36 focus:outline-none focus:border-teal-600"/>
+            list="ke-topics" placeholder="Sin tema"
+            style={{ ...metaInput, width: 130 }}/>
           <datalist id="ke-topics">{existingTopics.map(t => <option key={t} value={t}/>)}</datalist>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-slate-600">Fuente</span>
+        </MetaField>
+
+        <MetaField label="Fuente">
           <select value={source} onChange={e => { setSource(e.target.value); schedule() }}
-            className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none focus:border-teal-600">
+            style={{ ...metaSelect }}>
             <option value="">—</option>
             {sources.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-slate-600">Tags</span>
+        </MetaField>
+
+        <MetaField label="Tags">
           <input value={tagsRaw} onChange={e => { setTagsRaw(e.target.value); schedule() }}
             placeholder="tag1, tag2"
-            className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 w-40 focus:outline-none focus:border-teal-600"/>
-        </div>
+            style={{ ...metaInput, width: 150 }}/>
+        </MetaField>
       </div>
 
-      <KnowledgeRichTextEditor initialHtml={htmlBody} onChange={html => { setHtmlBody(html); schedule() }}/>
+      {/* ── AI summary band (read mode only) ──────────────────────── */}
+      {mode === 'read' && aiSummary && (
+        <div style={{
+          padding: '10px 16px',
+          borderBottom: '1px solid var(--border)',
+          background: 'color-mix(in srgb, var(--primary) 6%, var(--surface-card))',
+          flexShrink: 0,
+        }}>
+          <div style={{ maxWidth: 780, margin: '0 auto' }}>
+            <p style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Sparkles size={9}/> Resumen IA
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--text-body)', lineHeight: 1.65, margin: 0 }}>{aiSummary}</p>
+          </div>
+        </div>
+      )}
 
+      {/* ── Editor + optional AI panel ─────────────────────────────── */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <KnowledgeRichTextEditor
+          initialHtml={htmlBody}
+          onChange={html => { setHtmlBody(html); schedule() }}
+          readOnly={mode === 'read'}
+        />
+        {panelOpen && (
+          <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <KnowledgeAIPanel
+              topic={topic || defaultTopic}
+              userId={userId}
+              onClose={() => setPanelOpen(false)}
+              embedded
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── Attachment strip ───────────────────────────────────────── */}
       {savedId && (
-        <div className="px-5 pb-3 border-t border-slate-800 shrink-0 pt-2">
+        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
           <KnowledgeAttachmentStrip entryId={savedId}/>
         </div>
       )}
     </div>
+  )
+}
+
+// ── Small helpers ───────────────────────────────────────────────────
+function MetaField({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      {icon && <span style={{ color: 'var(--text-faint)' }}>{icon}</span>}
+      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-faint)', fontWeight: 600 }}>
+        {label}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+function ModeBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '4px 9px', border: 'none', cursor: 'pointer', fontSize: 11,
+      background: active ? 'var(--primary)' : 'transparent',
+      color: active ? '#fff' : 'var(--text-muted)',
+      transition: 'background 0.1s',
+    }}>
+      {icon} {label}
+    </button>
   )
 }

@@ -17,7 +17,7 @@ import CalendarSettingsSection from '../components/settings/CalendarSettingsSect
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/useProjects'
 import { useAIConfigured, useAIModels, useSaveAIApiKey, useSaveAIModels } from '../hooks/useAI'
 import { usePersonalContact, useSavePersonalContact } from '../hooks/useSettings'
-import { cn } from '../components/ui/utils'
+import { cn, Input, Button } from '../components/ui'
 import { ADMIN_USER_ID } from '@shared/modules'
 
 const PROJECT_COLORS = [
@@ -515,37 +515,26 @@ export default function Settings() {
           mismo en lugar de a otra persona.
         </p>
 
-        <div className="space-y-2">
-          <div className="relative">
-            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={personalName}
-              onChange={(e) => setPersonalName(e.target.value)}
-              placeholder="Tu nombre"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-          <div className="relative">
-            <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={personalWa}
-              onChange={(e) => setPersonalWa(e.target.value)}
-              placeholder="Tu WhatsApp (ej: +5491122334455)"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-          <div className="relative">
-            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="email"
-              value={personalEmail}
-              onChange={(e) => setPersonalEmail(e.target.value)}
-              placeholder="Tu email"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Input
+            value={personalName}
+            onChange={(e) => setPersonalName(e.target.value)}
+            placeholder="Tu nombre"
+            icon={User}
+          />
+          <Input
+            value={personalWa}
+            onChange={(e) => setPersonalWa(e.target.value)}
+            placeholder="Tu WhatsApp (ej: +5491122334455)"
+            icon={Phone}
+          />
+          <Input
+            type="email"
+            value={personalEmail}
+            onChange={(e) => setPersonalEmail(e.target.value)}
+            placeholder="Tu email"
+            icon={Mail}
+          />
           <div className="relative">
             <FileText size={14} className="absolute left-3 top-3 text-slate-500" />
             <textarea
@@ -556,18 +545,15 @@ export default function Settings() {
               className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors resize-none"
             />
           </div>
-          <button
+          <Button
             onClick={handleSavePersonalContact}
             disabled={savePersonalContact.isPending}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 text-sm rounded-lg transition-colors"
+            variant="secondary"
+            size="sm"
+            icon={personalSaved ? Check : savePersonalContact.isPending ? Loader2 : Save}
           >
-            {personalSaved
-              ? <Check size={13} className="text-emerald-400" />
-              : savePersonalContact.isPending
-                ? <Loader2 size={13} className="animate-spin" />
-                : <Save size={13} />}
             {personalSaved ? 'Guardado' : 'Guardar mis datos'}
-          </button>
+          </Button>
         </div>
       </section>
       </>
