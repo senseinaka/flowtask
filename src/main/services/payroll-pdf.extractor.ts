@@ -4,22 +4,27 @@ import type { PayrollEmployee, PayrollExtractionResult, PayrollValidation, PdfTe
 const Y_TOL = 5   // pixels of y-coordinate tolerance for grouping rows
 const X_TOL = 15  // pixels of x-coordinate tolerance for field matching
 
-// Known approximate coordinates (left half, y from bottom of page)
-// Measured from "Muestra sueldos.pdf" — A4 landscape 842×595
+// Coordinates calibrated for "RECIBOS ABRIL 2026.pdf" (842×595 A4 landscape)
+// Each page has ONE employee printed twice (left half + right half mirror).
+// We read only the left half (x < pageWidth/2).
 const COORDS = {
-  apellido:       { y: 499, x: 28  },
-  documento:      { y: 499, x: 163 },
-  cuil:           { y: 527, x: 333 },
-  fecha:          { y: 450, x: 205 },
-  tarea:          { y: 450, x: 256 },
-  periodo:        { y: 436, x: 77  },
-  totalNetoLabel: { y: 60,  x: 283 },
-  totalNetoValue: { y: 59,  x: 361 },
+  apellido:     { y: 507, x: 16  },
+  documento:    { y: 507, x: 151 },
+  legajo:       { y: 507, x: 392 },
+  tarea:        { y: 458, x: 245 },
+  fecha:        { y: 458, x: 194 },
+  cuil:         { y: 535, x: 322 },
+  fechaIngreso: { y: 483, x: 17  },
+  periodo:      { y: 444, x: 66  },
+  totalNeto:    { y: 48,  x: 350 },
 }
 
-// Labels to search for legajo and fecha de ingreso (case-insensitive)
-const LEGAJO_LABELS    = ['LEGAJO', 'LEG.', 'NRO.LEG', 'NRO. LEG', 'N°LEG', 'NROLEG', 'LEG']
-const INGRESO_LABELS   = ['F.INGRESO', 'FEC.ING', 'FECHA ING', 'F. ING', 'INGRESO', 'F.ING.', 'FECINGR', 'ANT.']
+// Year must start with "20" (20XX) to avoid false positives on CUITs like 30-71201832-8
+const PERIODO_PATTERN = /\b(\d{1,2})\s*[-–]\s*(20\d{2})\b/
+
+// Fallback label lists (searched on full page when coordinate extraction fails)
+const LEGAJO_LABELS  = ['LEGAJO', 'LEG.', 'NRO.LEG', 'NRO. LEG', 'N°LEG', 'NROLEG', 'LEG']
+const INGRESO_LABELS = ['F.INGRESO', 'FEC.ING', 'FECHA ING', 'F. ING', 'F.ING.', 'FECINGR']
 
 function near(a: number, b: number, tol: number): boolean {
   return Math.abs(a - b) <= tol
@@ -62,7 +67,8 @@ function findTextAtOrAfterX(rows: Map<number, PdfTextItem[]>, targetY: number, m
   return ''
 }
 
-// Search all rows for a label, return the first non-empty token immediately after it
+// Find a label in any row, return the next non-empty token to its right in the same row.
+// Used as fallback when coordinate extraction yields nothing.
 function findValueByLabel(rows: Map<number, PdfTextItem[]>, labels: string[]): string {
   for (const [_y, items] of rows) {
     const sorted = [...items].sort((a, b) => a.x - b.x)
@@ -79,22 +85,13 @@ function findValueByLabel(rows: Map<number, PdfTextItem[]>, labels: string[]): s
   return ''
 }
 
-const PERIODO_PATTERN = /\d{1,2}\s*[-–]\s*\d{4}/
-const PERIODO_LABELS  = ['PERIODOABONADO', 'PERÍODO', 'PERIODO', 'PER.', 'PERABONADO']
-
-// Extrae el período abonado usando 3 estrategias en cascada
+// 3-level cascade to find the "Período Abonado" value
 function findPeriodoAbonado(allRows: Map<number, PdfTextItem[]>, coordResult: string): string {
-  // 1. La coordenada ya tiene el patrón esperado
+  // 1. Coordinate result already has the expected pattern
   if (PERIODO_PATTERN.test(coordResult)) return coordResult
 
-  // 2. Búsqueda por etiqueta "PERIODO ABONADO" y similares
-  const byLabel = findValueByLabel(allRows, PERIODO_LABELS)
-  if (byLabel && PERIODO_PATTERN.test(byLabel)) return byLabel
-
-  // 3. Escanear toda la página buscando el primer texto que coincida con "N - YYYY"
-  //    (ordenado por y desc para leer de arriba a abajo)
-  const allItems = [...allRows.values()].flat()
-    .sort((a, b) => b.y - a.y)
+  // 2. Full-page scan — first item matching "N - 20YY"
+  const allItems = [...allRows.values()].flat().sort((a, b) => b.y - a.y)
   for (const item of allItems) {
     if (PERIODO_PATTERN.test(item.str)) return item.str.trim()
   }
@@ -103,25 +100,25 @@ function findPeriodoAbonado(allRows: Map<number, PdfTextItem[]>, coordResult: st
 }
 
 function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatted: string } {
-  // Find "TOTAL NETO" label row, then grab the numeric value to its right
-  for (const [rowY, items] of rows) {
-    const rowText = items.map(i => i.str).join(' ')
-    if (!rowText.includes('TOTAL') && !rowText.includes('NETO')) continue
-    if (!near(rowY, COORDS.totalNetoLabel.y, Y_TOL * 3)) continue
+  for (const [_rowY, items] of rows) {
+    const rowText = items.map(i => i.str.toUpperCase()).join(' ')
+    // Require BOTH words to avoid matching "SUBTOTAL" rows
+    if (!rowText.includes('TOTAL') || !rowText.includes('NETO')) continue
 
-    const sorted = items.sort((a, b) => a.x - b.x)
-    // Value is the item furthest right (after label)
-    const labelIdx = sorted.findIndex(i => i.str.includes('NETO') || i.str.includes('TOTAL'))
-    const valueItems = labelIdx >= 0 ? sorted.slice(labelIdx + 1) : sorted.filter(i => /\d/.test(i.str))
-    const rawStr = valueItems.map(i => i.str).join('').trim()
-    const num = parseFloat(rawStr.replace(/[^\d.]/g, ''))
-    if (!isNaN(num) && num > 0) return { raw: num, formatted: formatNeto(num) }
+    const sorted = [...items].sort((a, b) => a.x - b.x)
+    // The numeric value is the rightmost item that looks like a number
+    const numItems = sorted.filter(i => /^\d[\d.,]*$/.test(i.str.trim()))
+    if (numItems.length) {
+      const rawStr = numItems[numItems.length - 1].str.trim()
+      // PDF uses dot as decimal separator (e.g. "1473433.00")
+      const num = parseFloat(rawStr.replace(/[^\d.]/g, ''))
+      if (!isNaN(num) && num > 1000) return { raw: num, formatted: formatNeto(num) }
+    }
   }
   return { raw: 0, formatted: '' }
 }
 
 function formatNeto(n: number): string {
-  // Argentine format: $1.493.735,00
   const [intPart, decPart] = n.toFixed(2).split('.')
   const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return `$${intFormatted},${decPart}`
@@ -130,22 +127,24 @@ function formatNeto(n: number): string {
 function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: number): PayrollEmployee | null {
   const leftItems = items.filter(i => i.x < pageWidth / 2)
   const leftRows  = groupByRow(leftItems)
-  const allRows   = groupByRow(items)   // full page for label search
+  const allRows   = groupByRow(items)   // full page for label fallbacks
 
-  const apellido = findNearestStr(leftRows, COORDS.apellido.y, COORDS.apellido.x)
-  const documento = findNearestStr(leftRows, COORDS.documento.y, COORDS.documento.x)
-  const cuil = findNearestStr(leftRows, COORDS.cuil.y, COORDS.cuil.x)
-  const fecha = findNearestStr(leftRows, COORDS.fecha.y, COORDS.fecha.x)
-  const tarea = findTextAtOrAfterX(leftRows, COORDS.tarea.y, COORDS.tarea.x)
+  const apellido   = findNearestStr(leftRows, COORDS.apellido.y, COORDS.apellido.x)
+  const documento  = findNearestStr(leftRows, COORDS.documento.y, COORDS.documento.x)
+  const cuil       = findNearestStr(leftRows, COORDS.cuil.y, COORDS.cuil.x)
+  const fecha      = findNearestStr(leftRows, COORDS.fecha.y, COORDS.fecha.x)
+  const tarea      = findTextAtOrAfterX(leftRows, COORDS.tarea.y, COORDS.tarea.x)
   const periodoRaw = findTextAtOrAfterX(leftRows, COORDS.periodo.y, COORDS.periodo.x)
   const periodo    = findPeriodoAbonado(allRows, periodoRaw)
+
+  // Coordinate-based first, label-based fallback
+  const legajo       = findNearestStr(leftRows, COORDS.legajo.y, COORDS.legajo.x)
+                    || findValueByLabel(allRows, LEGAJO_LABELS)
+  const fechaIngreso = findNearestStr(leftRows, COORDS.fechaIngreso.y, COORDS.fechaIngreso.x)
+                    || findValueByLabel(allRows, INGRESO_LABELS)
+
   const { raw: totalNetoRaw, formatted: totalNeto } = findTotalNeto(leftRows)
 
-  // Label-based extraction (searches full page)
-  const legajo       = findValueByLabel(allRows, LEGAJO_LABELS)
-  const fechaIngreso = findValueByLabel(allRows, INGRESO_LABELS)
-
-  // If we can't find a name this page is probably blank/invalid
   if (!apellido) return null
 
   return {
