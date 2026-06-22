@@ -331,6 +331,28 @@ class DriveService {
     return this.getOrCreateFolder(drive, safeName, rootId)
   }
 
+  /**
+   * Summit RRHH / Sueldos / MM-YYYY
+   * e.g. mes=5, anio=2026 → "Summit RRHH/Sueldos/05-2026"
+   */
+  async getOrCreateRrhhSueldosMesFolder(mes: number, anio: number): Promise<string> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+    const cached = store.get('rrhhRootFolderId', '') as string
+    let rrhhRoot = cached
+    if (!rrhhRoot) {
+      rrhhRoot = await this.getOrCreateFolder(drive, 'Summit RRHH')
+      store.set('rrhhRootFolderId', rrhhRoot)
+    }
+
+    const sueldosId = await this.getOrCreateFolder(drive, 'Sueldos', rrhhRoot)
+    const folderName = `${String(mes).padStart(2, '0')}-${anio}`
+    return this.getOrCreateFolder(drive, folderName, sueldosId)
+  }
+
   // ── Backup completo de la base de datos ──────────────────────────────────
 
   getLastBackupStatus(): BackupStatus | null {

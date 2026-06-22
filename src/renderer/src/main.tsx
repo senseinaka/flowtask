@@ -34,6 +34,7 @@ import ReconPeriodView from './routes/contable/ReconPeriodView'
 import KnowledgeDashboard from './routes/knowledge/KnowledgeDashboard'
 import CortexDashboard from './routes/cortex/CortexDashboard'
 import SueldosDashboard from './routes/rrhh/SueldosDashboard'
+import PeriodoDetail from './routes/rrhh/PeriodoDetail'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -78,7 +79,8 @@ const router = createHashRouter([
       { path: 'email', element: <EmailDashboard /> },
       { path: 'contable/recon', element: <ReconDashboard /> },
       { path: 'contable/recon/:id', element: <ReconPeriodView /> },
-      { path: 'rrhh/sueldos', element: <SueldosDashboard /> }
+      { path: 'rrhh/sueldos', element: <SueldosDashboard /> },
+      { path: 'rrhh/sueldos/:id', element: <PeriodoDetail /> }
     ]
   }
 ])

@@ -52,7 +52,10 @@ import type {
   CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado,
   KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile,
   KnowledgeThreadDoc,
-  PayrollExtractionResult
+  PayrollExtractionResult,
+  RrhhColaborador, RrhhPeriodo, RrhhSueldo,
+  RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
+  RrhhSmartAlert, SavePayrollResult
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1077,6 +1080,29 @@ const api = {
     readPayroll:  (filePath: string): Promise<PayrollExtractionResult>                                                                      => ipcRenderer.invoke('pdf:readPayroll', filePath),
     clearCache:   (hash?: string): Promise<void>                                                                                             => ipcRenderer.invoke('pdf:clearCache', hash),
     getCacheInfo: (): Promise<{ count: number; entries: Array<{ hash: string; filePath: string; pageCount: number; cachedAt: number }> }>    => ipcRenderer.invoke('pdf:getCacheInfo'),
+  },
+
+  rrhh: {
+    savePayroll:             (filePath: string): Promise<SavePayrollResult>                        => ipcRenderer.invoke('rrhh:savePayroll', filePath),
+    colaboradores: {
+      list:                  (): Promise<RrhhColaborador[]>                                        => ipcRenderer.invoke('rrhh:colaboradores:list'),
+      historial:             (colaboradorId: string): Promise<RrhhHistorialEntry[]>               => ipcRenderer.invoke('rrhh:colaboradores:historial', colaboradorId),
+    },
+    periodos: {
+      list:                  (): Promise<RrhhPeriodoConStats[]>                                    => ipcRenderer.invoke('rrhh:periodos:list'),
+      get:                   (id: string): Promise<RrhhPeriodo | null>                            => ipcRenderer.invoke('rrhh:periodos:get', id),
+      confirmar:             (id: string): Promise<void>                                           => ipcRenderer.invoke('rrhh:periodos:confirmar', id),
+      delete:                (id: string): Promise<void>                                           => ipcRenderer.invoke('rrhh:periodos:delete', id),
+      ausentes:              (periodoId: string): Promise<RrhhColaborador[]>                       => ipcRenderer.invoke('rrhh:periodos:ausentes', periodoId),
+    },
+    sueldos: {
+      list:                  (periodoId: string): Promise<RrhhSueldoConColaborador[]>              => ipcRenderer.invoke('rrhh:sueldos:list', periodoId),
+    },
+    drive: {
+      openFolder:            (folderId: string): Promise<void>                                     => ipcRenderer.invoke('rrhh:drive:openFolder', folderId),
+      openFile:              (fileId: string): Promise<void>                                       => ipcRenderer.invoke('rrhh:drive:openFile', fileId),
+      isAuthenticated:       (): Promise<boolean>                                                  => ipcRenderer.invoke('rrhh:drive:isAuthenticated'),
+    },
   },
 
   on: (

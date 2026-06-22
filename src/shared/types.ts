@@ -2909,3 +2909,80 @@ export interface PayrollExtractionResult {
   validations: PayrollValidation[]
   processedAt: number
 }
+
+// ── RRHH (entidades Supabase/PowerSync) ───────────────────────────────────────
+
+export interface RrhhColaborador {
+  id: string
+  workspace_id: string
+  documento: string
+  cuil: string
+  nombre: string
+  tarea_habitual: string
+  activo: number
+  created_at: number
+  updated_at: number
+}
+
+export interface RrhhPeriodo {
+  id: string
+  workspace_id: string
+  anio: number
+  mes: number
+  label: string
+  total_neto: number
+  cantidad_colaboradores: number
+  pdf_nombre: string
+  pdf_drive_file_id: string | null
+  pdf_drive_folder_id: string | null
+  fecha_pago: string
+  estado: 'borrador' | 'confirmado'
+  created_at: number
+  updated_at: number
+}
+
+export interface RrhhSueldo {
+  id: string
+  workspace_id: string
+  periodo_id: string
+  colaborador_id: string
+  total_neto: number
+  tarea: string
+  periodo_abonado: string
+  created_at: number
+  updated_at: number
+}
+
+export interface RrhhSueldoConColaborador extends RrhhSueldo {
+  colaborador: RrhhColaborador
+  delta_importe: number | null
+  delta_pct: number | null
+  es_nuevo: boolean
+}
+
+export interface RrhhPeriodoConStats extends RrhhPeriodo {
+  delta_total: number | null
+  delta_pct: number | null
+}
+
+export interface RrhhSmartAlert {
+  type: 'nuevo' | 'ausente' | 'aumento' | 'baja'
+  nombre: string
+  importe?: number
+  delta?: number
+  delta_pct?: number
+}
+
+export interface SavePayrollResult {
+  periodo: RrhhPeriodo
+  colaboradoresNuevos: number
+  colaboradoresActualizados: number
+  alerts: RrhhSmartAlert[]
+}
+
+export interface RrhhHistorialEntry {
+  periodo: RrhhPeriodo
+  sueldo: RrhhSueldo
+  delta_importe: number | null
+  delta_pct: number | null
+}

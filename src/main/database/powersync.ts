@@ -942,6 +942,55 @@ const user_profiles = new Table(
   { indexes: { workspace: ['workspace_id'] } }
 )
 
+// ── RRHH ─────────────────────────────────────────────────────────────────────
+
+const rrhh_colaboradores = new Table(
+  {
+    workspace_id:   column.text,
+    documento:      column.text,
+    cuil:           column.text,
+    nombre:         column.text,
+    tarea_habitual: column.text,
+    activo:         column.integer,
+    created_at:     column.integer,
+    updated_at:     column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], documento: ['documento'] } }
+)
+
+const rrhh_periodos = new Table(
+  {
+    workspace_id:           column.text,
+    anio:                   column.integer,
+    mes:                    column.integer,
+    label:                  column.text,
+    total_neto:             column.real,
+    cantidad_colaboradores: column.integer,
+    pdf_nombre:             column.text,
+    pdf_drive_file_id:      column.text,
+    pdf_drive_folder_id:    column.text,
+    fecha_pago:             column.text,
+    estado:                 column.text,
+    created_at:             column.integer,
+    updated_at:             column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], periodo: ['anio', 'mes'] } }
+)
+
+const rrhh_sueldos = new Table(
+  {
+    workspace_id:    column.text,
+    periodo_id:      column.text,
+    colaborador_id:  column.text,
+    total_neto:      column.real,
+    tarea:           column.text,
+    periodo_abonado: column.text,
+    created_at:      column.integer,
+    updated_at:      column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], periodo: ['periodo_id'], colaborador: ['colaborador_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -993,7 +1042,10 @@ export const AppSchema = new Schema({
   quote_activities,
   knowledge_entries,
   knowledge_global_summaries,
-  user_profiles
+  user_profiles,
+  rrhh_colaboradores,
+  rrhh_periodos,
+  rrhh_sueldos,
 })
 
 /**
@@ -1474,7 +1526,9 @@ const EXTRA_COST_DOUBLE_COLS = [
 
 // Mapa de tabla → columnas float para sanitización en uploadData
 const TABLE_FLOAT_COLS: Record<string, string[]> = {
-  comex_import_extra_costs: EXTRA_COST_DOUBLE_COLS
+  comex_import_extra_costs: EXTRA_COST_DOUBLE_COLS,
+  rrhh_periodos: ['total_neto'],
+  rrhh_sueldos:  ['total_neto'],
 }
 
 // Convierte cualquier valor a number válido para Postgres double precision.
@@ -1736,6 +1790,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos'], throttleMs: 1000 }
   )
 }

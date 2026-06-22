@@ -66,7 +66,7 @@ const WORKSPACES: Array<{
     Icon: Receipt,
     color: '#f472b6',
     activeBg: 'rgba(244,114,182,.12)',
-    paths: ['/rrhh'],
+    paths: ['/rrhh/sueldos'],
   },
   {
     key: 'sistema',
