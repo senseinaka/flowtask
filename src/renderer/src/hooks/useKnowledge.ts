@@ -98,7 +98,7 @@ export function useCreateKnowledgeEntry() {
       data,
       userId
     }: {
-      data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number; parent_id?: string | null }
+      data: { title?: string; content_type: string; body?: string; topic?: string; tags?: string[]; source?: string; entry_date?: number; parent_id?: string | null; quote_id?: string | null }
       userId: string
     }): Promise<KnowledgeEntry> => window.api.knowledge.entries.create(data, userId),
     onSuccess: (_data, vars) => {

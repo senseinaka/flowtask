@@ -205,6 +205,7 @@ export async function updateQuote(
   if (data.company_id        !== undefined) { sets.push('company_id = ?');        vals.push(data.company_id) }
   if (data.contact_id        !== undefined) { sets.push('contact_id = ?');        vals.push(data.contact_id) }
   if (data.estimated_value   !== undefined) { sets.push('estimated_value = ?');   vals.push(data.estimated_value) }
+  if (data.budgeted_value    !== undefined) { sets.push('budgeted_value = ?');    vals.push(data.budgeted_value) }
   if (data.won_value         !== undefined) { sets.push('won_value = ?');         vals.push(data.won_value) }
   if (data.lost_reason       !== undefined) { sets.push('lost_reason = ?');       vals.push(data.lost_reason) }
   if (data.next_follow_up_at !== undefined) { sets.push('next_follow_up_at = ?'); vals.push(data.next_follow_up_at) }

@@ -860,6 +860,7 @@ const quotes = new Table(
     company_id: column.text,
     contact_id: column.text,
     estimated_value: column.real,
+    budgeted_value: column.real,
     won_value: column.real,
     lost_reason: column.text,
     next_follow_up_at: column.integer,

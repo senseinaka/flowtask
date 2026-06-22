@@ -2819,6 +2819,12 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       try { db.exec(`ALTER TABLE knowledge_entries ADD COLUMN quote_id TEXT`) } catch {}
       db.exec(`CREATE INDEX IF NOT EXISTS idx_ke_quote ON knowledge_entries(quote_id)`)
     }
+  },
+  {
+    version: 87,
+    up: (db) => {
+      try { db.exec(`ALTER TABLE quotes ADD COLUMN budgeted_value REAL`) } catch {}
+    }
   }
 ]
 

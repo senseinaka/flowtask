@@ -17,7 +17,9 @@ interface Props {
   sources: KnowledgeSource[]
   existingTopics: string[]
   parentId?: string | null
+  quoteId?: string | null
   onClose: () => void
+  onSaved?: (entry: KnowledgeEntry) => void
 }
 
 // ── Inline style helpers ────────────────────────────────────────────
@@ -37,7 +39,7 @@ const metaSelect: React.CSSProperties = {
 }
 
 export default function KnowledgeEntryEditor({
-  entry, defaultTopic, userId, sources, existingTopics, parentId, onClose
+  entry, defaultTopic, userId, sources, existingTopics, parentId, quoteId, onClose, onSaved
 }: Props) {
   const [savedId, setSavedId]     = useState<string | null>(entry?.id ?? null)
   const [title, setTitle]         = useState(entry?.title ?? '')
@@ -57,24 +59,26 @@ export default function KnowledgeEntryEditor({
   const del       = useDeleteKnowledgeEntry()
   const summarize = useSummarizeKnowledgeEntry()
 
-  const r = useRef({ savedId, title, topic, source, tagsRaw, entryDate, htmlBody, userId })
-  useEffect(() => { r.current = { savedId, title, topic, source, tagsRaw, entryDate, htmlBody, userId } })
+  const r = useRef({ savedId, title, topic, source, tagsRaw, entryDate, htmlBody, userId, quoteId, onSaved })
+  useEffect(() => { r.current = { savedId, title, topic, source, tagsRaw, entryDate, htmlBody, userId, quoteId, onSaved } })
 
   const performSaveRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => {
     performSaveRef.current = async () => {
-      const { savedId: sid, title: t, topic: tp, source: src, tagsRaw: tr, entryDate: ed, htmlBody: body, userId: uid } = r.current
+      const { savedId: sid, title: t, topic: tp, source: src, tagsRaw: tr, entryDate: ed, htmlBody: body, userId: uid, quoteId: qid, onSaved: saved } = r.current
       if (!sid && !t && !body) return
       const tags = tr.split(',').map(s => s.trim()).filter(Boolean)
       const ms   = ed ? dayjs(ed).valueOf() : null
       setSaveStatus('saving')
       try {
         if (!sid) {
-          const e = await create.mutateAsync({ data: { title: t, content_type: 'text', body, topic: tp, tags, source: src, entry_date: ms ?? undefined, parent_id: parentId ?? null }, userId: uid })
+          const e = await create.mutateAsync({ data: { title: t, content_type: 'text', body, topic: tp, tags, source: src, entry_date: ms ?? undefined, parent_id: parentId ?? null, quote_id: qid ?? null }, userId: uid })
           setSavedId(e.id)
           r.current.savedId = e.id
+          saved?.(e)
         } else {
-          await update.mutateAsync({ id: sid, data: { title: t, body, topic: tp, tags, source: src, entry_date: ms } })
+          const e = await update.mutateAsync({ id: sid, data: { title: t, body, topic: tp, tags, source: src, entry_date: ms } })
+          saved?.(e)
         }
         setSaveStatus('saved')
       } catch { setSaveStatus('idle') }

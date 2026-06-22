@@ -2308,6 +2308,7 @@ export interface Quote {
   company_id: string
   contact_id: string
   estimated_value: number | null
+  budgeted_value: number | null
   won_value: number | null
   lost_reason: string
   next_follow_up_at: number | null
@@ -2347,6 +2348,7 @@ export interface UpdateQuoteInput {
   company_id?: string
   contact_id?: string
   estimated_value?: number | null
+  budgeted_value?: number | null
   won_value?: number | null
   lost_reason?: string
   next_follow_up_at?: number | null

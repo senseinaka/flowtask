@@ -316,6 +316,153 @@ function EditableField({
   )
 }
 
+// ── Value with IVA Field ──────────────────────────────────────────────────────
+
+function ValueWithIvaField({
+  label,
+  value,
+  onSave,
+}: {
+  label: string
+  value: number | null | undefined
+  onSave: (v: number | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(String(value ?? ''))
+
+  useEffect(() => { setDraft(String(value ?? '')) }, [value])
+
+  const handleSave = () => {
+    setEditing(false)
+    const parsed = draft ? parseFloat(draft) : null
+    if (parsed !== (value ?? null)) onSave(parsed)
+  }
+
+  const withIva = value != null ? Math.round(value * 1.21 * 100) / 100 : null
+
+  return (
+    <div>
+      <label className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">{label}</label>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <span className="text-sm text-slate-400">$</span>
+          <input
+            autoFocus
+            type="number"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false) }}
+            className="flex-1 bg-slate-700 border border-violet-500 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none"
+          />
+          <span className="text-xs text-slate-500 whitespace-nowrap shrink-0">+ IVA</span>
+        </div>
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="w-full text-left group flex items-center gap-1"
+        >
+          <span className="text-sm text-slate-400 shrink-0">$</span>
+          <span className={`text-sm flex-1 ${value == null ? 'text-slate-600 italic' : 'text-slate-300 hover:text-white'}`}>
+            {value != null ? value.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : 'Sin valor'}
+          </span>
+          {value != null && <span className="text-[11px] text-slate-600 shrink-0">+ IVA</span>}
+          <Edit2 size={11} className="opacity-0 group-hover:opacity-100 text-slate-500 transition-opacity ml-1 shrink-0" />
+        </button>
+      )}
+      {withIva != null && (
+        <p className="text-[11px] text-slate-600 mt-0.5 pl-1">
+          Con IVA: <span className="text-slate-400">${withIva.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Follow-up Days Field ──────────────────────────────────────────────────────
+
+const QUICK_DAYS = [1, 3, 7, 14, 28]
+
+function FollowUpDaysField({
+  value,
+  onSave,
+}: {
+  value: number | null | undefined
+  onSave: (v: number | null) => void
+}) {
+  const [customDays, setCustomDays] = useState('')
+
+  const setDays = (days: number) => {
+    onSave(Date.now() + days * 24 * 60 * 60 * 1000)
+    setCustomDays('')
+  }
+
+  const handleCustom = () => {
+    const d = parseInt(customDays)
+    if (!isNaN(d) && d > 0) setDays(d)
+    setCustomDays('')
+  }
+
+  const now       = Date.now()
+  const isOverdue = value != null && value < now
+  const isDueToday = value != null && value >= now && value < now + 24 * 60 * 60 * 1000
+  const isDueSoon  = value != null && !isOverdue && !isDueToday && value < now + 3 * 24 * 60 * 60 * 1000
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <label className="text-[10px] text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+          <Clock size={10}/> Próximo seguimiento
+        </label>
+        {isOverdue  && <span className="text-[9px] text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded-full border border-red-800/40">Vencido</span>}
+        {isDueToday && <span className="text-[9px] text-amber-400 bg-amber-900/30 px-1.5 py-0.5 rounded-full border border-amber-800/40">Hoy</span>}
+        {isDueSoon  && <span className="text-[9px] text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded-full border border-yellow-800/40">Pronto</span>}
+      </div>
+
+      <div className="flex flex-wrap gap-1 mb-2">
+        {QUICK_DAYS.map(d => (
+          <button
+            key={d}
+            onClick={() => setDays(d)}
+            className="text-[11px] px-2 py-1 rounded-lg bg-slate-800 text-slate-400 hover:bg-violet-900/40 hover:text-violet-300 border border-slate-700 hover:border-violet-700/60 transition-colors"
+          >
+            {d}d
+          </button>
+        ))}
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            value={customDays}
+            onChange={(e) => setCustomDays(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCustom() }}
+            onBlur={handleCustom}
+            placeholder="…"
+            min={1}
+            className="w-12 bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-violet-500 text-center"
+          />
+          <span className="text-[11px] text-slate-600">días</span>
+        </div>
+      </div>
+
+      {value != null ? (
+        <div className="flex items-center gap-2">
+          <p className={`text-[12px] ${isOverdue ? 'text-red-400' : isDueToday ? 'text-amber-400' : 'text-slate-400'}`}>
+            {dayjs(value).format('DD/MM/YYYY')}
+          </p>
+          <button
+            onClick={() => onSave(null)}
+            className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors leading-none"
+          >
+            ×
+          </button>
+        </div>
+      ) : (
+        <p className="text-[11px] text-slate-600 italic">Sin fecha programada</p>
+      )}
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function QuoteDetail() {
@@ -546,12 +693,15 @@ export default function QuoteDetail() {
             <label className="block text-[10px] text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <DollarSign size={10} /> Valores
             </label>
-            <EditableField
-              label="Valor estimado"
+            <ValueWithIvaField
+              label="Valor estimado sin IVA"
               value={quote.estimated_value}
-              onSave={(v) => update({ estimated_value: v ? parseFloat(v) : null })}
-              type="number"
-              placeholder="$ 0"
+              onSave={(v) => update({ estimated_value: v })}
+            />
+            <ValueWithIvaField
+              label="Valor presupuestado sin IVA"
+              value={quote.budgeted_value}
+              onSave={(v) => update({ budgeted_value: v })}
             />
             {(quote.status === 'won') && (
               <EditableField
@@ -565,12 +715,10 @@ export default function QuoteDetail() {
           </div>
 
           {/* Follow-up */}
-          <div className="space-y-2 border-t border-slate-800 pt-4">
-            <EditableField
-              label="Próximo seguimiento"
+          <div className="border-t border-slate-800 pt-4">
+            <FollowUpDaysField
               value={quote.next_follow_up_at}
-              onSave={(v) => update({ next_follow_up_at: v ? Number(v) : null })}
-              type="date"
+              onSave={(v) => update({ next_follow_up_at: v })}
             />
           </div>
 

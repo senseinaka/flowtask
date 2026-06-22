@@ -1,119 +1,71 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, Check, X, FileText, Loader2 } from 'lucide-react'
-import dayjs from 'dayjs'
-import { useQuoteNotes, useCreateQuoteNote, useUpdateQuoteNote, useDeleteQuoteNote } from '../../hooks/useKnowledge'
-import KnowledgeAttachmentStrip from '../knowledge/KnowledgeAttachmentStrip'
-import { stripHtml } from '../knowledge/KnowledgeHelpers'
-import type { KnowledgeEntry } from '@shared/types'
+import { Plus, FileText, Loader2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  useQuoteNotes, useDeleteQuoteNote,
+  useKnowledgeSources, useKnowledgeSubEntries
+} from '../../hooks/useKnowledge'
+import KnowledgeEntryCard from '../knowledge/KnowledgeEntryCard'
+import KnowledgeEntryEditor from '../knowledge/KnowledgeEntryEditor'
+import KnowledgeThreadDocModal from '../knowledge/KnowledgeThreadDocModal'
+import type { KnowledgeEntry, KnowledgeSource } from '@shared/types'
 
 interface Props {
   quoteId: string
   userId: string
 }
 
-interface NoteCardProps {
+// Wrapper para cargar sub-entries de cada nota y poder abrir el modal de hilo
+interface WrapperProps {
   note: KnowledgeEntry
+  sources: KnowledgeSource[]
   quoteId: string
   onEdit: () => void
+  onDelete: () => void
+  onAddToThread: () => void
+  onEditSub: (sub: KnowledgeEntry) => void
+  onShowDocument: (entry: KnowledgeEntry, subEntries: KnowledgeEntry[]) => void
 }
 
-function NoteCard({ note, quoteId, onEdit }: NoteCardProps) {
-  const [expanded, setExpanded] = useState(false)
-  const remove = useDeleteQuoteNote()
-
-  const hasHtml = note.body.startsWith('<')
-  const preview = hasHtml ? stripHtml(note.body).slice(0, 200) : note.body.slice(0, 200)
+function NoteCardWrapper({ note, sources, quoteId: _quoteId, onEdit, onDelete, onAddToThread, onEditSub, onShowDocument }: WrapperProps) {
+  const { data: subEntries = [] } = useKnowledgeSubEntries(note.id)
+  const source = sources.find(s => s.name === note.source)
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors">
-      <div
-        className="p-3.5 cursor-pointer"
-        onClick={() => setExpanded(v => !v)}>
-        <div className="flex items-start gap-2">
-          <FileText size={13} className="text-slate-600 shrink-0 mt-0.5"/>
-          <div className="flex-1 min-w-0">
-            {note.title && (
-              <p className="text-[12px] font-medium text-slate-300 mb-0.5 truncate">{note.title}</p>
-            )}
-            <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-              {preview || '(sin contenido)'}
-            </p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0 ml-1">
-            <span className="text-[10px] text-slate-700">{dayjs(note.entry_date ?? note.created_at).format('DD/MM')}</span>
-            <button
-              onClick={e => { e.stopPropagation(); onEdit() }}
-              className="text-slate-700 hover:text-teal-400 p-1 rounded transition-colors">
-              <Pencil size={10}/>
-            </button>
-            <button
-              onClick={e => {
-                e.stopPropagation()
-                remove.mutate({ id: note.id, quoteId })
-              }}
-              disabled={remove.isPending}
-              className="text-slate-700 hover:text-red-400 p-1 rounded transition-colors">
-              <Trash2 size={10}/>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="px-3.5 pb-3.5 border-t border-slate-800/60 pt-2.5" onClick={e => e.stopPropagation()}>
-          {hasHtml ? (
-            <div
-              className="text-[12px] text-slate-300 leading-relaxed [&_ul]:list-disc [&_ul]:pl-4 [&_a]:text-teal-400"
-              dangerouslySetInnerHTML={{ __html: note.body }}/>
-          ) : (
-            <p className="text-[12px] text-slate-300 leading-relaxed whitespace-pre-wrap">{note.body}</p>
-          )}
-          <KnowledgeAttachmentStrip entryId={note.id} compact/>
-        </div>
-      )}
-    </div>
+    <KnowledgeEntryCard
+      entry={note}
+      source={source}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onAddToThread={onAddToThread}
+      onShowDocument={() => onShowDocument(note, subEntries)}
+      onEditSub={onEditSub}
+    />
   )
 }
 
+interface DocModal {
+  entry: KnowledgeEntry
+  subEntries: KnowledgeEntry[]
+}
+
 interface EditorState {
-  id?: string
-  title: string
-  body: string
+  entry: KnowledgeEntry | null
+  parentId?: string | null
 }
 
 export default function QuoteNotePanel({ quoteId, userId }: Props) {
+  const qc = useQueryClient()
   const { data: notes = [], isLoading } = useQuoteNotes(quoteId)
-  const createNote  = useCreateQuoteNote()
-  const updateNote  = useUpdateQuoteNote()
+  const { data: sources = [] } = useKnowledgeSources()
+  const remove = useDeleteQuoteNote()
 
-  const [editor, setEditor] = useState<EditorState | null>(null)
+  const [editor,   setEditor]   = useState<EditorState | null>(null)
+  const [docModal, setDocModal] = useState<DocModal | null>(null)
 
-  function openNew() {
-    setEditor({ title: '', body: '' })
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ['knowledge-quote-notes', quoteId] })
   }
-
-  function openEdit(note: KnowledgeEntry) {
-    setEditor({ id: note.id, title: note.title, body: note.body })
-  }
-
-  function cancelEditor() {
-    setEditor(null)
-  }
-
-  async function handleSave() {
-    if (!editor) return
-    const body = editor.body.trim()
-    if (!body) return
-
-    if (editor.id) {
-      await updateNote.mutateAsync({ id: editor.id, quoteId, title: editor.title, body })
-    } else {
-      await createNote.mutateAsync({ quoteId, title: editor.title, body, userId })
-    }
-    setEditor(null)
-  }
-
-  const isPending = createNote.isPending || updateNote.isPending
 
   return (
     <div className="flex flex-col h-full">
@@ -122,72 +74,65 @@ export default function QuoteNotePanel({ quoteId, userId }: Props) {
           {notes.length > 0 ? `${notes.length} nota${notes.length !== 1 ? 's' : ''}` : 'Sin notas'}
         </span>
         <button
-          onClick={openNew}
+          onClick={() => setEditor({ entry: null })}
           className="flex items-center gap-1 text-[11px] text-teal-400 hover:text-teal-300 px-2 py-1 rounded-lg hover:bg-teal-900/20 transition-colors">
           <Plus size={11}/>Nueva nota
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {editor && (
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3">
-            <input
-              type="text"
-              placeholder="Título (opcional)"
-              value={editor.title}
-              onChange={e => setEditor(s => s ? { ...s, title: e.target.value } : s)}
-              className="w-full bg-transparent text-[12px] text-slate-200 placeholder-slate-600 border-b border-slate-700 pb-1.5 mb-2 focus:outline-none focus:border-teal-600"
-            />
-            <textarea
-              autoFocus
-              rows={5}
-              placeholder="Escribí la nota aquí..."
-              value={editor.body}
-              onChange={e => setEditor(s => s ? { ...s, body: e.target.value } : s)}
-              className="w-full bg-transparent text-[12px] text-slate-300 placeholder-slate-600 resize-none focus:outline-none leading-relaxed"
-            />
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-700/60">
-              <button
-                onClick={handleSave}
-                disabled={!editor.body.trim() || isPending}
-                className="flex items-center gap-1 text-[11px] bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors">
-                {isPending ? <Loader2 size={10} className="animate-spin"/> : <Check size={10}/>}
-                {editor.id ? 'Guardar cambios' : 'Crear nota'}
-              </button>
-              <button
-                onClick={cancelEditor}
-                className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
-                <X size={10}/>Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 size={18} className="animate-spin text-slate-600"/>
           </div>
-        ) : notes.length === 0 && !editor ? (
+        ) : notes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <FileText size={22} className="text-slate-700 mb-2"/>
             <p className="text-[12px] text-slate-600">Sin notas todavía</p>
             <button
-              onClick={openNew}
+              onClick={() => setEditor({ entry: null })}
               className="mt-2 text-[11px] text-teal-500 hover:text-teal-400 transition-colors">
               Agregar la primera nota
             </button>
           </div>
         ) : (
           notes.map(note => (
-            <NoteCard
+            <NoteCardWrapper
               key={note.id}
               note={note}
+              sources={sources}
               quoteId={quoteId}
-              onEdit={() => openEdit(note)}
+              onEdit={() => setEditor({ entry: note })}
+              onDelete={() => remove.mutate({ id: note.id, quoteId })}
+              onAddToThread={() => setEditor({ entry: null, parentId: note.id })}
+              onEditSub={sub => setEditor({ entry: sub })}
+              onShowDocument={(entry, subEntries) => setDocModal({ entry, subEntries })}
             />
           ))
         )}
       </div>
+
+      {editor !== null && (
+        <KnowledgeEntryEditor
+          entry={editor.entry}
+          defaultTopic=""
+          userId={userId}
+          sources={sources}
+          existingTopics={[]}
+          parentId={editor.parentId ?? null}
+          quoteId={quoteId}
+          onSaved={invalidate}
+          onClose={() => { setEditor(null); invalidate() }}
+        />
+      )}
+
+      {docModal && (
+        <KnowledgeThreadDocModal
+          entry={docModal.entry}
+          subEntries={docModal.subEntries}
+          onClose={() => setDocModal(null)}
+        />
+      )}
     </div>
   )
 }
