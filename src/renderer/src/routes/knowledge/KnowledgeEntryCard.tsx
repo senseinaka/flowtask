@@ -104,7 +104,10 @@ export default function KnowledgeEntryCard({
     })
 
   return (
-    <div className={`bg-slate-900 border rounded-xl transition-colors ${selected ? 'border-teal-600 bg-teal-900/10' : 'border-slate-800 hover:border-slate-700'}`}>
+    <div
+      className={`bg-slate-900 border rounded-xl transition-colors ${selected ? 'border-teal-600 bg-teal-900/10' : 'border-slate-800 hover:border-slate-700'}`}
+      onDoubleClick={onEdit}
+    >
       <div className="flex items-start gap-3 p-4">
         {/* Selection checkbox (Etapa 7) */}
         {selectMode && (
@@ -185,12 +188,6 @@ export default function KnowledgeEntryCard({
           <button onClick={() => setExpanded(v => !v)} className="text-slate-700 hover:text-slate-400 p-1.5 rounded hover:bg-slate-800 transition-colors">
             <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`}/>
           </button>
-          <button onClick={onEdit} className="text-slate-700 hover:text-teal-400 p-1.5 rounded hover:bg-slate-800 transition-colors">
-            <Pencil size={11}/>
-          </button>
-          <button onClick={onDelete} className="text-slate-700 hover:text-red-400 p-1.5 rounded hover:bg-slate-800 transition-colors">
-            <Trash2 size={11}/>
-          </button>
         </div>
       </div>
 
@@ -221,15 +218,31 @@ export default function KnowledgeEntryCard({
         </div>
       )}
 
-      <div className="flex items-center gap-1 px-4 pb-2 pt-0">
-        <button onClick={onAddToThread} className="flex items-center gap-1 text-[10px] text-slate-700 hover:text-slate-400 transition-colors">
+      {/* ── Action footer bar (Opción A) ────────────────────────── */}
+      <div className="flex items-center gap-1 px-3 pb-2.5 pt-1 border-t border-slate-800/50">
+        <button
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          className="flex items-center gap-1.5 text-[11px] font-medium text-slate-300 hover:text-teal-300 px-2.5 py-1.5 rounded-lg hover:bg-teal-900/20 transition-colors border border-transparent hover:border-teal-800/40">
+          <Pencil size={11}/>Editar
+        </button>
+        <button
+          onClick={e => { e.stopPropagation(); onAddToThread() }}
+          className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-400 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
           <Plus size={10}/>Agregar al hilo
         </button>
+        <div className="flex-1"/>
         {subEntries.length > 0 && !threadOpen && (
-          <button onClick={onShowDocument} className="ml-auto flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-400 transition-colors">
-            {savedDoc ? <><RefreshCw size={10}/>Regenerar</> : <><Sparkles size={10}/>Generar documento</>}
+          <button
+            onClick={e => { e.stopPropagation(); onShowDocument() }}
+            className="flex items-center gap-1 text-[11px] text-violet-600 hover:text-violet-400 px-2 py-1.5 rounded-lg hover:bg-violet-900/20 transition-colors">
+            {savedDoc ? <><RefreshCw size={10}/>Regenerar</> : <><Sparkles size={10}/>Generar doc</>}
           </button>
         )}
+        <button
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          className="text-slate-700 hover:text-red-400 p-1.5 rounded hover:bg-slate-800 transition-colors ml-1">
+          <Trash2 size={11}/>
+        </button>
       </div>
     </div>
   )

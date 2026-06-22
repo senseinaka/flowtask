@@ -17,13 +17,14 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TextStyle, FontFamily, FontSize } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
 import {
   Bold, Italic, Underline as UIcon, Strikethrough, Highlighter,
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, ListChecks, Quote, Code2,
   Table as TableIcon, Link2, Minus, Undo2, Redo2,
   Heading1, Heading2, Heading3, Type, ChevronDown, Film,
-  Sparkles, Loader2, LayoutTemplate
+  Sparkles, Loader2, LayoutTemplate, Baseline
 } from 'lucide-react'
 import { useTransformKnowledgeText } from '../../hooks/useKnowledge'
 
@@ -75,6 +76,20 @@ const VideoEmbed = TiptapNode.create({
     return ReactNodeViewRenderer(VideoEmbedView)
   },
 })
+
+// ── Color palette ──────────────────────────────────────────────────
+const COLORS = [
+  { label: 'Blanco',   value: '#f1f5f9' },
+  { label: 'Gris',     value: '#94a3b8' },
+  { label: 'Rojo',     value: '#f87171' },
+  { label: 'Naranja',  value: '#fb923c' },
+  { label: 'Amarillo', value: '#fbbf24' },
+  { label: 'Verde',    value: '#4ade80' },
+  { label: 'Teal',     value: '#2dd4bf' },
+  { label: 'Azul',     value: '#60a5fa' },
+  { label: 'Violeta',  value: '#a78bfa' },
+  { label: 'Rosa',     value: '#f472b6' },
+]
 
 // ── Font families ───────────────────────────────────────────────────
 const FONTS = [
@@ -383,6 +398,65 @@ function TemplDrop({ editor }: { editor: Editor }) {
   )
 }
 
+// ── Color picker button ─────────────────────────────────────────────
+function ColorBtn({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const current = editor.getAttributes('textStyle').color as string | undefined
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={() => setOpen(v => !v)} title="Color de texto"
+        style={{
+          display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          width: 27, height: 27, border: 'none', borderRadius: 'var(--radius-md)',
+          background: 'transparent', cursor: 'pointer', padding: '2px 4px', gap: 1,
+        }}>
+        <Baseline size={13} style={{ color: 'var(--text-muted)' }}/>
+        <div style={{ width: 16, height: 3, borderRadius: 2, background: current ?? '#f1f5f9' }}/>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 3, zIndex: 250,
+          background: 'var(--surface-card)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,.5)',
+          padding: 8, width: 152,
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5, marginBottom: 6 }}>
+            {COLORS.map(c => (
+              <button key={c.value} type="button" title={c.label}
+                onClick={() => { editor.chain().focus().setColor(c.value).run(); setOpen(false) }}
+                style={{
+                  width: 22, height: 22, borderRadius: 5, padding: 0, cursor: 'pointer',
+                  background: c.value, boxSizing: 'border-box',
+                  border: current === c.value ? '2px solid #fff' : '1px solid rgba(255,255,255,.15)',
+                }}
+              />
+            ))}
+          </div>
+          <button type="button"
+            onClick={() => { editor.chain().focus().unsetColor().run(); setOpen(false) }}
+            style={{
+              display: 'block', width: '100%', padding: '4px 0', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)', background: 'transparent',
+              color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer',
+            }}>
+            Sin color
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OptBtn({ label, onClick }: { label: string; onClick: () => void }) {
   const [hov, setHov] = useState(false)
   return (
@@ -426,13 +500,19 @@ function Toolbar({ editor }: { editor: Editor }) {
       <HeadingDrop editor={e} />
       <FontDrop editor={e} />
       <Sep />
+      <TBtn active={false} disabled={!e.can().undo()} title="Deshacer (Ctrl+Z)" onClick={() => e.chain().focus().undo().run()}><Undo2 size={12}/></TBtn>
+      <TBtn active={false} disabled={!e.can().redo()} title="Rehacer (Ctrl+Y)" onClick={() => e.chain().focus().redo().run()}><Redo2 size={12}/></TBtn>
+      <Sep />
       {/* Font size */}
-      <TBtn active={false} title="Reducir tamaño" onClick={() => adjustFontSize(e, -2)}>
+      <TBtn active={false} title="Reducir tamaño (A-)" onClick={() => adjustFontSize(e, -2)}>
         <span style={{ fontSize: 9, fontWeight: 700 }}>A</span>
       </TBtn>
-      <TBtn active={false} title="Aumentar tamaño" onClick={() => adjustFontSize(e, 2)}>
+      <TBtn active={false} title="Aumentar tamaño (A+)" onClick={() => adjustFontSize(e, 2)}>
         <span style={{ fontSize: 13, fontWeight: 700 }}>A</span>
       </TBtn>
+      <Sep />
+      {/* Color de texto */}
+      <ColorBtn editor={e} />
       <Sep />
       <TBtn active={e.isActive('bold')}      title="Negrita (Ctrl+B)"   onClick={() => e.chain().focus().toggleBold().run()}><Bold size={12}/></TBtn>
       <TBtn active={e.isActive('italic')}    title="Cursiva (Ctrl+I)"   onClick={() => e.chain().focus().toggleItalic().run()}><Italic size={12}/></TBtn>
@@ -455,9 +535,6 @@ function Toolbar({ editor }: { editor: Editor }) {
       <TBtn active={false} title="Separador" onClick={() => e.chain().focus().setHorizontalRule().run()}><Minus size={12}/></TBtn>
       <Sep />
       <TemplDrop editor={e} />
-      <div style={{ flex: 1 }} />
-      <TBtn active={false} disabled={!e.can().undo()} title="Deshacer (Ctrl+Z)" onClick={() => e.chain().focus().undo().run()}><Undo2 size={12}/></TBtn>
-      <TBtn active={false} disabled={!e.can().redo()} title="Rehacer (Ctrl+Y)" onClick={() => e.chain().focus().redo().run()}><Redo2 size={12}/></TBtn>
     </div>
   )
 }
@@ -498,6 +575,7 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
       TextStyle,
       FontFamily,
       FontSize,
+      Color.configure({ types: ['textStyle'] }),
     ],
     content: initialHtml || '',
     editable: !readOnly,
@@ -628,6 +706,14 @@ export default function KnowledgeRichTextEditor({ initialHtml, onChange, readOnl
             <TBtn active={editor.isActive('underline')} title="Subrayado" onClick={() => editor.chain().focus().toggleUnderline().run()}><UIcon size={11}/></TBtn>
             <TBtn active={editor.isActive('strike')}    title="Tachado"   onClick={() => editor.chain().focus().toggleStrike().run()}><Strikethrough size={11}/></TBtn>
             <TBtn active={editor.isActive('highlight')} title="Resaltar"  onClick={() => editor.chain().focus().toggleHighlight().run()}><Highlighter size={11}/></TBtn>
+            <Sep/>
+            <TBtn active={false} title="Reducir tamaño" onClick={() => adjustFontSize(editor, -2)}>
+              <span style={{ fontSize: 8, fontWeight: 700 }}>A</span>
+            </TBtn>
+            <TBtn active={false} title="Aumentar tamaño" onClick={() => adjustFontSize(editor, 2)}>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>A</span>
+            </TBtn>
+            <ColorBtn editor={editor}/>
             <Sep/>
             <TBtn active={editor.isActive('link')} title="Enlace" onClick={() => {
               const url = prompt('URL:', editor.getAttributes('link').href ?? '')

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Loader2, Sparkles, X, Clock, GitBranch, Eye, Pencil, Brain } from 'lucide-react'
+import { Loader2, Sparkles, Clock, GitBranch, Eye, Pencil, Brain } from 'lucide-react'
 import dayjs from 'dayjs'
 import {
   useCreateKnowledgeEntry, useUpdateKnowledgeEntry, useDeleteKnowledgeEntry, useSummarizeKnowledgeEntry
@@ -200,14 +200,20 @@ export default function KnowledgeEntryEditor({
         <button
           onClick={handleDiscard}
           style={{
-            display: 'inline-flex', alignItems: 'center', padding: 5,
-            border: 'none', background: 'transparent',
-            color: 'var(--text-faint)', cursor: 'pointer', borderRadius: 'var(--radius-md)',
-            flexShrink: 0,
+            fontSize: 11, padding: '5px 12px', borderRadius: 'var(--radius-lg)', flexShrink: 0,
+            border: entry === null
+              ? '1px solid rgba(239,68,68,.35)'
+              : '1px solid var(--border)',
+            background: entry === null
+              ? 'rgba(239,68,68,.08)'
+              : 'transparent',
+            color: entry === null
+              ? '#f87171'
+              : 'var(--text-faint)',
+            cursor: 'pointer',
           }}
-          title="Descartar"
         >
-          <X size={15}/>
+          {entry === null ? 'Descartar' : 'Salir sin cambios'}
         </button>
       </div>
 
