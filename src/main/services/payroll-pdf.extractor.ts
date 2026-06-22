@@ -1,32 +1,12 @@
 import { readPdf } from './pdf-reader.service'
 import type { PayrollEmployee, PayrollExtractionResult, PayrollValidation, PdfTextItem } from '@shared/types'
 
-const Y_TOL = 5   // pixels of y-coordinate tolerance for grouping rows
-const X_TOL = 15  // pixels of x-coordinate tolerance for field matching
+const Y_TOL = 5
 
-// Coordinates calibrated for "RECIBOS ABRIL 2026.pdf" (842×595 A4 landscape)
-// Each page has ONE employee printed twice (left half + right half mirror).
-// We read only the left half (x < pageWidth/2).
-const COORDS = {
-  apellido:     { y: 507, x: 16  },
-  documento:    { y: 507, x: 151 },
-  legajo:       { y: 507, x: 392 },
-  tarea:        { y: 458, x: 245 },
-  fecha:        { y: 458, x: 194 },
-  cuil:         { y: 535, x: 322 },
-  fechaIngreso: { y: 483, x: 17  },
-  periodo:      { y: 444, x: 66  },
-  totalNeto:    { y: 48,  x: 350 },
-}
-
-// Year must start with "20" (20XX) to avoid false positives on CUITs like 30-71201832-8
+// Year must start with "20" to avoid false positives on CUITs like 30-71201832-8
 const PERIODO_PATTERN = /\b(\d{1,2})\s*[-–]\s*(20\d{2})\b/
 
-// Fallback label lists (searched on full page when coordinate extraction fails)
-const LEGAJO_LABELS  = ['LEGAJO', 'LEG.', 'NRO.LEG', 'NRO. LEG', 'N°LEG', 'NROLEG', 'LEG']
-const INGRESO_LABELS = ['F.INGRESO', 'FEC.ING', 'FECHA ING', 'F. ING', 'F.ING.', 'FECINGR']
-
-function near(a: number, b: number, tol: number): boolean {
+function near(a: number, b: number, tol: number) {
   return Math.abs(a - b) <= tol
 }
 
@@ -34,84 +14,116 @@ function groupByRow(items: PdfTextItem[]): Map<number, PdfTextItem[]> {
   const rows = new Map<number, PdfTextItem[]>()
   for (const item of items) {
     if (!item.str.trim()) continue
-    let foundKey: number | null = null
-    for (const key of rows.keys()) {
-      if (near(item.y, key, Y_TOL)) { foundKey = key; break }
+    let key: number | null = null
+    for (const k of rows.keys()) {
+      if (near(item.y, k, Y_TOL)) { key = k; break }
     }
-    if (foundKey === null) {
-      rows.set(item.y, [item])
-    } else {
-      rows.get(foundKey)!.push(item)
-    }
+    if (key === null) { rows.set(item.y, [item]) }
+    else { rows.get(key)!.push(item) }
   }
   return rows
 }
 
-function findNearestStr(rows: Map<number, PdfTextItem[]>, targetY: number, targetX: number): string {
-  for (const [rowY, items] of rows) {
-    if (!near(rowY, targetY, Y_TOL)) continue
-    const sorted = [...items].sort((a, b) => Math.abs(a.x - targetX) - Math.abs(b.x - targetX))
-    if (sorted.length && near(sorted[0].x, targetX, X_TOL * 3)) {
-      return sorted[0].str.trim()
+// Rows sorted top-to-bottom (descending y, since y=0 is bottom of PDF page)
+function topToBottom(rows: Map<number, PdfTextItem[]>): [number, PdfTextItem[]][] {
+  return [...rows.entries()].sort((a, b) => b[0] - a[0])
+}
+
+// Normalize for label matching: uppercase, single spaces, no diacritics
+function norm(s: string): string {
+  return s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')
+}
+
+// Find the first (topmost) row+item matching any label variant
+function findLabel(
+  rows: Map<number, PdfTextItem[]>,
+  labels: string[]
+): { y: number; x: number } | null {
+  const nl = labels.map(norm)
+  for (const [y, items] of topToBottom(rows)) {
+    for (const item of items) {
+      const t = norm(item.str)
+      if (nl.some(l => t === l || t.includes(l))) return { y, x: item.x }
+    }
+  }
+  return null
+}
+
+// Value in the row BELOW the label, within xTol pixels horizontally and maxYGap vertically
+function valueBelow(
+  rows: Map<number, PdfTextItem[]>,
+  pos: { y: number; x: number },
+  xTol = 60,
+  maxYGap = 25
+): string {
+  for (const [y, items] of topToBottom(rows)) {
+    if (y > pos.y - Y_TOL) continue    // skip same row and above
+    if (pos.y - y > maxYGap) break      // too far below
+
+    const best = [...items]
+      .filter(i => Math.abs(i.x - pos.x) <= xTol && i.str.trim())
+      .sort((a, b) => Math.abs(a.x - pos.x) - Math.abs(b.x - pos.x))
+
+    if (best.length) return best[0].str.trim()
+  }
+  return ''
+}
+
+// Value to the RIGHT of the label in the same row
+function valueRight(
+  rows: Map<number, PdfTextItem[]>,
+  pos: { y: number; x: number },
+  minOffset = 5
+): string {
+  for (const [y, items] of topToBottom(rows)) {
+    if (!near(y, pos.y, Y_TOL)) continue
+
+    const right = [...items]
+      .filter(i => i.x > pos.x + minOffset && i.str.trim())
+      .sort((a, b) => a.x - b.x)
+
+    if (right.length) return right[0].str.trim()
+  }
+  return ''
+}
+
+// Convenience wrappers
+function fieldBelow(rows: Map<number, PdfTextItem[]>, labels: string[], xTol = 60, maxYGap = 25): string {
+  const pos = findLabel(rows, labels)
+  return pos ? valueBelow(rows, pos, xTol, maxYGap) : ''
+}
+
+function fieldRight(rows: Map<number, PdfTextItem[]>, labels: string[]): string {
+  const pos = findLabel(rows, labels)
+  return pos ? valueRight(rows, pos) : ''
+}
+
+// Period: scan page top-to-bottom for "N - 20YY" pattern
+function findPeriodo(rows: Map<number, PdfTextItem[]>): string {
+  for (const [, items] of topToBottom(rows)) {
+    for (const item of items) {
+      if (PERIODO_PATTERN.test(item.str)) return item.str.trim()
     }
   }
   return ''
 }
 
-function findTextAtOrAfterX(rows: Map<number, PdfTextItem[]>, targetY: number, minX: number): string {
-  for (const [rowY, items] of rows) {
-    if (!near(rowY, targetY, Y_TOL)) continue
-    const rightItems = items.filter(i => i.x >= minX).sort((a, b) => a.x - b.x)
-    if (rightItems.length) return rightItems[0].str.trim()
-  }
-  return ''
-}
-
-// Find a label in any row, return the next non-empty token to its right in the same row.
-// Used as fallback when coordinate extraction yields nothing.
-function findValueByLabel(rows: Map<number, PdfTextItem[]>, labels: string[]): string {
-  for (const [_y, items] of rows) {
-    const sorted = [...items].sort((a, b) => a.x - b.x)
-    for (let i = 0; i < sorted.length; i++) {
-      const text = sorted[i].str.trim().toUpperCase().replace(/\s+/g, '')
-      if (labels.some(l => text === l.replace(/\s+/g, '') || text.startsWith(l.replace(/\s+/g, '')))) {
-        for (let j = i + 1; j < sorted.length; j++) {
-          const val = sorted[j].str.trim()
-          if (val) return val
-        }
-      }
-    }
-  }
-  return ''
-}
-
-// 3-level cascade to find the "Período Abonado" value
-function findPeriodoAbonado(allRows: Map<number, PdfTextItem[]>, coordResult: string): string {
-  // 1. Coordinate result already has the expected pattern
-  if (PERIODO_PATTERN.test(coordResult)) return coordResult
-
-  // 2. Full-page scan — first item matching "N - 20YY"
-  const allItems = [...allRows.values()].flat().sort((a, b) => b.y - a.y)
-  for (const item of allItems) {
-    if (PERIODO_PATTERN.test(item.str)) return item.str.trim()
-  }
-
-  return coordResult
-}
-
+// Total neto: find "TOTAL NETO" label, take the numeric value to its right
 function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatted: string } {
-  for (const [_rowY, items] of rows) {
-    const rowText = items.map(i => i.str.toUpperCase()).join(' ')
-    // Require BOTH words to avoid matching "SUBTOTAL" rows
-    if (!rowText.includes('TOTAL') || !rowText.includes('NETO')) continue
+  const pos = findLabel(rows, ['TOTAL NETO'])
+  if (!pos) return { raw: 0, formatted: '' }
 
-    const sorted = [...items].sort((a, b) => a.x - b.x)
-    // The numeric value is the rightmost item that looks like a number
-    const numItems = sorted.filter(i => /^\d[\d.,]*$/.test(i.str.trim()))
-    if (numItems.length) {
-      const rawStr = numItems[numItems.length - 1].str.trim()
-      // PDF uses dot as decimal separator (e.g. "1473433.00")
-      const num = parseFloat(rawStr.replace(/[^\d.]/g, ''))
+  // Value is the rightmost number-looking item in the same row group
+  for (const [y, items] of topToBottom(rows)) {
+    if (!near(y, pos.y, Y_TOL)) continue
+
+    const nums = [...items]
+      .filter(i => i.x > pos.x + 5 && /^\d[\d.,]*$/.test(i.str.trim()))
+      .sort((a, b) => a.x - b.x)
+
+    if (nums.length) {
+      // PDF uses dot as decimal separator ("1473433.00")
+      const num = parseFloat(nums[0].str.replace(/[^\d.]/g, ''))
       if (!isNaN(num) && num > 1000) return { raw: num, formatted: formatNeto(num) }
     }
   }
@@ -120,29 +132,28 @@ function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatt
 
 function formatNeto(n: number): string {
   const [intPart, decPart] = n.toFixed(2).split('.')
-  const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  return `$${intFormatted},${decPart}`
+  return `$${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${decPart}`
 }
 
 function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: number): PayrollEmployee | null {
+  // Each page has the same employee printed twice (left and right halves)
   const leftItems = items.filter(i => i.x < pageWidth / 2)
   const leftRows  = groupByRow(leftItems)
-  const allRows   = groupByRow(items)   // full page for label fallbacks
 
-  const apellido   = findNearestStr(leftRows, COORDS.apellido.y, COORDS.apellido.x)
-  const documento  = findNearestStr(leftRows, COORDS.documento.y, COORDS.documento.x)
-  const cuil       = findNearestStr(leftRows, COORDS.cuil.y, COORDS.cuil.x)
-  const fecha      = findNearestStr(leftRows, COORDS.fecha.y, COORDS.fecha.x)
-  const tarea      = findTextAtOrAfterX(leftRows, COORDS.tarea.y, COORDS.tarea.x)
-  const periodoRaw = findTextAtOrAfterX(leftRows, COORDS.periodo.y, COORDS.periodo.x)
-  const periodo    = findPeriodoAbonado(allRows, periodoRaw)
+  // Column-header fields: label is above value in adjacent row
+  const apellido     = fieldBelow(leftRows, ['APELLIDO Y NOMBRE', 'NOMBRE Y APELLIDO'], 80)
+  const documento    = fieldBelow(leftRows, ['DOCUMENTO', 'D.N.I', 'DNI'], 60)
+  const legajo       = fieldBelow(leftRows, ['LEGAJO'], 60)
+  // Categoría gives a broader group (ADMINISTRATIVO, OPERARIO) — better for filtering
+  const tarea        = fieldBelow(leftRows, ['CATEGORÍA', 'CATEGORIA', 'CATEGORY'], 60)
+                    || fieldBelow(leftRows, ['TAREA DESEMPE'], 60)
+  const fechaIngreso = fieldBelow(leftRows, ['INGRESO'], 50)
+  // "Fecha" row contains Período code / Fecha / Tarea Desempeñada — pick Fecha by x proximity
+  const fecha        = fieldBelow(leftRows, ['FECHA'], 40, 20)
 
-  // Coordinate-based first, label-based fallback
-  const legajo       = findNearestStr(leftRows, COORDS.legajo.y, COORDS.legajo.x)
-                    || findValueByLabel(allRows, LEGAJO_LABELS)
-  const fechaIngreso = findNearestStr(leftRows, COORDS.fechaIngreso.y, COORDS.fechaIngreso.x)
-                    || findValueByLabel(allRows, INGRESO_LABELS)
-
+  // Inline fields: label and value share a row
+  const cuil         = fieldRight(leftRows, ['C.U.I.L.', 'C.U.I.L', 'CUIL'])
+  const periodo      = findPeriodo(leftRows)
   const { raw: totalNetoRaw, formatted: totalNeto } = findTotalNeto(leftRows)
 
   if (!apellido) return null
@@ -165,12 +176,10 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
 function validateEmployee(emp: PayrollEmployee): PayrollValidation[] {
   const v: PayrollValidation[] = []
   if (!emp.apellidoYNombres) v.push({ field: 'apellidoYNombres', message: 'Sin nombre', severity: 'error' })
-  if (!emp.documento) v.push({ field: 'documento', message: 'Sin documento', severity: 'error' })
-  if (!emp.cuil) v.push({ field: 'cuil', message: 'Sin CUIL', severity: 'warning' })
-  if (!emp.fecha) v.push({ field: 'fecha', message: 'Sin fecha', severity: 'warning' })
-  if (!emp.periodoAbonado) v.push({ field: 'periodoAbonado', message: 'Sin período', severity: 'warning' })
-  if (!emp.tareaDesempenada) v.push({ field: 'tareaDesempenada', message: 'Sin tarea', severity: 'warning' })
-  if (emp.totalNetoRaw <= 0) v.push({ field: 'totalNeto', message: 'Total neto inválido o cero', severity: 'error' })
+  if (!emp.documento)        v.push({ field: 'documento',        message: 'Sin documento', severity: 'error' })
+  if (!emp.cuil)             v.push({ field: 'cuil',             message: 'Sin CUIL', severity: 'warning' })
+  if (!emp.periodoAbonado)   v.push({ field: 'periodoAbonado',   message: 'Sin período', severity: 'warning' })
+  if (emp.totalNetoRaw <= 0) v.push({ field: 'totalNeto',        message: 'Total neto inválido o cero', severity: 'error' })
   return v
 }
 
