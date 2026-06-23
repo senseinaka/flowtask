@@ -57,7 +57,8 @@ import type {
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
   RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult,
   RrhhColaboradorConStats, RrhhNominaConfig,
-  UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput
+  UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
+  RrhhLista, RrhhListaTipo, UpsertListaInput
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1115,7 +1116,8 @@ const api = {
         list:          (): Promise<RrhhColaboradorConStats[]>                                      => ipcRenderer.invoke('rrhh:nomina:colaboradores:list'),
         get:           (id: string): Promise<RrhhColaborador | null>                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:get', id),
         upsert:        (data: UpsertColaboradorInput): Promise<RrhhColaborador>                   => ipcRenderer.invoke('rrhh:nomina:colaboradores:upsert', data),
-        delete:        (id: string): Promise<void>                                                => ipcRenderer.invoke('rrhh:nomina:colaboradores:delete', id),
+        delete:         (id: string): Promise<void>                                                => ipcRenderer.invoke('rrhh:nomina:colaboradores:delete', id),
+        hardDelete:     (id: string): Promise<void>                                                => ipcRenderer.invoke('rrhh:nomina:colaboradores:hardDelete', id),
         asignarLegajo:  (id: string): Promise<string>                                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:asignarLegajo', id),
         crearDrive:     (id: string): Promise<string>                                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:crearDrive', id),
         selectImageFile:(): Promise<string | null>                                                 => ipcRenderer.invoke('rrhh:nomina:colaboradores:selectImageFile'),
@@ -1131,6 +1133,11 @@ const api = {
       generarDesdeUltimo: (): Promise<GenerarDesdeUltimoResult>                                   => ipcRenderer.invoke('rrhh:nomina:generarDesdeUltimo'),
       confirmarGenerar:   (input: ConfirmarGenerarInput, crearDrive: boolean): Promise<{ creados: number; actualizados: number }> => ipcRenderer.invoke('rrhh:nomina:confirmarGenerar', input, crearDrive),
       exportXls:          (rows: Record<string, unknown>[]): Promise<string | null>               => ipcRenderer.invoke('rrhh:nomina:exportXls', rows),
+    },
+    listas: {
+      list:   (tipo?: RrhhListaTipo): Promise<RrhhLista[]>                                        => ipcRenderer.invoke('rrhh:listas:list', tipo),
+      upsert: (data: UpsertListaInput): Promise<RrhhLista>                                        => ipcRenderer.invoke('rrhh:listas:upsert', data),
+      delete: (id: string): Promise<void>                                                         => ipcRenderer.invoke('rrhh:listas:delete', id),
     },
   },
 

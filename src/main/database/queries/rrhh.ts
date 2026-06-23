@@ -3,7 +3,8 @@ import { getPowerSyncDb } from '../powersync'
 import type {
   RrhhColaborador, RrhhPeriodo, RrhhSueldo,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
-  RrhhColaboradorConStats, RrhhNominaConfig, UpsertColaboradorInput
+  RrhhColaboradorConStats, RrhhNominaConfig, UpsertColaboradorInput,
+  RrhhLista, RrhhListaTipo, UpsertListaInput
 } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
@@ -359,7 +360,7 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
           email_personal = ?, email_laboral = ?, telefono = ?, fecha_nacimiento = ?,
           direccion = ?, localidad = ?, provincia = ?, banco = ?, cbu = ?,
           sueldo_neto_actual = ?, sueldo_bruto_actual = ?,
-          observaciones = ?, legajo_estado = ?, updated_at = ?
+          observaciones = ?, legajo_estado = ?, dias_home_office = ?, updated_at = ?
          WHERE id = ?`,
         [
           data.documento, data.cuil ?? existing.cuil, data.nombre,
@@ -383,6 +384,7 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
           data.sueldo_bruto_actual ?? existing.sueldo_bruto_actual,
           data.observaciones ?? existing.observaciones,
           data.legajo_estado ?? existing.legajo_estado ?? 'pendiente',
+          data.dias_home_office ?? existing.dias_home_office,
           now, data.id,
         ]
       )
@@ -401,8 +403,8 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
        email_personal, email_laboral, telefono, fecha_nacimiento,
        direccion, localidad, provincia, banco, cbu,
        sueldo_neto_actual, sueldo_bruto_actual,
-       observaciones, legajo_estado, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       observaciones, legajo_estado, dias_home_office, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id, WORKSPACE_ID, data.documento, data.cuil ?? '', data.nombre,
       data.tarea_habitual ?? '', data.legajo ?? null, data.fecha_ingreso ?? null,
@@ -416,6 +418,7 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
       data.banco ?? null, data.cbu ?? null,
       data.sueldo_neto_actual ?? null, data.sueldo_bruto_actual ?? null,
       data.observaciones ?? null, data.legajo_estado ?? 'pendiente',
+      data.dias_home_office ?? null,
       now, now,
     ]
   )
@@ -450,6 +453,12 @@ export async function softDeleteColaborador(id: string): Promise<void> {
     `UPDATE rrhh_colaboradores SET activo = 0, estado_laboral = 'inactivo', updated_at = ? WHERE id = ?`,
     [Date.now(), id]
   )
+}
+
+export async function hardDeleteColaborador(id: string): Promise<void> {
+  const db = getPowerSyncDb()
+  await db.execute(`DELETE FROM rrhh_sueldos WHERE colaborador_id = ?`, [id])
+  await db.execute(`DELETE FROM rrhh_colaboradores WHERE id = ?`, [id])
 }
 
 export async function getNextLegajoNumber(): Promise<number> {
@@ -531,5 +540,47 @@ export async function getAusentesEnPeriodo(periodoId: string): Promise<RrhhColab
   return db.getAll<RrhhColaborador>(
     `SELECT * FROM rrhh_colaboradores WHERE id IN (${ausenteIds.map(() => '?').join(',')})`,
     ausenteIds
+  )
+}
+
+// ── Listas gestionadas ────────────────────────────────────────────────────────
+
+export async function listRrhhListas(tipo?: RrhhListaTipo): Promise<RrhhLista[]> {
+  const db = getPowerSyncDb()
+  if (tipo) {
+    return db.getAll<RrhhLista>(
+      `SELECT * FROM rrhh_listas WHERE workspace_id = ? AND tipo = ? AND activo = 1 ORDER BY orden, valor`,
+      [WORKSPACE_ID, tipo]
+    )
+  }
+  return db.getAll<RrhhLista>(
+    `SELECT * FROM rrhh_listas WHERE workspace_id = ? AND activo = 1 ORDER BY tipo, orden, valor`,
+    [WORKSPACE_ID]
+  )
+}
+
+export async function upsertLista(data: UpsertListaInput): Promise<RrhhLista> {
+  const db = getPowerSyncDb()
+  const now = Date.now()
+  if (data.id) {
+    await db.execute(
+      `UPDATE rrhh_listas SET valor = ?, orden = ?, updated_at = ? WHERE id = ?`,
+      [data.valor.trim(), data.orden ?? 0, now, data.id]
+    )
+    return (await db.getOptional<RrhhLista>(`SELECT * FROM rrhh_listas WHERE id = ?`, [data.id]))!
+  }
+  const id = randomUUID()
+  await db.execute(
+    `INSERT INTO rrhh_listas (id, workspace_id, tipo, valor, orden, activo, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+    [id, WORKSPACE_ID, data.tipo, data.valor.trim(), data.orden ?? 0, now, now]
+  )
+  return (await db.getOptional<RrhhLista>(`SELECT * FROM rrhh_listas WHERE id = ?`, [id]))!
+}
+
+export async function deleteLista(id: string): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_listas SET activo = 0, updated_at = ? WHERE id = ?`,
+    [Date.now(), id]
   )
 }

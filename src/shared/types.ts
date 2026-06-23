@@ -2955,6 +2955,7 @@ export interface RrhhColaborador {
   legajo_estado: string | null        // 'completo'|'incompleto'|'pendiente'
   foto_drive_file_id: string | null
   cv_drive_file_id: string | null
+  dias_home_office: string | null    // CSV: "lunes,martes,jueves"
 }
 
 export type EstadoLaboral = 'activo' | 'inactivo' | 'licencia' | 'suspendido' | 'externo'
@@ -3006,6 +3007,7 @@ export interface UpsertColaboradorInput {
   sueldo_bruto_actual?: number | null
   observaciones?: string | null
   legajo_estado?: string | null
+  dias_home_office?: string | null
 }
 
 export interface GenerarDesdeUltimoEntry {
@@ -3029,6 +3031,26 @@ export interface GenerarDesdeUltimoResult {
 
 export interface ConfirmarGenerarInput {
   entries: GenerarDesdeUltimoEntry[]
+}
+
+export type RrhhListaTipo = 'sector' | 'puesto' | 'categoria' | 'banco'
+
+export interface RrhhLista {
+  id: string
+  workspace_id: string
+  tipo: RrhhListaTipo
+  valor: string
+  orden: number
+  activo: number
+  created_at: number
+  updated_at: number
+}
+
+export interface UpsertListaInput {
+  id?: string
+  tipo: RrhhListaTipo
+  valor: string
+  orden?: number
 }
 
 export interface RrhhPeriodo {

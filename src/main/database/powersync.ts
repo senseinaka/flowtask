@@ -981,6 +981,7 @@ const rrhh_colaboradores = new Table(
     legajo_estado:           column.text,
     foto_drive_file_id:      column.text,
     cv_drive_file_id:        column.text,
+    dias_home_office:        column.text,
     created_at:              column.integer,
     updated_at:              column.integer,
   },
@@ -996,6 +997,19 @@ const rrhh_nomina_config = new Table(
     updated_at:               column.integer,
   },
   { indexes: { workspace: ['workspace_id'] } }
+)
+
+const rrhh_listas = new Table(
+  {
+    workspace_id: column.text,
+    tipo:         column.text,
+    valor:        column.text,
+    orden:        column.integer,
+    activo:       column.integer,
+    created_at:   column.integer,
+    updated_at:   column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], tipo: ['tipo'] } }
 )
 
 const rrhh_periodos = new Table(
@@ -1093,6 +1107,7 @@ export const AppSchema = new Schema({
   rrhh_periodos,
   rrhh_sueldos,
   rrhh_nomina_config,
+  rrhh_listas,
 })
 
 /**

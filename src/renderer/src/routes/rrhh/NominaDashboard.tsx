@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, Plus, Download, RefreshCw, Users, UserCheck, UserX, Sparkles,
-  ChevronRight, Briefcase, Hash
+  ChevronRight, Hash, Settings2
 } from 'lucide-react'
 import {
   useNominaColaboradores, useExportNominaXls, useDeleteColaborador, useGenerarDesdeUltimo
@@ -10,6 +10,7 @@ import {
 import type { RrhhColaboradorConStats, EstadoLaboral } from '@shared/types'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
 import GenerarNominaModal from './GenerarNominaModal'
+import RrhhListasAdmin from './RrhhListasAdmin'
 
 const ESTADO_COLORS: Record<string, string> = {
   activo:     'bg-emerald-500/20 text-emerald-300',
@@ -55,6 +56,7 @@ export default function NominaDashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editando, setEditando] = useState<RrhhColaboradorConStats | null>(null)
   const [generarOpen, setGenerarOpen] = useState(false)
+  const [listasAdminOpen, setListasAdminOpen] = useState(false)
 
   const filtered = useMemo(() => {
     let list = colaboradores
@@ -116,6 +118,13 @@ export default function NominaDashboard() {
           <p className="text-xs text-slate-400 mt-0.5">{colaboradores.length} colaboradores registrados</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setListasAdminOpen(true)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            title="Administrar listas (sectores, puestos, categorías, bancos)"
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
           <button
             onClick={handleGenerar}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 text-sm font-medium transition-colors"
@@ -267,6 +276,11 @@ export default function NominaDashboard() {
       {/* Generar modal */}
       {generarOpen && (
         <GenerarNominaModal onClose={() => setGenerarOpen(false)} />
+      )}
+
+      {/* Admin listas */}
+      {listasAdminOpen && (
+        <RrhhListasAdmin onClose={() => setListasAdminOpen(false)} />
       )}
     </div>
   )

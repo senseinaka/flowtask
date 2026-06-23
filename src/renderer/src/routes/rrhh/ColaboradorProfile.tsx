@@ -1,30 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import {
   ChevronLeft, User, Briefcase, TrendingUp, FolderOpen, FileText,
-  Hash, Edit2, ExternalLink, Loader2, AlertCircle, FolderPlus, Tag,
-  Camera, Upload, FilePlus
+  Edit2, ExternalLink, Loader2, AlertCircle, FolderPlus, Tag,
+  Camera, Upload, FilePlus, Check, X, Trash2
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
 import {
   useHistorialColaborador, useAsignarLegajo, useCrearDriveColaborador,
-  useDeleteColaborador, useNominaColaboradores,
-  useUploadColaboradorFoto, useUploadColaboradorCv, useFotoDataUrl
+  useDeleteColaborador, useHardDeleteColaborador, useNominaColaboradores,
+  useUploadColaboradorFoto, useUploadColaboradorCv, useFotoDataUrl,
+  useUpsertColaborador, useRrhhListas,
 } from '../../hooks/useRrhh'
-import type { RrhhColaboradorConStats } from '@shared/types'
+import type { RrhhColaboradorConStats, UpsertColaboradorInput } from '@shared/types'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
 
 type Tab = 'resumen' | 'personal' | 'laboral' | 'sueldos' | 'drive'
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'resumen',  label: 'Resumen',  icon: <User className="w-4 h-4" /> },
-  { id: 'personal', label: 'Personal', icon: <User className="w-4 h-4" /> },
-  { id: 'laboral',  label: 'Laboral',  icon: <Briefcase className="w-4 h-4" /> },
-  { id: 'sueldos',  label: 'Sueldos',  icon: <TrendingUp className="w-4 h-4" /> },
-  { id: 'drive',    label: 'Drive',    icon: <FolderOpen className="w-4 h-4" /> },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'resumen',  label: 'Resumen'  },
+  { id: 'personal', label: 'Personal' },
+  { id: 'laboral',  label: 'Laboral'  },
+  { id: 'sueldos',  label: 'Sueldos'  },
+  { id: 'drive',    label: 'Drive'    },
 ]
 
 const ESTADO_COLORS: Record<string, string> = {
@@ -36,22 +36,48 @@ const ESTADO_COLORS: Record<string, string> = {
 }
 
 const ESTADO_LABELS: Record<string, string> = {
-  activo: 'Activo', inactivo: 'Inactivo', licencia: 'Licencia', suspendido: 'Suspendido', externo: 'Externo',
+  activo: 'Activo', inactivo: 'Inactivo', licencia: 'Licencia',
+  suspendido: 'Suspendido', externo: 'Externo',
 }
+
+const DIAS_SEMANA = [
+  { key: 'lunes', label: 'Lunes' },
+  { key: 'martes', label: 'Martes' },
+  { key: 'miercoles', label: 'Miércoles' },
+  { key: 'jueves', label: 'Jueves' },
+  { key: 'viernes', label: 'Viernes' },
+  { key: 'sabado', label: 'Sábado' },
+]
 
 function fmtM(n: number | null | undefined) {
   if (n == null) return '—'
   return '$' + Math.round(n).toLocaleString('es-AR')
 }
 
-function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
+const INP = 'w-full px-2.5 py-1 bg-slate-700 border border-slate-600 rounded-md text-sm text-slate-100 focus:outline-none focus:border-pink-500'
+const SEL = 'w-full px-2.5 py-1 bg-slate-700 border border-slate-600 rounded-md text-sm text-slate-100 focus:outline-none focus:border-pink-500'
+
+function EditField({ label, value, onChange, type }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string
+}) {
   return (
     <div>
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="text-sm text-slate-200 mt-0.5">{value ?? <span className="text-slate-600">—</span>}</dd>
+      <dt className="text-xs text-slate-500 mb-0.5">{label}</dt>
+      <input type={type ?? 'text'} value={value} onChange={e => onChange(e.target.value)} className={INP} />
     </div>
   )
 }
+
+function ViewField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="text-sm text-slate-200 mt-0.5">{value || <span className="text-slate-600">—</span>}</dd>
+    </div>
+  )
+}
+
+// ── Avatar foto ──────────────────────────────────────────────────────────────
 
 function AvatarFoto({ colaborador }: { colaborador: RrhhColaboradorConStats }) {
   const uploadFoto = useUploadColaboradorFoto()
@@ -64,14 +90,8 @@ function AvatarFoto({ colaborador }: { colaborador: RrhhColaboradorConStats }) {
   }
 
   const initials = colaborador.nombre
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-
-  const hue = Array.from(colaborador.nombre).reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360
+    .split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const hue = Array.from(colaborador.nombre).reduce((a, c) => a + c.charCodeAt(0), 0) % 360
 
   return (
     <button
@@ -83,10 +103,8 @@ function AvatarFoto({ colaborador }: { colaborador: RrhhColaboradorConStats }) {
       {fotoUrl
         ? <img src={fotoUrl} alt={colaborador.nombre} className="w-full h-full object-cover" />
         : (
-          <div
-            className="w-full h-full flex items-center justify-center text-white text-base font-semibold"
-            style={{ background: `hsl(${hue}, 35%, 28%)` }}
-          >
+          <div className="w-full h-full flex items-center justify-center text-white text-base font-semibold"
+            style={{ background: `hsl(${hue}, 35%, 28%)` }}>
             {initials}
           </div>
         )
@@ -101,49 +119,126 @@ function AvatarFoto({ colaborador }: { colaborador: RrhhColaboradorConStats }) {
   )
 }
 
+// ── Delete dialog ──────────────────────────────────────────────────────────
+
+type DeleteMode = 'baja' | 'eliminar'
+
+function DeleteDialog({ nombre, onClose, onBaja, onEliminar, pending }: {
+  nombre: string
+  onClose: () => void
+  onBaja: () => void
+  onEliminar: () => void
+  pending: boolean
+}) {
+  const [mode, setMode] = useState<DeleteMode>('baja')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-6 w-96 space-y-4 shadow-2xl">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100">Gestionar colaborador</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{nombre}</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+            mode === 'baja' ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700 hover:border-slate-600'
+          }`}>
+            <input type="radio" name="mode" checked={mode === 'baja'} onChange={() => setMode('baja')} className="mt-0.5 accent-amber-500" />
+            <div>
+              <div className="text-sm font-medium text-slate-200">Dar de baja</div>
+              <div className="text-xs text-slate-500 mt-0.5">Marca como inactivo. Conserva el historial de sueldos y puede reactivarse.</div>
+            </div>
+          </label>
+          <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+            mode === 'eliminar' ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700 hover:border-slate-600'
+          }`}>
+            <input type="radio" name="mode" checked={mode === 'eliminar'} onChange={() => setMode('eliminar')} className="mt-0.5 accent-red-500" />
+            <div>
+              <div className="text-sm font-medium text-slate-200">Eliminar permanentemente</div>
+              <div className="text-xs text-slate-500 mt-0.5">Borra el colaborador y todo su historial de sueldos. Esta acción no se puede deshacer.</div>
+            </div>
+          </label>
+        </div>
+
+        {mode === 'eliminar' && (
+          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 rounded-lg p-2.5">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            Se eliminarán todos los sueldos registrados de este colaborador.
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800">
+            Cancelar
+          </button>
+          <button
+            onClick={mode === 'baja' ? onBaja : onEliminar}
+            disabled={pending}
+            className={`px-4 py-1.5 text-sm text-white rounded-lg disabled:opacity-50 transition-colors ${
+              mode === 'baja'
+                ? 'bg-amber-600 hover:bg-amber-500'
+                : 'bg-red-600 hover:bg-red-500'
+            }`}
+          >
+            {pending ? 'Procesando...' : mode === 'baja' ? 'Confirmar baja' : 'Eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
+
 export default function ColaboradorProfile() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('resumen')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const { data: colaboradores = [] } = useNominaColaboradores()
   const colaborador = colaboradores.find(c => c.id === id) as RrhhColaboradorConStats | undefined
 
   const { data: historial = [], isLoading: histLoading } = useHistorialColaborador(id ?? null)
-  const asignarLegajo = useAsignarLegajo()
-  const crearDrive    = useCrearDriveColaborador()
-  const deleteCol     = useDeleteColaborador()
+  const asignarLegajo  = useAsignarLegajo()
+  const crearDrive     = useCrearDriveColaborador()
+  const softDelete     = useDeleteColaborador()
+  const hardDelete     = useHardDeleteColaborador()
 
   if (!id) return null
-
   if (!colaborador) {
     return (
       <div className="flex items-center justify-center h-full text-slate-500 gap-2">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        Cargando...
+        <Loader2 className="w-5 h-5 animate-spin" /> Cargando...
       </div>
     )
   }
 
-  const estado = colaborador.estado_laboral ?? 'activo'
-  const chartData = historial.map(h => ({
-    label: h.periodo.label,
-    neto: h.sueldo.total_neto,
-    vac:  h.sueldo.vacaciones_neto ?? 0,
-    total: h.sueldo.total_neto + (h.sueldo.vacaciones_neto ?? 0),
-  }))
-
-  function handleDelete() {
-    deleteCol.mutate(colaborador!.id, { onSuccess: () => navigate('/rrhh/nomina') })
-  }
+  const estado    = colaborador.estado_laboral ?? 'activo'
+  const chartData = [...historial]
+    .sort((a, b) => a.periodo.anio !== b.periodo.anio
+      ? a.periodo.anio - b.periodo.anio
+      : a.periodo.mes - b.periodo.mes)
+    .map(h => ({
+      label: h.periodo.label,
+      neto:  h.sueldo.total_neto,
+      vac:   h.sueldo.vacaciones_neto ?? 0,
+      total: h.sueldo.total_neto + (h.sueldo.vacaciones_neto ?? 0),
+    }))
 
   return (
     <div className="flex flex-col h-full bg-slate-900 text-slate-100">
       {/* Header */}
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-slate-700 flex-shrink-0">
-        <button onClick={() => navigate('/rrhh/nomina')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-700 flex-shrink-0">
+        <button onClick={() => navigate('/rrhh/nomina')}
+          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <AvatarFoto colaborador={colaborador} />
@@ -158,16 +253,18 @@ export default function ColaboradorProfile() {
             {colaborador.legajo && <span className="font-mono">Leg. {colaborador.legajo}</span>}
             <span>{colaborador.documento}</span>
             {colaborador.cuil && <span>{colaborador.cuil}</span>}
-            {colaborador.puesto || colaborador.tarea_habitual
-              ? <span>{colaborador.puesto || colaborador.tarea_habitual}</span>
-              : null}
+            {(colaborador.puesto || colaborador.tarea_habitual) &&
+              <span>{colaborador.puesto || colaborador.tarea_habitual}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm transition-colors"
-          >
+          <button onClick={() => setDeleteOpen(true)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            title="Eliminar colaborador">
+            <Trash2 className="w-4 h-4" />
+          </button>
+          <button onClick={() => setDrawerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm transition-colors">
             <Edit2 className="w-4 h-4" />
             Editar
           </button>
@@ -177,37 +274,27 @@ export default function ColaboradorProfile() {
       {/* Tabs */}
       <div className="flex border-b border-slate-700 flex-shrink-0 px-6">
         {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm border-b-2 transition-colors -mb-px ${
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-sm border-b-2 transition-colors -mb-px ${
               tab === t.id
                 ? 'border-pink-500 text-pink-300 font-medium'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
+            }`}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        {tab === 'resumen' && (
-          <TabResumen
-            colaborador={colaborador}
-            chartData={chartData}
-            histLoading={histLoading}
-            totalPeriodos={colaborador.total_periodos}
-          />
-        )}
+        {tab === 'resumen'  && <TabResumen colaborador={colaborador} chartData={chartData} histLoading={histLoading} />}
         {tab === 'personal' && <TabPersonal c={colaborador} />}
-        {tab === 'laboral' && (
+        {tab === 'laboral'  && (
           <TabLaboral
             c={colaborador}
             onAsignarLegajo={() => asignarLegajo.mutate(colaborador.id)}
             asignandoLegajo={asignarLegajo.isPending}
-            onDeleteClick={() => setConfirmDelete(true)}
+            onDeleteClick={() => setDeleteOpen(true)}
           />
         )}
         {tab === 'sueldos' && (
@@ -222,32 +309,22 @@ export default function ColaboradorProfile() {
         )}
       </div>
 
-      {/* Confirm delete */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-80 space-y-4">
-            <p className="text-sm text-slate-200">
-              Marcar a <strong>{colaborador.nombre}</strong> como inactivo. No se borrará su historial de sueldos.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmDelete(false)} className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800">Cancelar</button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteCol.isPending}
-                className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg disabled:opacity-50"
-              >
-                {deleteCol.isPending ? 'Procesando...' : 'Confirmar baja'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {deleteOpen && (
+        <DeleteDialog
+          nombre={colaborador.nombre}
+          onClose={() => setDeleteOpen(false)}
+          pending={softDelete.isPending || hardDelete.isPending}
+          onBaja={() => softDelete.mutate(colaborador.id, {
+            onSuccess: () => { setDeleteOpen(false); navigate('/rrhh/nomina') }
+          })}
+          onEliminar={() => hardDelete.mutate(colaborador.id, {
+            onSuccess: () => navigate('/rrhh/nomina')
+          })}
+        />
       )}
 
       {drawerOpen && (
-        <ColaboradorFormDrawer
-          colaborador={colaborador}
-          onClose={() => setDrawerOpen(false)}
-        />
+        <ColaboradorFormDrawer colaborador={colaborador} onClose={() => setDrawerOpen(false)} />
       )}
     </div>
   )
@@ -255,86 +332,177 @@ export default function ColaboradorProfile() {
 
 // ── Sub-tabs ──────────────────────────────────────────────────────────────────
 
-function TabResumen({ colaborador, chartData, histLoading, totalPeriodos }: {
+type ChartRange = '3m' | '6m' | '12m' | 'all'
+
+function TabResumen({ colaborador, chartData, histLoading }: {
   colaborador: RrhhColaboradorConStats
   chartData: { label: string; neto: number; vac: number; total: number }[]
   histLoading: boolean
-  totalPeriodos: number
 }) {
+  const [range, setRange] = useState<ChartRange>('all')
+
+  const filtered = range === 'all' ? chartData : chartData.slice(-Number(range.replace('m', '')))
+  const RANGES: { id: ChartRange; label: string }[] = [
+    { id: '3m', label: '3 m' }, { id: '6m', label: '6 m' },
+    { id: '12m', label: '12 m' }, { id: 'all', label: 'Todo' },
+  ]
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* KPIs */}
+    <div className="space-y-5 max-w-3xl">
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-slate-800 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1">Último neto</div>
           <div className="text-xl font-bold text-pink-400">{fmtM(colaborador.ultimo_total_neto)}</div>
-          {colaborador.ultimo_vacaciones_neto ? (
-            <div className="text-xs text-sky-400 mt-0.5">+ {fmtM(colaborador.ultimo_vacaciones_neto)} vac.</div>
-          ) : null}
+          {colaborador.ultimo_vacaciones_neto
+            ? <div className="text-xs text-sky-400 mt-0.5">+ {fmtM(colaborador.ultimo_vacaciones_neto)} vac.</div>
+            : null}
         </div>
         <div className="bg-slate-800 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1">Períodos liquidados</div>
-          <div className="text-xl font-bold text-slate-200">{totalPeriodos}</div>
-          {colaborador.ultimo_periodo_label && (
-            <div className="text-xs text-slate-500 mt-0.5">Último: {colaborador.ultimo_periodo_label}</div>
-          )}
+          <div className="text-xl font-bold text-slate-200">{colaborador.total_periodos}</div>
+          {colaborador.ultimo_periodo_label &&
+            <div className="text-xs text-slate-500 mt-0.5">Último: {colaborador.ultimo_periodo_label}</div>}
         </div>
         <div className="bg-slate-800 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1">Ingreso</div>
           <div className="text-base font-semibold text-slate-200">{colaborador.fecha_ingreso ?? '—'}</div>
-          {colaborador.legajo && (
-            <div className="text-xs text-slate-500 mt-0.5">Legajo {colaborador.legajo}</div>
-          )}
+          {colaborador.legajo &&
+            <div className="text-xs text-slate-500 mt-0.5">Legajo {colaborador.legajo}</div>}
         </div>
       </div>
 
-      {/* Mini chart */}
-      {histLoading ? (
-        <div className="flex items-center gap-2 text-slate-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Cargando historial...</div>
-      ) : chartData.length > 1 ? (
-        <div className="bg-slate-800 rounded-xl p-4">
-          <h3 className="text-sm font-medium text-slate-300 mb-4">Evolución de sueldos</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gradNeto" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#f472b6" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#f472b6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} />
-              <YAxis tickFormatter={v => `$${(v / 1_000_000).toFixed(1)}M`} tick={{ fill: '#64748b', fontSize: 10 }} width={52} />
-              <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                labelStyle={{ color: '#94a3b8', fontSize: 12 }}
-                formatter={(v: number) => [fmtM(v), '']}
-              />
-              <Area dataKey="neto" stroke="#f472b6" fill="url(#gradNeto)" strokeWidth={2} name="Neto" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : null}
+      {histLoading
+        ? <div className="flex items-center gap-2 text-slate-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Cargando historial...</div>
+        : filtered.length > 1 && (
+          <div className="bg-slate-800 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-slate-300">Evolución de sueldos</h3>
+              <div className="flex gap-1 bg-slate-700 rounded-lg p-0.5">
+                {RANGES.map(r => (
+                  <button key={r.id} onClick={() => setRange(r.id)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      range === r.id ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}>{r.label}</button>
+                ))}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={filtered} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradNeto" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f472b6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#f472b6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} />
+                <YAxis tickFormatter={v => `$${(v / 1_000_000).toFixed(1)}M`} tick={{ fill: '#64748b', fontSize: 10 }} width={52} />
+                <Tooltip
+                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+                  labelStyle={{ color: '#94a3b8', fontSize: 12 }}
+                  formatter={(v: number) => [fmtM(v), '']}
+                />
+                <Area dataKey="neto" stroke="#f472b6" fill="url(#gradNeto)" strokeWidth={2} name="Neto" dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )
+      }
     </div>
   )
 }
 
+// ── Tab Personal — inline edit ────────────────────────────────────────────────
+
 function TabPersonal({ c }: { c: RrhhColaboradorConStats }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const upsert = useUpsertColaborador()
+
+  function startEdit() {
+    setForm({
+      nombre:          c.nombre ?? '',
+      documento:       c.documento ?? '',
+      cuil:            c.cuil ?? '',
+      fecha_nacimiento: c.fecha_nacimiento ?? '',
+      telefono:        c.telefono ?? '',
+      email_personal:  c.email_personal ?? '',
+      direccion:       c.direccion ?? '',
+      localidad:       c.localidad ?? '',
+      provincia:       c.provincia ?? '',
+    })
+    setEditing(true)
+  }
+
+  function handleSave() {
+    upsert.mutate(
+      { ...form as unknown as UpsertColaboradorInput, id: c.id },
+      { onSuccess: () => setEditing(false) }
+    )
+  }
+
+  if (editing) {
+    return (
+      <div className="max-w-xl space-y-4">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <div className="col-span-2">
+            <EditField label="Nombre completo" value={form.nombre} onChange={v => setForm(f => ({ ...f, nombre: v }))} />
+          </div>
+          <EditField label="Documento (DNI)" value={form.documento} onChange={v => setForm(f => ({ ...f, documento: v }))} />
+          <EditField label="CUIL" value={form.cuil} onChange={v => setForm(f => ({ ...f, cuil: v }))} />
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Fecha nacimiento <span className="text-slate-600">dd-mm-aaaa</span></dt>
+            <input className={INP} placeholder="15-06-1990" value={form.fecha_nacimiento} onChange={e => setForm(f => ({ ...f, fecha_nacimiento: e.target.value }))} />
+          </div>
+          <EditField label="Celular" value={form.telefono} onChange={v => setForm(f => ({ ...f, telefono: v }))} />
+          <EditField label="Email personal" value={form.email_personal} onChange={v => setForm(f => ({ ...f, email_personal: v }))} type="email" />
+          <EditField label="Dirección" value={form.direccion} onChange={v => setForm(f => ({ ...f, direccion: v }))} />
+          <EditField label="Localidad" value={form.localidad} onChange={v => setForm(f => ({ ...f, localidad: v }))} />
+          <EditField label="Provincia" value={form.provincia} onChange={v => setForm(f => ({ ...f, provincia: v }))} />
+        </dl>
+        <div className="flex gap-2 pt-2">
+          <button onClick={handleSave} disabled={upsert.isPending}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium disabled:opacity-50 transition-colors">
+            <Check className="w-4 h-4" />
+            {upsert.isPending ? 'Guardando...' : 'Guardar'}
+          </button>
+          <button onClick={() => setEditing(false)} className="px-4 py-1.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-xl">
+    <div className="max-w-xl space-y-4">
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
-        <Field label="Nombre completo"  value={c.nombre} />
-        <Field label="Documento (DNI)"  value={c.documento} />
-        <Field label="CUIL"             value={c.cuil} />
-        <Field label="Fecha nacimiento" value={c.fecha_nacimiento} />
-        <Field label="Teléfono"         value={c.telefono} />
-        <Field label="Email personal"   value={c.email_personal} />
-        <Field label="Dirección"        value={c.direccion} />
-        <Field label="Localidad"        value={c.localidad} />
-        <Field label="Provincia"        value={c.provincia} />
+        <ViewField label="Nombre completo"  value={c.nombre} />
+        <ViewField label="Documento (DNI)"  value={c.documento} />
+        <ViewField label="CUIL"             value={c.cuil} />
+        <ViewField label="Fecha nacimiento" value={c.fecha_nacimiento} />
+        <ViewField label="Celular"          value={c.telefono} />
+        <ViewField label="Email personal"   value={c.email_personal} />
+        <ViewField label="Dirección"        value={c.direccion} />
+        <ViewField label="Localidad"        value={c.localidad} />
+        <ViewField label="Provincia"        value={c.provincia} />
       </dl>
+      <button onClick={startEdit}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors">
+        <Edit2 className="w-3.5 h-3.5" /> Editar datos personales
+      </button>
     </div>
   )
+}
+
+// ── Tab Laboral — inline edit ─────────────────────────────────────────────────
+
+const MODALIDAD_LABELS: Record<string, string> = {
+  presencial: 'Presencial', remoto: 'Remoto', hibrido: 'Híbrido',
+}
+const CONTRATACION_LABELS: Record<string, string> = {
+  relacion_dependencia: 'Rel. de dependencia', monotributo: 'Monotributista',
+  eventual: 'Eventual', otro: 'Otro',
 }
 
 function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
@@ -343,8 +511,153 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
   asignandoLegajo: boolean
   onDeleteClick: () => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const upsert = useUpsertColaborador()
+  const { data: sectores = [] }   = useRrhhListas('sector')
+  const { data: puestos = [] }    = useRrhhListas('puesto')
+  const { data: categorias = [] } = useRrhhListas('categoria')
+
+  function startEdit() {
+    setForm({
+      nombre:            c.nombre ?? '',
+      documento:         c.documento ?? '',
+      tarea_habitual:    c.tarea_habitual ?? '',
+      sector:            c.sector ?? '',
+      puesto:            c.puesto ?? '',
+      categoria_laboral: c.categoria_laboral ?? '',
+      fecha_ingreso:     c.fecha_ingreso ?? '',
+      estado_laboral:    c.estado_laboral ?? 'activo',
+      tipo_contratacion: c.tipo_contratacion ?? '',
+      jornada:           c.jornada ?? '',
+      modalidad:         c.modalidad ?? '',
+      email_laboral:     c.email_laboral ?? '',
+      banco:             c.banco ?? '',
+      cbu:               c.cbu ?? '',
+      dias_home_office:  c.dias_home_office ?? '',
+    })
+    setEditing(true)
+  }
+
+  function handleSave() {
+    const next = { ...form as unknown as UpsertColaboradorInput, id: c.id }
+    if (form.modalidad !== 'hibrido') next.dias_home_office = null
+    upsert.mutate(next, { onSuccess: () => setEditing(false) })
+  }
+
+  const diasActivos = new Set(c.dias_home_office ? c.dias_home_office.split(',').map(d => d.trim()) : [])
+
+  if (editing) {
+    const diasSet = new Set(form.dias_home_office ? form.dias_home_office.split(',').map(d => d.trim()).filter(Boolean) : [])
+    function toggleDia(dia: string) {
+      const next = new Set(diasSet)
+      next.has(dia) ? next.delete(dia) : next.add(dia)
+      const ordered = DIAS_SEMANA.map(d => d.key).filter(k => next.has(k))
+      setForm(f => ({ ...f, dias_home_office: ordered.join(',') }))
+    }
+
+    return (
+      <div className="max-w-xl space-y-4">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <EditField label="Tarea habitual" value={form.tarea_habitual} onChange={v => setForm(f => ({ ...f, tarea_habitual: v }))} />
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Sector</dt>
+            <select className={SEL} value={form.sector} onChange={e => setForm(f => ({ ...f, sector: e.target.value }))}>
+              <option value="">—</option>
+              {sectores.map(s => <option key={s.id} value={s.valor}>{s.valor}</option>)}
+            </select>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Puesto</dt>
+            <select className={SEL} value={form.puesto} onChange={e => setForm(f => ({ ...f, puesto: e.target.value }))}>
+              <option value="">—</option>
+              {puestos.map(s => <option key={s.id} value={s.valor}>{s.valor}</option>)}
+            </select>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Categoría</dt>
+            <select className={SEL} value={form.categoria_laboral} onChange={e => setForm(f => ({ ...f, categoria_laboral: e.target.value }))}>
+              <option value="">—</option>
+              {categorias.map(s => <option key={s.id} value={s.valor}>{s.valor}</option>)}
+            </select>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">F. ingreso <span className="text-slate-600">dd-mm-aaaa</span></dt>
+            <input className={INP} placeholder="01-03-2022" value={form.fecha_ingreso} onChange={e => setForm(f => ({ ...f, fecha_ingreso: e.target.value }))} />
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Estado</dt>
+            <select className={SEL} value={form.estado_laboral} onChange={e => setForm(f => ({ ...f, estado_laboral: e.target.value }))}>
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+              <option value="licencia">Licencia</option>
+              <option value="suspendido">Suspendido</option>
+              <option value="externo">Externo</option>
+            </select>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Contratación</dt>
+            <select className={SEL} value={form.tipo_contratacion} onChange={e => setForm(f => ({ ...f, tipo_contratacion: e.target.value }))}>
+              <option value="">—</option>
+              <option value="relacion_dependencia">Rel. de dependencia</option>
+              <option value="monotributo">Monotributista</option>
+              <option value="eventual">Eventual</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Jornada</dt>
+            <select className={SEL} value={form.jornada} onChange={e => setForm(f => ({ ...f, jornada: e.target.value }))}>
+              <option value="">—</option>
+              <option value="completa">Completa</option>
+              <option value="parcial">Parcial</option>
+            </select>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Modalidad</dt>
+            <select className={SEL} value={form.modalidad} onChange={e => setForm(f => ({ ...f, modalidad: e.target.value, dias_home_office: '' }))}>
+              <option value="">—</option>
+              <option value="presencial">Presencial</option>
+              <option value="remoto">Remoto</option>
+              <option value="hibrido">Híbrido</option>
+            </select>
+          </div>
+          {form.modalidad === 'hibrido' && (
+            <div className="col-span-2">
+              <dt className="text-xs text-slate-500 mb-1.5">Días de home office</dt>
+              <div className="flex gap-1.5 flex-wrap">
+                {DIAS_SEMANA.map(({ key, label }) => (
+                  <button key={key} type="button" onClick={() => toggleDia(key)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                      diasSet.has(key)
+                        ? 'bg-pink-600 border-pink-500 text-white'
+                        : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <EditField label="Email laboral" value={form.email_laboral} onChange={v => setForm(f => ({ ...f, email_laboral: v }))} type="email" />
+          <EditField label="Banco" value={form.banco} onChange={v => setForm(f => ({ ...f, banco: v }))} />
+          <EditField label="CBU" value={form.cbu} onChange={v => setForm(f => ({ ...f, cbu: v }))} />
+        </dl>
+        <div className="flex gap-2 pt-2">
+          <button onClick={handleSave} disabled={upsert.isPending}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium disabled:opacity-50">
+            <Check className="w-4 h-4" />{upsert.isPending ? 'Guardando...' : 'Guardar'}
+          </button>
+          <button onClick={() => setEditing(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-xl space-y-5">
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
         <div>
           <dt className="text-xs text-slate-500">Legajo</dt>
@@ -354,28 +667,42 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
               : <span className="text-slate-600 text-sm">Sin asignar</span>
             }
             {!c.legajo && (
-              <button
-                onClick={onAsignarLegajo}
-                disabled={asignandoLegajo}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 text-xs transition-colors disabled:opacity-50"
-              >
+              <button onClick={onAsignarLegajo} disabled={asignandoLegajo}
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 text-xs disabled:opacity-50">
                 <Tag className="w-3 h-3" />
                 {asignandoLegajo ? 'Asignando...' : 'Asignar'}
               </button>
             )}
           </dd>
         </div>
-        <Field label="F. ingreso"         value={c.fecha_ingreso} />
-        <Field label="Tarea habitual"      value={c.tarea_habitual} />
-        <Field label="Puesto"             value={c.puesto} />
-        <Field label="Sector"             value={c.sector} />
-        <Field label="Categoría"          value={c.categoria_laboral} />
-        <Field label="Tipo contratación"  value={c.tipo_contratacion} />
-        <Field label="Jornada"            value={c.jornada} />
-        <Field label="Modalidad"          value={c.modalidad} />
-        <Field label="Email laboral"      value={c.email_laboral} />
-        <Field label="Banco"              value={c.banco} />
-        <Field label="CBU"                value={c.cbu} />
+        <ViewField label="F. ingreso"        value={c.fecha_ingreso} />
+        <ViewField label="Tarea habitual"     value={c.tarea_habitual} />
+        <ViewField label="Sector"             value={c.sector} />
+        <ViewField label="Puesto"             value={c.puesto} />
+        <ViewField label="Categoría"          value={c.categoria_laboral} />
+        <ViewField label="Contratación"       value={CONTRATACION_LABELS[c.tipo_contratacion ?? ''] ?? c.tipo_contratacion} />
+        <ViewField label="Jornada"            value={c.jornada} />
+        <div>
+          <dt className="text-xs text-slate-500">Modalidad</dt>
+          <dd className="text-sm text-slate-200 mt-0.5">
+            {MODALIDAD_LABELS[c.modalidad ?? ''] ?? c.modalidad ?? <span className="text-slate-600">—</span>}
+            {c.modalidad === 'hibrido' && c.dias_home_office && (
+              <div className="flex gap-1 mt-1 flex-wrap">
+                {c.dias_home_office.split(',').map(d => d.trim()).filter(Boolean).map(dia => {
+                  const info = DIAS_SEMANA.find(x => x.key === dia)
+                  return (
+                    <span key={dia} className="px-2 py-0.5 rounded-full bg-pink-600/15 text-pink-300 text-xs">
+                      {info?.label ?? dia}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </dd>
+        </div>
+        <ViewField label="Email laboral"      value={c.email_laboral} />
+        <ViewField label="Banco"              value={c.banco} />
+        <ViewField label="CBU"                value={c.cbu} />
       </dl>
       {c.observaciones && (
         <div>
@@ -383,23 +710,28 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
           <dd className="text-sm text-slate-300 bg-slate-800 rounded-lg p-3">{c.observaciones}</dd>
         </div>
       )}
-      <div className="pt-4 border-t border-slate-700">
-        <button
-          onClick={onDeleteClick}
-          className="text-xs text-red-400 hover:text-red-300 transition-colors"
-        >
-          Dar de baja colaborador
-        </button>
-      </div>
+      <button onClick={startEdit}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors">
+        <Edit2 className="w-3.5 h-3.5" /> Editar datos laborales
+      </button>
     </div>
   )
 }
+
+// ── Tab Sueldos ───────────────────────────────────────────────────────────────
 
 function TabSueldos({ historial, loading, chartData }: {
   historial: ReturnType<typeof useHistorialColaborador>['data']
   loading: boolean
   chartData: { label: string; neto: number; vac: number; total: number }[]
 }) {
+  const [range, setRange] = useState<ChartRange>('all')
+  const filtered = range === 'all' ? chartData : chartData.slice(-Number(range.replace('m', '')))
+  const RANGES: { id: ChartRange; label: string }[] = [
+    { id: '3m', label: '3 m' }, { id: '6m', label: '6 m' },
+    { id: '12m', label: '12 m' }, { id: 'all', label: 'Todo' },
+  ]
+
   if (loading) return (
     <div className="flex items-center gap-2 text-slate-500 text-sm">
       <Loader2 className="w-4 h-4 animate-spin" /> Cargando...
@@ -413,19 +745,29 @@ function TabSueldos({ historial, loading, chartData }: {
   )
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {chartData.length > 1 && (
+    <div className="space-y-5 max-w-3xl">
+      {filtered.length > 1 && (
         <div className="bg-slate-800 rounded-xl p-4">
-          <h3 className="text-sm font-medium text-slate-300 mb-4">Evolución histórica</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-300">Evolución histórica</h3>
+            <div className="flex gap-1 bg-slate-700 rounded-lg p-0.5">
+              {RANGES.map(r => (
+                <button key={r.id} onClick={() => setRange(r.id)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    range === r.id ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}>{r.label}</button>
+              ))}
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <AreaChart data={filtered} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradN" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#f472b6" stopOpacity={0.4} />
+                  <stop offset="5%" stopColor="#f472b6" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#f472b6" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradV" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#38bdf8" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -437,7 +779,7 @@ function TabSueldos({ historial, loading, chartData }: {
                 formatter={(v: number) => [fmtM(v), '']}
               />
               <Area dataKey="neto" stroke="#f472b6" fill="url(#gradN)" strokeWidth={2} name="Sueldo" dot={false} />
-              <Area dataKey="vac"  stroke="#38bdf8" fill="url(#gradV)" strokeWidth={1.5} name="Vacaciones" dot={false} />
+              <Area dataKey="vac" stroke="#38bdf8" fill="url(#gradV)" strokeWidth={1.5} name="Vacaciones" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -463,11 +805,12 @@ function TabSueldos({ historial, loading, chartData }: {
                 <td className="py-2 text-right font-mono text-sky-400">{h.sueldo.vacaciones_neto ? fmtM(h.sueldo.vacaciones_neto) : '—'}</td>
                 <td className="py-2 text-right font-mono text-slate-200">{fmtM(total)}</td>
                 <td className="py-2 text-right">
-                  {h.delta_pct != null ? (
-                    <span className={h.delta_pct >= 0 ? 'text-emerald-400 text-xs' : 'text-red-400 text-xs'}>
-                      {h.delta_pct >= 0 ? '+' : ''}{h.delta_pct}%
-                    </span>
-                  ) : <span className="text-slate-600 text-xs">—</span>}
+                  {h.delta_pct != null
+                    ? <span className={h.delta_pct >= 0 ? 'text-emerald-400 text-xs' : 'text-red-400 text-xs'}>
+                        {h.delta_pct >= 0 ? '+' : ''}{h.delta_pct}%
+                      </span>
+                    : <span className="text-slate-600 text-xs">—</span>
+                  }
                 </td>
               </tr>
             )
@@ -477,6 +820,8 @@ function TabSueldos({ historial, loading, chartData }: {
     </div>
   )
 }
+
+// ── Tab Drive ─────────────────────────────────────────────────────────────────
 
 function TabDrive({ c, onCrearCarpeta, creando }: {
   c: RrhhColaboradorConStats
@@ -502,45 +847,37 @@ function TabDrive({ c, onCrearCarpeta, creando }: {
 
   return (
     <div className="space-y-4 max-w-sm">
-      {/* Carpeta de legajo */}
+      {/* Carpeta */}
       <div className="bg-slate-800 rounded-xl p-5 space-y-3">
         {c.drive_legajo_folder_id ? (
           <>
             <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
-              <FolderOpen className="w-5 h-5" />
-              Carpeta de legajo creada
+              <FolderOpen className="w-4 h-4" /> Carpeta de legajo creada
             </div>
             <p className="text-xs text-slate-400">
               <strong>Summit RRHH / Legajos / {c.legajo} {c.nombre}</strong>
             </p>
-            <button
-              onClick={() => window.api.rrhh.drive.openFolder(c.drive_legajo_folder_id!)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Abrir en Drive
+            <button onClick={() => window.api.rrhh.drive.openFolder(c.drive_legajo_folder_id!)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm">
+              <ExternalLink className="w-4 h-4" /> Abrir en Drive
             </button>
           </>
         ) : (
           <>
             <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">
-              <FolderOpen className="w-5 h-5" />
-              Sin carpeta de legajo
+              <FolderOpen className="w-4 h-4" /> Sin carpeta de legajo
             </div>
             {!c.legajo && (
               <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-500/10 rounded-lg p-2.5">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                Asigná un legajo primero desde la tab Laboral para poder crear la carpeta.
+                Asigná un legajo primero desde la tab Laboral.
               </div>
             )}
             <p className="text-xs text-slate-400">
-              Se creará <strong>Summit RRHH / Legajos / {c.legajo ?? '???'} {c.nombre}</strong> con subcarpetas: Documentos personales, Contratos, Recibos.
+              Se creará <strong>Summit RRHH / Legajos / {c.legajo ?? '???'} {c.nombre}</strong>.
             </p>
-            <button
-              onClick={onCrearCarpeta}
-              disabled={creando || !c.legajo}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm transition-colors"
-            >
+            <button onClick={onCrearCarpeta} disabled={creando || !c.legajo}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm">
               {creando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
               {creando ? 'Creando...' : 'Crear carpeta en Drive'}
             </button>
@@ -551,87 +888,65 @@ function TabDrive({ c, onCrearCarpeta, creando }: {
       {/* Foto */}
       <div className="bg-slate-800 rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
-          <Camera className="w-4 h-4 text-pink-400" />
-          Foto del colaborador
+          <Camera className="w-4 h-4 text-pink-400" /> Foto del colaborador
         </div>
-        {noFolder && (
-          <p className="text-xs text-slate-500">Creá la carpeta de legajo primero.</p>
-        )}
-        {!noFolder && c.foto_drive_file_id && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => window.api.rrhh.drive.openFile(c.foto_drive_file_id!)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Ver en Drive
-            </button>
-            <button
-              onClick={handleUploadFoto}
-              disabled={uploadFoto.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs transition-colors disabled:opacity-50"
-            >
-              {uploadFoto.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              Reemplazar
-            </button>
-          </div>
-        )}
-        {!noFolder && !c.foto_drive_file_id && (
-          <button
-            onClick={handleUploadFoto}
-            disabled={uploadFoto.isPending}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors disabled:opacity-50"
-          >
-            {uploadFoto.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {uploadFoto.isPending ? 'Subiendo...' : 'Subir foto'}
-          </button>
-        )}
-        {uploadFoto.isError && (
-          <p className="text-xs text-red-400">{uploadFoto.error.message}</p>
-        )}
+        {noFolder
+          ? <p className="text-xs text-slate-500">Creá la carpeta de legajo primero.</p>
+          : c.foto_drive_file_id
+            ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => window.api.rrhh.drive.openFile(c.foto_drive_file_id!)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs">
+                  <ExternalLink className="w-3.5 h-3.5" /> Ver en Drive
+                </button>
+                <button onClick={handleUploadFoto} disabled={uploadFoto.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs disabled:opacity-50">
+                  {uploadFoto.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  Reemplazar
+                </button>
+              </div>
+            )
+            : (
+              <button onClick={handleUploadFoto} disabled={uploadFoto.isPending}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm disabled:opacity-50">
+                {uploadFoto.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploadFoto.isPending ? 'Subiendo...' : 'Subir foto'}
+              </button>
+            )
+        }
+        {uploadFoto.isError && <p className="text-xs text-red-400">{uploadFoto.error.message}</p>}
       </div>
 
       {/* CV */}
       <div className="bg-slate-800 rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
-          <FilePlus className="w-4 h-4 text-sky-400" />
-          CV / Currículum
+          <FilePlus className="w-4 h-4 text-sky-400" /> CV / Currículum
         </div>
-        {noFolder && (
-          <p className="text-xs text-slate-500">Creá la carpeta de legajo primero.</p>
-        )}
-        {!noFolder && c.cv_drive_file_id && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => window.api.rrhh.drive.openFile(c.cv_drive_file_id!)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Ver en Drive
-            </button>
-            <button
-              onClick={handleUploadCv}
-              disabled={uploadCv.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs transition-colors disabled:opacity-50"
-            >
-              {uploadCv.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              Reemplazar
-            </button>
-          </div>
-        )}
-        {!noFolder && !c.cv_drive_file_id && (
-          <button
-            onClick={handleUploadCv}
-            disabled={uploadCv.isPending}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors disabled:opacity-50"
-          >
-            {uploadCv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {uploadCv.isPending ? 'Subiendo...' : 'Subir CV (PDF)'}
-          </button>
-        )}
-        {uploadCv.isError && (
-          <p className="text-xs text-red-400">{uploadCv.error.message}</p>
-        )}
+        {noFolder
+          ? <p className="text-xs text-slate-500">Creá la carpeta de legajo primero.</p>
+          : c.cv_drive_file_id
+            ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => window.api.rrhh.drive.openFile(c.cv_drive_file_id!)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs">
+                  <ExternalLink className="w-3.5 h-3.5" /> Ver en Drive
+                </button>
+                <button onClick={handleUploadCv} disabled={uploadCv.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs disabled:opacity-50">
+                  {uploadCv.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  Reemplazar
+                </button>
+              </div>
+            )
+            : (
+              <button onClick={handleUploadCv} disabled={uploadCv.isPending}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm disabled:opacity-50">
+                {uploadCv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploadCv.isPending ? 'Subiendo...' : 'Subir CV (PDF)'}
+              </button>
+            )
+        }
+        {uploadCv.isError && <p className="text-xs text-red-400">{uploadCv.error.message}</p>}
       </div>
     </div>
   )

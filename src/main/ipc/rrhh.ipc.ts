@@ -9,10 +9,12 @@ import {
   confirmarPeriodo, deletePeriodo, getAusentesEnPeriodo,
   updateSueldoNotas,
   listColaboradoresConStats, getColaboradorById,
-  upsertColaboradorCompleto, softDeleteColaborador,
+  upsertColaboradorCompleto, softDeleteColaborador, hardDeleteColaborador,
   asignarLegajo, getNominaConfig, upsertNominaConfig,
-  updateColaboradorMediaIds
+  updateColaboradorMediaIds,
+  listRrhhListas, upsertLista, deleteLista
 } from '../database/queries/rrhh'
+import type { UpsertListaInput, RrhhListaTipo } from '@shared/types'
 import {
   generarDesdeUltimoPeriodo, confirmarGenerarNomina, crearCarpetaDriveColaborador
 } from '../services/nomina.service'
@@ -211,6 +213,24 @@ export function registerRrhhIpc(): void {
   })
 
   // ── Foto y CV del colaborador ────────────────────────────────────────────────
+
+  // ── Hard delete colaborador ──────────────────────────────────────────────────
+  ipcMain.handle('rrhh:nomina:colaboradores:hardDelete', (_e, id: string) =>
+    hardDeleteColaborador(id)
+  )
+
+  // ── Listas gestionadas ───────────────────────────────────────────────────────
+  ipcMain.handle('rrhh:listas:list', (_e, tipo?: RrhhListaTipo) =>
+    listRrhhListas(tipo)
+  )
+
+  ipcMain.handle('rrhh:listas:upsert', (_e, data: UpsertListaInput) =>
+    upsertLista(data)
+  )
+
+  ipcMain.handle('rrhh:listas:delete', (_e, id: string) =>
+    deleteLista(id)
+  )
 
   ipcMain.handle('rrhh:nomina:colaboradores:selectImageFile', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)

@@ -4,6 +4,7 @@ import type {
   RrhhPeriodoConStats, RrhhSueldoConColaborador, RrhhHistorialEntry,
   RrhhColaborador, RrhhColaboradorConStats, RrhhNominaConfig,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
+  RrhhLista, RrhhListaTipo, UpsertListaInput,
 } from '@shared/types'
 
 export function usePeriodos() {
@@ -125,6 +126,14 @@ export function useDeleteColaborador() {
   })
 }
 
+export function useHardDeleteColaborador() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.hardDelete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+  })
+}
+
 export function useAsignarLegajo() {
   const qc = useQueryClient()
   return useMutation<string, Error, string>({
@@ -186,5 +195,33 @@ export function useFotoDataUrl(colaboradorId: string | undefined, hasFoto: boole
     queryFn: () => window.api.rrhh.nomina.colaboradores.getFotoDataUrl(colaboradorId!),
     enabled: !!colaboradorId && hasFoto,
     staleTime: 5 * 60_000,
+  })
+}
+
+// ── Listas gestionadas ────────────────────────────────────────────────────────
+
+export function useRrhhListas(tipo?: RrhhListaTipo) {
+  return useQuery<RrhhLista[]>({
+    queryKey: ['rrhh:listas', tipo ?? 'all'],
+    queryFn: () => window.api.rrhh.listas.list(tipo),
+    staleTime: 60_000,
+  })
+}
+
+export function useUpsertLista() {
+  const qc = useQueryClient()
+  return useMutation<RrhhLista, Error, UpsertListaInput>({
+    mutationFn: (data) => window.api.rrhh.listas.upsert(data),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['rrhh:listas'] })
+    },
+  })
+}
+
+export function useDeleteLista() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => window.api.rrhh.listas.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:listas'] }),
   })
 }
