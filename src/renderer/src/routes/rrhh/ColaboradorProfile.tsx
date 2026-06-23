@@ -584,6 +584,7 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
   const { data: sectores = [] }   = useRrhhListas('sector')
   const { data: puestos = [] }    = useRrhhListas('puesto')
   const { data: categorias = [] } = useRrhhListas('categoria')
+  const { data: bancos = [] }     = useRrhhListas('banco')
 
   function startEdit() {
     setForm({
@@ -599,7 +600,7 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
       jornada:           c.jornada ?? '',
       modalidad:         c.modalidad ?? '',
       email_laboral:     c.email_laboral ?? '',
-      banco:             c.banco ?? '',
+      banco:             c.banco ?? 'Banco Galicia',
       cbu:               c.cbu ?? '',
       dias_home_office:  c.dias_home_office ?? '',
     })
@@ -707,7 +708,13 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
             </div>
           )}
           <EditField label="Email laboral" value={form.email_laboral} onChange={v => setForm(f => ({ ...f, email_laboral: v }))} type="email" />
-          <EditField label="Banco" value={form.banco} onChange={v => setForm(f => ({ ...f, banco: v }))} />
+          <div>
+            <dt className="text-xs text-slate-500 mb-0.5">Banco</dt>
+            <select className={SEL} value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))}>
+              <option value="">—</option>
+              {bancos.map(b => <option key={b.id} value={b.valor}>{b.valor}</option>)}
+            </select>
+          </div>
           <EditField label="CBU" value={form.cbu} onChange={v => setForm(f => ({ ...f, cbu: v }))} />
         </dl>
         <div className="flex gap-2 pt-2">

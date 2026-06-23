@@ -3065,6 +3065,71 @@ export interface UpsertListaInput {
   orden?: number
 }
 
+export interface ImportParsedRow {
+  rowIndex: number
+  nombre: string
+  documento: string
+  cuil: string
+  fecha_nacimiento: string
+  telefono: string
+  email_personal: string
+  direccion: string
+  localidad: string
+  provincia: string
+  contacto_emergencia_1_nombre: string
+  contacto_emergencia_1_celular: string
+  contacto_emergencia_1_vinculo: string
+  contacto_emergencia_2_nombre: string
+  contacto_emergencia_2_celular: string
+  contacto_emergencia_2_vinculo: string
+  legajo: string
+  fecha_ingreso: string
+  tarea_habitual: string
+  sector: string
+  puesto: string
+  categoria_laboral: string
+  estado_laboral: string
+  tipo_contratacion: string
+  jornada: string
+  modalidad: string
+  dias_home_office: string
+  email_laboral: string
+  banco: string
+  cbu: string
+  observaciones: string
+  status: 'create' | 'update' | 'error'
+  errors: string[]
+  existingId: string | null
+  existingLegajo: string | null
+  legajoConflict: boolean
+  changedFields: string[]
+}
+
+export interface ImportParseResult {
+  rows: ImportParsedRow[]
+  stats: {
+    total: number
+    toCreate: number
+    toUpdate: number
+    withErrors: number
+    legajoConflicts: number
+  }
+}
+
+export interface LegajoDecision {
+  rowIndex: number
+  existingId: string
+  nombre: string
+  existingLegajo: string
+  planillaLegajo: string
+  keep: boolean
+}
+
+export interface ConfirmImportInput {
+  rows: ImportParsedRow[]
+  legajoDecisions: LegajoDecision[]
+}
+
 export interface RrhhPeriodo {
   id: string
   workspace_id: string

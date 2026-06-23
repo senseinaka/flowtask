@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, Plus, Download, RefreshCw, Users, UserCheck, UserX, Sparkles,
-  ChevronRight, Hash, Settings2
+  ChevronRight, Hash, Settings2, Upload
 } from 'lucide-react'
 import {
   useNominaColaboradores, useExportNominaXls, useDeleteColaborador, useGenerarDesdeUltimo
@@ -11,6 +11,7 @@ import type { RrhhColaboradorConStats, EstadoLaboral } from '@shared/types'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
 import GenerarNominaModal from './GenerarNominaModal'
 import RrhhListasAdmin from './RrhhListasAdmin'
+import ImportarNominaModal from './ImportarNominaModal'
 
 const ESTADO_COLORS: Record<string, string> = {
   activo:     'bg-emerald-500/20 text-emerald-300',
@@ -57,6 +58,7 @@ export default function NominaDashboard() {
   const [editando, setEditando] = useState<RrhhColaboradorConStats | null>(null)
   const [generarOpen, setGenerarOpen] = useState(false)
   const [listasAdminOpen, setListasAdminOpen] = useState(false)
+  const [importarOpen, setImportarOpen] = useState(false)
 
   const filtered = useMemo(() => {
     let list = colaboradores
@@ -118,6 +120,14 @@ export default function NominaDashboard() {
           <p className="text-xs text-slate-400 mt-0.5">{colaboradores.length} colaboradores registrados</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setImportarOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700 text-sm transition-colors"
+            title="Importar desde planilla XLS"
+          >
+            <Upload className="w-4 h-4" />
+            Importar
+          </button>
           <button
             onClick={() => setListasAdminOpen(true)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
@@ -281,6 +291,11 @@ export default function NominaDashboard() {
       {/* Admin listas */}
       {listasAdminOpen && (
         <RrhhListasAdmin onClose={() => setListasAdminOpen(false)} />
+      )}
+
+      {/* Importar nómina */}
+      {importarOpen && (
+        <ImportarNominaModal onClose={() => setImportarOpen(false)} />
       )}
     </div>
   )

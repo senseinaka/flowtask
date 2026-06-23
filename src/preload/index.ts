@@ -58,7 +58,8 @@ import type {
   RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult,
   RrhhColaboradorConStats, RrhhNominaConfig,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
-  RrhhLista, RrhhListaTipo, UpsertListaInput
+  RrhhLista, RrhhListaTipo, UpsertListaInput,
+  ImportParseResult, LegajoDecision, ConfirmImportInput
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1133,6 +1134,10 @@ const api = {
       generarDesdeUltimo: (): Promise<GenerarDesdeUltimoResult>                                   => ipcRenderer.invoke('rrhh:nomina:generarDesdeUltimo'),
       confirmarGenerar:   (input: ConfirmarGenerarInput, crearDrive: boolean): Promise<{ creados: number; actualizados: number }> => ipcRenderer.invoke('rrhh:nomina:confirmarGenerar', input, crearDrive),
       exportXls:          (rows: Record<string, unknown>[]): Promise<string | null>               => ipcRenderer.invoke('rrhh:nomina:exportXls', rows),
+      exportTemplate:     (): Promise<string | null>                                               => ipcRenderer.invoke('rrhh:nomina:exportTemplate'),
+      selectImportFile:   (): Promise<string | null>                                               => ipcRenderer.invoke('rrhh:nomina:selectImportFile'),
+      parseImport:        (filePath: string): Promise<ImportParseResult>                           => ipcRenderer.invoke('rrhh:nomina:parseImport', filePath),
+      confirmImport:      (input: ConfirmImportInput): Promise<{ created: number; updated: number }> => ipcRenderer.invoke('rrhh:nomina:confirmImport', input),
     },
     listas: {
       list:   (tipo?: RrhhListaTipo): Promise<RrhhLista[]>                                        => ipcRenderer.invoke('rrhh:listas:list', tipo),

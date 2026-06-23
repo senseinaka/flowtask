@@ -5,6 +5,7 @@ import type {
   RrhhColaborador, RrhhColaboradorConStats, RrhhNominaConfig,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
   RrhhLista, RrhhListaTipo, UpsertListaInput,
+  ImportParseResult, ConfirmImportInput,
 } from '@shared/types'
 
 export function usePeriodos() {
@@ -231,6 +232,28 @@ export function useDeleteLista() {
       const remove = (old: RrhhLista[] = []) => old.filter(item => item.id !== id)
       qc.setQueryData<RrhhLista[]>(['rrhh:listas', tipo], remove)
       qc.setQueryData<RrhhLista[]>(['rrhh:listas', 'all'], remove)
+    },
+  })
+}
+
+export function useExportTemplate() {
+  return useMutation<string | null, Error, void>({
+    mutationFn: () => window.api.rrhh.nomina.exportTemplate(),
+  })
+}
+
+export function useParseImport() {
+  return useMutation<ImportParseResult, Error, string>({
+    mutationFn: (filePath) => window.api.rrhh.nomina.parseImport(filePath),
+  })
+}
+
+export function useConfirmImport() {
+  const qc = useQueryClient()
+  return useMutation<{ created: number; updated: number }, Error, ConfirmImportInput>({
+    mutationFn: (input) => window.api.rrhh.nomina.confirmImport(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] })
     },
   })
 }

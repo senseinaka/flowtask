@@ -96,7 +96,7 @@ export default function ColaboradorFormDrawer({ colaborador, onClose }: Props) {
       }
       setForm(f)
     } else {
-      setForm({ estado_laboral: 'activo', tipo_contratacion: 'relacion_dependencia', jornada: 'completa', modalidad: 'presencial' })
+      setForm({ estado_laboral: 'activo', tipo_contratacion: 'relacion_dependencia', jornada: 'completa', modalidad: 'presencial', banco: 'Banco Galicia' })
     }
   }, [colaborador])
 
