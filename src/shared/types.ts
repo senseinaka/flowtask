@@ -2953,6 +2953,8 @@ export interface RrhhColaborador {
   ultimo_periodo_liquidado: string | null
   observaciones: string | null
   legajo_estado: string | null        // 'completo'|'incompleto'|'pendiente'
+  foto_drive_file_id: string | null
+  cv_drive_file_id: string | null
 }
 
 export type EstadoLaboral = 'activo' | 'inactivo' | 'licencia' | 'suspendido' | 'externo'

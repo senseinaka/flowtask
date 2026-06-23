@@ -29,19 +29,28 @@ const CHANNEL_MODULE_MAP: Record<string, string> = {
   expiry: 'expiry',
   finance: 'finance',
   companyFinance: 'company_finance',
+  rrhh: 'rrhh',
   settings: 'settings'
 }
 
 // Acciones que solo leen datos — todo lo que no matchee se trata como 'write'.
-const READ_ACTION_RE = /^(list|get|export|is[A-Z]|status|categoryBreakdown|history|topConcepts|topIncreases|listByItem|listUpcoming)/
+const READ_ACTION_RE = /^(list|get|export|is[A-Z]|status|categoryBreakdown|history|historial|ausentes|topConcepts|topIncreases|listByItem|listUpcoming)/
+
+const LEVEL_RANK: Record<PermissionLevel, number> = { none: 0, read: 1, write: 2 }
 
 function levelForChannel(channel: string): { moduleKey: string; level: PermissionLevel } | null {
-  const [prefix, ...rest] = channel.split(':')
-  const moduleKey = CHANNEL_MODULE_MAP[prefix]
+  const segments = channel.split(':')
+  const moduleKey = CHANNEL_MODULE_MAP[segments[0]]
   if (!moduleKey) return null
 
-  const action = rest.join(':')
-  const level: PermissionLevel = READ_ACTION_RE.test(action) ? 'read' : 'write'
+  // Varios módulos usan canales con forma `recurso:verbo` (p.ej. periodos:list,
+  // nomina:colaboradores:list). La detección de lectura mira tanto el action
+  // completo como el último segmento (el verbo real) para no clasificar como
+  // 'write' operaciones que en realidad solo leen.
+  const action = segments.slice(1).join(':')
+  const verb = segments[segments.length - 1] ?? ''
+  const isRead = READ_ACTION_RE.test(action) || READ_ACTION_RE.test(verb)
+  const level: PermissionLevel = isRead ? 'read' : 'write'
   return { moduleKey, level }
 }
 
@@ -56,8 +65,17 @@ function getUserModuleLevel(userId: string, moduleKey: string): PermissionLevel 
   if (!cache || cache.userId !== userId) {
     cache = { userId, rows: listUserPermissions(userId) }
   }
-  const row = cache.rows.find((r) => r.module_key === moduleKey && r.submodule_key === null)
-  return row?.level ?? 'none'
+  // Nivel efectivo del módulo = el más alto entre el permiso a nivel módulo
+  // (submodule_key = null) y el de cualquiera de sus submódulos. Refleja la
+  // lógica del renderer (`levelFor` en usePermissions): si un submódulo concede
+  // acceso, el módulo es accesible vía IPC. Sin esto, un usuario con acceso a
+  // RRHH solo por el submódulo `sueldos` quedaría bloqueado en el IPC.
+  let best: PermissionLevel = 'none'
+  for (const row of cache.rows) {
+    if (row.module_key !== moduleKey) continue
+    if (LEVEL_RANK[row.level] > LEVEL_RANK[best]) best = row.level
+  }
+  return best
 }
 
 /**

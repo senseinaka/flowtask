@@ -3,14 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ChevronLeft, User, Briefcase, TrendingUp, FolderOpen, FileText,
-  Hash, Edit2, ExternalLink, Loader2, AlertCircle, FolderPlus, Tag
+  Hash, Edit2, ExternalLink, Loader2, AlertCircle, FolderPlus, Tag,
+  Camera, Upload, FilePlus
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
 import {
   useHistorialColaborador, useAsignarLegajo, useCrearDriveColaborador,
-  useDeleteColaborador, useNominaColaboradores
+  useDeleteColaborador, useNominaColaboradores,
+  useUploadColaboradorFoto, useUploadColaboradorCv, useFotoDataUrl
 } from '../../hooks/useRrhh'
 import type { RrhhColaboradorConStats } from '@shared/types'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
@@ -48,6 +50,54 @@ function Field({ label, value }: { label: string; value: string | number | null 
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="text-sm text-slate-200 mt-0.5">{value ?? <span className="text-slate-600">—</span>}</dd>
     </div>
+  )
+}
+
+function AvatarFoto({ colaborador }: { colaborador: RrhhColaboradorConStats }) {
+  const uploadFoto = useUploadColaboradorFoto()
+  const { data: fotoUrl } = useFotoDataUrl(colaborador.id, !!colaborador.foto_drive_file_id)
+
+  async function handleUpload() {
+    const localPath = await window.api.rrhh.nomina.colaboradores.selectImageFile()
+    if (!localPath) return
+    uploadFoto.mutate({ id: colaborador.id, localPath })
+  }
+
+  const initials = colaborador.nombre
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+
+  const hue = Array.from(colaborador.nombre).reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360
+
+  return (
+    <button
+      onClick={handleUpload}
+      disabled={uploadFoto.isPending}
+      title={colaborador.foto_drive_file_id ? 'Reemplazar foto' : 'Subir foto'}
+      className="relative flex-shrink-0 w-12 h-12 rounded-full overflow-hidden group focus:outline-none"
+    >
+      {fotoUrl
+        ? <img src={fotoUrl} alt={colaborador.nombre} className="w-full h-full object-cover" />
+        : (
+          <div
+            className="w-full h-full flex items-center justify-center text-white text-base font-semibold"
+            style={{ background: `hsl(${hue}, 35%, 28%)` }}
+          >
+            {initials}
+          </div>
+        )
+      }
+      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        {uploadFoto.isPending
+          ? <Loader2 className="w-4 h-4 text-white animate-spin" />
+          : <Camera className="w-4 h-4 text-white" />
+        }
+      </div>
+    </button>
   )
 }
 
@@ -96,6 +146,7 @@ export default function ColaboradorProfile() {
         <button onClick={() => navigate('/rrhh/nomina')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
+        <AvatarFoto colaborador={colaborador} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-slate-100 truncate">{colaborador.nombre}</h1>
@@ -432,53 +483,155 @@ function TabDrive({ c, onCrearCarpeta, creando }: {
   onCrearCarpeta: () => void
   creando: boolean
 }) {
-  if (c.drive_legajo_folder_id) {
-    return (
-      <div className="space-y-4 max-w-sm">
-        <div className="bg-slate-800 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
-            <FolderOpen className="w-5 h-5" />
-            Carpeta de legajo creada
-          </div>
-          <p className="text-xs text-slate-400">
-            La carpeta está en <strong>Summit RRHH / Legajos / {c.legajo} {c.nombre}</strong>
-          </p>
-          <button
-            onClick={() => window.api.rrhh.drive.openFolder(c.drive_legajo_folder_id!)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Abrir en Drive
-          </button>
-        </div>
-      </div>
-    )
+  const uploadFoto = useUploadColaboradorFoto()
+  const uploadCv   = useUploadColaboradorCv()
+
+  async function handleUploadFoto() {
+    const localPath = await window.api.rrhh.nomina.colaboradores.selectImageFile()
+    if (!localPath) return
+    uploadFoto.mutate({ id: c.id, localPath })
   }
+
+  async function handleUploadCv() {
+    const localPath = await window.api.rrhh.nomina.colaboradores.selectCvFile()
+    if (!localPath) return
+    uploadCv.mutate({ id: c.id, localPath })
+  }
+
+  const noFolder = !c.drive_legajo_folder_id
 
   return (
     <div className="space-y-4 max-w-sm">
+      {/* Carpeta de legajo */}
       <div className="bg-slate-800 rounded-xl p-5 space-y-3">
-        <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">
-          <FolderOpen className="w-5 h-5" />
-          Sin carpeta de legajo
+        {c.drive_legajo_folder_id ? (
+          <>
+            <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+              <FolderOpen className="w-5 h-5" />
+              Carpeta de legajo creada
+            </div>
+            <p className="text-xs text-slate-400">
+              <strong>Summit RRHH / Legajos / {c.legajo} {c.nombre}</strong>
+            </p>
+            <button
+              onClick={() => window.api.rrhh.drive.openFolder(c.drive_legajo_folder_id!)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Abrir en Drive
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">
+              <FolderOpen className="w-5 h-5" />
+              Sin carpeta de legajo
+            </div>
+            {!c.legajo && (
+              <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-500/10 rounded-lg p-2.5">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                Asigná un legajo primero desde la tab Laboral para poder crear la carpeta.
+              </div>
+            )}
+            <p className="text-xs text-slate-400">
+              Se creará <strong>Summit RRHH / Legajos / {c.legajo ?? '???'} {c.nombre}</strong> con subcarpetas: Documentos personales, Contratos, Recibos.
+            </p>
+            <button
+              onClick={onCrearCarpeta}
+              disabled={creando || !c.legajo}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm transition-colors"
+            >
+              {creando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
+              {creando ? 'Creando...' : 'Crear carpeta en Drive'}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Foto */}
+      <div className="bg-slate-800 rounded-xl p-5 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+          <Camera className="w-4 h-4 text-pink-400" />
+          Foto del colaborador
         </div>
-        {!c.legajo && (
-          <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-500/10 rounded-lg p-2.5">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            Asigná un legajo primero desde la tab Laboral para poder crear la carpeta.
+        {noFolder && (
+          <p className="text-xs text-slate-500">Creá la carpeta de legajo primero.</p>
+        )}
+        {!noFolder && c.foto_drive_file_id && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => window.api.rrhh.drive.openFile(c.foto_drive_file_id!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Ver en Drive
+            </button>
+            <button
+              onClick={handleUploadFoto}
+              disabled={uploadFoto.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs transition-colors disabled:opacity-50"
+            >
+              {uploadFoto.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              Reemplazar
+            </button>
           </div>
         )}
-        <p className="text-xs text-slate-400">
-          Se creará la carpeta <strong>Summit RRHH / Legajos / {c.legajo ?? '???'} {c.nombre}</strong> con subcarpetas: Documentos personales, Contratos, Recibos.
-        </p>
-        <button
-          onClick={onCrearCarpeta}
-          disabled={creando || !c.legajo}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm transition-colors"
-        >
-          {creando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
-          {creando ? 'Creando...' : 'Crear carpeta en Drive'}
-        </button>
+        {!noFolder && !c.foto_drive_file_id && (
+          <button
+            onClick={handleUploadFoto}
+            disabled={uploadFoto.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors disabled:opacity-50"
+          >
+            {uploadFoto.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {uploadFoto.isPending ? 'Subiendo...' : 'Subir foto'}
+          </button>
+        )}
+        {uploadFoto.isError && (
+          <p className="text-xs text-red-400">{uploadFoto.error.message}</p>
+        )}
+      </div>
+
+      {/* CV */}
+      <div className="bg-slate-800 rounded-xl p-5 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+          <FilePlus className="w-4 h-4 text-sky-400" />
+          CV / Currículum
+        </div>
+        {noFolder && (
+          <p className="text-xs text-slate-500">Creá la carpeta de legajo primero.</p>
+        )}
+        {!noFolder && c.cv_drive_file_id && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => window.api.rrhh.drive.openFile(c.cv_drive_file_id!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Ver en Drive
+            </button>
+            <button
+              onClick={handleUploadCv}
+              disabled={uploadCv.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs transition-colors disabled:opacity-50"
+            >
+              {uploadCv.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              Reemplazar
+            </button>
+          </div>
+        )}
+        {!noFolder && !c.cv_drive_file_id && (
+          <button
+            onClick={handleUploadCv}
+            disabled={uploadCv.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors disabled:opacity-50"
+          >
+            {uploadCv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {uploadCv.isPending ? 'Subiendo...' : 'Subir CV (PDF)'}
+          </button>
+        )}
+        {uploadCv.isError && (
+          <p className="text-xs text-red-400">{uploadCv.error.message}</p>
+        )}
       </div>
     </div>
   )

@@ -429,6 +429,22 @@ export async function updateColaboradorDrive(id: string, folderId: string): Prom
   )
 }
 
+export async function updateColaboradorMediaIds(
+  id: string,
+  fields: { foto_drive_file_id?: string | null; cv_drive_file_id?: string | null }
+): Promise<void> {
+  const sets: string[] = []
+  const vals: unknown[] = []
+  if ('foto_drive_file_id' in fields) { sets.push('foto_drive_file_id = ?'); vals.push(fields.foto_drive_file_id ?? null) }
+  if ('cv_drive_file_id' in fields)   { sets.push('cv_drive_file_id = ?');   vals.push(fields.cv_drive_file_id ?? null) }
+  if (!sets.length) return
+  vals.push(Date.now(), id)
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_colaboradores SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`,
+    vals
+  )
+}
+
 export async function softDeleteColaborador(id: string): Promise<void> {
   await getPowerSyncDb().execute(
     `UPDATE rrhh_colaboradores SET activo = 0, estado_laboral = 'inactivo', updated_at = ? WHERE id = ?`,

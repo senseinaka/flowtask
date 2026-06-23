@@ -1,6 +1,7 @@
-import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
+import { ipcMain, shell, dialog, BrowserWindow, app } from 'electron'
 import path from 'path'
 import os from 'os'
+import fs from 'fs'
 import { savePayroll, saveVacaciones } from '../services/rrhh.service'
 import {
   listColaboradores, listPeriodos, getPeriodo,
@@ -9,13 +10,31 @@ import {
   updateSueldoNotas,
   listColaboradoresConStats, getColaboradorById,
   upsertColaboradorCompleto, softDeleteColaborador,
-  asignarLegajo, getNominaConfig, upsertNominaConfig
+  asignarLegajo, getNominaConfig, upsertNominaConfig,
+  updateColaboradorMediaIds
 } from '../database/queries/rrhh'
 import {
   generarDesdeUltimoPeriodo, confirmarGenerarNomina, crearCarpetaDriveColaborador
 } from '../services/nomina.service'
 import { driveService } from '../services/drive.service'
 import type { UpsertColaboradorInput, ConfirmarGenerarInput } from '@shared/types'
+
+/**
+ * Mitiga CSV/Formula injection: Excel, LibreOffice y Google Sheets interpretan
+ * una celda que empieza con = + - @ (o tab/CR) como fórmula al abrir el archivo.
+ * Como parte de los datos provienen de PDFs externos (recibos) y de texto libre
+ * del usuario, prefijamos un apóstrofo a esos valores para neutralizarlos.
+ */
+const FORMULA_INJECTION_RE = /^[=+\-@\t\r]/
+function sanitizeXlsRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.map(row => {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(row)) {
+      out[k] = typeof v === 'string' && FORMULA_INJECTION_RE.test(v) ? `'${v}` : v
+    }
+    return out
+  })
+}
 
 export function registerRrhhIpc(): void {
   ipcMain.handle('rrhh:savePayroll', (_e, filePath: string) =>
@@ -65,7 +84,7 @@ export function registerRrhhIpc(): void {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const XLSX = require('xlsx')
 
-    const ws = XLSX.utils.json_to_sheet(rows)
+    const ws = XLSX.utils.json_to_sheet(sanitizeXlsRows(rows))
     // Auto column widths based on header names
     ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 14) }))
 
@@ -153,7 +172,7 @@ export function registerRrhhIpc(): void {
     if (!rows || rows.length === 0) throw new Error('Sin datos para exportar')
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const XLSX = require('xlsx')
-    const ws = XLSX.utils.json_to_sheet(rows)
+    const ws = XLSX.utils.json_to_sheet(sanitizeXlsRows(rows))
     ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 16) }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Nómina')
@@ -189,5 +208,90 @@ export function registerRrhhIpc(): void {
       properties: ['openFile'],
     })
     return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  // ── Foto y CV del colaborador ────────────────────────────────────────────────
+
+  ipcMain.handle('rrhh:nomina:colaboradores:selectImageFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar foto del colaborador',
+      filters: [{ name: 'Imagen', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+      properties: ['openFile'],
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('rrhh:nomina:colaboradores:selectCvFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar CV del colaborador',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      properties: ['openFile'],
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('rrhh:nomina:colaboradores:uploadFoto', async (_e, id: string, localPath: string) => {
+    const col = await getColaboradorById(id)
+    if (!col) throw new Error('Colaborador no encontrado')
+    if (!col.drive_legajo_folder_id) throw new Error('No tiene carpeta en Drive. Creá la carpeta primero desde la tab Drive.')
+
+    const ext = path.extname(localPath).toLowerCase()
+    const MIME_MAP: Record<string, string> = {
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+    }
+    const mimeType = MIME_MAP[ext] ?? 'image/jpeg'
+    const safeName = col.nombre.replace(/[/:*?"<>|]/g, '-').slice(0, 50).trim()
+    const fileName = `foto_${safeName}${ext}`
+
+    if (col.foto_drive_file_id) await driveService.deleteFile(col.foto_drive_file_id).catch(() => null)
+
+    const fileId = await driveService.uploadFileToFolder(localPath, col.drive_legajo_folder_id, fileName, mimeType)
+
+    // Guardar copia local para mostrar en UI
+    const fotosDir = path.join(app.getPath('userData'), 'rrhh-fotos')
+    if (!fs.existsSync(fotosDir)) fs.mkdirSync(fotosDir, { recursive: true })
+    for (const e of fs.readdirSync(fotosDir)) {
+      if (e.startsWith(`${id}.`)) fs.unlinkSync(path.join(fotosDir, e))
+    }
+    fs.copyFileSync(localPath, path.join(fotosDir, `${id}${ext}`))
+
+    await updateColaboradorMediaIds(id, { foto_drive_file_id: fileId })
+    return fileId
+  })
+
+  ipcMain.handle('rrhh:nomina:colaboradores:uploadCv', async (_e, id: string, localPath: string) => {
+    const col = await getColaboradorById(id)
+    if (!col) throw new Error('Colaborador no encontrado')
+    if (!col.drive_legajo_folder_id) throw new Error('No tiene carpeta en Drive. Creá la carpeta primero desde la tab Drive.')
+
+    const safeName = col.nombre.replace(/[/:*?"<>|]/g, '-').slice(0, 50).trim()
+    const fileName = `cv_${safeName}.pdf`
+
+    if (col.cv_drive_file_id) await driveService.deleteFile(col.cv_drive_file_id).catch(() => null)
+
+    const fileId = await driveService.uploadFileToFolder(localPath, col.drive_legajo_folder_id, fileName, 'application/pdf')
+
+    await updateColaboradorMediaIds(id, { cv_drive_file_id: fileId })
+    return fileId
+  })
+
+  ipcMain.handle('rrhh:nomina:colaboradores:getFotoDataUrl', async (_e, id: string) => {
+    const fotosDir = path.join(app.getPath('userData'), 'rrhh-fotos')
+    if (!fs.existsSync(fotosDir)) return null
+    const MIME_MAP: Record<string, string> = {
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+    }
+    for (const ext of Object.keys(MIME_MAP)) {
+      const p = path.join(fotosDir, `${id}${ext}`)
+      if (fs.existsSync(p)) {
+        const buf = fs.readFileSync(p)
+        return `data:${MIME_MAP[ext]};base64,${buf.toString('base64')}`
+      }
+    }
+    return null
   })
 }

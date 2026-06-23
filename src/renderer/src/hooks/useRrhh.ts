@@ -160,3 +160,31 @@ export function useExportNominaXls() {
     mutationFn: (rows) => window.api.rrhh.nomina.exportXls(rows),
   })
 }
+
+export function useUploadColaboradorFoto() {
+  const qc = useQueryClient()
+  return useMutation<string, Error, { id: string; localPath: string }>({
+    mutationFn: ({ id, localPath }) => window.api.rrhh.nomina.colaboradores.uploadFoto(id, localPath),
+    onSuccess: (_fileId, { id }) => {
+      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:foto', id] })
+    },
+  })
+}
+
+export function useUploadColaboradorCv() {
+  const qc = useQueryClient()
+  return useMutation<string, Error, { id: string; localPath: string }>({
+    mutationFn: ({ id, localPath }) => window.api.rrhh.nomina.colaboradores.uploadCv(id, localPath),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+  })
+}
+
+export function useFotoDataUrl(colaboradorId: string | undefined, hasFoto: boolean) {
+  return useQuery<string | null>({
+    queryKey: ['rrhh:foto', colaboradorId],
+    queryFn: () => window.api.rrhh.nomina.colaboradores.getFotoDataUrl(colaboradorId!),
+    enabled: !!colaboradorId && hasFoto,
+    staleTime: 5 * 60_000,
+  })
+}

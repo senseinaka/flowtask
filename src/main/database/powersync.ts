@@ -979,6 +979,8 @@ const rrhh_colaboradores = new Table(
     ultimo_periodo_liquidado: column.text,
     observaciones:           column.text,
     legajo_estado:           column.text,
+    foto_drive_file_id:      column.text,
+    cv_drive_file_id:        column.text,
     created_at:              column.integer,
     updated_at:              column.integer,
   },
