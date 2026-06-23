@@ -212,16 +212,25 @@ export function useUpsertLista() {
   const qc = useQueryClient()
   return useMutation<RrhhLista, Error, UpsertListaInput>({
     mutationFn: (data) => window.api.rrhh.listas.upsert(data),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['rrhh:listas'] })
+    onSuccess: (newItem, vars) => {
+      const update = (old: RrhhLista[] = []) =>
+        vars.id
+          ? old.map(item => item.id === vars.id ? newItem : item)
+          : [...old, newItem]
+      qc.setQueryData<RrhhLista[]>(['rrhh:listas', vars.tipo], update)
+      qc.setQueryData<RrhhLista[]>(['rrhh:listas', 'all'], update)
     },
   })
 }
 
 export function useDeleteLista() {
   const qc = useQueryClient()
-  return useMutation<void, Error, string>({
-    mutationFn: (id) => window.api.rrhh.listas.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:listas'] }),
+  return useMutation<void, Error, { id: string; tipo: RrhhListaTipo }>({
+    mutationFn: ({ id }) => window.api.rrhh.listas.delete(id),
+    onSuccess: (_, { id, tipo }) => {
+      const remove = (old: RrhhLista[] = []) => old.filter(item => item.id !== id)
+      qc.setQueryData<RrhhLista[]>(['rrhh:listas', tipo], remove)
+      qc.setQueryData<RrhhLista[]>(['rrhh:listas', 'all'], remove)
+    },
   })
 }

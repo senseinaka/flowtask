@@ -86,6 +86,8 @@ export default function ColaboradorFormDrawer({ colaborador, onClose }: Props) {
         'fecha_ingreso','estado_laboral','tipo_contratacion','jornada',
         'modalidad','email_laboral','banco','cbu','observaciones',
         'dias_home_office',
+        'contacto_emergencia_1_nombre','contacto_emergencia_1_celular','contacto_emergencia_1_vinculo',
+        'contacto_emergencia_2_nombre','contacto_emergencia_2_celular','contacto_emergencia_2_vinculo',
       ]
       const f: Record<string, string> = {}
       for (const k of fields) {
@@ -270,6 +272,32 @@ export default function ColaboradorFormDrawer({ colaborador, onClose }: Props) {
                 <label className={lbl}>CBU</label>
                 <input className={inp} value={form.cbu ?? ''} onChange={e => set('cbu', e.target.value)} />
               </div>
+            </div>
+          </section>
+
+          {/* Contactos de emergencia */}
+          <section>
+            <h3 className="text-xs font-semibold text-pink-400 uppercase tracking-wider mb-3">Contactos de emergencia</h3>
+            <div className="space-y-3">
+              {([1, 2] as const).map(n => (
+                <div key={n} className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+                  <div className="text-xs text-slate-500 font-medium">Contacto {n}</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className={lbl}>Nombre</label>
+                      <input className={inp} value={form[`contacto_emergencia_${n}_nombre`] ?? ''} onChange={e => set(`contacto_emergencia_${n}_nombre`, e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={lbl}>Celular</label>
+                      <input className={inp} value={form[`contacto_emergencia_${n}_celular`] ?? ''} onChange={e => set(`contacto_emergencia_${n}_celular`, e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={lbl}>Vínculo</label>
+                      <input className={inp} placeholder="Ej: Madre, Esposo" value={form[`contacto_emergencia_${n}_vinculo`] ?? ''} onChange={e => set(`contacto_emergencia_${n}_vinculo`, e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 

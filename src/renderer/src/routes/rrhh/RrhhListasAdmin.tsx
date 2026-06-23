@@ -50,7 +50,7 @@ function ListaTab({ tipo }: { tipo: RrhhListaTipo }) {
   }
 
   function handleDelete(id: string) {
-    deleteItem.mutate(id, { onSuccess: () => setConfirmDelete(null) })
+    deleteItem.mutate({ id, tipo }, { onSuccess: () => setConfirmDelete(null) })
   }
 
   if (isLoading) {

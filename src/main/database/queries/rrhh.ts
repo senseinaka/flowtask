@@ -360,7 +360,10 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
           email_personal = ?, email_laboral = ?, telefono = ?, fecha_nacimiento = ?,
           direccion = ?, localidad = ?, provincia = ?, banco = ?, cbu = ?,
           sueldo_neto_actual = ?, sueldo_bruto_actual = ?,
-          observaciones = ?, legajo_estado = ?, dias_home_office = ?, updated_at = ?
+          observaciones = ?, legajo_estado = ?, dias_home_office = ?,
+          contacto_emergencia_1_nombre = ?, contacto_emergencia_1_celular = ?, contacto_emergencia_1_vinculo = ?,
+          contacto_emergencia_2_nombre = ?, contacto_emergencia_2_celular = ?, contacto_emergencia_2_vinculo = ?,
+          updated_at = ?
          WHERE id = ?`,
         [
           data.documento, data.cuil ?? existing.cuil, data.nombre,
@@ -385,6 +388,12 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
           data.observaciones ?? existing.observaciones,
           data.legajo_estado ?? existing.legajo_estado ?? 'pendiente',
           data.dias_home_office ?? existing.dias_home_office,
+          data.contacto_emergencia_1_nombre  ?? existing.contacto_emergencia_1_nombre,
+          data.contacto_emergencia_1_celular ?? existing.contacto_emergencia_1_celular,
+          data.contacto_emergencia_1_vinculo ?? existing.contacto_emergencia_1_vinculo,
+          data.contacto_emergencia_2_nombre  ?? existing.contacto_emergencia_2_nombre,
+          data.contacto_emergencia_2_celular ?? existing.contacto_emergencia_2_celular,
+          data.contacto_emergencia_2_vinculo ?? existing.contacto_emergencia_2_vinculo,
           now, data.id,
         ]
       )
@@ -403,8 +412,11 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
        email_personal, email_laboral, telefono, fecha_nacimiento,
        direccion, localidad, provincia, banco, cbu,
        sueldo_neto_actual, sueldo_bruto_actual,
-       observaciones, legajo_estado, dias_home_office, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       observaciones, legajo_estado, dias_home_office,
+       contacto_emergencia_1_nombre, contacto_emergencia_1_celular, contacto_emergencia_1_vinculo,
+       contacto_emergencia_2_nombre, contacto_emergencia_2_celular, contacto_emergencia_2_vinculo,
+       created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id, WORKSPACE_ID, data.documento, data.cuil ?? '', data.nombre,
       data.tarea_habitual ?? '', data.legajo ?? null, data.fecha_ingreso ?? null,
@@ -419,6 +431,12 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
       data.sueldo_neto_actual ?? null, data.sueldo_bruto_actual ?? null,
       data.observaciones ?? null, data.legajo_estado ?? 'pendiente',
       data.dias_home_office ?? null,
+      data.contacto_emergencia_1_nombre  ?? null,
+      data.contacto_emergencia_1_celular ?? null,
+      data.contacto_emergencia_1_vinculo ?? null,
+      data.contacto_emergencia_2_nombre  ?? null,
+      data.contacto_emergencia_2_celular ?? null,
+      data.contacto_emergencia_2_vinculo ?? null,
       now, now,
     ]
   )
@@ -473,7 +491,7 @@ export async function getNextLegajoNumber(): Promise<number> {
 
 export async function asignarLegajo(colaboradorId: string): Promise<string> {
   const next = await getNextLegajoNumber()
-  const legajo = String(next).padStart(4, '0')
+  const legajo = String(next).padStart(3, '0')
   await getPowerSyncDb().execute(
     `UPDATE rrhh_colaboradores SET legajo = ?, updated_at = ? WHERE id = ?`,
     [legajo, Date.now(), colaboradorId]

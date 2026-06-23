@@ -421,15 +421,21 @@ function TabPersonal({ c }: { c: RrhhColaboradorConStats }) {
 
   function startEdit() {
     setForm({
-      nombre:          c.nombre ?? '',
-      documento:       c.documento ?? '',
-      cuil:            c.cuil ?? '',
+      nombre:           c.nombre ?? '',
+      documento:        c.documento ?? '',
+      cuil:             c.cuil ?? '',
       fecha_nacimiento: c.fecha_nacimiento ?? '',
-      telefono:        c.telefono ?? '',
-      email_personal:  c.email_personal ?? '',
-      direccion:       c.direccion ?? '',
-      localidad:       c.localidad ?? '',
-      provincia:       c.provincia ?? '',
+      telefono:         c.telefono ?? '',
+      email_personal:   c.email_personal ?? '',
+      direccion:        c.direccion ?? '',
+      localidad:        c.localidad ?? '',
+      provincia:        c.provincia ?? '',
+      contacto_emergencia_1_nombre:  c.contacto_emergencia_1_nombre  ?? '',
+      contacto_emergencia_1_celular: c.contacto_emergencia_1_celular ?? '',
+      contacto_emergencia_1_vinculo: c.contacto_emergencia_1_vinculo ?? '',
+      contacto_emergencia_2_nombre:  c.contacto_emergencia_2_nombre  ?? '',
+      contacto_emergencia_2_celular: c.contacto_emergencia_2_celular ?? '',
+      contacto_emergencia_2_vinculo: c.contacto_emergencia_2_vinculo ?? '',
     })
     setEditing(true)
   }
@@ -441,32 +447,66 @@ function TabPersonal({ c }: { c: RrhhColaboradorConStats }) {
     )
   }
 
+  const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
+
   if (editing) {
     return (
-      <div className="max-w-xl space-y-4">
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
-          <div className="col-span-2">
-            <EditField label="Nombre completo" value={form.nombre} onChange={v => setForm(f => ({ ...f, nombre: v }))} />
-          </div>
-          <EditField label="Documento (DNI)" value={form.documento} onChange={v => setForm(f => ({ ...f, documento: v }))} />
-          <EditField label="CUIL" value={form.cuil} onChange={v => setForm(f => ({ ...f, cuil: v }))} />
-          <div>
-            <dt className="text-xs text-slate-500 mb-0.5">Fecha nacimiento <span className="text-slate-600">dd-mm-aaaa</span></dt>
-            <input className={INP} placeholder="15-06-1990" value={form.fecha_nacimiento} onChange={e => setForm(f => ({ ...f, fecha_nacimiento: e.target.value }))} />
-          </div>
-          <EditField label="Celular" value={form.telefono} onChange={v => setForm(f => ({ ...f, telefono: v }))} />
-          <EditField label="Email personal" value={form.email_personal} onChange={v => setForm(f => ({ ...f, email_personal: v }))} type="email" />
-          <EditField label="Dirección" value={form.direccion} onChange={v => setForm(f => ({ ...f, direccion: v }))} />
-          <EditField label="Localidad" value={form.localidad} onChange={v => setForm(f => ({ ...f, localidad: v }))} />
-          <EditField label="Provincia" value={form.provincia} onChange={v => setForm(f => ({ ...f, provincia: v }))} />
-        </dl>
-        <div className="flex gap-2 pt-2">
+      <div className="max-w-xl space-y-5">
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Datos personales</h4>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="col-span-2">
+              <EditField label="Nombre completo" value={form.nombre} onChange={set('nombre')} />
+            </div>
+            <EditField label="Documento (DNI)" value={form.documento} onChange={set('documento')} />
+            <EditField label="CUIL" value={form.cuil} onChange={set('cuil')} />
+            <div>
+              <dt className="text-xs text-slate-500 mb-0.5">Fecha nacimiento <span className="text-slate-600">dd-mm-aaaa</span></dt>
+              <input className={INP} placeholder="15-06-1990" value={form.fecha_nacimiento} onChange={e => set('fecha_nacimiento')(e.target.value)} />
+            </div>
+            <EditField label="Celular" value={form.telefono} onChange={set('telefono')} />
+            <EditField label="Email personal" value={form.email_personal} onChange={set('email_personal')} type="email" />
+            <EditField label="Dirección" value={form.direccion} onChange={set('direccion')} />
+            <EditField label="Localidad" value={form.localidad} onChange={set('localidad')} />
+            <EditField label="Provincia" value={form.provincia} onChange={set('provincia')} />
+          </dl>
+        </div>
+
+        <div className="space-y-3 pt-1 border-t border-slate-800">
+          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pt-2">Contactos de emergencia</h4>
+          {([1, 2] as const).map(n => (
+            <div key={n} className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+              <div className="text-xs text-slate-500 font-medium">Contacto {n}</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-3 sm:col-span-1">
+                  <EditField
+                    label="Nombre"
+                    value={form[`contacto_emergencia_${n}_nombre`]}
+                    onChange={set(`contacto_emergencia_${n}_nombre`)}
+                  />
+                </div>
+                <EditField
+                  label="Celular"
+                  value={form[`contacto_emergencia_${n}_celular`]}
+                  onChange={set(`contacto_emergencia_${n}_celular`)}
+                />
+                <EditField
+                  label="Vínculo"
+                  value={form[`contacto_emergencia_${n}_vinculo`]}
+                  onChange={set(`contacto_emergencia_${n}_vinculo`)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 pt-1">
           <button onClick={handleSave} disabled={upsert.isPending}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium disabled:opacity-50 transition-colors">
             <Check className="w-4 h-4" />
             {upsert.isPending ? 'Guardando...' : 'Guardar'}
           </button>
-          <button onClick={() => setEditing(false)} className="px-4 py-1.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+          <button onClick={() => setEditing(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -474,19 +514,46 @@ function TabPersonal({ c }: { c: RrhhColaboradorConStats }) {
     )
   }
 
+  const hasContact1 = c.contacto_emergencia_1_nombre || c.contacto_emergencia_1_celular
+  const hasContact2 = c.contacto_emergencia_2_nombre || c.contacto_emergencia_2_celular
+
   return (
-    <div className="max-w-xl space-y-4">
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
-        <ViewField label="Nombre completo"  value={c.nombre} />
-        <ViewField label="Documento (DNI)"  value={c.documento} />
-        <ViewField label="CUIL"             value={c.cuil} />
-        <ViewField label="Fecha nacimiento" value={c.fecha_nacimiento} />
-        <ViewField label="Celular"          value={c.telefono} />
-        <ViewField label="Email personal"   value={c.email_personal} />
-        <ViewField label="Dirección"        value={c.direccion} />
-        <ViewField label="Localidad"        value={c.localidad} />
-        <ViewField label="Provincia"        value={c.provincia} />
-      </dl>
+    <div className="max-w-xl space-y-5">
+      <div className="space-y-3">
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Datos personales</h4>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <ViewField label="Nombre completo"  value={c.nombre} />
+          <ViewField label="Documento (DNI)"  value={c.documento} />
+          <ViewField label="CUIL"             value={c.cuil} />
+          <ViewField label="Fecha nacimiento" value={c.fecha_nacimiento} />
+          <ViewField label="Celular"          value={c.telefono} />
+          <ViewField label="Email personal"   value={c.email_personal} />
+          <ViewField label="Dirección"        value={c.direccion} />
+          <ViewField label="Localidad"        value={c.localidad} />
+          <ViewField label="Provincia"        value={c.provincia} />
+        </dl>
+      </div>
+
+      {(hasContact1 || hasContact2) && (
+        <div className="space-y-2 border-t border-slate-800 pt-4">
+          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contactos de emergencia</h4>
+          {[
+            { n: 1, nombre: c.contacto_emergencia_1_nombre, celular: c.contacto_emergencia_1_celular, vinculo: c.contacto_emergencia_1_vinculo },
+            { n: 2, nombre: c.contacto_emergencia_2_nombre, celular: c.contacto_emergencia_2_celular, vinculo: c.contacto_emergencia_2_vinculo },
+          ].filter(ct => ct.nombre || ct.celular).map(ct => (
+            <div key={ct.n} className="bg-slate-800/50 rounded-lg p-3 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-200">{ct.nombre || '—'}</div>
+                {ct.vinculo && <div className="text-xs text-slate-500 mt-0.5">{ct.vinculo}</div>}
+              </div>
+              {ct.celular && (
+                <div className="text-sm text-slate-300 font-mono flex-shrink-0">{ct.celular}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <button onClick={startEdit}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors">
         <Edit2 className="w-3.5 h-3.5" /> Editar datos personales

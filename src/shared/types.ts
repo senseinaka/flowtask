@@ -2956,6 +2956,12 @@ export interface RrhhColaborador {
   foto_drive_file_id: string | null
   cv_drive_file_id: string | null
   dias_home_office: string | null    // CSV: "lunes,martes,jueves"
+  contacto_emergencia_1_nombre: string | null
+  contacto_emergencia_1_celular: string | null
+  contacto_emergencia_1_vinculo: string | null
+  contacto_emergencia_2_nombre: string | null
+  contacto_emergencia_2_celular: string | null
+  contacto_emergencia_2_vinculo: string | null
 }
 
 export type EstadoLaboral = 'activo' | 'inactivo' | 'licencia' | 'suspendido' | 'externo'
@@ -3008,6 +3014,12 @@ export interface UpsertColaboradorInput {
   observaciones?: string | null
   legajo_estado?: string | null
   dias_home_office?: string | null
+  contacto_emergencia_1_nombre?: string | null
+  contacto_emergencia_1_celular?: string | null
+  contacto_emergencia_1_vinculo?: string | null
+  contacto_emergencia_2_nombre?: string | null
+  contacto_emergencia_2_celular?: string | null
+  contacto_emergencia_2_vinculo?: string | null
 }
 
 export interface GenerarDesdeUltimoEntry {
