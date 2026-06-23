@@ -946,18 +946,54 @@ const user_profiles = new Table(
 
 const rrhh_colaboradores = new Table(
   {
-    workspace_id:   column.text,
-    documento:      column.text,
-    cuil:           column.text,
-    nombre:         column.text,
-    tarea_habitual: column.text,
-    legajo:         column.text,
-    fecha_ingreso:  column.text,
-    activo:         column.integer,
-    created_at:     column.integer,
-    updated_at:     column.integer,
+    workspace_id:            column.text,
+    documento:               column.text,
+    cuil:                    column.text,
+    nombre:                  column.text,
+    tarea_habitual:          column.text,
+    legajo:                  column.text,
+    fecha_ingreso:           column.text,
+    activo:                  column.integer,
+    // Campos extendidos de Nómina
+    estado_laboral:          column.text,
+    fecha_egreso:            column.text,
+    motivo_egreso:           column.text,
+    sector:                  column.text,
+    puesto:                  column.text,
+    categoria_laboral:       column.text,
+    tipo_contratacion:       column.text,
+    jornada:                 column.text,
+    modalidad:               column.text,
+    email_personal:          column.text,
+    email_laboral:           column.text,
+    telefono:                column.text,
+    fecha_nacimiento:        column.text,
+    direccion:               column.text,
+    localidad:               column.text,
+    provincia:               column.text,
+    banco:                   column.text,
+    cbu:                     column.text,
+    drive_legajo_folder_id:  column.text,
+    sueldo_neto_actual:      column.real,
+    sueldo_bruto_actual:     column.real,
+    ultimo_periodo_liquidado: column.text,
+    observaciones:           column.text,
+    legajo_estado:           column.text,
+    created_at:              column.integer,
+    updated_at:              column.integer,
   },
   { indexes: { workspace: ['workspace_id'], documento: ['documento'] } }
+)
+
+const rrhh_nomina_config = new Table(
+  {
+    workspace_id:             column.text,
+    drive_legajos_folder_id:  column.text,
+    ultimo_legajo_numero:     column.integer,
+    created_at:               column.integer,
+    updated_at:               column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'] } }
 )
 
 const rrhh_periodos = new Table(
@@ -1054,6 +1090,7 @@ export const AppSchema = new Schema({
   rrhh_colaboradores,
   rrhh_periodos,
   rrhh_sueldos,
+  rrhh_nomina_config,
 })
 
 /**
@@ -1535,8 +1572,9 @@ const EXTRA_COST_DOUBLE_COLS = [
 // Mapa de tabla → columnas float para sanitización en uploadData
 const TABLE_FLOAT_COLS: Record<string, string[]> = {
   comex_import_extra_costs: EXTRA_COST_DOUBLE_COLS,
-  rrhh_periodos: ['total_neto', 'total_vacaciones'],
-  rrhh_sueldos:  ['total_neto', 'vacaciones_neto'],
+  rrhh_periodos:       ['total_neto', 'total_vacaciones'],
+  rrhh_sueldos:        ['total_neto', 'vacaciones_neto'],
+  rrhh_colaboradores:  ['sueldo_neto_actual', 'sueldo_bruto_actual'],
 }
 
 // Convierte cualquier valor a number válido para Postgres double precision.

@@ -55,7 +55,9 @@ import type {
   PayrollExtractionResult,
   RrhhColaborador, RrhhPeriodo, RrhhSueldo,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
-  RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult
+  RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult,
+  RrhhColaboradorConStats, RrhhNominaConfig,
+  UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1107,6 +1109,23 @@ const api = {
       openFolder:            (folderId: string): Promise<void>                                     => ipcRenderer.invoke('rrhh:drive:openFolder', folderId),
       openFile:              (fileId: string): Promise<void>                                       => ipcRenderer.invoke('rrhh:drive:openFile', fileId),
       isAuthenticated:       (): Promise<boolean>                                                  => ipcRenderer.invoke('rrhh:drive:isAuthenticated'),
+    },
+    nomina: {
+      colaboradores: {
+        list:          (): Promise<RrhhColaboradorConStats[]>                                      => ipcRenderer.invoke('rrhh:nomina:colaboradores:list'),
+        get:           (id: string): Promise<RrhhColaborador | null>                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:get', id),
+        upsert:        (data: UpsertColaboradorInput): Promise<RrhhColaborador>                   => ipcRenderer.invoke('rrhh:nomina:colaboradores:upsert', data),
+        delete:        (id: string): Promise<void>                                                => ipcRenderer.invoke('rrhh:nomina:colaboradores:delete', id),
+        asignarLegajo: (id: string): Promise<string>                                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:asignarLegajo', id),
+        crearDrive:    (id: string): Promise<string>                                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:crearDrive', id),
+      },
+      config: {
+        get:    (): Promise<RrhhNominaConfig | null>                                               => ipcRenderer.invoke('rrhh:nomina:config:get'),
+        upsert: (data: Partial<{ drive_legajos_folder_id: string | null; ultimo_legajo_numero: number }>): Promise<RrhhNominaConfig> => ipcRenderer.invoke('rrhh:nomina:config:upsert', data),
+      },
+      generarDesdeUltimo: (): Promise<GenerarDesdeUltimoResult>                                   => ipcRenderer.invoke('rrhh:nomina:generarDesdeUltimo'),
+      confirmarGenerar:   (input: ConfirmarGenerarInput, crearDrive: boolean): Promise<{ creados: number; actualizados: number }> => ipcRenderer.invoke('rrhh:nomina:confirmarGenerar', input, crearDrive),
+      exportXls:          (rows: Record<string, unknown>[]): Promise<string | null>               => ipcRenderer.invoke('rrhh:nomina:exportXls', rows),
     },
   },
 

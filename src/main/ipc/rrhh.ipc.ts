@@ -6,9 +6,16 @@ import {
   listColaboradores, listPeriodos, getPeriodo,
   listSueldosByPeriodo, getHistorialColaborador,
   confirmarPeriodo, deletePeriodo, getAusentesEnPeriodo,
-  updateSueldoNotas
+  updateSueldoNotas,
+  listColaboradoresConStats, getColaboradorById,
+  upsertColaboradorCompleto, softDeleteColaborador,
+  asignarLegajo, getNominaConfig, upsertNominaConfig
 } from '../database/queries/rrhh'
+import {
+  generarDesdeUltimoPeriodo, confirmarGenerarNomina, crearCarpetaDriveColaborador
+} from '../services/nomina.service'
 import { driveService } from '../services/drive.service'
+import type { UpsertColaboradorInput, ConfirmarGenerarInput } from '@shared/types'
 
 export function registerRrhhIpc(): void {
   ipcMain.handle('rrhh:savePayroll', (_e, filePath: string) =>
@@ -97,6 +104,70 @@ export function registerRrhhIpc(): void {
   ipcMain.handle('rrhh:drive:isAuthenticated', () =>
     driveService.isAuthenticated()
   )
+
+  // ── Nómina: colaboradores ────────────────────────────────────────────────
+  ipcMain.handle('rrhh:nomina:colaboradores:list', () =>
+    listColaboradoresConStats()
+  )
+
+  ipcMain.handle('rrhh:nomina:colaboradores:get', (_e, id: string) =>
+    getColaboradorById(id)
+  )
+
+  ipcMain.handle('rrhh:nomina:colaboradores:upsert', (_e, data: UpsertColaboradorInput) =>
+    upsertColaboradorCompleto(data)
+  )
+
+  ipcMain.handle('rrhh:nomina:colaboradores:delete', (_e, id: string) =>
+    softDeleteColaborador(id)
+  )
+
+  ipcMain.handle('rrhh:nomina:colaboradores:asignarLegajo', (_e, id: string) =>
+    asignarLegajo(id)
+  )
+
+  ipcMain.handle('rrhh:nomina:colaboradores:crearDrive', (_e, id: string) =>
+    crearCarpetaDriveColaborador(id)
+  )
+
+  // ── Nómina: config ───────────────────────────────────────────────────────
+  ipcMain.handle('rrhh:nomina:config:get', () =>
+    getNominaConfig()
+  )
+
+  ipcMain.handle('rrhh:nomina:config:upsert', (_e, data: Partial<{ drive_legajos_folder_id: string | null; ultimo_legajo_numero: number }>) =>
+    upsertNominaConfig(data)
+  )
+
+  // ── Nómina: generación desde último período ──────────────────────────────
+  ipcMain.handle('rrhh:nomina:generarDesdeUltimo', () =>
+    generarDesdeUltimoPeriodo()
+  )
+
+  ipcMain.handle('rrhh:nomina:confirmarGenerar', (_e, input: ConfirmarGenerarInput, crearDrive: boolean) =>
+    confirmarGenerarNomina(input, crearDrive)
+  )
+
+  // ── Nómina: export XLS ───────────────────────────────────────────────────
+  ipcMain.handle('rrhh:nomina:exportXls', async (event, rows: Record<string, unknown>[]) => {
+    if (!rows || rows.length === 0) throw new Error('Sin datos para exportar')
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const XLSX = require('xlsx')
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 16) }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Nómina')
+
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const { canceled, filePath: savePath } = await dialog.showSaveDialog(win!, {
+      title: 'Exportar nómina de colaboradores',
+      defaultPath: path.join(os.homedir(), 'Downloads', 'nomina_colaboradores.xlsx'),
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+    })
+    if (canceled || !savePath) return null
+    XLSX.writeFile(wb, savePath)
+    return savePath
+  })
 
   ipcMain.handle('rrhh:selectPdf', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)

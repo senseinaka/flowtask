@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SavePayrollResult, SaveVacacionesResult, RrhhPeriodoConStats, RrhhSueldoConColaborador, RrhhHistorialEntry } from '@shared/types'
+import type {
+  SavePayrollResult, SaveVacacionesResult,
+  RrhhPeriodoConStats, RrhhSueldoConColaborador, RrhhHistorialEntry,
+  RrhhColaborador, RrhhColaboradorConStats, RrhhNominaConfig,
+  UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
+} from '@shared/types'
 
 export function usePeriodos() {
   return useQuery<RrhhPeriodoConStats[]>({
@@ -80,5 +85,78 @@ export function useExportXls() {
   }>({
     mutationFn: ({ periodoLabel, defaultFileName, rows }) =>
       window.api.rrhh.exportXls(periodoLabel, defaultFileName, rows),
+  })
+}
+
+// ── Nómina de Colaboradores ───────────────────────────────────────────────────
+
+export function useNominaColaboradores() {
+  return useQuery<RrhhColaboradorConStats[]>({
+    queryKey: ['rrhh:nomina:colaboradores'],
+    queryFn: () => window.api.rrhh.nomina.colaboradores.list(),
+    staleTime: 30_000,
+  })
+}
+
+export function useNominaConfig() {
+  return useQuery<RrhhNominaConfig | null>({
+    queryKey: ['rrhh:nomina:config'],
+    queryFn: () => window.api.rrhh.nomina.config.get(),
+    staleTime: 60_000,
+  })
+}
+
+export function useUpsertColaborador() {
+  const qc = useQueryClient()
+  return useMutation<RrhhColaborador, Error, UpsertColaboradorInput>({
+    mutationFn: (data) => window.api.rrhh.nomina.colaboradores.upsert(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:colaboradores'] })
+    },
+  })
+}
+
+export function useDeleteColaborador() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+  })
+}
+
+export function useAsignarLegajo() {
+  const qc = useQueryClient()
+  return useMutation<string, Error, string>({
+    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.asignarLegajo(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+  })
+}
+
+export function useCrearDriveColaborador() {
+  const qc = useQueryClient()
+  return useMutation<string, Error, string>({
+    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.crearDrive(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+  })
+}
+
+export function useGenerarDesdeUltimo() {
+  return useMutation<GenerarDesdeUltimoResult, Error, void>({
+    mutationFn: () => window.api.rrhh.nomina.generarDesdeUltimo(),
+  })
+}
+
+export function useConfirmarGenerar() {
+  const qc = useQueryClient()
+  return useMutation<{ creados: number; actualizados: number }, Error, { input: ConfirmarGenerarInput; crearDrive: boolean }>({
+    mutationFn: ({ input, crearDrive }) => window.api.rrhh.nomina.confirmarGenerar(input, crearDrive),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+  })
+}
+
+export function useExportNominaXls() {
+  return useMutation<string | null, Error, Record<string, unknown>[]>({
+    mutationFn: (rows) => window.api.rrhh.nomina.exportXls(rows),
   })
 }

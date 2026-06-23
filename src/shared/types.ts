@@ -2928,6 +2928,105 @@ export interface RrhhColaborador {
   activo: number
   created_at: number
   updated_at: number
+  // Campos extendidos de Nómina
+  estado_laboral: string | null       // 'activo'|'inactivo'|'licencia'|'suspendido'|'externo'
+  fecha_egreso: string | null
+  motivo_egreso: string | null
+  sector: string | null
+  puesto: string | null
+  categoria_laboral: string | null
+  tipo_contratacion: string | null    // 'relacion_dependencia'|'monotributo'|'eventual'|'otro'
+  jornada: string | null              // 'completa'|'parcial'
+  modalidad: string | null            // 'presencial'|'remoto'|'hibrido'
+  email_personal: string | null
+  email_laboral: string | null
+  telefono: string | null
+  fecha_nacimiento: string | null
+  direccion: string | null
+  localidad: string | null
+  provincia: string | null
+  banco: string | null
+  cbu: string | null
+  drive_legajo_folder_id: string | null
+  sueldo_neto_actual: number | null
+  sueldo_bruto_actual: number | null
+  ultimo_periodo_liquidado: string | null
+  observaciones: string | null
+  legajo_estado: string | null        // 'completo'|'incompleto'|'pendiente'
+}
+
+export type EstadoLaboral = 'activo' | 'inactivo' | 'licencia' | 'suspendido' | 'externo'
+export type LegajoEstado  = 'completo' | 'incompleto' | 'pendiente'
+
+export interface RrhhColaboradorConStats extends RrhhColaborador {
+  total_periodos: number
+  ultimo_total_neto: number | null
+  ultimo_vacaciones_neto: number | null
+  ultimo_periodo_label: string | null
+}
+
+export interface RrhhNominaConfig {
+  id: string
+  workspace_id: string
+  drive_legajos_folder_id: string | null
+  ultimo_legajo_numero: number
+  created_at: number
+  updated_at: number
+}
+
+export interface UpsertColaboradorInput {
+  id?: string
+  documento: string
+  cuil?: string
+  nombre: string
+  tarea_habitual?: string
+  legajo?: string | null
+  fecha_ingreso?: string | null
+  estado_laboral?: string
+  fecha_egreso?: string | null
+  motivo_egreso?: string | null
+  sector?: string | null
+  puesto?: string | null
+  categoria_laboral?: string | null
+  tipo_contratacion?: string | null
+  jornada?: string | null
+  modalidad?: string | null
+  email_personal?: string | null
+  email_laboral?: string | null
+  telefono?: string | null
+  fecha_nacimiento?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  banco?: string | null
+  cbu?: string | null
+  sueldo_neto_actual?: number | null
+  sueldo_bruto_actual?: number | null
+  observaciones?: string | null
+  legajo_estado?: string | null
+}
+
+export interface GenerarDesdeUltimoEntry {
+  colaborador_id: string | null
+  nombre: string
+  documento: string
+  cuil: string
+  tarea: string
+  total_neto: number
+  vacaciones_neto: number | null
+  legajo: string | null
+  fecha_ingreso: string | null
+  esNuevo: boolean
+  esModificado: boolean
+}
+
+export interface GenerarDesdeUltimoResult {
+  periodoLabel: string
+  entries: GenerarDesdeUltimoEntry[]
+}
+
+export interface ConfirmarGenerarInput {
+  entries: GenerarDesdeUltimoEntry[]
 }
 
 export interface RrhhPeriodo {

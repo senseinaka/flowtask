@@ -23,6 +23,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
 - **Knowledge** *(en construcción — tablas y sync configurados, backend/UI pendientes)*: captura y organización de información (textos, archivos, imágenes) con resúmenes por IA y resúmenes globales por tema. Sincroniza vía PowerSync.
 - **RRHH — Sueldos:** administración mensual de sueldos por colaborador. Extrae datos de PDFs de recibos de sueldo, los guarda en Supabase via PowerSync, genera alertas inteligentes (nuevos, ausentes, variaciones), compara con el mes anterior y exporta planillas XLS. Los PDFs se almacenan en Google Drive (`Summit RRHH/Sueldos/MM-YYYY/`).
+- **RRHH — Nómina:** módulo de ficha de colaboradores. Registro completo (datos personales, laborales, bancarios, Drive). Genera la nómina desde la última liquidación, asigna legajos automáticos (4 dígitos), crea carpetas Drive en `Summit RRHH/Legajos/XXXX Nombre/` con subcarpetas, muestra historial salarial por colaborador con gráfico de área. Rutas: `/rrhh/nomina` y `/rrhh/nomina/:id`.
 - **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
 
 ### Visión a futuro
@@ -130,7 +131,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `company_finance_movement_entries`
 - Todas las tablas `comex_*` e `import_order_*` (incluidas `comex_logistics_quotes`, `comex_quote_files`)
 - `knowledge_entries`, `knowledge_global_summaries`
-- `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`
+- `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`, `rrhh_nomina_config`
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 

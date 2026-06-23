@@ -341,16 +341,57 @@ class DriveService {
     oauth2Client.setCredentials(store.get('tokens') as object)
     const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
-    const cached = store.get('rrhhRootFolderId', '') as string
-    let rrhhRoot = cached
-    if (!rrhhRoot) {
-      rrhhRoot = await this.getOrCreateFolder(drive, 'Summit RRHH')
-      store.set('rrhhRootFolderId', rrhhRoot)
-    }
-
+    const rrhhRoot = await this.getRrhhRootFolder(drive)
     const sueldosId = await this.getOrCreateFolder(drive, 'Sueldos', rrhhRoot)
     const folderName = `${String(mes).padStart(2, '0')}-${anio}`
     return this.getOrCreateFolder(drive, folderName, sueldosId)
+  }
+
+  private async getRrhhRootFolder(drive: ReturnType<typeof google.drive>): Promise<string> {
+    const cached = store.get('rrhhRootFolderId', '') as string
+    if (cached) return cached
+    const id = await this.getOrCreateFolder(drive, 'Summit RRHH')
+    store.set('rrhhRootFolderId', id)
+    return id
+  }
+
+  async getOrCreateLegajosFolder(): Promise<string> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+    const cached = store.get('rrhhLegajosFolderId', '') as string
+    if (cached) return cached
+
+    const rrhhRoot = await this.getRrhhRootFolder(drive)
+    const id = await this.getOrCreateFolder(drive, 'Legajos', rrhhRoot)
+    store.set('rrhhLegajosFolderId', id)
+    return id
+  }
+
+  /**
+   * Summit RRHH / Legajos / "0001 Juan Pérez" (legajo + nombre)
+   * Crea subfolders default si es nuevo: Documentos, Contratos, Recibos.
+   */
+  async getOrCreateColaboradorLegajoFolder(legajo: string, nombre: string): Promise<string> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+    const legajosRoot = await this.getOrCreateLegajosFolder()
+    const safeName = `${legajo} ${nombre}`.replace(/[/:*?"<>|]/g, '-').slice(0, 100).trim()
+    const folderId = await this.getOrCreateFolder(drive, safeName, legajosRoot)
+
+    // Crear subcarpetas default (silencioso — no falla si ya existen)
+    await Promise.all([
+      this.getOrCreateFolder(drive, 'Documentos personales', folderId).catch(() => null),
+      this.getOrCreateFolder(drive, 'Contratos', folderId).catch(() => null),
+      this.getOrCreateFolder(drive, 'Recibos', folderId).catch(() => null),
+    ])
+
+    return folderId
   }
 
   // ── Backup completo de la base de datos ──────────────────────────────────

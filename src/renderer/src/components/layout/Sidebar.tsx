@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud
+  ArrowLeftRight, Brain, Network, Cloud, BookUser
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -398,6 +398,9 @@ export default function Sidebar() {
               <GroupLabel label="RRHH" color="#f472b6" />
               {canRead('rrhh', 'sueldos') && (
                 <PanelLink to="/rrhh/sueldos" icon={Users} label="Sueldos" color="#f472b6" onClick={close} />
+              )}
+              {canRead('rrhh', 'sueldos') && (
+                <PanelLink to="/rrhh/nomina" icon={BookUser} label="Nómina" color="#f472b6" onClick={close} />
               )}
             </div>
           )}

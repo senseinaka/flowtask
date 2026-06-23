@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
 import type {
   RrhhColaborador, RrhhPeriodo, RrhhSueldo,
-  RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry
+  RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
+  RrhhColaboradorConStats, RrhhNominaConfig, UpsertColaboradorInput
 } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
@@ -296,6 +297,199 @@ export async function getHistorialColaborador(colaboradorId: string): Promise<Rr
     })
     .filter(Boolean) as RrhhHistorialEntry[]
 }
+
+// ── Colaboradores con stats (Nómina) ──────────────────────────────────────────
+
+export async function listColaboradoresConStats(): Promise<RrhhColaboradorConStats[]> {
+  const db = getPowerSyncDb()
+  const colaboradores = await db.getAll<RrhhColaborador>(
+    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? ORDER BY nombre ASC`,
+    [WORKSPACE_ID]
+  )
+  if (colaboradores.length === 0) return []
+
+  const ids = colaboradores.map(c => c.id)
+  const sueldos = await db.getAll<RrhhSueldo>(
+    `SELECT rs.*, rp.label AS __label, rp.anio AS __anio, rp.mes AS __mes
+     FROM rrhh_sueldos rs
+     JOIN rrhh_periodos rp ON rp.id = rs.periodo_id
+     WHERE rs.colaborador_id IN (${ids.map(() => '?').join(',')})
+     ORDER BY rp.anio DESC, rp.mes DESC`,
+    ids
+  )
+
+  const byColaborador = new Map<string, typeof sueldos>()
+  for (const s of sueldos) {
+    if (!byColaborador.has(s.colaborador_id)) byColaborador.set(s.colaborador_id, [])
+    byColaborador.get(s.colaborador_id)!.push(s)
+  }
+
+  return colaboradores.map(c => {
+    const hist = byColaborador.get(c.id) ?? []
+    const last = hist[0] ?? null
+    return {
+      ...c,
+      total_periodos: hist.length,
+      ultimo_total_neto:      last ? last.total_neto : null,
+      ultimo_vacaciones_neto: last ? (last.vacaciones_neto ?? null) : null,
+      ultimo_periodo_label:   last ? (last as unknown as Record<string, unknown>).__label as string : null,
+    }
+  })
+}
+
+export async function getColaboradorById(id: string): Promise<RrhhColaborador | null> {
+  return getPowerSyncDb().getOptional<RrhhColaborador>(
+    `SELECT * FROM rrhh_colaboradores WHERE id = ?`, [id]
+  )
+}
+
+export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): Promise<RrhhColaborador> {
+  const db = getPowerSyncDb()
+  const now = Date.now()
+
+  if (data.id) {
+    const existing = await getColaboradorById(data.id)
+    if (existing) {
+      await db.execute(
+        `UPDATE rrhh_colaboradores SET
+          documento = ?, cuil = ?, nombre = ?, tarea_habitual = ?,
+          legajo = ?, fecha_ingreso = ?, estado_laboral = ?,
+          fecha_egreso = ?, motivo_egreso = ?, sector = ?, puesto = ?,
+          categoria_laboral = ?, tipo_contratacion = ?, jornada = ?, modalidad = ?,
+          email_personal = ?, email_laboral = ?, telefono = ?, fecha_nacimiento = ?,
+          direccion = ?, localidad = ?, provincia = ?, banco = ?, cbu = ?,
+          sueldo_neto_actual = ?, sueldo_bruto_actual = ?,
+          observaciones = ?, legajo_estado = ?, updated_at = ?
+         WHERE id = ?`,
+        [
+          data.documento, data.cuil ?? existing.cuil, data.nombre,
+          data.tarea_habitual ?? existing.tarea_habitual,
+          data.legajo ?? existing.legajo, data.fecha_ingreso ?? existing.fecha_ingreso,
+          data.estado_laboral ?? existing.estado_laboral ?? 'activo',
+          data.fecha_egreso ?? existing.fecha_egreso,
+          data.motivo_egreso ?? existing.motivo_egreso,
+          data.sector ?? existing.sector, data.puesto ?? existing.puesto,
+          data.categoria_laboral ?? existing.categoria_laboral,
+          data.tipo_contratacion ?? existing.tipo_contratacion,
+          data.jornada ?? existing.jornada, data.modalidad ?? existing.modalidad,
+          data.email_personal ?? existing.email_personal,
+          data.email_laboral ?? existing.email_laboral,
+          data.telefono ?? existing.telefono,
+          data.fecha_nacimiento ?? existing.fecha_nacimiento,
+          data.direccion ?? existing.direccion, data.localidad ?? existing.localidad,
+          data.provincia ?? existing.provincia, data.banco ?? existing.banco,
+          data.cbu ?? existing.cbu,
+          data.sueldo_neto_actual ?? existing.sueldo_neto_actual,
+          data.sueldo_bruto_actual ?? existing.sueldo_bruto_actual,
+          data.observaciones ?? existing.observaciones,
+          data.legajo_estado ?? existing.legajo_estado ?? 'pendiente',
+          now, data.id,
+        ]
+      )
+      return (await getColaboradorById(data.id))!
+    }
+  }
+
+  // Create new
+  const id = data.id ?? randomUUID()
+  await db.execute(
+    `INSERT INTO rrhh_colaboradores
+      (id, workspace_id, documento, cuil, nombre, tarea_habitual,
+       legajo, fecha_ingreso, activo, estado_laboral,
+       fecha_egreso, motivo_egreso, sector, puesto, categoria_laboral,
+       tipo_contratacion, jornada, modalidad,
+       email_personal, email_laboral, telefono, fecha_nacimiento,
+       direccion, localidad, provincia, banco, cbu,
+       sueldo_neto_actual, sueldo_bruto_actual,
+       observaciones, legajo_estado, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id, WORKSPACE_ID, data.documento, data.cuil ?? '', data.nombre,
+      data.tarea_habitual ?? '', data.legajo ?? null, data.fecha_ingreso ?? null,
+      data.estado_laboral ?? 'activo', data.fecha_egreso ?? null,
+      data.motivo_egreso ?? null, data.sector ?? null, data.puesto ?? null,
+      data.categoria_laboral ?? null, data.tipo_contratacion ?? null,
+      data.jornada ?? null, data.modalidad ?? null,
+      data.email_personal ?? null, data.email_laboral ?? null,
+      data.telefono ?? null, data.fecha_nacimiento ?? null,
+      data.direccion ?? null, data.localidad ?? null, data.provincia ?? null,
+      data.banco ?? null, data.cbu ?? null,
+      data.sueldo_neto_actual ?? null, data.sueldo_bruto_actual ?? null,
+      data.observaciones ?? null, data.legajo_estado ?? 'pendiente',
+      now, now,
+    ]
+  )
+  return (await getColaboradorById(id))!
+}
+
+export async function updateColaboradorDrive(id: string, folderId: string): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_colaboradores SET drive_legajo_folder_id = ?, updated_at = ? WHERE id = ?`,
+    [folderId, Date.now(), id]
+  )
+}
+
+export async function softDeleteColaborador(id: string): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_colaboradores SET activo = 0, estado_laboral = 'inactivo', updated_at = ? WHERE id = ?`,
+    [Date.now(), id]
+  )
+}
+
+export async function getNextLegajoNumber(): Promise<number> {
+  const db = getPowerSyncDb()
+  // Max legajo numérico ya asignado
+  const row = await db.getOptional<{ max_leg: string | null }>(
+    `SELECT MAX(CAST(legajo AS INTEGER)) AS max_leg FROM rrhh_colaboradores WHERE workspace_id = ? AND legajo IS NOT NULL`,
+    [WORKSPACE_ID]
+  )
+  return (Number(row?.max_leg ?? 0)) + 1
+}
+
+export async function asignarLegajo(colaboradorId: string): Promise<string> {
+  const next = await getNextLegajoNumber()
+  const legajo = String(next).padStart(4, '0')
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_colaboradores SET legajo = ?, updated_at = ? WHERE id = ?`,
+    [legajo, Date.now(), colaboradorId]
+  )
+  return legajo
+}
+
+// ── Nómina Config ─────────────────────────────────────────────────────────────
+
+export async function getNominaConfig(): Promise<RrhhNominaConfig | null> {
+  return getPowerSyncDb().getOptional<RrhhNominaConfig>(
+    `SELECT * FROM rrhh_nomina_config WHERE workspace_id = ?`, [WORKSPACE_ID]
+  )
+}
+
+export async function upsertNominaConfig(data: Partial<Omit<RrhhNominaConfig, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>): Promise<RrhhNominaConfig> {
+  const db = getPowerSyncDb()
+  const now = Date.now()
+  const existing = await getNominaConfig()
+
+  if (existing) {
+    const sets: string[] = []
+    const vals: unknown[] = []
+    if ('drive_legajos_folder_id' in data) { sets.push('drive_legajos_folder_id = ?'); vals.push(data.drive_legajos_folder_id ?? null) }
+    if ('ultimo_legajo_numero' in data) { sets.push('ultimo_legajo_numero = ?'); vals.push(data.ultimo_legajo_numero) }
+    sets.push('updated_at = ?'); vals.push(now)
+    vals.push(existing.id)
+    await db.execute(`UPDATE rrhh_nomina_config SET ${sets.join(', ')} WHERE id = ?`, vals)
+    return (await getNominaConfig())!
+  }
+
+  const id = randomUUID()
+  await db.execute(
+    `INSERT INTO rrhh_nomina_config (id, workspace_id, drive_legajos_folder_id, ultimo_legajo_numero, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, WORKSPACE_ID, data.drive_legajos_folder_id ?? null, data.ultimo_legajo_numero ?? 0, now, now]
+  )
+  return (await getNominaConfig())!
+}
+
+// ── Ausentes ──────────────────────────────────────────────────────────────────
 
 export async function getAusentesEnPeriodo(periodoId: string): Promise<RrhhColaborador[]> {
   const db = getPowerSyncDb()
