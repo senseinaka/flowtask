@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList
 } from 'recharts'
 import {
   Upload, Loader2, TrendingUp, TrendingDown, Users,
   ChevronRight, FolderOpen, AlertTriangle, CheckCircle2,
-  ExternalLink, Minus, Umbrella
+  ExternalLink, Minus
 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import { usePeriodos, useSavePayroll, useSaveVacaciones, useDeletePeriodo } from '../../hooks/useRrhh'
@@ -18,7 +18,7 @@ function fmt(n: number): string {
   return `$${Math.round(n).toLocaleString('es-AR').replace(/,/g, '.')}`
 }
 
-function fmtK(n: number): string {
+function fmtM(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000)     return `$${Math.round(n / 1_000)}K`
   return fmt(n)
@@ -48,7 +48,7 @@ function KpiBar({ periodos }: { periodos: RrhhPeriodoConStats[] }) {
             : 'text-slate-500',
         },
         { label: 'Colaboradores', value: String(ultimo.cantidad_colaboradores), sub: 'activos este período' },
-        { label: 'Promedio', value: fmtK(promedio), sub: 'por colaborador' },
+        { label: 'Promedio', value: fmtM(promedio), sub: 'por colaborador' },
       ].map(({ label, value, sub, color }) => (
         <div key={label} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{label}</p>
@@ -62,30 +62,96 @@ function KpiBar({ periodos }: { periodos: RrhhPeriodoConStats[] }) {
 
 // ── Bar chart ─────────────────────────────────────────────────────────────────
 
+interface ChartRow {
+  label: string
+  sueldos: number
+  vacaciones: number
+  labelVal: number  // always 0, used as anchor for the top label
+  total: number
+  colabs: number
+}
+
+function CustomXTick(props: { x?: number; y?: number; payload?: { value: string; index: number }; chartData?: ChartRow[] }) {
+  const { x = 0, y = 0, payload, chartData } = props
+  if (!payload) return null
+  const row = chartData?.[payload.index]
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={8}  textAnchor="middle" fill="#64748b" fontSize={10}>{payload.value}</text>
+      <text x={0} y={21} textAnchor="middle" fill="#475569" fontSize={9}>{row?.colabs ?? ''} col.</text>
+    </g>
+  )
+}
+
 function NominaChart({ periodos }: { periodos: RrhhPeriodoConStats[] }) {
   if (periodos.length < 2) return null
-  const data = [...periodos].reverse().map(p => ({
-    label: p.label.split(' ')[0].slice(0, 3),
-    total: p.total_neto + (p.total_vacaciones ?? 0),
-    promedio: p.cantidad_colaboradores > 0 ? (p.total_neto + (p.total_vacaciones ?? 0)) / p.cantidad_colaboradores : 0,
-  }))
+
+  const data: ChartRow[] = [...periodos].reverse().map(p => {
+    const sueldos    = p.total_neto
+    const vacaciones = p.total_vacaciones ?? 0
+    return {
+      label:      p.label.split(' ')[0].slice(0, 3),
+      sueldos,
+      vacaciones,
+      labelVal:   0,
+      total:      sueldos + vacaciones,
+      colabs:     p.cantidad_colaboradores,
+    }
+  })
+
   const maxVal = Math.max(...data.map(d => d.total))
+  const hasAnyVac = data.some(d => d.vacaciones > 0)
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-      <p className="text-xs font-semibold text-slate-400 mb-3">Evolución de nómina</p>
-      <ResponsiveContainer width="100%" height={120}>
-        <BarChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-          <YAxis hide domain={[0, maxVal * 1.1]} />
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-slate-400">Evolución de nómina</p>
+        {hasAnyVac && (
+          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-pink-400" />
+              Sueldos
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-sky-400" />
+              Vacaciones
+            </span>
+          </div>
+        )}
+      </div>
+      <ResponsiveContainer width="100%" height={148}>
+        <BarChart data={data} margin={{ top: 22, right: 4, left: 4, bottom: 4 }}>
+          <XAxis
+            dataKey="label"
+            tick={<CustomXTick chartData={data} />}
+            axisLine={false}
+            tickLine={false}
+            height={32}
+          />
+          <YAxis hide domain={[0, maxVal * 1.22]} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,.04)' }}
             contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-            formatter={(v: number) => [fmt(v), 'Total']}
             labelStyle={{ color: '#94a3b8' }}
+            formatter={(v: number, name: string) => {
+              if (name === 'sueldos')    return [fmt(v), 'Sueldos']
+              if (name === 'vacaciones') return [fmt(v), 'Vacaciones']
+              return [null, '']
+            }}
           />
-          <Bar dataKey="total" fill="#f472b6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-          <ReferenceLine y={data[data.length - 1]?.promedio ?? 0} stroke="#64748b" strokeDasharray="3 3" />
+          {/* Sueldos — bottom of stack */}
+          <Bar dataKey="sueldos" fill="#f472b6" stackId="a" maxBarSize={44} isAnimationActive={false} />
+          {/* Vacaciones — top of stack, rounded top corners only when > 0 */}
+          <Bar dataKey="vacaciones" fill="#38bdf8" stackId="a" maxBarSize={44} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+          {/* Invisible bar — sits at the very top, carries the total label */}
+          <Bar dataKey="labelVal" fill="transparent" stackId="a" maxBarSize={44} isAnimationActive={false}>
+            <LabelList
+              dataKey="total"
+              position="top"
+              style={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+              formatter={(v: number) => fmtM(v)}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -98,7 +164,7 @@ function AlertsPanel({ result, onClose }: { result: SavePayrollResult; onClose: 
   const { alerts, colaboradoresNuevos, colaboradoresActualizados } = result
   if (alerts.length === 0) return null
 
-  const nuevos  = alerts.filter(a => a.type === 'nuevo')
+  const nuevos   = alerts.filter(a => a.type === 'nuevo')
   const ausentes = alerts.filter(a => a.type === 'ausente')
   const cambios  = alerts.filter(a => a.type === 'aumento' || a.type === 'baja')
 
@@ -143,10 +209,10 @@ function AlertsPanel({ result, onClose }: { result: SavePayrollResult; onClose: 
 function PeriodoCard({
   periodo, onClick
 }: { periodo: RrhhPeriodoConStats; onClick: () => void }) {
-  const hasDrive = !!periodo.pdf_drive_folder_id
+  const hasDrive     = !!periodo.pdf_drive_folder_id
   const isConfirmado = periodo.estado === 'confirmado'
-  const hasVac = (periodo.total_vacaciones ?? 0) > 0
-  const grand = periodo.total_neto + (periodo.total_vacaciones ?? 0)
+  const hasVac       = (periodo.total_vacaciones ?? 0) > 0
+  const grand        = periodo.total_neto + (periodo.total_vacaciones ?? 0)
 
   return (
     <button
@@ -171,10 +237,7 @@ function PeriodoCard({
       {hasVac ? (
         <div className="space-y-0.5 mb-2">
           <p className="text-[11px] text-slate-400">Sueldos: <span className="text-slate-200 font-medium">{fmt(periodo.total_neto)}</span></p>
-          <p className="text-[11px] text-slate-400 flex items-center gap-1">
-            <Umbrella size={10} className="text-sky-400" />
-            Vacaciones: <span className="text-sky-300 font-medium">{fmt(periodo.total_vacaciones!)}</span>
-          </p>
+          <p className="text-[11px] text-slate-400">Vacaciones: <span className="text-sky-300 font-medium">{fmt(periodo.total_vacaciones!)}</span></p>
           <p className="text-base font-bold text-slate-100">Total: {fmt(grand)}</p>
         </div>
       ) : (
@@ -197,8 +260,7 @@ function PeriodoCard({
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[10px] text-slate-600 group-hover:text-slate-400 transition-colors">
-        <span>Pago: {periodo.fecha_pago || '—'}</span>
+      <div className="mt-3 flex justify-end text-slate-700 group-hover:text-slate-500 transition-colors">
         <ChevronRight size={13} />
       </div>
     </button>
@@ -231,8 +293,10 @@ function UploadZone({
     if (p) onFilePath(p)
   }
 
-  const borderActive   = accent === 'pink' ? 'border-pink-500 bg-pink-950/10' : 'border-sky-500 bg-sky-950/10'
-  const iconColor      = accent === 'pink' ? 'text-pink-400' : 'text-sky-400'
+  const borderActive = accent === 'pink' ? 'border-pink-500 bg-pink-950/10' : 'border-sky-500 bg-sky-950/10'
+  const iconClass    = dragOver
+    ? (accent === 'pink' ? 'text-pink-400' : 'text-sky-400')
+    : (accent === 'sky'  ? 'text-sky-600'  : 'text-slate-500')
 
   return (
     <div
@@ -247,11 +311,8 @@ function UploadZone({
           : 'border-slate-700 hover:border-slate-600 bg-slate-800/40'
       )}
     >
-      {accent === 'sky'
-        ? <Umbrella size={16} className={dragOver ? iconColor : 'text-slate-500'} />
-        : <Upload size={16} className={dragOver ? iconColor : 'text-slate-500'} />
-      }
-      <span className="text-xs text-slate-400">
+      <Upload size={16} className={iconClass} />
+      <span className={cn('text-xs', accent === 'sky' && !dragOver ? 'text-sky-600' : 'text-slate-400')}>
         {dragOver ? 'Soltá el PDF aquí' : label}
       </span>
     </div>
@@ -263,18 +324,13 @@ function UploadZone({
 export default function SueldosDashboard() {
   const navigate = useNavigate()
   const { data: periodos = [], isLoading } = usePeriodos()
-  const savePayroll = useSavePayroll()
+  const savePayroll   = useSavePayroll()
   const saveVacaciones = useSaveVacaciones()
-  const [lastResult, setLastResult] = useState<SavePayrollResult | null>(null)
   const [lastVacResult, setLastVacResult] = useState<SaveVacacionesResult | null>(null)
 
   function handleFile(filePath: string) {
-    setLastResult(null)
     savePayroll.mutate(filePath, {
-      onSuccess: result => {
-        setLastResult(result)
-        navigate(`/rrhh/sueldos/${result.periodo.id}`)
-      }
+      onSuccess: result => navigate(`/rrhh/sueldos/${result.periodo.id}`)
     })
   }
 
@@ -312,13 +368,13 @@ export default function SueldosDashboard() {
       {/* Upload zones */}
       <div className="grid grid-cols-2 gap-3">
         <UploadZone
-          label="Arrastrá o hacé clic para subir sueldos del mes"
+          label="Sueldos del mes"
           accent="pink"
           onFilePath={handleFile}
           selectFn={() => window.api.rrhh.selectPdf()}
         />
         <UploadZone
-          label="Arrastrá o hacé clic para subir vacaciones"
+          label="Vacaciones"
           accent="sky"
           onFilePath={handleVacFile}
           selectFn={() => window.api.rrhh.selectVacacionesPdf()}
@@ -342,7 +398,7 @@ export default function SueldosDashboard() {
       {/* Vacaciones no-match warning */}
       {lastVacResult && lastVacResult.colaboradoresSinMatch.length > 0 && (
         <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs text-amber-400">
-          <p className="font-semibold mb-1">Sin match en sueldos:</p>
+          <p className="font-semibold mb-1">Sin match de documento en sueldos:</p>
           {lastVacResult.colaboradoresSinMatch.map(n => <p key={n}>{n}</p>)}
         </div>
       )}
