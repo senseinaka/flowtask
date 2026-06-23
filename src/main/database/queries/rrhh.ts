@@ -69,9 +69,11 @@ export async function listPeriodos(): Promise<RrhhPeriodoConStats[]> {
 
   return periodos.map((p, idx) => {
     const prev = periodos[idx + 1] ?? null
-    const delta_total = prev ? p.total_neto - prev.total_neto : null
-    const delta_pct = prev && prev.total_neto > 0
-      ? Math.round(((p.total_neto - prev.total_neto) / prev.total_neto) * 1000) / 10
+    const curGrand  = p.total_neto + (p.total_vacaciones ?? 0)
+    const prevGrand = prev ? prev.total_neto + (prev.total_vacaciones ?? 0) : 0
+    const delta_total = prev ? curGrand - prevGrand : null
+    const delta_pct = prev && prevGrand > 0
+      ? Math.round(((curGrand - prevGrand) / prevGrand) * 1000) / 10
       : null
     return { ...p, delta_total, delta_pct }
   })
@@ -116,6 +118,17 @@ export async function updatePeriodoDrive(id: string, driveFileId: string, driveF
   )
 }
 
+export async function updatePeriodoVacaciones(id: string, data: {
+  total_vacaciones: number
+  pdf_vacaciones_nombre: string
+  pdf_vacaciones_drive_file_id?: string | null
+}): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_periodos SET total_vacaciones = ?, pdf_vacaciones_nombre = ?, pdf_vacaciones_drive_file_id = ?, updated_at = ? WHERE id = ?`,
+    [data.total_vacaciones, data.pdf_vacaciones_nombre, data.pdf_vacaciones_drive_file_id ?? null, Date.now(), id]
+  )
+}
+
 export async function updatePeriodoStats(id: string, data: {
   total_neto: number
   cantidad_colaboradores: number
@@ -138,6 +151,25 @@ export async function updateSueldoNotas(id: string, notas: string | null): Promi
   await getPowerSyncDb().execute(
     `UPDATE rrhh_sueldos SET notas = ?, updated_at = ? WHERE id = ?`,
     [notas, Date.now(), id]
+  )
+}
+
+export async function updateSueldoVacaciones(data: {
+  periodoId: string
+  colaboradorId: string
+  vacaciones_neto: number
+  vacaciones_dias: number
+}): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_sueldos SET vacaciones_neto = ?, vacaciones_dias = ?, updated_at = ? WHERE periodo_id = ? AND colaborador_id = ?`,
+    [data.vacaciones_neto, data.vacaciones_dias, Date.now(), data.periodoId, data.colaboradorId]
+  )
+}
+
+export async function getSueldoByPeriodoColaborador(periodoId: string, colaboradorId: string): Promise<RrhhSueldo | null> {
+  return getPowerSyncDb().getOptional<RrhhSueldo>(
+    `SELECT * FROM rrhh_sueldos WHERE periodo_id = ? AND colaborador_id = ?`,
+    [periodoId, colaboradorId]
   )
 }
 
@@ -191,9 +223,12 @@ export async function listSueldosByPeriodo(periodoId: string): Promise<RrhhSueld
   return sueldos.map(s => {
     const colaborador = colaboradoresMap.get(s.colaborador_id)!
     const prev = prevMap.get(s.colaborador_id) ?? null
-    const delta_importe = prev ? s.total_neto - prev.total_neto : null
-    const delta_pct = prev && prev.total_neto > 0
-      ? Math.round(((s.total_neto - prev.total_neto) / prev.total_neto) * 1000) / 10
+    // Delta compares sueldo+vacaciones total vs previous sueldo+vacaciones total
+    const curTotal  = s.total_neto + (s.vacaciones_neto ?? 0)
+    const prevTotal = prev ? prev.total_neto + (prev.vacaciones_neto ?? 0) : 0
+    const delta_importe = prev ? curTotal - prevTotal : null
+    const delta_pct = prev && prevTotal > 0
+      ? Math.round(((curTotal - prevTotal) / prevTotal) * 1000) / 10
       : null
     return {
       ...s,

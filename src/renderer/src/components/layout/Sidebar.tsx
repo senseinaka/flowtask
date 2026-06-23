@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud, Receipt
+  ArrowLeftRight, Brain, Network, Cloud
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -63,7 +63,7 @@ const WORKSPACES: Array<{
   {
     key: 'rrhh',
     label: 'RRHH',
-    Icon: Receipt,
+    Icon: Users,
     color: '#f472b6',
     activeBg: 'rgba(244,114,182,.12)',
     paths: ['/rrhh/sueldos'],
@@ -201,7 +201,7 @@ export default function Sidebar() {
     <aside
       ref={asideRef}
       className="flex-shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col relative"
-      style={{ width: 52 }}
+      style={{ width: 60 }}
     >
       {/* Logo — ascending bar-chart mark (bars-only on dark rail) */}
       <div className="flex items-center justify-center py-[18px] border-b border-slate-700">
@@ -222,13 +222,14 @@ export default function Sidebar() {
               title={label}
               aria-label={label}
               onClick={() => toggle(key)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-100"
+              className="w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100"
               style={{
                 color: highlighted ? color : '#64748b',
                 background: highlighted ? activeBg : 'transparent',
               }}
             >
-              <Icon size={16} />
+              <Icon size={15} />
+              <span className="text-[8px] leading-none font-medium tracking-wide">{label}</span>
             </button>
           )
         })}
@@ -396,7 +397,7 @@ export default function Sidebar() {
             <div className="p-2 space-y-0.5">
               <GroupLabel label="RRHH" color="#f472b6" />
               {canRead('rrhh', 'sueldos') && (
-                <PanelLink to="/rrhh/sueldos" icon={Receipt} label="Sueldos" color="#f472b6" onClick={close} />
+                <PanelLink to="/rrhh/sueldos" icon={Users} label="Sueldos" color="#f472b6" onClick={close} />
               )}
             </div>
           )}

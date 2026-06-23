@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SavePayrollResult, RrhhPeriodoConStats, RrhhSueldoConColaborador, RrhhHistorialEntry } from '@shared/types'
+import type { SavePayrollResult, SaveVacacionesResult, RrhhPeriodoConStats, RrhhSueldoConColaborador, RrhhHistorialEntry } from '@shared/types'
 
 export function usePeriodos() {
   return useQuery<RrhhPeriodoConStats[]>({
@@ -33,6 +33,17 @@ export function useSavePayroll() {
     mutationFn: (filePath) => window.api.rrhh.savePayroll(filePath),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rrhh:periodos'] })
+    },
+  })
+}
+
+export function useSaveVacaciones() {
+  const qc = useQueryClient()
+  return useMutation<SaveVacacionesResult, Error, string>({
+    mutationFn: (filePath) => window.api.rrhh.saveVacaciones(filePath),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rrhh:periodos'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:sueldos'] })
     },
   })
 }

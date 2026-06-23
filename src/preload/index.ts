@@ -55,7 +55,7 @@ import type {
   PayrollExtractionResult,
   RrhhColaborador, RrhhPeriodo, RrhhSueldo,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
-  RrhhSmartAlert, SavePayrollResult
+  RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1084,7 +1084,9 @@ const api = {
 
   rrhh: {
     savePayroll:             (filePath: string): Promise<SavePayrollResult>                        => ipcRenderer.invoke('rrhh:savePayroll', filePath),
+    saveVacaciones:          (filePath: string): Promise<SaveVacacionesResult>                     => ipcRenderer.invoke('rrhh:saveVacaciones', filePath),
     selectPdf:               (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectPdf'),
+    selectVacacionesPdf:     (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectVacacionesPdf'),
     colaboradores: {
       list:                  (): Promise<RrhhColaborador[]>                                        => ipcRenderer.invoke('rrhh:colaboradores:list'),
       historial:             (colaboradorId: string): Promise<RrhhHistorialEntry[]>               => ipcRenderer.invoke('rrhh:colaboradores:historial', colaboradorId),

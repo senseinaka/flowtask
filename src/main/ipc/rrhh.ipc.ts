@@ -1,7 +1,7 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import path from 'path'
 import os from 'os'
-import { savePayroll } from '../services/rrhh.service'
+import { savePayroll, saveVacaciones } from '../services/rrhh.service'
 import {
   listColaboradores, listPeriodos, getPeriodo,
   listSueldosByPeriodo, getHistorialColaborador,
@@ -13,6 +13,10 @@ import { driveService } from '../services/drive.service'
 export function registerRrhhIpc(): void {
   ipcMain.handle('rrhh:savePayroll', (_e, filePath: string) =>
     savePayroll(filePath)
+  )
+
+  ipcMain.handle('rrhh:saveVacaciones', (_e, filePath: string) =>
+    saveVacaciones(filePath)
   )
 
   ipcMain.handle('rrhh:colaboradores:list', () =>
@@ -99,6 +103,17 @@ export function registerRrhhIpc(): void {
     if (!win) return null
     const result = await dialog.showOpenDialog(win, {
       title: 'Seleccionar recibo de sueldos',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      properties: ['openFile'],
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('rrhh:selectVacacionesPdf', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar recibo de vacaciones',
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
       properties: ['openFile'],
     })

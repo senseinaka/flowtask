@@ -2896,6 +2896,8 @@ export interface PayrollEmployee {
   totalNetoRaw: number
   legajo: string
   fechaIngreso: string
+  isVacaciones: boolean
+  vacacionesDias: number
 }
 
 export interface PayrollValidation {
@@ -2941,6 +2943,9 @@ export interface RrhhPeriodo {
   pdf_drive_folder_id: string | null
   fecha_pago: string
   estado: 'borrador' | 'confirmado'
+  total_vacaciones: number | null
+  pdf_vacaciones_nombre: string | null
+  pdf_vacaciones_drive_file_id: string | null
   created_at: number
   updated_at: number
 }
@@ -2954,6 +2959,8 @@ export interface RrhhSueldo {
   tarea: string
   periodo_abonado: string
   notas: string | null
+  vacaciones_neto: number | null
+  vacaciones_dias: number | null
   created_at: number
   updated_at: number
 }
@@ -2990,4 +2997,11 @@ export interface RrhhHistorialEntry {
   sueldo: RrhhSueldo
   delta_importe: number | null
   delta_pct: number | null
+}
+
+export interface SaveVacacionesResult {
+  periodo: RrhhPeriodo
+  colaboradoresActualizados: number
+  colaboradoresNuevos: number
+  colaboradoresSinMatch: string[]
 }

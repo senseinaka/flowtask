@@ -6,7 +6,7 @@ import {
 import {
   ArrowLeft, TrendingUp, TrendingDown, FolderOpen,
   ExternalLink, CheckCircle2, AlertTriangle,
-  Loader2, X, FileSpreadsheet, Search, ChevronDown
+  Loader2, X, FileSpreadsheet, Search, ChevronDown, Umbrella
 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import {
@@ -331,7 +331,9 @@ export default function PeriodoDetail() {
     return 0
   }), [filtered, sortKey])
 
-  const totalNeto = sueldos.reduce((s, e) => s + e.total_neto, 0)
+  const totalSueldos = sueldos.reduce((s, e) => s + e.total_neto, 0)
+  const totalVacaciones = sueldos.reduce((s, e) => s + (e.vacaciones_neto ?? 0), 0)
+  const totalNeto = totalSueldos + totalVacaciones
   const nuevos = sueldos.filter(s => s.es_nuevo).length
 
   function buildXlsRows(rows: RrhhSueldoConColaborador[]) {
@@ -344,6 +346,8 @@ export default function PeriodoDetail() {
       'Antigüedad':         calcAntiguedad(s.colaborador.fecha_ingreso),
       'Mes':                periodoShort(s.periodo_abonado),
       'Total Neto':         s.total_neto,
+      'Vacaciones':         s.vacaciones_neto ?? '',
+      'Días Vacaciones':    s.vacaciones_dias ?? '',
       'Variación ($)':      s.delta_importe ?? '',
       'Variación (%)':      s.delta_pct !== null ? `${s.delta_pct > 0 ? '+' : ''}${s.delta_pct.toFixed(1)}%` : '',
       'Estado':             s.es_nuevo ? 'NUEVO' : '',
@@ -411,8 +415,19 @@ export default function PeriodoDetail() {
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* KPIs */}
         <div className="flex-shrink-0 grid grid-cols-4 gap-3 px-6 pt-5 pb-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Total nómina</p>
+            <p className="text-xl font-bold text-slate-100">{fmt(totalNeto)}</p>
+            {totalVacaciones > 0 && (
+              <div className="mt-1 space-y-0.5">
+                <p className="text-[10px] text-slate-500">Sueldos: {fmt(totalSueldos)}</p>
+                <p className="text-[10px] text-sky-400 flex items-center gap-0.5">
+                  <Umbrella size={9} /> Vacaciones: {fmt(totalVacaciones)}
+                </p>
+              </div>
+            )}
+          </div>
           {[
-            { label: 'Total nómina', value: fmt(totalNeto), color: '' },
             { label: 'vs mes anterior', value: periodo.delta_pct !== null ? `${periodo.delta_pct > 0 ? '+' : ''}${periodo.delta_pct.toFixed(1)}%` : '—', color: periodo.delta_pct !== null ? (periodo.delta_pct > 0 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-500' },
             { label: 'Colaboradores', value: String(sueldos.length), extra: nuevos > 0 ? `+${nuevos} nuevos` : '' },
             { label: 'Promedio', value: sueldos.length ? fmt(totalNeto / sueldos.length) : '—', color: '' },
@@ -475,7 +490,7 @@ export default function PeriodoDetail() {
             <div className="flex justify-center py-12"><Loader2 size={16} className="animate-spin text-slate-500" /></div>
           ) : (
             <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs" style={{ minWidth: 1000 }}>
+              <table className="w-full text-left text-xs" style={{ minWidth: 1150 }}>
                 <thead className="sticky top-0 z-10 bg-slate-800 border-b border-slate-700">
                   <tr>
                     <SortTh label="Apellido y Nombres" k="nombre" current={sortKey} onSort={setSortKey} />
@@ -486,6 +501,8 @@ export default function PeriodoDetail() {
                     <SortTh label="Antigüedad" k="antiguedad" current={sortKey} onSort={setSortKey} />
                     <PlainTh label="Mes" className="text-center" />
                     <SortTh label="Total Neto" k="total_neto" current={sortKey} onSort={setSortKey} className="text-right" />
+                    <PlainTh label="Vacaciones" className="text-right" />
+                    <PlainTh label="Días" className="text-center" />
                     <SortTh label="Variación" k="delta_pct" current={sortKey} onSort={setSortKey} className="text-right" />
                     <PlainTh label="Notas" />
                     <th className="px-3 py-2.5 w-8" />
@@ -537,6 +554,22 @@ export default function PeriodoDetail() {
                         <span className="font-semibold text-emerald-400">{fmt(s.total_neto)}</span>
                       </td>
 
+                      {/* Vacaciones */}
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        {s.vacaciones_neto != null && s.vacaciones_neto > 0
+                          ? <span className="font-semibold text-sky-400">{fmt(s.vacaciones_neto)}</span>
+                          : <span className="text-slate-700">—</span>
+                        }
+                      </td>
+
+                      {/* Días vacaciones */}
+                      <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                        {s.vacaciones_dias != null && s.vacaciones_dias > 0
+                          ? <span className="text-sky-300 font-mono text-[11px]">{s.vacaciones_dias}d</span>
+                          : <span className="text-slate-700">—</span>
+                        }
+                      </td>
+
                       {/* Variación */}
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
                         {s.delta_importe !== null && s.delta_pct !== null ? (
@@ -562,7 +595,7 @@ export default function PeriodoDetail() {
                     </tr>
                   ))}
                   {sorted.length === 0 && (
-                    <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-600 text-xs">Sin resultados</td></tr>
+                    <tr><td colSpan={13} className="px-4 py-8 text-center text-slate-600 text-xs">Sin resultados</td></tr>
                   )}
                 </tbody>
               </table>

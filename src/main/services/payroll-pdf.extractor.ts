@@ -108,6 +108,43 @@ function findPeriodo(rows: Map<number, PdfTextItem[]>): string {
   return ''
 }
 
+// Vacation days: find "VACACIONES" concept row and return its "Unidades" value
+// The PDF has concept rows like: | VACACIONES | ... | 7.00 | ...
+// "Unidades" is the first numeric value to the right of the "VACACIONES" label
+function findVacacionesDias(rows: Map<number, PdfTextItem[]>): number {
+  for (const [y, items] of topToBottom(rows)) {
+    // Find a row containing the word VACACIONES (as concept label)
+    const hasVac = items.some(i => norm(i.str) === 'VACACIONES')
+    if (!hasVac) continue
+
+    // The unidades value is the first number to the right of the VACACIONES item
+    const vacItem = items.find(i => norm(i.str) === 'VACACIONES')
+    if (!vacItem) continue
+
+    const nums = [...items]
+      .filter(i => i.x > vacItem.x + 5 && /^\d[\d.,]*$/.test(i.str.trim()))
+      .sort((a, b) => a.x - b.x)
+
+    if (nums.length) {
+      const val = parseFloat(nums[0].str.replace(',', '.'))
+      if (!isNaN(val) && val > 0 && val <= 366) return Math.round(val)
+    }
+    // Also try next row (some PDFs put unidades below)
+    for (const [y2, items2] of topToBottom(rows)) {
+      if (y2 >= y - 1) continue
+      if (y - y2 > 30) break
+      const nums2 = [...items2]
+        .filter(i => Math.abs(i.x - vacItem.x) <= 40 && /^\d[\d.,]*$/.test(i.str.trim()))
+        .sort((a, b) => a.x - b.x)
+      if (nums2.length) {
+        const val = parseFloat(nums2[0].str.replace(',', '.'))
+        if (!isNaN(val) && val > 0 && val <= 366) return Math.round(val)
+      }
+    }
+  }
+  return 0
+}
+
 // Total neto: find "TOTAL NETO" label, take the numeric value to its right
 function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatted: string } {
   const pos = findLabel(rows, ['TOTAL NETO'])
@@ -156,6 +193,10 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
   const periodo      = findPeriodo(leftRows)
   const { raw: totalNetoRaw, formatted: totalNeto } = findTotalNeto(leftRows)
 
+  // Vacation detection: período contains "Vacaciones" (case-insensitive)
+  const isVacaciones = /vacaciones/i.test(periodo)
+  const vacacionesDias = isVacaciones ? findVacacionesDias(leftRows) : 0
+
   if (!apellido) return null
 
   return {
@@ -170,6 +211,8 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
     totalNetoRaw,
     legajo,
     fechaIngreso,
+    isVacaciones,
+    vacacionesDias,
   }
 }
 

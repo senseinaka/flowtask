@@ -962,34 +962,39 @@ const rrhh_colaboradores = new Table(
 
 const rrhh_periodos = new Table(
   {
-    workspace_id:           column.text,
-    anio:                   column.integer,
-    mes:                    column.integer,
-    label:                  column.text,
-    total_neto:             column.real,
-    cantidad_colaboradores: column.integer,
-    pdf_nombre:             column.text,
-    pdf_drive_file_id:      column.text,
-    pdf_drive_folder_id:    column.text,
-    fecha_pago:             column.text,
-    estado:                 column.text,
-    created_at:             column.integer,
-    updated_at:             column.integer,
+    workspace_id:                   column.text,
+    anio:                           column.integer,
+    mes:                            column.integer,
+    label:                          column.text,
+    total_neto:                     column.real,
+    cantidad_colaboradores:         column.integer,
+    pdf_nombre:                     column.text,
+    pdf_drive_file_id:              column.text,
+    pdf_drive_folder_id:            column.text,
+    fecha_pago:                     column.text,
+    estado:                         column.text,
+    total_vacaciones:               column.real,
+    pdf_vacaciones_nombre:          column.text,
+    pdf_vacaciones_drive_file_id:   column.text,
+    created_at:                     column.integer,
+    updated_at:                     column.integer,
   },
   { indexes: { workspace: ['workspace_id'], periodo: ['anio', 'mes'] } }
 )
 
 const rrhh_sueldos = new Table(
   {
-    workspace_id:    column.text,
-    periodo_id:      column.text,
-    colaborador_id:  column.text,
-    total_neto:      column.real,
-    tarea:           column.text,
-    periodo_abonado: column.text,
-    notas:           column.text,
-    created_at:      column.integer,
-    updated_at:      column.integer,
+    workspace_id:     column.text,
+    periodo_id:       column.text,
+    colaborador_id:   column.text,
+    total_neto:       column.real,
+    tarea:            column.text,
+    periodo_abonado:  column.text,
+    notas:            column.text,
+    vacaciones_neto:  column.real,
+    vacaciones_dias:  column.integer,
+    created_at:       column.integer,
+    updated_at:       column.integer,
   },
   { indexes: { workspace: ['workspace_id'], periodo: ['periodo_id'], colaborador: ['colaborador_id'] } }
 )
@@ -1530,8 +1535,8 @@ const EXTRA_COST_DOUBLE_COLS = [
 // Mapa de tabla → columnas float para sanitización en uploadData
 const TABLE_FLOAT_COLS: Record<string, string[]> = {
   comex_import_extra_costs: EXTRA_COST_DOUBLE_COLS,
-  rrhh_periodos: ['total_neto'],
-  rrhh_sueldos:  ['total_neto'],
+  rrhh_periodos: ['total_neto', 'total_vacaciones'],
+  rrhh_sueldos:  ['total_neto', 'vacaciones_neto'],
 }
 
 // Convierte cualquier valor a number válido para Postgres double precision.
