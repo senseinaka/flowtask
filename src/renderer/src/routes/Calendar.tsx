@@ -28,7 +28,7 @@ const SOURCE_COLORS: Record<CalendarEventSource, string> = {
 
 const SOURCE_LABELS: Record<CalendarEventSource, string> = {
   google: 'Google Calendar',
-  finance: 'Finanzas Personal',
+  finance: 'Contable',
   company_finance: 'Finanzas Empresa',
   comex_planning: 'Comex - Programación Pedidos'
 }
@@ -534,7 +534,7 @@ function AgendaView({ events, onEventClick, calendarColorMap }: { events: Unifie
 // ── Calendar sidebar ─────────────────────────────────────────────────────────
 
 const SUMMIT_SOURCES: { source: CalendarEventSource; label: string; color: string }[] = [
-  { source: 'finance',         label: 'Finanzas Personal',            color: SOURCE_COLORS.finance },
+  { source: 'finance',         label: 'Contable',                     color: SOURCE_COLORS.finance },
   { source: 'company_finance', label: 'Finanzas Empresa',             color: SOURCE_COLORS.company_finance },
   { source: 'comex_planning',  label: 'Comex - Prog. Pedidos',        color: SOURCE_COLORS.comex_planning },
 ]

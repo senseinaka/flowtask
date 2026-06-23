@@ -66,7 +66,7 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: 'finance',
-    label: 'Finanzas',
+    label: 'Contable',
     routes: ['/finance']
   },
   {
