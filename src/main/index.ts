@@ -56,6 +56,7 @@ import { registerEmailIpc } from './ipc/email.ipc'
 import { registerReconIpc } from './ipc/recon.ipc'
 import { registerPdfIpc } from './ipc/pdf.ipc'
 import { registerRrhhIpc } from './ipc/rrhh.ipc'
+import { registerMercadoPagoIpc } from './ipc/mercadopago.ipc'
 import { startEmailAutoSync } from './services/email.service'
 import { syncEnabledCalendars } from './services/google-calendar.service'
 import cron from 'node-cron'
@@ -164,6 +165,7 @@ app.whenReady().then(() => {
   registerReconIpc()
   registerPdfIpc()
   registerRrhhIpc()
+  registerMercadoPagoIpc()
   startEmailAutoSync()
 
   // ── Calendario: sync automático cada 10 minutos (si hay conexión activa) ──

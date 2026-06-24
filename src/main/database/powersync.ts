@@ -1057,6 +1057,113 @@ const rrhh_sueldos = new Table(
   { indexes: { workspace: ['workspace_id'], periodo: ['periodo_id'], colaborador: ['colaborador_id'] } }
 )
 
+// ── Mercado Pago (4 tablas sync multi-dispositivo; credentials quedan local) ──
+
+const mercadopago_connections = new Table(
+  {
+    workspace_id:         column.text,
+    name:                 column.text,
+    account_label:        column.text,
+    mercadopago_user_id:  column.text,
+    environment:          column.text,
+    auth_type:            column.text,
+    status:               column.text,
+    last_sync_at:         column.integer,
+    created_by:           column.text,
+    created_at:           column.integer,
+    updated_at:           column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const mercadopago_report_jobs = new Table(
+  {
+    workspace_id:  column.text,
+    connection_id: column.text,
+    report_type:   column.text,
+    date_from:     column.text,
+    date_to:       column.text,
+    status:        column.text,
+    file_name:     column.text,
+    error_message: column.text,
+    created_from:  column.text,
+    requested_by:  column.text,
+    requested_at:  column.integer,
+    downloaded_at: column.integer,
+    processed_at:  column.integer,
+    created_at:    column.integer,
+    updated_at:    column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], connection: ['connection_id'], status: ['status'] } }
+)
+
+const mercadopago_report_files = new Table(
+  {
+    workspace_id:    column.text,
+    connection_id:   column.text,
+    job_id:          column.text,
+    file_name:       column.text,
+    file_hash:       column.text,
+    raw_file_path:   column.text,
+    total_rows:      column.integer,
+    imported_rows:   column.integer,
+    duplicated_rows: column.integer,
+    error_rows:      column.integer,
+    created_at:      column.integer,
+    updated_at:      column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], job: ['job_id'] } }
+)
+
+const mercadopago_transactions = new Table(
+  {
+    workspace_id:          column.text,
+    connection_id:         column.text,
+    report_file_id:        column.text,
+    source_id:             column.text,
+    external_reference:    column.text,
+    transaction_date:      column.text,
+    transaction_type:      column.text,
+    transaction_amount:    column.real,
+    transaction_currency:  column.text,
+    settlement_net_amount: column.real,
+    settlement_date:       column.text,
+    fee_amount:            column.real,
+    taxes_amount:          column.real,
+    payment_method:        column.text,
+    payment_method_type:   column.text,
+    installments:          column.integer,
+    description:           column.text,
+    money_release_date:    column.text,
+    payer_name:            column.text,
+    payer_id_type:         column.text,
+    payer_id_number:       column.text,
+    order_id:              column.text,
+    store_id:              column.text,
+    store_name:            column.text,
+    pos_id:                column.text,
+    pos_name:              column.text,
+    shipping_id:           column.text,
+    last_four_digits:      column.text,
+    authorization_code:    column.text,
+    application_id:        column.text,
+    raw_row_json:          column.text,
+    raw_hash:              column.text,
+    reconciliation_status: column.text,
+    created_at:            column.integer,
+    updated_at:            column.integer,
+  },
+  {
+    indexes: {
+      workspace:  ['workspace_id'],
+      connection: ['connection_id'],
+      date:       ['transaction_date'],
+      type:       ['transaction_type'],
+      recon:      ['reconciliation_status'],
+    }
+  }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -1114,6 +1221,10 @@ export const AppSchema = new Schema({
   rrhh_sueldos,
   rrhh_nomina_config,
   rrhh_listas,
+  mercadopago_connections,
+  mercadopago_report_jobs,
+  mercadopago_report_files,
+  mercadopago_transactions,
 })
 
 /**
@@ -1183,10 +1294,13 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
     if (!transaction) return
 
     const env = readEnvLocal()
+    const session = await getSession()
+    if (!session) throw new Error('[PowerSync] uploadData sin sesión — se reintenta tras re-login')
+
     const baseUrl = `${env.SUPABASE_URL}/rest/v1`
     const headers = {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: env.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.accessToken}`,
       'Content-Type': 'application/json'
     }
 
@@ -1594,10 +1708,11 @@ const EXTRA_COST_DOUBLE_COLS = [
 
 // Mapa de tabla → columnas float para sanitización en uploadData
 const TABLE_FLOAT_COLS: Record<string, string[]> = {
-  comex_import_extra_costs: EXTRA_COST_DOUBLE_COLS,
-  rrhh_periodos:       ['total_neto', 'total_vacaciones'],
-  rrhh_sueldos:        ['total_neto', 'vacaciones_neto'],
-  rrhh_colaboradores:  ['sueldo_neto_actual', 'sueldo_bruto_actual'],
+  comex_import_extra_costs:  EXTRA_COST_DOUBLE_COLS,
+  rrhh_periodos:             ['total_neto', 'total_vacaciones'],
+  rrhh_sueldos:              ['total_neto', 'vacaciones_neto'],
+  rrhh_colaboradores:        ['sueldo_neto_actual', 'sueldo_bruto_actual'],
+  mercadopago_transactions:  ['transaction_amount', 'settlement_net_amount', 'fee_amount', 'taxes_amount'],
 }
 
 // Convierte cualquier valor a number válido para Postgres double precision.
@@ -1859,6 +1974,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions'], throttleMs: 1000 }
   )
 }

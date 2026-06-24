@@ -3205,3 +3205,168 @@ export interface SaveVacacionesResult {
   colaboradoresNuevos: number
   colaboradoresSinMatch: string[]
 }
+
+// ─── Mercado Pago ─────────────────────────────────────────────────────────────
+
+export type MpEnvironment = 'production' | 'sandbox'
+export type MpAuthType = 'access_token' | 'oauth'
+export type MpConnectionStatus = 'active' | 'error' | 'disconnected'
+export type MpJobStatus =
+  | 'pending'
+  | 'requested'
+  | 'ready_to_download'
+  | 'downloading'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+export type MpReconciliationStatus =
+  | 'pending'
+  | 'suggested'
+  | 'confirmed'
+  | 'rejected'
+  | 'ignored'
+  | 'needs_review'
+
+export interface MpConnection {
+  id: string
+  workspace_id: string
+  name: string
+  account_label: string
+  mercadopago_user_id: string
+  environment: MpEnvironment
+  auth_type: MpAuthType
+  status: MpConnectionStatus
+  last_sync_at: number | null
+  created_by: string
+  created_at: number
+  updated_at: number
+}
+
+export interface MpConnectionWithCreds extends MpConnection {
+  has_token: boolean
+}
+
+export interface MpReportJob {
+  id: string
+  workspace_id: string
+  connection_id: string
+  report_type: string
+  date_from: string
+  date_to: string
+  status: MpJobStatus
+  file_name: string | null
+  created_from: string
+  requested_by: string
+  requested_at: number | null
+  downloaded_at: number | null
+  processed_at: number | null
+  error_message: string | null
+  created_at: number
+  updated_at: number
+}
+
+export interface MpReportFile {
+  id: string
+  workspace_id: string
+  connection_id: string
+  job_id: string
+  file_name: string
+  file_hash: string
+  raw_file_path: string
+  total_rows: number
+  imported_rows: number
+  duplicated_rows: number
+  error_rows: number
+  created_at: number
+  updated_at: number
+}
+
+export interface MpTransaction {
+  id: string
+  workspace_id: string
+  connection_id: string
+  report_file_id: string
+  source_id: string
+  external_reference: string
+  transaction_date: string
+  transaction_type: string
+  transaction_amount: number
+  transaction_currency: string
+  settlement_net_amount: number
+  settlement_date: string
+  fee_amount: number
+  taxes_amount: number
+  payment_method: string
+  payment_method_type: string
+  installments: number
+  description: string
+  money_release_date: string
+  payer_name: string
+  payer_id_type: string
+  payer_id_number: string
+  order_id: string
+  store_id: string
+  store_name: string
+  pos_id: string
+  pos_name: string
+  shipping_id: string
+  last_four_digits: string
+  authorization_code: string
+  application_id: string
+  raw_row_json: string
+  raw_hash: string
+  reconciliation_status: MpReconciliationStatus
+  created_at: number
+  updated_at: number
+}
+
+export interface MpReportConfig {
+  file_name_prefix: string
+  columns: string[]
+  display_timezone: string
+  header_language: string
+  separator: string
+  include_withdraw: boolean
+  show_fee_prevision: boolean
+  show_chargeback_cancel: boolean
+  refund_detailed: boolean
+  coupon_detailed: boolean
+  shipping_detail: boolean
+  frequency: { hour: number; type: string }
+}
+
+export interface CreateMpConnectionInput {
+  name: string
+  account_label: string
+  access_token: string
+  environment: MpEnvironment
+}
+
+export interface MpTransactionFilters {
+  connection_id?: string
+  transaction_type?: string
+  reconciliation_status?: MpReconciliationStatus
+  date_from?: string
+  date_to?: string
+  external_reference?: string
+  search?: string
+  limit?: number
+  offset?: number
+}
+
+export interface MpSyncResult {
+  job_id: string
+  status: MpJobStatus
+  file_name: string | null
+  imported: number
+  duplicated: number
+  errors: number
+  error_message: string | null
+}
+
+export interface MpTestConnectionResult {
+  ok: boolean
+  user_id?: string
+  email?: string
+  error?: string
+}

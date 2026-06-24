@@ -94,7 +94,8 @@ export const MODULES: ModuleDef[] = [
     label: 'Contable',
     routes: ['/contable'],
     submodules: [
-      { key: 'recon', label: 'Conciliador Contable', routes: ['/contable/recon'] }
+      { key: 'recon',         label: 'Conciliador Contable', routes: ['/contable/recon'] },
+      { key: 'mercadopago',   label: 'Mercado Pago',         routes: ['/contable/mercadopago'] },
     ]
   },
   {

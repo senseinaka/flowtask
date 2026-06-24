@@ -2837,6 +2837,155 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         cached_at   INTEGER NOT NULL
       )`)
     }
+  },
+  {
+    version: 89,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS mercadopago_connections (
+        id                    TEXT PRIMARY KEY,
+        workspace_id          TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5',
+        name                  TEXT NOT NULL DEFAULT '',
+        account_label         TEXT NOT NULL DEFAULT '',
+        mercadopago_user_id   TEXT NOT NULL DEFAULT '',
+        environment           TEXT NOT NULL DEFAULT 'production',
+        auth_type             TEXT NOT NULL DEFAULT 'access_token',
+        status                TEXT NOT NULL DEFAULT 'active',
+        last_sync_at          INTEGER,
+        created_by            TEXT NOT NULL DEFAULT '',
+        created_at            INTEGER NOT NULL,
+        updated_at            INTEGER NOT NULL
+      )`)
+    }
+  },
+  {
+    version: 90,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS mercadopago_credentials (
+        id                       TEXT PRIMARY KEY,
+        workspace_id             TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5',
+        connection_id            TEXT NOT NULL,
+        encrypted_access_token   TEXT NOT NULL DEFAULT '',
+        encrypted_refresh_token  TEXT NOT NULL DEFAULT '',
+        client_id                TEXT NOT NULL DEFAULT '',
+        client_secret_reference  TEXT NOT NULL DEFAULT '',
+        expires_at               INTEGER,
+        scopes                   TEXT NOT NULL DEFAULT '',
+        created_at               INTEGER NOT NULL,
+        updated_at               INTEGER NOT NULL
+      )`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_creds_conn ON mercadopago_credentials(connection_id)`)
+    }
+  },
+  {
+    version: 91,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS mercadopago_report_jobs (
+        id            TEXT PRIMARY KEY,
+        workspace_id  TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5',
+        connection_id TEXT NOT NULL,
+        report_type   TEXT NOT NULL DEFAULT 'settlement',
+        date_from     TEXT NOT NULL DEFAULT '',
+        date_to       TEXT NOT NULL DEFAULT '',
+        status        TEXT NOT NULL DEFAULT 'pending',
+        file_name     TEXT,
+        created_from  TEXT NOT NULL DEFAULT 'manual',
+        requested_by  TEXT NOT NULL DEFAULT '',
+        requested_at  INTEGER,
+        downloaded_at INTEGER,
+        processed_at  INTEGER,
+        error_message TEXT,
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL
+      )`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_jobs_conn ON mercadopago_report_jobs(connection_id)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_jobs_status ON mercadopago_report_jobs(status)`)
+    }
+  },
+  {
+    version: 92,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS mercadopago_report_files (
+        id             TEXT PRIMARY KEY,
+        workspace_id   TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5',
+        connection_id  TEXT NOT NULL,
+        job_id         TEXT NOT NULL,
+        file_name      TEXT NOT NULL DEFAULT '',
+        file_hash      TEXT NOT NULL DEFAULT '',
+        raw_file_path  TEXT NOT NULL DEFAULT '',
+        total_rows     INTEGER NOT NULL DEFAULT 0,
+        imported_rows  INTEGER NOT NULL DEFAULT 0,
+        duplicated_rows INTEGER NOT NULL DEFAULT 0,
+        error_rows     INTEGER NOT NULL DEFAULT 0,
+        created_at     INTEGER NOT NULL,
+        updated_at     INTEGER NOT NULL
+      )`)
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mp_files_hash ON mercadopago_report_files(file_hash)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_files_job ON mercadopago_report_files(job_id)`)
+    }
+  },
+  {
+    version: 93,
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS mercadopago_transactions (
+        id                    TEXT PRIMARY KEY,
+        workspace_id          TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5',
+        connection_id         TEXT NOT NULL,
+        report_file_id        TEXT NOT NULL,
+        source_id             TEXT NOT NULL DEFAULT '',
+        external_reference    TEXT NOT NULL DEFAULT '',
+        transaction_date      TEXT NOT NULL DEFAULT '',
+        transaction_type      TEXT NOT NULL DEFAULT '',
+        transaction_amount    REAL NOT NULL DEFAULT 0,
+        transaction_currency  TEXT NOT NULL DEFAULT 'ARS',
+        settlement_net_amount REAL NOT NULL DEFAULT 0,
+        settlement_date       TEXT NOT NULL DEFAULT '',
+        fee_amount            REAL NOT NULL DEFAULT 0,
+        taxes_amount          REAL NOT NULL DEFAULT 0,
+        payment_method        TEXT NOT NULL DEFAULT '',
+        payment_method_type   TEXT NOT NULL DEFAULT '',
+        installments          INTEGER NOT NULL DEFAULT 1,
+        description           TEXT NOT NULL DEFAULT '',
+        money_release_date    TEXT NOT NULL DEFAULT '',
+        payer_name            TEXT NOT NULL DEFAULT '',
+        payer_id_type         TEXT NOT NULL DEFAULT '',
+        payer_id_number       TEXT NOT NULL DEFAULT '',
+        order_id              TEXT NOT NULL DEFAULT '',
+        store_id              TEXT NOT NULL DEFAULT '',
+        store_name            TEXT NOT NULL DEFAULT '',
+        pos_id                TEXT NOT NULL DEFAULT '',
+        pos_name              TEXT NOT NULL DEFAULT '',
+        shipping_id           TEXT NOT NULL DEFAULT '',
+        last_four_digits      TEXT NOT NULL DEFAULT '',
+        authorization_code    TEXT NOT NULL DEFAULT '',
+        application_id        TEXT NOT NULL DEFAULT '',
+        raw_row_json          TEXT NOT NULL DEFAULT '{}',
+        raw_hash              TEXT NOT NULL DEFAULT '',
+        reconciliation_status TEXT NOT NULL DEFAULT 'pending',
+        created_at            INTEGER NOT NULL,
+        updated_at            INTEGER NOT NULL
+      )`)
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mp_txn_hash     ON mercadopago_transactions(raw_hash)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_txn_source          ON mercadopago_transactions(source_id)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_txn_ext_ref         ON mercadopago_transactions(external_reference)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_txn_date            ON mercadopago_transactions(transaction_date)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_txn_type            ON mercadopago_transactions(transaction_type)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_txn_recon           ON mercadopago_transactions(reconciliation_status)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mp_txn_conn            ON mercadopago_transactions(connection_id)`)
+    }
+  },
+  {
+    version: 94,
+    up: (db) => {
+      // mercadopago_connections, _report_jobs, _report_files, _transactions
+      // migradas a PowerSync (Supabase sync, multi-dispositivo).
+      // mercadopago_credentials permanece local (tokens cifrados per-device).
+      db.exec(`
+        DROP TABLE IF EXISTS mercadopago_transactions;
+        DROP TABLE IF EXISTS mercadopago_report_files;
+        DROP TABLE IF EXISTS mercadopago_report_jobs;
+        DROP TABLE IF EXISTS mercadopago_connections;
+      `)
+    }
   }
 ]
 

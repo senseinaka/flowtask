@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud, BookUser
+  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -18,7 +18,7 @@ import SyncStatusBadge from './SyncStatusBadge'
 
 // ── Workspace definitions ─────────────────────────────────────────────────────
 
-type WorkspaceKey = 'trabajo' | 'empresa' | 'finanzas' | 'agenda' | 'rrhh' | 'sistema'
+type WorkspaceKey = 'trabajo' | 'empresa' | 'comex' | 'finanzas' | 'agenda' | 'rrhh' | 'sistema'
 
 const WORKSPACES: Array<{
   key: WorkspaceKey
@@ -42,11 +42,19 @@ const WORKSPACES: Array<{
     Icon: Globe2,
     color: '#fb923c',
     activeBg: 'rgba(251,146,60,.15)',
-    paths: ['/comex', '/quotes', '/knowledge'],
+    paths: ['/quotes', '/knowledge'],
+  },
+  {
+    key: 'comex',
+    label: 'Comex',
+    Icon: Package,
+    color: '#f59e0b',
+    activeBg: 'rgba(245,158,11,.15)',
+    paths: ['/comex'],
   },
   {
     key: 'finanzas',
-    label: 'Finanzas',
+    label: 'Contable',
     Icon: Wallet,
     color: '#34d399',
     activeBg: 'rgba(52,211,153,.12)',
@@ -344,28 +352,29 @@ export default function Sidebar() {
               {canRead('quotes') && (
                 <PanelLink to="/quotes" icon={FileText} label="Presupuestos" color="#fb923c" onClick={close} />
               )}
-              {comexSubItems.length > 0 && (
-                <>
-                  <GroupLabel label="Comex" color="#fb923c" />
-                  {comexSubItems.map((it) => (
-                    <PanelLink
-                      key={it.to}
-                      to={it.to}
-                      icon={it.Icon}
-                      label={it.label}
-                      end={it.end}
-                      color="#fb923c"
-                      onClick={close}
-                    />
-                  ))}
-                </>
-              )}
+            </div>
+          )}
+
+          {openPanel === 'comex' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Comex" color="#f59e0b" />
+              {comexSubItems.map((it) => (
+                <PanelLink
+                  key={it.to}
+                  to={it.to}
+                  icon={it.Icon}
+                  label={it.label}
+                  end={it.end}
+                  color="#f59e0b"
+                  onClick={close}
+                />
+              ))}
             </div>
           )}
 
           {openPanel === 'finanzas' && (
             <div className="p-2 space-y-0.5">
-              <GroupLabel label="Finanzas" color="#34d399" />
+              <GroupLabel label="Contable" color="#34d399" />
               {canRead('finance') && (
                 <PanelLink to="/finance"         icon={Wallet}          label="Fin. Personal" color="#34d399" onClick={close} />
               )}
@@ -376,7 +385,10 @@ export default function Sidebar() {
                 <PanelLink to="/expiry"          icon={Clock}           label="Vencimientos"  color="#34d399" onClick={close} />
               )}
               {canRead('contable') && (
-                <PanelLink to="/contable/recon"  icon={ArrowLeftRight}  label="Conciliador"   color="#34d399" onClick={close} />
+                <PanelLink to="/contable/recon"         icon={ArrowLeftRight}  label="Conciliador"    color="#34d399" onClick={close} />
+              )}
+              {canRead('contable', 'mercadopago') && (
+                <PanelLink to="/contable/mercadopago"   icon={CreditCard}      label="Mercado Pago"   color="#34d399" onClick={close} />
               )}
             </div>
           )}

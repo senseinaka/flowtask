@@ -31,6 +31,7 @@ import QuoteDetail from './routes/quotes/QuoteDetail'
 import EmailDashboard from './routes/email/EmailDashboard'
 import ReconDashboard from './routes/contable/ReconDashboard'
 import ReconPeriodView from './routes/contable/ReconPeriodView'
+import MPDashboard from './routes/contable/MPDashboard'
 import KnowledgeDashboard from './routes/knowledge/KnowledgeDashboard'
 import CortexDashboard from './routes/cortex/CortexDashboard'
 import SueldosDashboard from './routes/rrhh/SueldosDashboard'
@@ -81,6 +82,7 @@ const router = createHashRouter([
       { path: 'email', element: <EmailDashboard /> },
       { path: 'contable/recon', element: <ReconDashboard /> },
       { path: 'contable/recon/:id', element: <ReconPeriodView /> },
+      { path: 'contable/mercadopago', element: <MPDashboard /> },
       { path: 'rrhh/sueldos', element: <SueldosDashboard /> },
       { path: 'rrhh/sueldos/:id', element: <PeriodoDetail /> },
       { path: 'rrhh/nomina', element: <NominaDashboard /> },

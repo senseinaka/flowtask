@@ -59,7 +59,10 @@ import type {
   RrhhColaboradorConStats, RrhhNominaConfig,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
   RrhhLista, RrhhListaTipo, UpsertListaInput,
-  ImportParseResult, LegajoDecision, ConfirmImportInput
+  ImportParseResult, LegajoDecision, ConfirmImportInput,
+  MpConnection, MpConnectionWithCreds, MpReportJob, MpReportFile, MpTransaction,
+  MpReportConfig, CreateMpConnectionInput, MpTransactionFilters,
+  MpSyncResult, MpTestConnectionResult, MpReconciliationStatus,
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1143,6 +1146,39 @@ const api = {
       list:   (tipo?: RrhhListaTipo): Promise<RrhhLista[]>                                        => ipcRenderer.invoke('rrhh:listas:list', tipo),
       upsert: (data: UpsertListaInput): Promise<RrhhLista>                                        => ipcRenderer.invoke('rrhh:listas:upsert', data),
       delete: (id: string): Promise<void>                                                         => ipcRenderer.invoke('rrhh:listas:delete', id),
+    },
+  },
+
+  mercadopago: {
+    connections: {
+      list:         (): Promise<MpConnectionWithCreds[]>                                                              => ipcRenderer.invoke('mp:connections:list'),
+      create:       (input: CreateMpConnectionInput, userId: string): Promise<{ connection: MpConnection; test: MpTestConnectionResult }> => ipcRenderer.invoke('mp:connections:create', input, userId),
+      updateToken:  (connectionId: string, newToken: string): Promise<MpTestConnectionResult>                         => ipcRenderer.invoke('mp:connections:update-token', connectionId, newToken),
+      test:         (connectionId: string): Promise<MpTestConnectionResult>                                           => ipcRenderer.invoke('mp:connections:test', connectionId),
+      delete:       (connectionId: string): Promise<void>                                                             => ipcRenderer.invoke('mp:connections:delete', connectionId),
+    },
+    config: {
+      default:  (): Promise<MpReportConfig>                                          => ipcRenderer.invoke('mp:config:default'),
+      get:      (connectionId: string): Promise<MpReportConfig | null>              => ipcRenderer.invoke('mp:config:get', connectionId),
+      set:      (connectionId: string, config: Partial<MpReportConfig>): Promise<void> => ipcRenderer.invoke('mp:config:set', connectionId, config),
+    },
+    jobs: {
+      list:     (connectionId: string, limit?: number): Promise<MpReportJob[]>         => ipcRenderer.invoke('mp:jobs:list', connectionId, limit),
+      get:      (jobId: string): Promise<MpReportJob | null>                           => ipcRenderer.invoke('mp:jobs:get', jobId),
+      request:  (connectionId: string, dateFrom: string, dateTo: string, requestedBy: string): Promise<string> => ipcRenderer.invoke('mp:jobs:request', connectionId, dateFrom, dateTo, requestedBy),
+      poll:     (jobId: string): Promise<{ ready: boolean; file_name?: string }>       => ipcRenderer.invoke('mp:jobs:poll', jobId),
+      download: (jobId: string): Promise<MpSyncResult>                                 => ipcRenderer.invoke('mp:jobs:download', jobId),
+      cancel:       (jobId: string): Promise<void>                                               => ipcRenderer.invoke('mp:jobs:cancel', jobId),
+      openFile:     (jobId: string): Promise<{ ok: boolean; error?: string }>                  => ipcRenderer.invoke('mp:jobs:open-file', jobId),
+      showInFolder: (jobId: string): Promise<void>                                             => ipcRenderer.invoke('mp:jobs:show-in-folder', jobId),
+    },
+    sync: {
+      run: (connectionId: string, dateFrom: string, dateTo: string, requestedBy: string): Promise<MpSyncResult> => ipcRenderer.invoke('mp:sync:run', connectionId, dateFrom, dateTo, requestedBy),
+    },
+    transactions: {
+      list:        (filters: MpTransactionFilters): Promise<MpTransaction[]>                           => ipcRenderer.invoke('mp:transactions:list', filters),
+      updateRecon: (id: string, status: MpReconciliationStatus): Promise<void>                         => ipcRenderer.invoke('mp:transactions:update-recon', id, status),
+      stats:       (connectionId: string): Promise<{ total: number; by_type: { transaction_type: string; count: number; total_amount: number }[]; by_recon: { reconciliation_status: string; count: number }[] }> => ipcRenderer.invoke('mp:transactions:stats', connectionId),
     },
   },
 

@@ -233,7 +233,7 @@ export default function ImportarNominaModal({ onClose }: Props) {
                             )}
                           </td>
                           <td className="px-3 py-2 text-slate-400">{r.sector || '—'}</td>
-                          <td className="px-3 py-2 text-slate-400">{ESTADO_LABELS[r.estado_laboral] ?? r.estado_laboral || '—'}</td>
+                          <td className="px-3 py-2 text-slate-400">{(ESTADO_LABELS[r.estado_laboral] ?? r.estado_laboral) || '—'}</td>
                           <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
                         </tr>
                       ))}
