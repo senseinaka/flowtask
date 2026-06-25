@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard
+  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -389,6 +389,9 @@ export default function Sidebar() {
               )}
               {canRead('contable', 'mercadopago') && (
                 <PanelLink to="/contable/mercadopago"   icon={CreditCard}      label="Mercado Pago"   color="#34d399" onClick={close} />
+              )}
+              {canRead('contable', 'servicios') && (
+                <PanelLink to="/contable/servicios"     icon={Repeat}          label="Servicios"      color="#34d399" onClick={close} />
               )}
             </div>
           )}

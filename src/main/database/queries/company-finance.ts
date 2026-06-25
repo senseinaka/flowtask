@@ -714,7 +714,7 @@ export async function saveCompanyFinanceMonthNotes(month: number, year: number, 
     INSERT INTO company_finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at, workspace_id)
     VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)
     ON CONFLICT(month, year) DO UPDATE SET notes = excluded.notes, updated_at = excluded.updated_at
-  `, [randomUUID(), month, year, notes, now, now, WORKSPACE_ID])
+  `, [`insight-${year}-${month}`, month, year, notes, now, now, WORKSPACE_ID])
   return (await getCompanyFinanceMonthInsight(month, year))!
 }
 
@@ -732,7 +732,7 @@ export async function saveCompanyFinanceMonthAIAnalysis(month: number, year: num
     INSERT INTO company_finance_month_insights (id, month, year, notes, ai_analysis, ai_generated_at, created_at, updated_at, workspace_id)
     VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
     ON CONFLICT(month, year) DO UPDATE SET ai_analysis = excluded.ai_analysis, ai_generated_at = excluded.ai_generated_at, updated_at = excluded.updated_at
-  `, [randomUUID(), month, year, analysis, now, now, now, WORKSPACE_ID])
+  `, [`insight-${year}-${month}`, month, year, analysis, now, now, now, WORKSPACE_ID])
   return (await getCompanyFinanceMonthInsight(month, year))!
 }
 

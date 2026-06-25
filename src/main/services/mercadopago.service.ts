@@ -327,7 +327,7 @@ export async function downloadAndProcessJob(jobId: string): Promise<MpSyncResult
   fs.writeFileSync(rawFilePath, csvContent, 'utf-8')
 
   const { rows, errors } = parseSettlementCSV(csvContent)
-  const fileId = `${jobId}-file`
+  const fileId = `file-${fileHash}`
 
   const txRows: Omit<MpTransaction, 'id' | 'created_at' | 'updated_at'>[] = rows.map(row => ({
     workspace_id: 'd61a4071-1557-4f32-be5e-6443fb336bf5',

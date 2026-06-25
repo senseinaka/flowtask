@@ -135,6 +135,12 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 
+### Reglas al crear una tabla sincronizada nueva (Supabase)
+
+1. **RLS + policy para `authenticated` + GRANT** (ver template en "DDL pendiente en Supabase"): `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY ... FOR ALL TO authenticated USING (workspace_id = '...') WITH CHECK (...)` + `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated`. Los uploads suben con el JWT del usuario (rol `authenticated`), no con service_role — si falta el GRANT, fallan con `42501 permission denied`; si falta la policy, con RLS violation.
+
+2. **NUNCA un constraint `UNIQUE` además de la PK (`id`).** PowerSync resuelve conflictos solo por la PK; si dos dispositivos crean la misma fila lógica, la segunda viola el UNIQUE (`23505`) y **bloquea toda la cola de sync para todos**. Para garantizar unicidad, hacer el `id` determinístico sobre la tupla (ej. `insight-${year}-${month}`, `${taskId}__${dependsOnId}`, `file-${fileHash}`) → misma fila lógica = misma PK → PowerSync deduplica solo. (jun 2026: se dropearon 6 UNIQUE secundarias por este motivo.)
+
 ### ❌ Solo local (NO sincroniza — por diseño)
 
 Estas tablas viven únicamente en `flowtask.db` porque representan estado local del dispositivo que no tiene sentido sincronizar:
@@ -244,8 +250,12 @@ POWERSYNC_URL=https://...
 POWERSYNC_JWT_PRIVATE_KEY_B64=...
 POWERSYNC_JWT_KID=...
 SUPABASE_URL=https://....supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_ANON_KEY=sb_publishable_...
 ```
+
+`SUPABASE_ANON_KEY` contiene la **publishable key** del sistema nuevo de Supabase (`sb_publishable_...`), no la anon JWT legacy (deshabilitada jun 2026). Se manda como header `apikey` en el login (`auth.service.ts`) y en los uploads de PowerSync (`uploadData`).
+
+**Auth de los uploads (jun 2026):** PowerSync sube con el **access token del usuario logueado** (`getSession().accessToken`, rol `authenticated`); RLS hace cumplir el acceso por workspace. Antes usaba `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS y viajaba en texto plano en cada máquina = agujero de seguridad) — **fue eliminado y no debe volver al cliente**. La `sb_secret_...` (reemplazo del service_role) es server-side; Summit no la usa.
 
 El JWT para autenticarse en PowerSync se firma localmente con la clave privada RSA en cada conexión (TTL: 24h). Si la sesión dura más de 24h sin reiniciar la app, la cola de sync puede congelarse — la solución es reiniciar.
 
@@ -468,9 +478,11 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   last_seen_at BIGINT NOT NULL
 );
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "workspace" ON user_profiles
-  USING (workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5');
-GRANT SELECT, INSERT, UPDATE, DELETE ON user_profiles TO service_role;
+CREATE POLICY "authenticated_workspace_all" ON user_profiles
+  FOR ALL TO authenticated
+  USING (workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5')
+  WITH CHECK (workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5');
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_profiles TO authenticated;
 CREATE INDEX ON user_profiles(workspace_id);
 ```
 

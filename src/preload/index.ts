@@ -63,6 +63,8 @@ import type {
   MpConnection, MpConnectionWithCreds, MpReportJob, MpReportFile, MpTransaction,
   MpReportConfig, CreateMpConnectionInput, MpTransactionFilters,
   MpSyncResult, MpTestConnectionResult, MpReconciliationStatus,
+  AccountingService, AccountingServicePayment, AccountingServiceFilters,
+  CreateAccountingServiceInput, RegisterServicePaymentInput, ServiceStatus,
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1179,6 +1181,29 @@ const api = {
       list:        (filters: MpTransactionFilters): Promise<MpTransaction[]>                           => ipcRenderer.invoke('mp:transactions:list', filters),
       updateRecon: (id: string, status: MpReconciliationStatus): Promise<void>                         => ipcRenderer.invoke('mp:transactions:update-recon', id, status),
       stats:       (connectionId: string): Promise<{ total: number; by_type: { transaction_type: string; count: number; total_amount: number }[]; by_recon: { reconciliation_status: string; count: number }[] }> => ipcRenderer.invoke('mp:transactions:stats', connectionId),
+    },
+  },
+
+  catalog: {
+    list:   (type: string): Promise<Array<{ id: string; value: string; label: string; sort_order: number }>> =>
+      ipcRenderer.invoke('catalog:list', type),
+    upsert: (input: { id?: string; config_type: string; value: string; label: string; sort_order?: number }): Promise<string> =>
+      ipcRenderer.invoke('catalog:upsert', input),
+    delete: (id: string): Promise<void> =>
+      ipcRenderer.invoke('catalog:delete', id),
+  },
+
+  services: {
+    list:      (filters: AccountingServiceFilters): Promise<AccountingService[]>                      => ipcRenderer.invoke('services:list', filters),
+    get:       (id: string): Promise<AccountingService | null>                                        => ipcRenderer.invoke('services:get', id),
+    create:    (input: CreateAccountingServiceInput): Promise<AccountingService>                      => ipcRenderer.invoke('services:create', input),
+    update:    (id: string, patch: Partial<CreateAccountingServiceInput>): Promise<AccountingService> => ipcRenderer.invoke('services:update', id, patch),
+    setStatus: (id: string, status: ServiceStatus): Promise<void>                                     => ipcRenderer.invoke('services:set-status', id, status),
+    delete:    (id: string): Promise<void>                                                            => ipcRenderer.invoke('services:delete', id),
+    payments: {
+      list:     (serviceId: string): Promise<AccountingServicePayment[]>                              => ipcRenderer.invoke('services:payments:list', serviceId),
+      register: (input: RegisterServicePaymentInput): Promise<AccountingServicePayment>               => ipcRenderer.invoke('services:payments:register', input),
+      delete:   (id: string): Promise<void>                                                           => ipcRenderer.invoke('services:payments:delete', id),
     },
   },
 

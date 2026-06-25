@@ -3370,3 +3370,115 @@ export interface MpTestConnectionResult {
   email?: string
   error?: string
 }
+
+// ─── Servicios contables (abonos, suscripciones, pólizas) ──────────────────────
+
+export type ServiceCategory =
+  | 'software'        // Software y SaaS
+  | 'seguro'          // Seguro
+  | 'dominio_hosting' // Dominio o hosting
+  | 'profesional'     // Servicio profesional
+  | 'bancario'        // Servicio bancario
+  | 'administrativo'  // Servicio administrativo
+  | 'mantenimiento'   // Mantenimiento
+  | 'suscripcion'     // Suscripción
+  | 'otro'            // Otro
+
+export type ServiceStatus = 'activo' | 'pausado' | 'cancelado'
+
+export type BillingFrequency =
+  | 'mensual' | 'bimestral' | 'trimestral' | 'semestral' | 'anual' | 'pago_unico' | 'otro'
+
+export type ServicePaymentMethod =
+  | 'tarjeta_credito' | 'transferencia' | 'debito_automatico' | 'mercadopago'
+  | 'paypal' | 'banco' | 'efectivo' | 'otro' | ''
+
+export interface AccountingService {
+  id: string
+  workspace_id: string
+  name: string
+  category: string
+  provider: string
+  description: string
+  area: string
+  internal_owner: string
+  status: ServiceStatus
+  amount: number
+  currency: string
+  billing_frequency: BillingFrequency
+  payment_method: string
+  auto_renewal: number       // 0 | 1 (PowerSync integer boolean)
+  requires_approval: number  // 0 | 1
+  start_date: string
+  last_payment_date: string
+  next_due_date: string
+  next_renewal_date: string
+  decision_deadline_date: string
+  contact_name: string
+  contact_email: string
+  contact_phone: string
+  manager_name: string
+  manager_email: string
+  manager_phone: string
+  document_url: string
+  provider_portal_url: string
+  notes: string
+  // Seguros (inline, sólo relevantes si category === 'seguro')
+  insurance_company: string
+  policy_number: string
+  coverage_type: string
+  insured_asset: string
+  insured_amount: number
+  coverage_start_date: string
+  coverage_end_date: string
+  broker_name: string
+  broker_contact: string
+  deleted_at: number | null
+  created_at: number
+  updated_at: number
+}
+
+export type CreateAccountingServiceInput = Omit<
+  AccountingService, 'id' | 'workspace_id' | 'deleted_at' | 'created_at' | 'updated_at'
+>
+
+export interface AccountingServicePayment {
+  id: string
+  workspace_id: string
+  service_id: string
+  payment_date: string
+  amount: number
+  currency: string
+  period_from: string
+  period_to: string
+  payment_method: string
+  receipt_url: string
+  notes: string
+  created_by: string
+  created_at: number
+  updated_at: number
+}
+
+export interface RegisterServicePaymentInput {
+  service_id: string
+  payment_date: string
+  amount: number
+  currency: string
+  period_from: string
+  period_to: string
+  payment_method: string
+  receipt_url: string
+  notes: string
+  next_due_date?: string      // si se indica, actualiza el próximo vencimiento del servicio
+  next_renewal_date?: string  // si se indica, actualiza la próxima renovación
+}
+
+export interface AccountingServiceFilters {
+  category?: string
+  status?: ServiceStatus
+  currency?: string
+  billing_frequency?: BillingFrequency
+  auto_renewal?: boolean
+  internal_owner?: string
+  search?: string
+}

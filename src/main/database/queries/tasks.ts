@@ -156,7 +156,7 @@ export async function deleteTask(id: string): Promise<void> {
 
 export async function addDependency(taskId: string, dependsOnId: string): Promise<void> {
   const db = getPowerSyncDb()
-  const id = randomUUID()
+  const id = `${taskId}__${dependsOnId}`
   const now = Date.now()
   await db.execute(
     'INSERT OR IGNORE INTO task_dependencies (id, task_id, depends_on_id, created_at, workspace_id) VALUES (?, ?, ?, ?, ?)',

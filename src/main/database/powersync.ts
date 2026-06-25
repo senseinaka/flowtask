@@ -1164,6 +1164,102 @@ const mercadopago_transactions = new Table(
   }
 )
 
+const accounting_services = new Table(
+  {
+    workspace_id:           column.text,
+    name:                   column.text,
+    category:               column.text,
+    provider:               column.text,
+    description:            column.text,
+    area:                   column.text,
+    internal_owner:         column.text,
+    status:                 column.text,
+    amount:                 column.real,
+    currency:               column.text,
+    billing_frequency:      column.text,
+    payment_method:         column.text,
+    auto_renewal:           column.integer,
+    requires_approval:      column.integer,
+    start_date:             column.text,
+    last_payment_date:      column.text,
+    next_due_date:          column.text,
+    next_renewal_date:      column.text,
+    decision_deadline_date: column.text,
+    contact_name:           column.text,
+    contact_email:          column.text,
+    contact_phone:          column.text,
+    manager_name:           column.text,
+    manager_email:          column.text,
+    manager_phone:          column.text,
+    document_url:           column.text,
+    provider_portal_url:    column.text,
+    notes:                  column.text,
+    insurance_company:      column.text,
+    policy_number:          column.text,
+    coverage_type:          column.text,
+    insured_asset:          column.text,
+    insured_amount:         column.real,
+    coverage_start_date:    column.text,
+    coverage_end_date:      column.text,
+    broker_name:            column.text,
+    broker_contact:         column.text,
+    deleted_at:             column.integer,
+    created_at:             column.integer,
+    updated_at:             column.integer,
+  },
+  {
+    indexes: {
+      workspace: ['workspace_id'],
+      category:  ['category'],
+      status:    ['status'],
+      due:       ['next_due_date'],
+    }
+  }
+)
+
+const accounting_service_payments = new Table(
+  {
+    workspace_id:   column.text,
+    service_id:     column.text,
+    payment_date:   column.text,
+    amount:         column.real,
+    currency:       column.text,
+    period_from:    column.text,
+    period_to:      column.text,
+    payment_method: column.text,
+    receipt_url:    column.text,
+    notes:          column.text,
+    created_by:     column.text,
+    created_at:     column.integer,
+    updated_at:     column.integer,
+  },
+  {
+    indexes: {
+      workspace: ['workspace_id'],
+      service:   ['service_id'],
+    }
+  }
+)
+
+const service_catalog = new Table(
+  {
+    workspace_id: column.text,
+    config_type:  column.text,
+    value:        column.text,
+    label:        column.text,
+    sort_order:   column.integer,
+    deleted_at:   column.integer,
+    created_at:   column.integer,
+    updated_at:   column.integer,
+  },
+  {
+    indexes: {
+      workspace: ['workspace_id'],
+      type:      ['config_type'],
+    }
+  }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -1225,6 +1321,9 @@ export const AppSchema = new Schema({
   mercadopago_report_jobs,
   mercadopago_report_files,
   mercadopago_transactions,
+  accounting_services,
+  accounting_service_payments,
+  service_catalog,
 })
 
 /**
@@ -1713,6 +1812,8 @@ const TABLE_FLOAT_COLS: Record<string, string[]> = {
   rrhh_sueldos:              ['total_neto', 'vacaciones_neto'],
   rrhh_colaboradores:        ['sueldo_neto_actual', 'sueldo_bruto_actual'],
   mercadopago_transactions:  ['transaction_amount', 'settlement_net_amount', 'fee_amount', 'taxes_amount'],
+  accounting_services:         ['amount', 'insured_amount'],
+  accounting_service_payments: ['amount'],
 }
 
 // Convierte cualquier valor a number válido para Postgres double precision.
@@ -1974,6 +2075,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog'], throttleMs: 1000 }
   )
 }
