@@ -21,7 +21,9 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Email:** recepción y envío de correos electrónicos desde la app.
 - **Backup:** backup automático de código (GitHub) y datos (Google Drive) en la nube.
 - **Configuración:** módulo robusto de ajustes para todos los menús y preferencias del sistema.
-- **Knowledge** *(en construcción — tablas y sync configurados, backend/UI pendientes)*: captura y organización de información (textos, archivos, imágenes) con resúmenes por IA y resúmenes globales por tema. Sincroniza vía PowerSync.
+- **Knowledge:** captura y organización de información (textos, archivos, imágenes, PDFs) con resúmenes por IA (Haiku) y resúmenes globales por tema. Rutas `/knowledge`. Sincroniza vía PowerSync.
+- **Mercado Pago:** integración con la API de MP para descargar reportes de liquidaciones, sincronizar transacciones, y conciliarlas con operaciones internas. Multi-cuenta. Rutas `/contable/mercadopago`. Tablas PowerSync: `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`.
+- **Contable → Servicios:** gestión de servicios recurrentes: software/SaaS, seguros, hosting, bancarios, suscripciones, etc. Panel de control con vencimientos, historial de pagos/renovaciones, soporte inline para datos de pólizas de seguros. Catálogos editables (categorías, áreas, medios de pago) vía tabla `service_catalog`. Rutas `/contable/servicios`.
 - **RRHH — Sueldos:** administración mensual de sueldos por colaborador. Extrae datos de PDFs de recibos de sueldo, los guarda en Supabase via PowerSync, genera alertas inteligentes (nuevos, ausentes, variaciones), compara con el mes anterior y exporta planillas XLS. Los PDFs se almacenan en Google Drive (`Summit RRHH/Sueldos/MM-YYYY/`).
 - **RRHH — Nómina:** módulo de ficha de colaboradores. Registro completo (datos personales, laborales, bancarios, Drive). Genera la nómina desde la última liquidación, asigna legajos automáticos (4 dígitos), crea carpetas Drive en `Summit RRHH/Legajos/XXXX Nombre/` con subcarpetas, muestra historial salarial por colaborador con gráfico de área. Rutas: `/rrhh/nomina` y `/rrhh/nomina/:id`.
 - **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
@@ -131,9 +133,37 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `company_finance_movement_entries`
 - Todas las tablas `comex_*` e `import_order_*` (incluidas `comex_logistics_quotes`, `comex_quote_files`)
 - `knowledge_entries`, `knowledge_global_summaries`
-- `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`, `rrhh_nomina_config`
+- `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`, `rrhh_nomina_config`, `rrhh_listas`
+- `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`
+- `accounting_services`, `accounting_service_payments`, `service_catalog`
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
+
+**DDL pendiente de ejecutar en Supabase (Contable → Servicios, jun 2026):**
+```sql
+CREATE TABLE public.service_catalog (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-be5e-6443fb336bf5',
+  config_type TEXT NOT NULL DEFAULT '',
+  value TEXT NOT NULL DEFAULT '',
+  label TEXT NOT NULL DEFAULT '',
+  sort_order BIGINT NOT NULL DEFAULT 0,
+  deleted_at BIGINT,
+  created_at BIGINT NOT NULL DEFAULT 0,
+  updated_at BIGINT NOT NULL DEFAULT 0
+);
+ALTER TABLE public.service_catalog ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "authenticated_workspace_all" ON public.service_catalog
+  FOR ALL TO authenticated
+  USING  (workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5')
+  WITH CHECK (workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5');
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.service_catalog TO authenticated;
+CREATE INDEX ON public.service_catalog (workspace_id, config_type);
+```
+Y agregar a sync-rules de PowerSync:
+```yaml
+- SELECT * FROM service_catalog WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+```
 
 ### Reglas al crear una tabla sincronizada nueva (Supabase)
 
@@ -872,6 +902,50 @@ ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS purchase_frequency_days INT
 
 ---
 
+## Módulo Contable → Servicios (junio 2026)
+
+### Propósito
+
+Panel de control de servicios recurrentes de la empresa: software/SaaS, seguros, dominios/hosting, servicios profesionales, bancarios, suscripciones, etc. Permite registrar cada pago/renovación, llevar historial, ver próximos vencimientos y gestionar datos de pólizas de seguros inline.
+
+### Tablas (PowerSync ↔ Supabase — 3 tablas)
+
+| Tabla | Contenido |
+|-------|-----------|
+| `accounting_services` | Un registro por servicio. Incluye campos de póliza de seguro inline (activos solo si `category = 'seguro'`). Soft delete via `deleted_at`. |
+| `accounting_service_payments` | Historial de pagos/renovaciones por servicio. Asociado a `service_id`. |
+| `service_catalog` | Catálogo editable de categorías, áreas internas y medios de pago. `config_type` = `'category'` \| `'area'` \| `'payment_method'`. Auto-seed de defaults en primer uso con IDs determinísticos (`catalog-{type}-{value}`). |
+
+### IDs determinísticos en service_catalog
+
+Los defaults se insertan con `id = catalog-${type}-${value}` (ej. `catalog-category-software`). Esto garantiza idempotencia: si dos dispositivos ceden simultáneamente, producen la misma PK y PowerSync deduplica sin error 23505. Los entries creados por el usuario tienen `id = catalog-${type}-${slug}-${timestamp}`.
+
+### Archivos clave
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/database/queries/accounting-services.ts` | CRUD servicios y pagos |
+| `src/main/database/queries/service-catalog.ts` | CRUD catálogo + auto-seed de defaults |
+| `src/main/ipc/accounting-services.ipc.ts` | Handlers IPC (`services:*`) |
+| `src/main/ipc/service-catalog.ipc.ts` | Handlers IPC (`catalog:list`, `catalog:upsert`, `catalog:delete`) |
+| `src/renderer/src/hooks/useAccountingServices.ts` | Hooks React Query servicios y pagos |
+| `src/renderer/src/hooks/useServiceCatalog.ts` | Hooks React Query catálogo |
+| `src/renderer/src/routes/contable/ServicesDashboard.tsx` | Panel principal con tabla, filtros, KPIs y modales |
+| `src/renderer/src/routes/contable/ServiceFormModal.tsx` | Modal edición: 2 tabs (General / Contactos y docs), dropdowns con ⚙ para gestionar catálogo |
+| `src/renderer/src/routes/contable/ServicePaymentsModal.tsx` | Modal de historial y registro de pagos |
+| `src/renderer/src/routes/contable/ServiceCatalogModal.tsx` | Mini-modal para gestionar entradas de un tipo de catálogo (add/edit label/delete) |
+| `src/renderer/src/routes/contable/services.constants.ts` | Constantes: STATUS_OPTIONS, FREQUENCY_OPTIONS, CURRENCY_OPTIONS (ARS/USD/EUR), helpers `dueStatus`, `fmtMoney` |
+
+### Campos del formulario (ServiceFormModal — 2 tabs)
+
+**Tab General:** nombre*, categoría (catálogo⚙), proveedor, área interna (datalist⚙), responsable interno, estado, descripción, valor, moneda, frecuencia, medio de pago (catálogo⚙), renovación automática, requiere aprobación, fechas (inicio/último pago/próximo venc./próxima renovación/límite decisión), datos de póliza (condicional si `category = 'seguro'`).
+
+**Tab Contactos y docs:** contacto en proveedor (nombre/email/teléfono), responsable interno (nombre/email/teléfono), documentos (URL carpeta Drive, portal proveedor, notas).
+
+### Reglas de tipo (IMPORTANTE)
+
+`AccountingService.category` y `AccountingService.payment_method` son `string` (no union literal) para soportar valores custom del catálogo. Los helpers `CATEGORY_LABEL` y `PAYMENT_METHOD_LABEL` en `services.constants.ts` siguen siendo `Record<ServiceCategory, string>` para los defaults — usar cast `as ServiceCategory` con `?? rawValue` fallback.
+
 ---
 
 ## Módulo RRHH — Sueldos (junio 2026)
@@ -1034,14 +1108,13 @@ Cortex es el módulo de Summit que expone el grafo de dependencias del código f
 - Descripción de nodos (`graphify explain`)
 - Visualización interactiva animada del grafo completo
 
-### Stats del grafo (generado junio 2026)
+### Stats del grafo (actualizado junio 2026)
 
 | Métrica | Valor |
 |---------|-------|
-| Nodos | 2 650 |
-| Aristas | 5 621 |
-| Comunidades | 114 |
-| Archivos analizados | 189 |
+| Nodos | 3 228 |
+| Aristas | 6 782 |
+| Comunidades | 128 |
 
 ### Archivos
 
