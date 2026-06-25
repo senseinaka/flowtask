@@ -15,8 +15,8 @@
     "semantic_hash": "e4b044b8bf005f837511747aaaf331f7"
   },
   "package.json": {
-    "mtime": 1782234238.436062,
-    "ast_hash": "7694239792c75ea3cdc2de4ef57c9887",
+    "mtime": 1782417618.3386319,
+    "ast_hash": "24b96d3d5afe2a606ba047f99914a09e",
     "semantic_hash": ""
   },
   "setup-auto-backup.ps1": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782349142.749106,
-    "ast_hash": "13b11cbea2a4c250f5fcbb8da09cd5d8",
+    "mtime": 1782417188.0448728,
+    "ast_hash": "8ea790d2c167830605d691edc3519658",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
