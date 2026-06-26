@@ -1,16 +1,16 @@
 # Graph Report - flowtask  (2026-06-26)
 
 ## Corpus Check
-- 258 files · ~401,269 words
+- 258 files · ~401,450 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3333 nodes · 7109 edges · 132 communities (124 shown, 8 thin omitted)
+- 3334 nodes · 7110 edges · 130 communities (124 shown, 6 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 29 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `703a5239`
+- Built from commit: `059ede85`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -140,9 +140,7 @@
 - [[_COMMUNITY_Community 126|Community 126]]
 - [[_COMMUNITY_Community 127|Community 127]]
 - [[_COMMUNITY_Community 128|Community 128]]
-- [[_COMMUNITY_Community 129|Community 129]]
 - [[_COMMUNITY_Community 130|Community 130]]
-- [[_COMMUNITY_Community 131|Community 131]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `getPowerSyncDb()` - 318 edges
@@ -165,13 +163,13 @@
   src/main/database/queries/quotes.ts → src/main/database/powersync.ts
 - `getBlockedBy()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
   src/main/database/queries/tasks.ts → src/main/database/powersync.ts
-- `EditableText()` --calls--> `cn()`  [EXTRACTED]
-  src/renderer/src/routes/comex/ComexImportDetail.tsx → src/renderer/src/components/ui/utils.ts
+- `useNominaConfig()` --calls--> `useRrhhEmpresa()`  [EXTRACTED]
+  src/renderer/src/hooks/useRrhh.ts → src/renderer/src/routes/rrhh/RrhhEmpresaContext.tsx
 
 ## Import Cycles
 - None detected.
 
-## Communities (132 total, 8 thin omitted)
+## Communities (130 total, 6 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
@@ -187,23 +185,23 @@ Nodes (94): getPowerSyncDb(), COST_SUBFOLDERS, addCotizacion(), createCost(), cr
 
 ### Community 3 - "Community 3"
 Cohesion: 0.04
-Nodes (61): AIExtractionModal(), ALL_SECTION_KEYS, ALL_STATUSES, buildTimelineSteps(), CollapsibleSection(), ComexImportDetail(), CURRENCIES, DespachoSection() (+53 more)
+Nodes (77): ALL_SECTION_KEYS, ALL_STATUSES, buildTimelineSteps(), ComexImportDetail(), CostDashboard(), CURRENCIES, DespachoSection(), DocumentsSection() (+69 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.03
 Nodes (100): EditablePaymentMethod(), ALERT_ICONS, ALERT_STYLES, applyMovementFilters(), BulkActionsBar(), CategoriesManager(), CHART_AXIS_LINE, CHART_AXIS_TICK (+92 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.06
-Nodes (72): buildPaymentMethodLabels(), MONTH_NAMES_ES, addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildCompanyFinanceImportPreview(), ConceptRow, confirmCompanyFinanceImport() (+64 more)
+Cohesion: 0.07
+Nodes (61): buildPaymentMethodLabels(), MONTH_NAMES_ES, registerCompanyFinanceIpc(), addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildCompanyFinanceImportPreview(), ConceptRow (+53 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.03
-Nodes (79): accounting_service_payments, accounting_services, AppSchema, calendar_event_links, comex_brands, comex_cotizaciones, comex_despachante_contacts, comex_despachantes (+71 more)
+Cohesion: 0.02
+Nodes (81): accounting_service_payments, accounting_services, AppSchema, base64url(), calendar_event_links, comex_brands, comex_cotizaciones, comex_despachante_contacts (+73 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.07
-Nodes (61): buildPaymentMethodLabels(), MONTH_NAMES_ES, registerFinanceIpc(), addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildFinanceImportPreview(), ConceptRow (+53 more)
+Cohesion: 0.05
+Nodes (73): buildPaymentMethodLabels(), MONTH_NAMES_ES, registerFinanceIpc(), addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildFinanceImportPreview(), ConceptRow (+65 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.19
@@ -230,12 +228,12 @@ Cohesion: 0.09
 Nodes (36): AlertRow, CategoryManager(), DEFAULT_ALERT_DAYS, EMOJI_OPTIONS, ExpiryCard(), ExpiryDashboard(), ExpiryItemForm(), ExpiryList() (+28 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.08
-Nodes (25): registerMessagesIpc(), deleteWaReminder(), getPendingWaReminders(), getWaReminderForEvent(), markWaReminderSent(), upsertWaReminder(), getPendingDelegatedReminders(), markDelegatedReminderSent() (+17 more)
+Cohesion: 0.09
+Nodes (20): registerReminderIpc(), deleteWaReminder(), getPendingWaReminders(), getWaReminderForEvent(), markWaReminderSent(), upsertWaReminder(), getPendingDelegatedReminders(), markDelegatedReminderSent() (+12 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.05
-Nodes (37): MIGRATIONS, runMigrations(), registerSyncListeners(), registerAppIpc(), registerComexIpc(), registerCompanyFinanceIpc(), registerCortexIpc(), registerDelegatedIpc() (+29 more)
+Cohesion: 0.06
+Nodes (28): MIGRATIONS, runMigrations(), registerSyncListeners(), registerAppIpc(), registerBNAIpc(), registerComexIpc(), registerCortexIpc(), registerEmailIpc() (+20 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.10
@@ -250,20 +248,20 @@ Cohesion: 0.20
 Nodes (4): ComexBrandDetail(), MONTH_LABELS, useComexBrand(), useUpdateComexBrand()
 
 ### Community 19 - "Community 19"
-Cohesion: 0.10
-Nodes (34): ComexDespachantes(), DespachanteCard(), DespachanteContactRow(), DespachanteFormModal(), EMPTY, ComexGestores(), EMPTY_GESTOR, ESPECIALIDAD_COLORS (+26 more)
+Cohesion: 0.07
+Nodes (47): BrandCard(), ComexBrands(), QuickCreateModal(), ComexDespachantes(), DespachanteCard(), DespachanteContactRow(), DespachanteFormModal(), EMPTY (+39 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.06
 Nodes (37): ServiceCatalogModal(), TYPE_LABELS, EMPTY, fromService(), ServiceFormModal(), addPeriod(), ServicePaymentsModal(), CATEGORY_LABEL (+29 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.18
-Nodes (18): getAttachmentsDir(), registerAttachmentIpc(), registerDelegatedExtrasIpc(), addAttachment(), deleteAttachment(), getAttachment(), getAttachmentPath(), getMimeType() (+10 more)
+Cohesion: 0.12
+Nodes (25): closeDb(), getAttachmentsDir(), getDbPath(), registerAttachmentIpc(), registerDelegatedExtrasIpc(), addAttachment(), deleteAttachment(), exportAllAttachments() (+17 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.10
-Nodes (35): KEY, useContacts(), useCreateContact(), useDeleteContact(), useUpdateContact(), KEY, useCreateDelegatedTask(), useDelegatedTasks() (+27 more)
+Cohesion: 0.14
+Nodes (24): KEY, useContacts(), useCreateContact(), useDeleteContact(), useUpdateContact(), KEY, useCreateDelegatedTask(), useDelegatedTasks() (+16 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.04
@@ -275,7 +273,7 @@ Nodes (28): ACTIVE_STATUSES, ALL_STATUSES, ComexImports(), CostBar(), CreateImpo
 
 ### Community 25 - "Community 25"
 Cohesion: 0.06
-Nodes (35): ChatPanel(), ProactiveAlert, Props, CostDashboard(), CalendarEvent, WEEKDAYS, CustomsSection(), EDate() (+27 more)
+Nodes (33): EspTag(), GestorFormModal(), AIExtractionModal(), CollapsibleSection(), EditableDate(), EditableNumber(), EditableSentDate(), EditableText() (+25 more)
 
 ### Community 26 - "Community 26"
 Cohesion: 0.08
@@ -286,12 +284,12 @@ Cohesion: 0.12
 Nodes (24): BLSection(), ExtraCostRow(), FixedCostSection(), PLFileCard(), PLSection(), useAIConfigured(), useAIModels(), useAnalyzeBL() (+16 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.09
-Nodes (39): createDelegatedTask(), deleteDelegatedTask(), getDelegatedTask(), hydrate(), listDelegatedTasks(), updateDelegatedTask(), getStatusLog(), logStatusChange() (+31 more)
+Cohesion: 0.08
+Nodes (41): registerDelegatedIpc(), registerQuestionsIpc(), createDelegatedTask(), deleteDelegatedTask(), getDelegatedTask(), hydrate(), listDelegatedTasks(), updateDelegatedTask() (+33 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.13
-Nodes (25): createKnowledgeEntry(), CreateKnowledgeEntryFields, createKnowledgeEntryFile(), createKnowledgeGlobalSummary(), createKnowledgeSource(), deleteKnowledgeEntry(), deleteKnowledgeEntryFile(), deleteKnowledgeGlobalSummary() (+17 more)
+Nodes (26): registerKnowledgeIpc(), createKnowledgeEntry(), CreateKnowledgeEntryFields, createKnowledgeEntryFile(), createKnowledgeGlobalSummary(), createKnowledgeSource(), deleteKnowledgeEntry(), deleteKnowledgeEntryFile() (+18 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.14
@@ -306,8 +304,8 @@ Cohesion: 0.12
 Nodes (40): recon.ts (queries), getDb(), DIALOG_FILTERS, DIALOG_TITLES, calcNextExpiryDate(), createExpiryCategory(), createExpiryItem(), deleteExpiryCategory() (+32 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.09
-Nodes (51): createConnection(), createJob(), deleteConnection(), getAccessToken(), getConnection(), getJob(), getReportFileByHash(), getTransactionStats() (+43 more)
+Cohesion: 0.12
+Nodes (32): createJob(), getAccessToken(), getJob(), getReportFileByHash(), updateJobStatus(), checkJobReady(), col(), COL_MAP (+24 more)
 
 ### Community 34 - "Community 34"
 Cohesion: 0.12
@@ -322,12 +320,16 @@ Cohesion: 0.17
 Nodes (20): registerQuotesIpc(), _addActivity(), addQuoteActivity(), createQuote(), createQuoteCompany(), createQuoteContact(), deleteQuote(), deleteQuoteCompany() (+12 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.17
-Nodes (14): useConfirmarPeriodo(), useDeletePeriodo(), useExportXls(), useHistorialColaborador(), useSueldos(), useUpdateSueldoNotas(), fmt(), HistorialSlideOver() (+6 more)
+Cohesion: 0.19
+Nodes (13): useConfirmarPeriodo(), useDeletePeriodo(), useExportXls(), useHistorialColaborador(), useNominaConfig(), usePeriodos(), useSueldos(), useUpdateSueldoNotas() (+5 more)
+
+### Community 38 - "Community 38"
+Cohesion: 0.09
+Nodes (7): registerBackupIpc(), DriveService, BACKUP_INTERVAL_OPTIONS, defaultBackupDir(), dirSizeMB(), LocalBackupService, store
 
 ### Community 39 - "Community 39"
-Cohesion: 0.07
-Nodes (67): CHANGED_FIELD_LABELS, ColField, TEMPLATE_COLS, xlsx, asignarLegajo(), clearSueldosByPeriodo(), confirmarPeriodo(), createPeriodo() (+59 more)
+Cohesion: 0.06
+Nodes (78): registerPdfIpc(), CHANGED_FIELD_LABELS, ColField, registerRrhhIpc(), TEMPLATE_COLS, xlsx, asignarLegajo(), clearSueldosByPeriodo() (+70 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.20
@@ -335,7 +337,7 @@ Nodes (16): useCreateMessage(), useCreateTemplate(), useDeleteMessage(), useDele
 
 ### Community 41 - "Community 41"
 Cohesion: 0.09
-Nodes (18): getBestETA(), INAL_BADGE_CONFIG, PIPELINE_PHASES, PipelineCard(), ScaleKey, SCALES, CotizacionesModal(), desvio() (+10 more)
+Nodes (19): ComexDashboard(), getBestETA(), INAL_BADGE_CONFIG, PIPELINE_PHASES, PipelineCard(), ScaleKey, SCALES, CotizacionesModal() (+11 more)
 
 ### Community 42 - "Community 42"
 Cohesion: 0.27
@@ -354,28 +356,28 @@ Cohesion: 0.11
 Nodes (18): build, appId, asar, directories, files, nsis, productName, publish (+10 more)
 
 ### Community 46 - "Community 46"
-Cohesion: 0.14
-Nodes (26): useAddAttachment(), useAttachments(), useDeleteAttachment(), useProjects(), useCreateReminder(), useDeleteReminder(), useReminders(), useAddDependency() (+18 more)
+Cohesion: 0.12
+Nodes (32): useAddAttachment(), useAttachments(), useDeleteAttachment(), useProjects(), useCreateReminder(), useDeleteReminder(), useReminders(), useAddDependency() (+24 more)
 
 ### Community 47 - "Community 47"
 Cohesion: 0.14
 Nodes (21): registerChatIpc(), getCustoms(), listExtraCosts(), listImports(), listPayments(), listProformas(), listTributos(), upsertTributos() (+13 more)
 
 ### Community 48 - "Community 48"
-Cohesion: 0.13
-Nodes (13): usePermissions hook, MPDashboard(), usePermissions(), _subs, usePowerSyncStatus(), Sidebar(), WorkspaceKey, WORKSPACES (+5 more)
+Cohesion: 0.14
+Nodes (11): usePermissions hook, MPDashboard(), usePermissions(), _subs, usePowerSyncStatus(), Sidebar(), WorkspaceKey, WORKSPACES (+3 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.24
-Nodes (9): ALL_CATEGORIES, CostRow(), CostsSection(), Props, QuickAddPanel(), useComexCosts(), useCreateComexCost(), useDeleteComexCost() (+1 more)
+Cohesion: 0.23
+Nodes (10): ALL_CATEGORIES, CostRow(), CostsSection(), Props, QuickAddPanel(), useComexCosts(), useComexCustoms(), useCreateComexCost() (+2 more)
 
 ### Community 50 - "Community 50"
 Cohesion: 0.16
 Nodes (14): useAuthSession(), useCreateQuote(), useCreateQuoteCompany(), useQuoteCompanies(), useQuoteKPIs(), useQuotes(), DashboardTab, formatValue() (+6 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.25
-Nodes (4): EDGES, FLOW_EDGES, NODES, Tab
+Cohesion: 0.15
+Nodes (9): EDGES, FLOW_EDGES, NODES, Tab, isEmpresa(), RrhhEmpresaContext, RrhhEmpresaLayout(), queryClient (+1 more)
 
 ### Community 52 - "Community 52"
 Cohesion: 0.26
@@ -410,12 +412,12 @@ Cohesion: 0.18
 Nodes (14): registerPermissionsIpc(), requireAdmin(), adminSaveUserProfile(), deleteUserProfile(), listAllPermissions(), listUserPermissions(), listUserProfiles(), upsertPermission() (+6 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.11
-Nodes (20): computeChangedFields(), registerSettingsIpc(), registerWallpaperIpc(), ConfigStore, getPersonalContact(), savePersonalContact(), store, addUserImage() (+12 more)
+Cohesion: 0.23
+Nodes (14): registerWallpaperIpc(), addUserImage(), DEFAULT_CONFIG, deleteUserImage(), fileToDataUrl(), getUserWallpapersDir(), getWallpaperConfig(), getWallpaperStats() (+6 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.10
-Nodes (18): ComexDashboard(), ComexPlannings(), PlanningRow(), QuickCreateModal(), VIEW_TABS, ViewMode, ACTIVE_STATUSES, PlanningAlert (+10 more)
+Cohesion: 0.09
+Nodes (19): CalendarEvent, WEEKDAYS, ComexPlannings(), PlanningRow(), QuickCreateModal(), VIEW_TABS, ViewMode, ACTIVE_STATUSES (+11 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.42
@@ -473,6 +475,10 @@ Nodes (10): Archivos, Archivos del módulo, Binario y entorno, ¿Claude usa el g
 Cohesion: 0.22
 Nodes (8): compilerOptions, composite, paths, types, extends, include, @main/*, @shared/*
 
+### Community 76 - "Community 76"
+Cohesion: 0.14
+Nodes (8): extractText(), pollIncomingMessages(), processedMessageIds, RawMessage, startPolling(), stopPolling(), warmUpAndStart(), WhatsappService
+
 ### Community 77 - "Community 77"
 Cohesion: 0.25
 Nodes (7): author, description, keywords, license, main, name, version
@@ -486,12 +492,12 @@ Cohesion: 0.22
 Nodes (9): Bugs conocidos y sus fixes (historial relevante), Fix: badge del contador de cargas siempre en 0 (resuelto — junio 2025), Fix: badge PowerSync mostraba "object Object" en lugar del error real (resuelto — junio 2025), Fix: cargas no guardaban valores — FK constraint (resuelto — junio 2025), Fix: cola de sync bloqueada por string "null" en columnas numéricas (resuelto — junio 2025), Fix: import_order_plannings subía con workspace_id = null (resuelto — junio 2025), Fix: input "Monto" no aceptaba teclado (resuelto — junio 2025), Fix: sincronización de cargas y company_finance entre dispositivos (resuelto — junio 2025) (+1 more)
 
 ### Community 80 - "Community 80"
-Cohesion: 0.18
-Nodes (13): base64url(), disconnectPowerSync(), ProductionTokenConnector, readEnvLocal(), signPowerSyncJwt(), registerAuthIpc(), getSession(), login() (+5 more)
+Cohesion: 0.22
+Nodes (11): disconnectPowerSync(), ProductionTokenConnector, readEnvLocal(), registerAuthIpc(), getSession(), login(), logout(), refreshSession() (+3 more)
 
 ### Community 81 - "Community 81"
-Cohesion: 0.16
-Nodes (18): useAsignarLegajo(), useConfirmarGenerar(), useCrearDriveColaborador(), useDeleteColaborador(), useExportNominaXls(), useGenerarDesdeUltimo(), useHardDeleteColaborador(), useNominaColaboradores() (+10 more)
+Cohesion: 0.17
+Nodes (17): useAsignarLegajo(), useConfirmarGenerar(), useCrearDriveColaborador(), useDeleteColaborador(), useExportNominaXls(), useGenerarDesdeUltimo(), useHardDeleteColaborador(), useNominaColaboradores() (+9 more)
 
 ### Community 82 - "Community 82"
 Cohesion: 0.18
@@ -502,24 +508,24 @@ Cohesion: 0.36
 Nodes (11): BcraDetalleDia, BcraResponse, fetchFromBcra(), getBcraRates(), latestCachedDate(), readCacheEntries(), refreshBcraRates(), sixMonthsAgo() (+3 more)
 
 ### Community 84 - "Community 84"
-Cohesion: 0.13
-Nodes (19): BrandCard(), ComexBrands(), QuickCreateModal(), ComexPlanningAIReports(), ComexSuppliers(), QuickCreateModal(), SupplierCard(), useComexBrands() (+11 more)
+Cohesion: 0.15
+Nodes (13): ChatPanel(), ProactiveAlert, Props, DelegatedCard(), PriorityBadge(), Props, Props, STATUS_STYLES (+5 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.29
 Nodes (7): scripts, build, build:win, dev, postinstall, preview, release
 
 ### Community 86 - "Community 86"
-Cohesion: 0.19
-Nodes (12): useReadPayrollPdf(), usePeriodos(), useSavePayroll(), useSaveSac(), useSaveVacaciones(), ChartRow, fmt(), fmtM() (+4 more)
+Cohesion: 0.22
+Nodes (10): useReadPayrollPdf(), useSavePayroll(), useSaveSac(), useSaveVacaciones(), ChartRow, fmt(), fmtM(), KpiBar() (+2 more)
 
 ### Community 87 - "Community 87"
 Cohesion: 0.29
 Nodes (4): ModuleDef, MODULES, PermissionLevel, SubmoduleDef
 
 ### Community 88 - "Community 88"
-Cohesion: 0.36
-Nodes (9): FacturasComercialSection(), FieldRow(), formatFieldValue(), ProformaSection(), useAnalyzeProforma(), useCreateComexProforma(), useDeleteComexProforma(), useUpdateComexProforma() (+1 more)
+Cohesion: 0.20
+Nodes (16): registerMercadoPagoIpc(), createConnection(), deleteConnection(), getConnection(), getTransactionStats(), insertTransactionsBatch(), listConnections(), listJobs() (+8 more)
 
 ### Community 89 - "Community 89"
 Cohesion: 0.33
@@ -542,8 +548,8 @@ Cohesion: 0.40
 Nodes (5): Arquitectura de sincronización — DIRECTIVA FUNDAMENTAL, Función `restoreComexLocalCache` / `restoreCompanyFinanceLocalCache`, Reglas al crear una tabla sincronizada nueva (Supabase), ❌ Solo local (NO sincroniza — por diseño), ✅ Todas las tablas de negocio sincronizan via PowerSync ↔ Supabase
 
 ### Community 94 - "Community 94"
-Cohesion: 0.13
-Nodes (8): closeDb(), getDbPath(), registerBackupIpc(), BACKUP_INTERVAL_OPTIONS, defaultBackupDir(), dirSizeMB(), LocalBackupService, store
+Cohesion: 0.28
+Nodes (11): registerMessagesIpc(), createScheduledMessage(), createTemplate(), deleteScheduledMessage(), deleteTemplate(), hydrateMessage(), listScheduledMessages(), listTemplates() (+3 more)
 
 ### Community 95 - "Community 95"
 Cohesion: 0.50
@@ -566,8 +572,8 @@ Cohesion: 0.16
 Nodes (13): useDeleteLista(), useRrhhListas(), useUpsertColaborador(), useUpsertLista(), ColaboradorFormDrawer(), DIAS_SEMANA, ListaSelect(), Props (+5 more)
 
 ### Community 100 - "Community 100"
-Cohesion: 0.27
-Nodes (10): DocumentsSection(), PaymentSection(), useAnalyzeComexDocument(), useComexDocuments(), useComexPayments(), useCreateComexDocument(), useDeleteComexDocument(), useUpdateComexDocument() (+2 more)
+Cohesion: 0.47
+Nodes (4): decryptToken(), encryptToken(), getDerivedKey(), store
 
 ### Community 105 - "Community 105"
 Cohesion: 0.09
@@ -602,8 +608,8 @@ Cohesion: 0.22
 Nodes (11): getMimeType(), _renameDriveFolder(), setupImportDriveFolders(), _uploadProformaToDrive(), createImport(), getImport(), getProforma(), hydrateImport() (+3 more)
 
 ### Community 118 - "Community 118"
-Cohesion: 0.27
-Nodes (10): registerPdfIpc(), calcConfidence(), clearPdfCache(), getCached(), getPdfCacheInfo(), getPdfLib(), hashFile(), PdfjsLib (+2 more)
+Cohesion: 0.40
+Nodes (4): DatePicker(), DatePickerProps, DAYS, MONTHS
 
 ### Community 119 - "Community 119"
 Cohesion: 0.43
@@ -630,8 +636,8 @@ Cohesion: 0.47
 Nodes (6): MovementEntriesLedger(), MovementEntriesQuickList(), useAddMovementEntry(), useMovementEntries(), useRemoveMovementEntry(), useUpdateMovementEntry()
 
 ### Community 126 - "Community 126"
-Cohesion: 0.18
-Nodes (11): registerReminderIpc(), exportAllAttachments(), createReminder(), deleteReminder(), exportAllReminders(), getPendingReminders(), getReminder(), listReminders() (+3 more)
+Cohesion: 0.20
+Nodes (6): computeChangedFields(), registerSettingsIpc(), ConfigStore, getPersonalContact(), savePersonalContact(), store
 
 ### Community 127 - "Community 127"
 Cohesion: 0.83
@@ -641,32 +647,24 @@ Nodes (4): EditableStatus(), EditableStatus(), getDisplayStatus(), getNextStatus
 Cohesion: 0.48
 Nodes (6): buildImportExportTitle(), ComexImportFullDetail, fmtDate(), sanitizeFileName(), writeImportExcel(), writeImportPdf()
 
-### Community 129 - "Community 129"
-Cohesion: 0.67
-Nodes (3): isEmpresa(), RrhhEmpresaContext, RrhhEmpresaLayout()
-
 ### Community 130 - "Community 130"
 Cohesion: 0.33
 Nodes (7): createBrand(), getBrand(), getSupplier(), hydrateBrand(), hydratePlanning(), listMilestones(), updateBrand()
 
-### Community 131 - "Community 131"
-Cohesion: 0.38
-Nodes (4): registerBNAIpc(), CotizacionRow, fetchAllRates(), getEurArsRateDirect()
-
 ## Knowledge Gaps
 - **1014 isolated node(s):** `projects`, `tasks`, `task_dependencies`, `user_permissions`, `financeAccountLikeColumns` (+1009 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `getPowerSyncDb()` connect `Community 2` to `Community 130`, `Community 5`, `Community 6`, `Community 7`, `Community 11`, `Community 15`, `Community 28`, `Community 29`, `Community 33`, `Community 36`, `Community 39`, `Community 47`, `Community 52`, `Community 57`, `Community 60`, `Community 62`, `Community 65`, `Community 109`, `Community 117`, `Community 122`, `Community 123`?**
-  _High betweenness centrality (0.132) - this node is a cross-community bridge._
-- **Why does `cn()` connect `Community 25` to `Community 1`, `Community 3`, `Community 4`, `Community 13`, `Community 19`, `Community 22`, `Community 24`, `Community 26`, `Community 27`, `Community 37`, `Community 40`, `Community 41`, `Community 44`, `Community 46`, `Community 48`, `Community 49`, `Community 54`, `Community 56`, `Community 61`, `Community 63`, `Community 68`, `Community 78`, `Community 86`, `Community 88`, `Community 100`, `Community 108`, `Community 119`, `Community 124`, `Community 125`?**
+- **Why does `getDb()` connect `Community 32` to `Community 6`, `Community 9`, `Community 10`, `Community 11`, `Community 14`, `Community 15`, `Community 17`, `Community 21`, `Community 28`, `Community 29`, `Community 33`, `Community 38`, `Community 39`, `Community 47`, `Community 57`, `Community 59`, `Community 60`, `Community 69`, `Community 83`, `Community 88`, `Community 94`?**
+  _High betweenness centrality (0.131) - this node is a cross-community bridge._
+- **Why does `getPowerSyncDb()` connect `Community 2` to `Community 130`, `Community 5`, `Community 6`, `Community 7`, `Community 11`, `Community 15`, `Community 28`, `Community 29`, `Community 33`, `Community 36`, `Community 39`, `Community 47`, `Community 52`, `Community 57`, `Community 60`, `Community 62`, `Community 65`, `Community 88`, `Community 109`, `Community 117`, `Community 122`, `Community 123`?**
   _High betweenness centrality (0.128) - this node is a cross-community bridge._
-- **Why does `getDb()` connect `Community 32` to `Community 6`, `Community 9`, `Community 10`, `Community 11`, `Community 14`, `Community 15`, `Community 17`, `Community 21`, `Community 28`, `Community 29`, `Community 33`, `Community 38`, `Community 47`, `Community 57`, `Community 59`, `Community 60`, `Community 69`, `Community 83`, `Community 94`, `Community 118`, `Community 126`?**
-  _High betweenness centrality (0.122) - this node is a cross-community bridge._
+- **Why does `cn()` connect `Community 25` to `Community 1`, `Community 3`, `Community 4`, `Community 13`, `Community 19`, `Community 22`, `Community 24`, `Community 26`, `Community 27`, `Community 37`, `Community 40`, `Community 41`, `Community 44`, `Community 46`, `Community 48`, `Community 49`, `Community 54`, `Community 56`, `Community 61`, `Community 63`, `Community 68`, `Community 78`, `Community 84`, `Community 86`, `Community 108`, `Community 118`, `Community 119`, `Community 124`, `Community 125`?**
+  _High betweenness centrality (0.127) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `projects`, `tasks`, `task_dependencies` to the rest of the system?**

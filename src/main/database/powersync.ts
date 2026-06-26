@@ -2147,29 +2147,35 @@ export function getPowerSyncStatus(): PowerSyncStatusInfo | null {
  * escritura local (`powersync:dataChanged`).
  */
 // ── Watchdog de reconexión ────────────────────────────────────────────────────
-// El Rust client de PowerSync (v0.18.x) a veces queda en connected:false,
-// connecting:false sin error tras un cierre limpio del server (idle-timeout,
-// rolling deploy, etc.). Este watchdog lo detecta y reconecta automáticamente.
+// El Rust client de PowerSync (v0.18.x) queda en connected:false, connecting:false
+// sin error cuando el server cierra la conexión limpiamente (idle-timeout, rolling
+// deploy, etc.). El SDK no reintenta solo; este watchdog lo detecta y llama a
+// db.connect() directamente (SIN disconnect() previo, que causaría otro evento
+// idle y un loop conflictivo).
 
 let _watchdogTimer: ReturnType<typeof setTimeout> | null = null
-let _intentionalDisconnect = false  // true cuando llamamos disconnect() a propósito (logout)
+let _intentionalDisconnect = false
 
 function scheduleWatchdog() {
   if (_watchdogTimer) clearTimeout(_watchdogTimer)
   _watchdogTimer = setTimeout(async () => {
+    _watchdogTimer = null
     if (_intentionalDisconnect || !_psDb) return
     const s = _psDb.currentStatus
-    if (!s.connected && !s.connecting) {
-      console.warn('[PowerSync] Watchdog: detectado estado idle sin reconexión — reconectando…')
-      try {
-        await reconnectPowerSync()
-      } catch (e) {
-        console.error('[PowerSync] Watchdog: error al reconectar:', errorMessage(e))
-        // Volver a programar para el próximo intento
-        scheduleWatchdog()
-      }
+    if (s.connected || s.connecting) return   // ya se recuperó solo
+
+    console.warn('[PowerSync] Watchdog: idle sin error — llamando connect() directo')
+    const env = readEnvLocal()
+    const endpoint = env.POWERSYNC_URL
+    if (!endpoint || !env.POWERSYNC_JWT_PRIVATE_KEY_B64 || !env.POWERSYNC_JWT_KID) return
+    try {
+      await _psDb.connect(new ProductionTokenConnector(endpoint))
+    } catch (e) {
+      _lastErrorMessage = errorMessage(e)
+      console.error('[PowerSync] Watchdog: error en connect():', _lastErrorMessage)
+      scheduleWatchdog()   // reintentar
     }
-  }, 15_000)   // 15 s sin cambio de estado → reconectar
+  }, 10_000)   // 10 s idle → reconectar
 }
 
 export function registerSyncListeners(sendToRenderer: (channel: string, data: unknown) => void): void {
