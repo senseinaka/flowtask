@@ -2013,6 +2013,7 @@ export async function connectPowerSync(): Promise<void> {
   }
 
   _configError = null
+  _intentionalDisconnect = false
 
   const db = getPowerSyncDb()
   await migrateLegacyTaskData(db)
@@ -2052,6 +2053,8 @@ export async function connectPowerSync(): Promise<void> {
 /** Desconecta PowerSync (p. ej. al cerrar sesión). */
 export async function disconnectPowerSync(): Promise<void> {
   if (!_psDb) return
+  _intentionalDisconnect = true
+  if (_watchdogTimer) { clearTimeout(_watchdogTimer); _watchdogTimer = null }
   await _psDb.disconnect()
 }
 
@@ -2143,11 +2146,47 @@ export function getPowerSyncStatus(): PowerSyncStatusInfo | null {
  * actualizan datos de tasks/projects/task_dependencies por sync remoto o
  * escritura local (`powersync:dataChanged`).
  */
+// ── Watchdog de reconexión ────────────────────────────────────────────────────
+// El Rust client de PowerSync (v0.18.x) a veces queda en connected:false,
+// connecting:false sin error tras un cierre limpio del server (idle-timeout,
+// rolling deploy, etc.). Este watchdog lo detecta y reconecta automáticamente.
+
+let _watchdogTimer: ReturnType<typeof setTimeout> | null = null
+let _intentionalDisconnect = false  // true cuando llamamos disconnect() a propósito (logout)
+
+function scheduleWatchdog() {
+  if (_watchdogTimer) clearTimeout(_watchdogTimer)
+  _watchdogTimer = setTimeout(async () => {
+    if (_intentionalDisconnect || !_psDb) return
+    const s = _psDb.currentStatus
+    if (!s.connected && !s.connecting) {
+      console.warn('[PowerSync] Watchdog: detectado estado idle sin reconexión — reconectando…')
+      try {
+        await reconnectPowerSync()
+      } catch (e) {
+        console.error('[PowerSync] Watchdog: error al reconectar:', errorMessage(e))
+        // Volver a programar para el próximo intento
+        scheduleWatchdog()
+      }
+    }
+  }, 15_000)   // 15 s sin cambio de estado → reconectar
+}
+
 export function registerSyncListeners(sendToRenderer: (channel: string, data: unknown) => void): void {
   const db = getPowerSyncDb()
 
   db.registerListener({
-    statusChanged: (status) => sendToRenderer('powersync:status', serializeStatus(status))
+    statusChanged: (status) => {
+      sendToRenderer('powersync:status', serializeStatus(status))
+
+      if (status.connected) {
+        // Conectado → cancelar cualquier watchdog pendiente
+        if (_watchdogTimer) { clearTimeout(_watchdogTimer); _watchdogTimer = null }
+      } else if (!status.connecting) {
+        // Desconectado y no reintentando → armar watchdog
+        scheduleWatchdog()
+      }
+    }
   })
 
   db.onChangeWithCallback(
