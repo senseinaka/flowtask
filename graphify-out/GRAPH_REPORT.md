@@ -1,7 +1,7 @@
 # Graph Report - flowtask  (2026-06-26)
 
 ## Corpus Check
-- 255 files · ~393,437 words
+- 255 files · ~393,564 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ab56022f`
+- Built from commit: `a99b3aba`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -143,22 +143,22 @@
 4. `DriveService` - 35 edges
 5. `formatCurrency()` - 32 edges
 6. `useRrhhEmpresa()` - 28 edges
-7. `SchedulerService` - 26 edges
-8. `Summit — Contexto del proyecto para Claude Code` - 26 edges
+7. `Summit — Contexto del proyecto para Claude Code` - 26 edges
+8. `SchedulerService` - 26 edges
 9. `getMonthLabel()` - 23 edges
 10. `useUIStore` - 23 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `getEmailMessageByUid()` --calls--> `getDb()`  [INFERRED]
-  src/main/database/queries/email.ts → src/main/database/db.ts
-- `markAlertSent()` --calls--> `getDb()`  [EXTRACTED]
-  src/main/database/queries/expiry.ts → src/main/database/db.ts
-- `getQuestionStatus()` --calls--> `getDb()`  [EXTRACTED]
-  src/main/database/queries/task_questions.ts → src/main/database/db.ts
 - `listPendingJobs()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
   src/main/database/queries/mercadopago.ts → src/main/database/powersync.ts
 - `getQuoteCompany()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
   src/main/database/queries/quotes.ts → src/main/database/powersync.ts
+- `getBlockedBy()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
+  src/main/database/queries/tasks.ts → src/main/database/powersync.ts
+- `App()` --calls--> `useUIStore`  [EXTRACTED]
+  src/renderer/src/App.tsx → src/renderer/src/store/ui.store.ts
+- `SortTh()` --calls--> `cn()`  [EXTRACTED]
+  src/renderer/src/routes/rrhh/PeriodoDetail.tsx → src/renderer/src/components/ui/utils.ts
 
 ## Import Cycles
 - None detected.
@@ -614,7 +614,7 @@ Cohesion: 0.47
 Nodes (4): ESTADO_ORDER, fmt(), ReconTabKPIs(), useReconKPIs()
 
 ## Knowledge Gaps
-- **1004 isolated node(s):** `name`, `version`, `description`, `main`, `dev` (+999 more)
+- **1004 isolated node(s):** `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first`, `Cómo correr el proyecto`, `1. `flowtask.db` — base local (better-sqlite3)` (+999 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -622,14 +622,14 @@ Nodes (4): ESTADO_ORDER, fmt(), ReconTabKPIs(), useReconKPIs()
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `getDb()` connect `Community 10` to `Community 6`, `Community 9`, `Community 14`, `Community 15`, `Community 17`, `Community 21`, `Community 28`, `Community 29`, `Community 32`, `Community 33`, `Community 38`, `Community 39`, `Community 43`, `Community 50`, `Community 57`, `Community 59`, `Community 80`, `Community 83`, `Community 94`?**
-  _High betweenness centrality (0.140) - this node is a cross-community bridge._
-- **Why does `getPowerSyncDb()` connect `Community 2` to `Community 65`, `Community 33`, `Community 36`, `Community 69`, `Community 6`, `Community 5`, `Community 7`, `Community 39`, `Community 9`, `Community 43`, `Community 15`, `Community 52`, `Community 57`, `Community 122`, `Community 28`, `Community 29`, `Community 62`?**
-  _High betweenness centrality (0.112) - this node is a cross-community bridge._
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
 - **Why does `cn()` connect `Community 30` to `Community 1`, `Community 3`, `Community 4`, `Community 11`, `Community 13`, `Community 19`, `Community 22`, `Community 24`, `Community 26`, `Community 27`, `Community 37`, `Community 40`, `Community 41`, `Community 44`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 54`, `Community 56`, `Community 61`, `Community 68`, `Community 78`, `Community 84`, `Community 86`, `Community 117`, `Community 119`, `Community 124`, `Community 126`?**
-  _High betweenness centrality (0.105) - this node is a cross-community bridge._
+  _High betweenness centrality (0.112) - this node is a cross-community bridge._
+- **Why does `adminSaveUserProfile()` connect `Community 80` to `Community 56`, `Community 10`?**
+  _High betweenness centrality (0.107) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `name`, `version`, `description` to the rest of the system?**
+- **What connects `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first` to the rest of the system?**
   _1004 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.005970149253731343 - nodes in this community are weakly interconnected._
