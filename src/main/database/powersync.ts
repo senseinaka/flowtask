@@ -10,10 +10,8 @@ import {
   Table,
   column,
   UpdateType,
-  SyncStreamConnectionMethod,
   type AbstractPowerSyncDatabase,
   type PowerSyncBackendConnector,
-  type PowerSyncConnectionOptions,
   type SyncStatus
 } from '@powersync/common'
 import type { PowerSyncStatusInfo } from '@shared/types'
@@ -1415,19 +1413,6 @@ function signPowerSyncJwt(env: Record<string, string>, endpoint: string, sub: st
   return `${signingInput}.${base64url(signature)}`
 }
 
-/**
- * Opciones de conexión de PowerSync. Usamos WebSocket en lugar del HTTP streaming
- * por defecto: el HTTP streaming en @powersync/node queda colgado tras un cierre
- * limpio del server (idle-timeout, deploy) sin que el SDK lo note, dejando el
- * estado en connected:false / connecting:false sin error. WebSocket tiene
- * keepalive ping/pong y propaga el cierre como evento, disparando el reintento
- * automático del SDK (connecting:true).
- */
-const PS_CONNECT_OPTIONS: PowerSyncConnectionOptions = {
-  connectionMethod: SyncStreamConnectionMethod.WEB_SOCKET,
-  retryDelayMs: 5_000,
-}
-
 class ProductionTokenConnector implements PowerSyncBackendConnector {
   constructor(private endpoint: string) {}
 
@@ -1524,7 +1509,20 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
       }
 
       if (!res.ok) {
-        throw new Error(`[PowerSync] ${op.op} ${op.table}/${op.id} -> ${res.status} ${await res.text()}`)
+        const body = await res.text()
+        // 403 / 42501 = RLS violation: la tabla existe en Supabase pero le falta la
+        // policy o el GRANT para el rol `authenticated`. Es un error de SETUP (DDL no
+        // corrido), no de datos. Saltamos la fila para NO bloquear toda la cola ps_crud
+        // (ver CLAUDE.md: una sola fila mala congela el sync de todos). Mismo criterio
+        // que el skip de PGRST205. El usuario ve qué tabla falta en el badge.
+        if (res.status === 403 || body.includes('42501')) {
+          _lastErrorMessage =
+            `[PowerSync] ${op.table}: falta RLS policy / GRANT para 'authenticated' (42501). ` +
+            `Fila ${op.id} omitida para no trabar la cola — corré el DDL de esa tabla en Supabase.`
+          console.error(`[PowerSync] SKIP ${op.op} ${op.table}/${op.id} -> 403/42501. ${body}`)
+          continue
+        }
+        throw new Error(`[PowerSync] ${op.op} ${op.table}/${op.id} -> ${res.status} ${body}`)
       }
     }
 
@@ -2056,8 +2054,8 @@ export async function connectPowerSync(): Promise<void> {
     console.log('[PowerSync] no se pudo leer ps_crud:', errorMessage(e))
   }
   try {
-    await db.connect(new ProductionTokenConnector(endpoint), PS_CONNECT_OPTIONS)
-    console.log('[PowerSync] Conectado (WebSocket) a', endpoint, 'como', session.email)
+    await db.connect(new ProductionTokenConnector(endpoint))
+    console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
   } catch (e) {
     _lastErrorMessage = errorMessage(e)
     console.error('[PowerSync] Error al conectar:', _lastErrorMessage)
@@ -2088,8 +2086,8 @@ export async function reconnectPowerSync(): Promise<void> {
   const db = getPowerSyncDb()
   await db.disconnect()
   try {
-    await db.connect(new ProductionTokenConnector(endpoint), PS_CONNECT_OPTIONS)
-    console.log('[PowerSync] Reconectado (WebSocket) a', endpoint, 'como', session.email)
+    await db.connect(new ProductionTokenConnector(endpoint))
+    console.log('[PowerSync] Reconectado a', endpoint, 'como', session.email)
   } catch (e) {
     _lastErrorMessage = errorMessage(e)
     console.error('[PowerSync] Error al reconectar:', _lastErrorMessage)
@@ -2184,7 +2182,7 @@ function scheduleWatchdog() {
     const endpoint = env.POWERSYNC_URL
     if (!endpoint || !env.POWERSYNC_JWT_PRIVATE_KEY_B64 || !env.POWERSYNC_JWT_KID) return
     try {
-      await _psDb.connect(new ProductionTokenConnector(endpoint), PS_CONNECT_OPTIONS)
+      await _psDb.connect(new ProductionTokenConnector(endpoint))
     } catch (e) {
       _lastErrorMessage = errorMessage(e)
       console.error('[PowerSync] Watchdog: error en connect():', _lastErrorMessage)
