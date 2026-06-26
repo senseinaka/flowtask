@@ -94,6 +94,13 @@ export function useAnalyzePL() {
   })
 }
 
+export function useAnalyzePlFile() {
+  return useMutation({
+    mutationFn: (plFileId: string): Promise<AIAnalysisResult> =>
+      window.api.ai.analyzePlFile(plFileId)
+  })
+}
+
 // ── Chat del dashboard ────────────────────────────────────────────────────────
 
 export function useDashboardChat() {

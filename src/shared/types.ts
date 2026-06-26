@@ -1257,6 +1257,19 @@ export interface ComexQuoteFile {
   updated_at: number
 }
 
+export interface ComexImportPlFile {
+  id: string
+  import_id: string
+  workspace_id: string
+  stored_name: string | null
+  original_name: string | null
+  drive_file_id: string | null
+  drive_status: DriveDocStatus
+  extracted_json: string | null
+  sort_order: number
+  created_at: number
+}
+
 export interface ComexPayment {
   id: string
   import_id: string

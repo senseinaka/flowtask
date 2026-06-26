@@ -14,7 +14,7 @@ import type {
   SyncResult, SyncStatus, PowerSyncStatusInfo, UpdateCheckResult, UpdateDownloadProgress,
   TaskStatusLogEntry, TaskType,
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert,
-  ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCustoms, ComexCostItem,
+  ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact,
   ComexBrand, CreateComexBrandInput,
@@ -413,6 +413,13 @@ const api = {
       open:       (importId: string):                   Promise<void>           => ipcRenderer.invoke('comex:pl:open', importId),
       delete:     (importId: string):                   Promise<ComexImport>    => ipcRenderer.invoke('comex:pl:delete', importId)
     },
+    plFiles: {
+      list:             (importId: string):                                                                                Promise<ComexImportPlFile[]> => ipcRenderer.invoke('comex:pl-files:list', importId),
+      upload:           (args: { importId: string; importFolderId: string | null; filePath?: string; fileBuffer?: ArrayBuffer; fileName?: string }): Promise<ComexImportPlFile[] | null> => ipcRenderer.invoke('comex:pl-files:upload', args),
+      delete:           (plFileId: string):                                                                                Promise<ComexImportPlFile[]> => ipcRenderer.invoke('comex:pl-files:delete', plFileId),
+      open:             (plFileId: string):                                                                                Promise<void>               => ipcRenderer.invoke('comex:pl-files:open', plFileId),
+      updateExtracted:  (plFileId: string, extractedJson: string):                                                        Promise<ComexImportPlFile[]> => ipcRenderer.invoke('comex:pl-files:updateExtracted', plFileId, extractedJson),
+    },
     bl: {
       selectFile: ():                               Promise<string | null>  => ipcRenderer.invoke('comex:bl:selectFile'),
       upload:     (importId: string, filePath: string): Promise<ComexImport>  => ipcRenderer.invoke('comex:bl:upload', importId, filePath),
@@ -551,6 +558,7 @@ const api = {
     analyzeDespacho:      (importId: string, page?: number):                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeDespacho', importId, page ?? 1),
     analyzeBL:            (importId: string):                                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeBL', importId),
     analyzePL:            (importId: string):                                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzePL', importId),
+    analyzePlFile:        (plFileId: string):                                            Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzePlFile', plFileId),
     analyzeProforma:      (proformaId: string):                                         Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeProforma', proformaId),
     analyzeExtraCost:     (costId: string):                                             Promise<AIAnalysisResult> => ipcRenderer.invoke('ai:analyzeExtraCost', costId),
     dashboardChat:   (params: { contextData: unknown; messages: Array<{ role: 'user' | 'assistant'; content: string }> }): Promise<{ content: string; tokens_used: number }> =>

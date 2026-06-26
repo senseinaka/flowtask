@@ -465,8 +465,8 @@
     "semantic_hash": "29846cd39af0bc84e09ee1d15aec1223"
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782443463.43285,
-    "ast_hash": "0ca7abff6eff35001544b70e0e794564",
+    "mtime": 1782491968.8745854,
+    "ast_hash": "3f91fb377ab8c4863b3d21cba6d54bdc",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -1110,8 +1110,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/SueldosDashboard.tsx": {
-    "mtime": 1782477171.2457914,
-    "ast_hash": "16891edd934b5a427538e9fff3038f5e",
+    "mtime": 1782490551.0764234,
+    "ast_hash": "0b1c0e309a857c2addfe38fada6b0c4b",
     "semantic_hash": ""
   },
   "src/main/database/queries/rrhh.ts": {
@@ -1125,8 +1125,8 @@
     "semantic_hash": ""
   },
   "src/main/services/rrhh.service.ts": {
-    "mtime": 1782476873.6598363,
-    "ast_hash": "5c55ab6b90e5072327b310802bd8e167",
+    "mtime": 1782490854.2748382,
+    "ast_hash": "8c31e66a8c08839c574cfe31050ef518",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useRrhh.ts": {
@@ -1135,8 +1135,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/PeriodoDetail.tsx": {
-    "mtime": 1782477257.9736764,
-    "ast_hash": "0d5e17a5a1135e8e836a87b5f1e945e2",
+    "mtime": 1782490961.769636,
+    "ast_hash": "c1c6c99a47b33d05ae7bacef12d6fe12",
     "semantic_hash": ""
   },
   "src/main/services/nomina.service.ts": {

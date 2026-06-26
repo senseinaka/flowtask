@@ -10,6 +10,7 @@ import {
   listDocuments, getDocument, createDocument, updateDocument, deleteDocument,
   listQuotes, createQuote, updateQuote, deleteQuote,
   listQuoteFiles, createQuoteFile, updateQuoteFile, deleteQuoteFile,
+  listImportPlFiles, getImportPlFile, createImportPlFile, updateImportPlFile, deleteImportPlFile,
   listPayments, createPayment, updatePayment, deletePayment,
   getCustoms, upsertCustoms, listCosts, createCost, updateCost, deleteCost,
   listSupplierContacts, createSupplierContact, updateSupplierContact, deleteSupplierContact,
@@ -1098,6 +1099,107 @@ export function registerComexIpc(): void {
       pl_extracted_json: null
     })
     return await getImport(importId)
+  })
+
+  // ── PL Files (multi-documento) ────────────────────────────────────────────
+  ipcMain.handle('comex:pl-files:list', (_e, importId: string) => listImportPlFiles(importId))
+
+  ipcMain.handle('comex:pl-files:upload', async (_e, {
+    importId, filePath, fileBuffer, fileName: dropFileName, importFolderId
+  }: {
+    importId: string; importFolderId: string | null
+    filePath?: string; fileBuffer?: ArrayBuffer; fileName?: string
+  }) => {
+    let localPath: string
+    let tmpPath: string | null = null
+
+    if (fileBuffer && dropFileName) {
+      const safeName = path.basename(dropFileName).replace(/[/\\:*?"<>|]/g, '-')
+      tmpPath = path.join(os.tmpdir(), `summit-pl-${Date.now()}-${safeName}`)
+      fs.writeFileSync(tmpPath, Buffer.from(fileBuffer))
+      localPath = tmpPath
+    } else if (filePath) {
+      localPath = filePath
+    } else {
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+      const result = await dialog.showOpenDialog(win, {
+        title: 'Seleccionar Packing List',
+        properties: ['openFile'],
+        filters: [{ name: 'PDF / Excel', extensions: ['pdf', 'xls', 'xlsx'] }]
+      })
+      if (result.canceled || !result.filePaths.length) return null
+      localPath = result.filePaths[0]
+    }
+
+    try {
+      const originalName = dropFileName ?? path.basename(localPath)
+      const ext          = path.extname(originalName).toLowerCase()
+      const storedName   = `plf_${randomUUID()}${ext}`
+      const dest         = path.join(getAttachmentsDir(), storedName)
+      fs.copyFileSync(localPath, dest)
+
+      const existing  = await listImportPlFiles(importId)
+      const sortOrder = existing.length
+
+      const record = await createImportPlFile({
+        import_id: importId, stored_name: storedName,
+        original_name: originalName, drive_status: 'none', sort_order: sortOrder
+      })
+
+      if (driveService.isAuthenticated()) {
+        await updateImportPlFile(record.id, { drive_status: 'uploading' })
+        try {
+          const imp       = await getImport(importId)
+          let plFolderId  = imp?.pl_folder_id ?? null
+          if (!plFolderId) {
+            const parentId = importFolderId ?? imp?.drive_folder_id ?? null
+            if (parentId) {
+              plFolderId = await driveService.createSubfolder('PL - Packing List', parentId)
+              await updateImport(importId, { pl_folder_id: plFolderId })
+            }
+          }
+          if (plFolderId) {
+            const mimeType    = getMimeType(ext)
+            const driveFileId = await driveService.uploadFileToFolder(dest, plFolderId, originalName, mimeType)
+            await updateImportPlFile(record.id, { drive_file_id: driveFileId, drive_status: 'synced' })
+          }
+        } catch (err) {
+          await updateImportPlFile(record.id, { drive_status: 'error' })
+          console.error('[PL Files] Drive upload error:', err)
+        }
+      }
+
+      return await listImportPlFiles(importId)
+    } finally {
+      if (tmpPath) try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+    }
+  })
+
+  ipcMain.handle('comex:pl-files:delete', async (_e, plFileId: string) => {
+    const record = await getImportPlFile(plFileId)
+    if (!record) return
+    if (record.stored_name) {
+      const fp = path.join(getAttachmentsDir(), record.stored_name)
+      try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
+    }
+    if (record.drive_file_id) {
+      try { await driveService.deleteFile(record.drive_file_id) } catch { /* non-critical */ }
+    }
+    await deleteImportPlFile(plFileId)
+    return await listImportPlFiles(record.import_id)
+  })
+
+  ipcMain.handle('comex:pl-files:open', async (_e, plFileId: string) => {
+    const record = await getImportPlFile(plFileId)
+    if (!record?.stored_name) throw new Error('Sin archivo adjunto')
+    shell.openPath(path.join(getAttachmentsDir(), record.stored_name))
+  })
+
+  ipcMain.handle('comex:pl-files:updateExtracted', async (_e, plFileId: string, extractedJson: string) => {
+    await updateImportPlFile(plFileId, { extracted_json: extractedJson })
+    const record = await getImportPlFile(plFileId)
+    if (!record) return null
+    return await listImportPlFiles(record.import_id)
   })
 
   // ── BL - Bill of Lading ───────────────────────────────────────────────────

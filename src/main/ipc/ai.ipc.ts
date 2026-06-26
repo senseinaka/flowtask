@@ -8,7 +8,7 @@ import {
   getEffectiveSystemPrompt, parseExpiryText, parseFinanceImportText,
 } from '../services/ai.service'
 import { DEFAULT_SYSTEM_PROMPTS, PROMPT_LABELS, PROMPT_DESCRIPTIONS } from '../services/ai.prompts'
-import { getDocument, getImport, getExtraCost, getProforma } from '../database/queries/comex'
+import { getDocument, getImport, getExtraCost, getProforma, getImportPlFile } from '../database/queries/comex'
 import { getAttachmentsDir } from '../database/db'
 import type { AIOperation, AIConfig, ClaudeModelId } from '@shared/types'
 
@@ -90,6 +90,14 @@ export function registerAIIpc(): void {
     if (!record) throw new Error('Importación no encontrada')
     if (!record.pl_stored_name) throw new Error('No hay Packing List adjunto a esta importación. Subí el archivo primero.')
     const filePath = path.join(getAttachmentsDir(), record.pl_stored_name)
+    return analyzeDocument({ filePath, operation: 'extract_pl' })
+  })
+
+  // ── Análisis de un archivo PL individual (multi-PL) ─────────────────────
+  ipcMain.handle('ai:analyzePlFile', async (_e, plFileId: string) => {
+    const record = await getImportPlFile(plFileId)
+    if (!record?.stored_name) throw new Error('No hay archivo adjunto a este PL')
+    const filePath = path.join(getAttachmentsDir(), record.stored_name)
     return analyzeDocument({ filePath, operation: 'extract_pl' })
   })
 

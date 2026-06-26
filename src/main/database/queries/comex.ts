@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
-  ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCustoms, ComexCostItem,
+  ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
@@ -463,6 +463,62 @@ export async function updateQuoteFile(id: string, data: { drive_file_id?: string
 
 export async function deleteQuoteFile(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_quote_files WHERE id = ?', [id])
+}
+
+// ─── Import PL Files ──────────────────────────────────────────────────────────
+
+export async function listImportPlFiles(importId: string): Promise<ComexImportPlFile[]> {
+  return getPowerSyncDb().getAll<ComexImportPlFile>(
+    'SELECT * FROM comex_import_pl_files WHERE import_id = ? ORDER BY sort_order ASC, created_at ASC',
+    [importId]
+  )
+}
+
+export async function getImportPlFile(id: string): Promise<ComexImportPlFile | null> {
+  return getPowerSyncDb().getOptional<ComexImportPlFile>(
+    'SELECT * FROM comex_import_pl_files WHERE id = ?', [id]
+  )
+}
+
+export async function createImportPlFile(input: {
+  import_id:     string
+  stored_name:   string | null
+  original_name: string | null
+  drive_file_id?: string | null
+  drive_status?:  string
+  sort_order:    number
+}): Promise<ComexImportPlFile> {
+  const db  = getPowerSyncDb()
+  const id  = randomUUID()
+  const now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_import_pl_files
+       (id, import_id, workspace_id, stored_name, original_name, drive_file_id, drive_status, extracted_json, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+    [id, input.import_id, WORKSPACE_ID, input.stored_name ?? null, input.original_name ?? null,
+     input.drive_file_id ?? null, input.drive_status ?? 'none', input.sort_order, now]
+  )
+  return (await db.getOptional<ComexImportPlFile>('SELECT * FROM comex_import_pl_files WHERE id = ?', [id]))!
+}
+
+export async function updateImportPlFile(
+  id:   string,
+  data: Partial<Pick<ComexImportPlFile, 'drive_file_id' | 'drive_status' | 'extracted_json' | 'sort_order'>>
+): Promise<void> {
+  const db   = getPowerSyncDb()
+  const sets: string[]  = []
+  const vals: unknown[] = []
+  if (data.drive_file_id  !== undefined) { sets.push('drive_file_id = ?');   vals.push(data.drive_file_id) }
+  if (data.drive_status   !== undefined) { sets.push('drive_status = ?');    vals.push(data.drive_status) }
+  if (data.extracted_json !== undefined) { sets.push('extracted_json = ?');  vals.push(data.extracted_json) }
+  if (data.sort_order     !== undefined) { sets.push('sort_order = ?');      vals.push(data.sort_order) }
+  if (!sets.length) return
+  vals.push(id)
+  await db.execute(`UPDATE comex_import_pl_files SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function deleteImportPlFile(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_import_pl_files WHERE id = ?', [id])
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
