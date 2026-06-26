@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782512866.6404235,
-    "ast_hash": "fdf788b672dfff80ef349c776a02720f",
+    "mtime": 1782513749.267683,
+    "ast_hash": "ebdf3d7794a1d150c8832a4282431bd1",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {

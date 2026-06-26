@@ -10,8 +10,10 @@ import {
   Table,
   column,
   UpdateType,
+  SyncStreamConnectionMethod,
   type AbstractPowerSyncDatabase,
   type PowerSyncBackendConnector,
+  type PowerSyncConnectionOptions,
   type SyncStatus
 } from '@powersync/common'
 import type { PowerSyncStatusInfo } from '@shared/types'
@@ -1413,6 +1415,19 @@ function signPowerSyncJwt(env: Record<string, string>, endpoint: string, sub: st
   return `${signingInput}.${base64url(signature)}`
 }
 
+/**
+ * Opciones de conexión de PowerSync. Usamos WebSocket en lugar del HTTP streaming
+ * por defecto: el HTTP streaming en @powersync/node queda colgado tras un cierre
+ * limpio del server (idle-timeout, deploy) sin que el SDK lo note, dejando el
+ * estado en connected:false / connecting:false sin error. WebSocket tiene
+ * keepalive ping/pong y propaga el cierre como evento, disparando el reintento
+ * automático del SDK (connecting:true).
+ */
+const PS_CONNECT_OPTIONS: PowerSyncConnectionOptions = {
+  connectionMethod: SyncStreamConnectionMethod.WEB_SOCKET,
+  retryDelayMs: 5_000,
+}
+
 class ProductionTokenConnector implements PowerSyncBackendConnector {
   constructor(private endpoint: string) {}
 
@@ -2041,8 +2056,8 @@ export async function connectPowerSync(): Promise<void> {
     console.log('[PowerSync] no se pudo leer ps_crud:', errorMessage(e))
   }
   try {
-    await db.connect(new ProductionTokenConnector(endpoint))
-    console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
+    await db.connect(new ProductionTokenConnector(endpoint), PS_CONNECT_OPTIONS)
+    console.log('[PowerSync] Conectado (WebSocket) a', endpoint, 'como', session.email)
   } catch (e) {
     _lastErrorMessage = errorMessage(e)
     console.error('[PowerSync] Error al conectar:', _lastErrorMessage)
@@ -2073,8 +2088,8 @@ export async function reconnectPowerSync(): Promise<void> {
   const db = getPowerSyncDb()
   await db.disconnect()
   try {
-    await db.connect(new ProductionTokenConnector(endpoint))
-    console.log('[PowerSync] Reconectado a', endpoint, 'como', session.email)
+    await db.connect(new ProductionTokenConnector(endpoint), PS_CONNECT_OPTIONS)
+    console.log('[PowerSync] Reconectado (WebSocket) a', endpoint, 'como', session.email)
   } catch (e) {
     _lastErrorMessage = errorMessage(e)
     console.error('[PowerSync] Error al reconectar:', _lastErrorMessage)
@@ -2169,7 +2184,7 @@ function scheduleWatchdog() {
     const endpoint = env.POWERSYNC_URL
     if (!endpoint || !env.POWERSYNC_JWT_PRIVATE_KEY_B64 || !env.POWERSYNC_JWT_KID) return
     try {
-      await _psDb.connect(new ProductionTokenConnector(endpoint))
+      await _psDb.connect(new ProductionTokenConnector(endpoint), PS_CONNECT_OPTIONS)
     } catch (e) {
       _lastErrorMessage = errorMessage(e)
       console.error('[PowerSync] Watchdog: error en connect():', _lastErrorMessage)
