@@ -2,34 +2,48 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { PowerSyncStatusInfo } from '@shared/types'
 
-/**
- * Estado de sincronización de PowerSync + auto-refresh: cuando llega
- * `powersync:dataChanged` (datos actualizados localmente por sync remoto o
- * por otra parte de la app), invalida las queries de tasks/projects/task-deps
- * para que la UI se actualice sola sin recargar.
- */
+// Singleton — un solo listener IPC compartido entre todos los componentes.
+// window.api.off() llama a removeAllListeners() (nuclear), así que registrar
+// el listener una sola vez evita que un componente al desmontar mate el listener
+// de otro (ej. SyncStatusBadge en Sistema mataba el del Sidebar).
+let _status: PowerSyncStatusInfo | null = null
+const _subs = new Set<(s: PowerSyncStatusInfo) => void>()
+let _ready = false
+
+function init(onDataChanged: () => void) {
+  if (_ready) return
+  _ready = true
+
+  window.api.powersync.getStatus().then((s) => {
+    if (!s) return
+    _status = s
+    _subs.forEach(fn => fn(s))
+  })
+
+  window.api.on('powersync:status', (data) => {
+    _status = data as PowerSyncStatusInfo
+    _subs.forEach(fn => fn(_status!))
+  })
+
+  window.api.on('powersync:dataChanged', onDataChanged)
+}
+
 export function usePowerSyncStatus() {
-  const [status, setStatus] = useState<PowerSyncStatusInfo | null>(null)
+  const [status, setStatus] = useState<PowerSyncStatusInfo | null>(_status)
   const qc = useQueryClient()
 
   useEffect(() => {
-    window.api.powersync.getStatus().then(setStatus)
-
-    window.api.on('powersync:status', (data) => {
-      setStatus(data as PowerSyncStatusInfo)
-    })
-
-    window.api.on('powersync:dataChanged', () => {
+    init(() => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['task'] })
       qc.invalidateQueries({ queryKey: ['task-deps'] })
       qc.invalidateQueries({ queryKey: ['projects'] })
     })
 
-    return () => {
-      window.api.off('powersync:status')
-      window.api.off('powersync:dataChanged')
-    }
+    _subs.add(setStatus)
+    if (_status) setStatus(_status)
+
+    return () => { _subs.delete(setStatus) }
   }, [qc])
 
   return status
