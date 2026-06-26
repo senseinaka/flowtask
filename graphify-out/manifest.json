@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782509461.1102602,
-    "ast_hash": "c80683e3f87bac082442a1045f00b160",
+    "mtime": 1782511883.5040972,
+    "ast_hash": "a8d6dd38ecf30c608013d52973c332a9",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -470,8 +470,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
-    "mtime": 1782507460.2610188,
-    "ast_hash": "d67b952b649657f8b572b978dacae889",
+    "mtime": 1782511904.8834283,
+    "ast_hash": "0af6846d1f68917cecd5e0201ab61e86",
     "semantic_hash": ""
   },
   "src/renderer/src/components/prompts/PromptEditor.tsx": {

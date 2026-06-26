@@ -2039,8 +2039,14 @@ export async function connectPowerSync(): Promise<void> {
   } catch (e) {
     console.log('[PowerSync] no se pudo leer ps_crud:', errorMessage(e))
   }
-  await db.connect(new ProductionTokenConnector(endpoint))
-  console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
+  try {
+    await db.connect(new ProductionTokenConnector(endpoint))
+    console.log('[PowerSync] Conectado a', endpoint, 'como', session.email)
+  } catch (e) {
+    _lastErrorMessage = errorMessage(e)
+    console.error('[PowerSync] Error al conectar:', _lastErrorMessage)
+    throw e
+  }
 }
 
 /** Desconecta PowerSync (p. ej. al cerrar sesión). */
@@ -2063,8 +2069,14 @@ export async function reconnectPowerSync(): Promise<void> {
   if (!session) throw new Error('Sin sesión de usuario autenticado')
   const db = getPowerSyncDb()
   await db.disconnect()
-  await db.connect(new ProductionTokenConnector(endpoint))
-  console.log('[PowerSync] Reconectado a', endpoint, 'como', session.email)
+  try {
+    await db.connect(new ProductionTokenConnector(endpoint))
+    console.log('[PowerSync] Reconectado a', endpoint, 'como', session.email)
+  } catch (e) {
+    _lastErrorMessage = errorMessage(e)
+    console.error('[PowerSync] Error al reconectar:', _lastErrorMessage)
+    throw e
+  }
 }
 
 function errorMessage(err: unknown): string {
@@ -2087,8 +2099,11 @@ function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
     console.error('[PowerSync] downloadError:', dataFlow.downloadError)
     _lastErrorMessage = errorMessage(error)
   } else if (status.connected) {
-    // Conectado sin errores → limpiar mensaje de error anterior
     _lastErrorMessage = null
+  } else if (!status.connecting && !_lastErrorMessage) {
+    // No conectado, no reintentando, sin error capturado → usar diagnóstico del SDK
+    _lastErrorMessage = `[PowerSync] ${status.getMessage()}`
+    console.warn('[PowerSync] Sin conexión, mensaje SDK:', _lastErrorMessage)
   }
   return {
     connected: status.connected,
