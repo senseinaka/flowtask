@@ -15,7 +15,8 @@ function formatLastSync(timestamp: number | null): string {
 
 export default function SyncStatusBadge() {
   const status = usePowerSyncStatus()
-  const [copied, setCopied] = useState(false)
+  const [copied,   setCopied]   = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   if (!status) return null
 
@@ -48,7 +49,7 @@ export default function SyncStatusBadge() {
   }
 
   function copyLog(e?: React.MouseEvent) {
-    e?.preventDefault()
+    e?.stopPropagation()
     const text = errorText ?? `[PowerSync] ${label} — ${new Date().toISOString()}`
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
@@ -57,29 +58,36 @@ export default function SyncStatusBadge() {
   }
 
   return (
-    <div className="relative group">
+    <div className="flex flex-col gap-1.5">
+      {/* Badge principal */}
       <div
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 cursor-default select-none ${className}`}
-        onContextMenu={copyLog}
+        onClick={() => errorText && setExpanded(p => !p)}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 select-none ${className} ${errorText ? 'cursor-pointer' : 'cursor-default'}`}
       >
         {icon}
-        <span>{copied ? '✓ Copiado' : label}</span>
+        <span className="flex-1 truncate">{label}</span>
+        {errorText && (
+          <span className="text-[10px] opacity-60 ml-1">{expanded ? '▲' : '▼'}</span>
+        )}
       </div>
 
-      {/* Tooltip con detalle del error */}
-      {errorText && (
-        <div className="absolute bottom-full left-0 mb-2 w-[420px] bg-slate-950 border border-amber-800/40 rounded-xl p-3 text-[11px] text-slate-300 font-mono hidden group-hover:block z-[9999] shadow-2xl">
-          <div className="flex items-start gap-2">
-            <p className="flex-1 break-words leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">{errorText}</p>
+      {/* Detalle del error — inline, sin posicionamiento flotante */}
+      {errorText && expanded && (
+        <div className="bg-slate-950 border border-amber-800/40 rounded-lg p-2.5 text-[10px] text-slate-300 font-mono">
+          <p className="break-all leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+            {errorText}
+          </p>
+          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-800">
+            <span className="text-slate-600 font-sans">Click derecho para copiar</span>
             <button
               onClick={copyLog}
-              className="shrink-0 mt-0.5 p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
               title="Copiar log"
             >
-              {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+              {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+              <span className="text-[10px] font-sans">{copied ? 'Copiado' : 'Copiar'}</span>
             </button>
           </div>
-          <p className="text-slate-600 mt-2 text-[10px] font-sans">Click derecho en el badge para copiar</p>
         </div>
       )}
     </div>

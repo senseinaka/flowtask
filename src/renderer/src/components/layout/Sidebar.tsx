@@ -197,11 +197,12 @@ export default function Sidebar() {
 
   const psStatus = usePowerSyncStatus()
   const [psReconnecting, setPsReconnecting] = useState(false)
-  const psConnected    = psStatus?.connected ?? false
+  const psConnected    = (psStatus?.connected ?? false) && !psStatus?.hasError
+  const psHasError     = (psStatus?.connected ?? false) && (psStatus?.hasError ?? false)
   const psDisconnected = !!psStatus && !psStatus.connected && !psStatus.connecting && !psStatus.configError
 
   async function handlePsReconnect() {
-    if (psReconnecting || !psDisconnected) return
+    if (psReconnecting || (!psDisconnected && !psHasError)) return
     setPsReconnecting(true)
     try {
       await window.api.powersync.reconnect()
@@ -307,13 +308,14 @@ export default function Sidebar() {
       {/* Bottom: PowerSync + Drive + logout */}
       <div className="flex flex-col items-center gap-1 py-3 border-t border-slate-700">
 
-        {/* PowerSync status — siempre visible; clickeable para reconectar si está desconectado */}
+        {/* PowerSync status — siempre visible; clickeable para reconectar si está desconectado o con error */}
         <button
           onClick={handlePsReconnect}
           disabled={psConnected || psReconnecting}
           title={
-            psReconnecting ? 'Reconectando...'
-            : psConnected   ? 'Sync conectado'
+            psReconnecting   ? 'Reconectando...'
+            : psConnected    ? 'Sync conectado'
+            : psHasError     ? 'Error de sync — click para reconectar'
             : psDisconnected ? 'Sin conexión — click para reconectar'
             : 'Sync'
           }
@@ -323,7 +325,7 @@ export default function Sidebar() {
               ? 'text-indigo-400 cursor-default'
               : psConnected
                 ? 'text-slate-400 cursor-default'
-                : psDisconnected
+                : (psDisconnected || psHasError)
                   ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-900/25 cursor-pointer'
                   : 'text-slate-600 cursor-default'
           )}
@@ -336,9 +338,10 @@ export default function Sidebar() {
           <span
             className={cn(
               'absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full',
-              psReconnecting  ? 'bg-indigo-400'
-              : psConnected   ? 'bg-emerald-400'
-              : psDisconnected ? 'bg-amber-400'
+              psReconnecting    ? 'bg-indigo-400'
+              : psConnected     ? 'bg-emerald-400'
+              : psHasError      ? 'bg-amber-400'
+              : psDisconnected  ? 'bg-amber-400'
               : 'bg-slate-600'
             )}
           />

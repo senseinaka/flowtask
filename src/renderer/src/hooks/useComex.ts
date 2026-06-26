@@ -1055,3 +1055,43 @@ export function useDeleteComexDespachanteContact() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
   })
 }
+
+// ── Cotizaciones USD/EUR ──────────────────────────────────────────────────────
+
+export function useCotizaciones() {
+  return useQuery({
+    queryKey: ['comex-cotizaciones'],
+    queryFn:  () => window.api.comex.cotizaciones.list(),
+    staleTime: 30_000,
+  })
+}
+
+export function useAddCotizacion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ moneda, valor_ars, nota }: {
+      moneda: import('@shared/types').ComexMoneda
+      valor_ars: number
+      nota?: string
+    }) => window.api.comex.cotizaciones.add(moneda, valor_ars, nota),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-cotizaciones'] })
+  })
+}
+
+export function useBcraRates(moneda: import('@shared/types').ComexMoneda) {
+  return useQuery({
+    queryKey: ['comex-bcra-rates', moneda],
+    queryFn:  () => window.api.comex.bcra.rates(moneda),
+    staleTime: 60 * 60 * 1000, // 1 hora — se refresca solo si el cache tiene > 1h
+  })
+}
+
+export function useRefreshBcra() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (moneda: import('@shared/types').ComexMoneda) =>
+      window.api.comex.bcra.refresh(moneda),
+    onSuccess: (_data, moneda) =>
+      qc.invalidateQueries({ queryKey: ['comex-bcra-rates', moneda] })
+  })
+}

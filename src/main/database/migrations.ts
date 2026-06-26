@@ -2986,6 +2986,23 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         DROP TABLE IF EXISTS mercadopago_connections;
       `)
     }
+  },
+  {
+    version: 95,
+    up: (db) => {
+      // Cache local de cotizaciones BCRA (dato público, no sincroniza con Supabase).
+      // Se rellena al abrir el modal de Cotizaciones y se refresca a diario.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS bcra_rates_cache (
+          moneda     TEXT NOT NULL,
+          fecha      TEXT NOT NULL,
+          valor      REAL NOT NULL,
+          fetched_at INTEGER NOT NULL,
+          PRIMARY KEY (moneda, fecha)
+        );
+        CREATE INDEX IF NOT EXISTS idx_bcra_moneda_fecha ON bcra_rates_cache(moneda, fecha);
+      `)
+    }
   }
 ]
 

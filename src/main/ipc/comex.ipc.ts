@@ -29,8 +29,10 @@ import {
   listBrands, getBrand, createBrand, updateBrand, deleteBrand,
   listPlannings, getPlanning, createPlanning, updatePlanning, deletePlanning, recalculatePlanning,
   updateMilestone,
-  listPlanningAIReports, createPlanningAIReport, deletePlanningAIReport
+  listPlanningAIReports, createPlanningAIReport, deletePlanningAIReport,
+  listCotizaciones, addCotizacion
 } from '../database/queries/comex'
+import { getBcraRates, refreshBcraRates } from '../services/bcra.service'
 import { generatePlanningRecommendation, generatePlanningAIReport } from '../services/planning-ai.service'
 import type { GeneratePlanningAIReportInput } from '../services/planning-ai.service'
 import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/comex-planning-io.service'
@@ -1520,6 +1522,20 @@ export function registerComexIpc(): void {
     if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
     await updateDespachante(despId, { logo_stored_name: null, logo_data: null })
   })
+
+  // ── Cotizaciones USD/EUR propias ─────────────────────────────────────────────
+  ipcMain.handle('comex:cotizaciones:list', () => listCotizaciones())
+  ipcMain.handle('comex:cotizaciones:add', (
+    _e, moneda: import('@shared/types').ComexMoneda, valor_ars: number, nota?: string
+  ) => addCotizacion(moneda, valor_ars, nota))
+
+  // ── Cotizaciones BCRA (fetch + caché local) ───────────────────────────────
+  ipcMain.handle('comex:bcra:rates', (
+    _e, moneda: import('@shared/types').ComexMoneda
+  ) => getBcraRates(moneda))
+  ipcMain.handle('comex:bcra:refresh', (
+    _e, moneda: import('@shared/types').ComexMoneda
+  ) => refreshBcraRates(moneda))
 }
 
 function fileToDataUrl(fp: string): string | null {

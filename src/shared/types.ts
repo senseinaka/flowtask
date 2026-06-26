@@ -1270,6 +1270,23 @@ export interface ComexImportPlFile {
   created_at: number
 }
 
+export type ComexMoneda = 'USD' | 'EUR'
+
+export interface ComexCotizacion {
+  id: string
+  workspace_id: string
+  moneda: ComexMoneda
+  valor_ars: number
+  nota: string | null
+  created_at: number
+}
+
+export interface BcraRateEntry {
+  moneda: ComexMoneda
+  fecha: string       // 'YYYY-MM-DD'
+  valor: number
+}
+
 export interface ComexPayment {
   id: string
   import_id: string

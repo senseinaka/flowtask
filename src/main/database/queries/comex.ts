@@ -13,7 +13,8 @@ import type {
   CreateComexQuoteInput, CreateComexPaymentInput,
   UpsertComexCustomsInput, CreateComexCostInput,
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
-  CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput
+  CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
+  ComexCotizacion, ComexMoneda
 } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
@@ -1476,3 +1477,31 @@ export async function createPlanningAIReport(input: CreateImportOrderPlanningAIR
 export async function deletePlanningAIReport(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM import_order_planning_ai_reports WHERE id = ?', [id])
 }
+
+// ── Cotizaciones USD/EUR propias ──────────────────────────────────────────────
+
+export async function listCotizaciones(): Promise<ComexCotizacion[]> {
+  return getPowerSyncDb().getAll<ComexCotizacion>(
+    `SELECT * FROM comex_cotizaciones WHERE workspace_id = ? ORDER BY created_at DESC`,
+    [WORKSPACE_ID]
+  )
+}
+
+export async function addCotizacion(
+  moneda: ComexMoneda,
+  valor_ars: number,
+  nota?: string
+): Promise<ComexCotizacion> {
+  const db  = getPowerSyncDb()
+  const id  = randomUUID()
+  const now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_cotizaciones (id, workspace_id, moneda, valor_ars, nota, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, WORKSPACE_ID, moneda, valor_ars, nota ?? null, now]
+  )
+  return (await db.getOptional<ComexCotizacion>(
+    'SELECT * FROM comex_cotizaciones WHERE id = ?', [id]
+  ))!
+}
+

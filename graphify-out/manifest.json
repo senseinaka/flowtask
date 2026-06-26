@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782493371.894006,
-    "ast_hash": "2fecfd132b484f600a85dbb2936774b2",
+    "mtime": 1782506438.6964698,
+    "ast_hash": "55c94e05c21bd8efbc346da69ef99a57",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -255,9 +255,9 @@
     "semantic_hash": "361b27734dfad4d9604c0d1e822558c6"
   },
   "src/main/ipc/powersync.ipc.ts": {
-    "mtime": 1781625898.8640351,
-    "ast_hash": "b17c78f3638175949e3d4bda76760dd3",
-    "semantic_hash": "b17c78f3638175949e3d4bda76760dd3"
+    "mtime": 1782506447.707505,
+    "ast_hash": "31535248a473eece1c7a3d51d5c2759b",
+    "semantic_hash": ""
   },
   "src/main/ipc/projects.ipc.ts": {
     "mtime": 1779700447.2150688,
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782493449.1191752,
-    "ast_hash": "3cc3f1e9942a116e8645d8e3bcc83faf",
+    "mtime": 1782506171.8990834,
+    "ast_hash": "66cb518118cc501f505471fc8f656533",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -465,14 +465,14 @@
     "semantic_hash": "29846cd39af0bc84e09ee1d15aec1223"
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782491968.8745854,
-    "ast_hash": "3f91fb377ab8c4863b3d21cba6d54bdc",
+    "mtime": 1782506485.4373965,
+    "ast_hash": "1234b7da51427476aed421b502cb0cd3",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
-    "mtime": 1781987646.2364106,
-    "ast_hash": "200b80881fecac13cb2d2ef6c903ec5a",
-    "semantic_hash": "200b80881fecac13cb2d2ef6c903ec5a"
+    "mtime": 1782506503.1878586,
+    "ast_hash": "5046ffa1b5ceb4f61d9659a06c23f741",
+    "semantic_hash": ""
   },
   "src/renderer/src/components/prompts/PromptEditor.tsx": {
     "mtime": 1780514486.1056223,
@@ -745,8 +745,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782493715.301908,
-    "ast_hash": "1a4503a0536a7d1a92d5426c39a90d43",
+    "mtime": 1782501100.7708836,
+    "ast_hash": "0855575d267b769c1f278d446c51a22e",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {

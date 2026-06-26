@@ -4,6 +4,7 @@ import type {
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
+  ComexCotizacion, ComexMoneda, BcraRateEntry,
   BackupStatus, LocalBackupStatus, LocalBackupEntry, RestoreResult,
   Task, Project, Attachment, Reminder, Contact, CreateContactInput,
   DelegatedTask, CreateDelegatedTaskInput,
@@ -425,6 +426,14 @@ const api = {
       upload:     (importId: string, filePath: string): Promise<ComexImport>  => ipcRenderer.invoke('comex:bl:upload', importId, filePath),
       open:       (importId: string):               Promise<void>           => ipcRenderer.invoke('comex:bl:open', importId),
       delete:     (importId: string):               Promise<ComexImport>    => ipcRenderer.invoke('comex:bl:delete', importId)
+    },
+    cotizaciones: {
+      list: ():                                                 Promise<ComexCotizacion[]> => ipcRenderer.invoke('comex:cotizaciones:list'),
+      add:  (moneda: ComexMoneda, valor_ars: number, nota?: string): Promise<ComexCotizacion> => ipcRenderer.invoke('comex:cotizaciones:add', moneda, valor_ars, nota),
+    },
+    bcra: {
+      rates:   (moneda: ComexMoneda): Promise<BcraRateEntry[]> => ipcRenderer.invoke('comex:bcra:rates', moneda),
+      refresh: (moneda: ComexMoneda): Promise<BcraRateEntry[]> => ipcRenderer.invoke('comex:bcra:refresh', moneda),
     },
     inal: {
       certs: {

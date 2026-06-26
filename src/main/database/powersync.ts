@@ -581,6 +581,17 @@ const comex_import_pl_files = new Table(
   { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
 )
 
+const comex_cotizaciones = new Table(
+  {
+    workspace_id: column.text,
+    moneda:       column.text,
+    valor_ars:    column.real,
+    nota:         column.text,
+    created_at:   column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], moneda: ['moneda'] } }
+)
+
 const comex_payments = new Table(
   {
     import_id: column.text,
@@ -1318,6 +1329,7 @@ export const AppSchema = new Schema({
   comex_logistics_quotes,
   comex_quote_files,
   comex_import_pl_files,
+  comex_cotizaciones,
   comex_payments,
   comex_import_customs,
   comex_import_costs,
@@ -1673,6 +1685,7 @@ const COMEX_IMPORTS_TABLES = [
   'comex_logistics_quotes',
   'comex_quote_files',
   'comex_import_pl_files',
+  'comex_cotizaciones',
   'comex_payments',
   'comex_import_customs',
   'comex_import_costs',
