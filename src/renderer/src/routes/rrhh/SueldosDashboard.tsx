@@ -229,7 +229,8 @@ function PeriodoCard({
   const hasDrive     = !!periodo.pdf_drive_folder_id
   const isConfirmado = periodo.estado === 'confirmado'
   const hasVac       = (periodo.total_vacaciones ?? 0) > 0
-  const grand        = periodo.total_neto + (periodo.total_vacaciones ?? 0)
+  const hasSac       = (periodo.total_sac ?? 0) > 0
+  const grand        = periodo.total_neto + (periodo.total_vacaciones ?? 0) + (periodo.total_sac ?? 0)
 
   return (
     <button
@@ -251,10 +252,11 @@ function PeriodoCard({
         </div>
       </div>
 
-      {hasVac ? (
+      {(hasVac || hasSac) ? (
         <div className="space-y-0.5 mb-2">
           <p className="text-[11px] text-slate-400">Sueldos: <span className="text-slate-200 font-medium">{fmt(periodo.total_neto)}</span></p>
-          <p className="text-[11px] text-slate-400">Vacaciones: <span className="text-sky-300 font-medium">{fmt(periodo.total_vacaciones!)}</span></p>
+          {hasVac && <p className="text-[11px] text-slate-400">Vacaciones: <span className="text-sky-300 font-medium">{fmt(periodo.total_vacaciones!)}</span></p>}
+          {hasSac && <p className="text-[11px] text-slate-400">SAC: <span className="text-amber-300 font-medium">{fmt(periodo.total_sac!)}</span></p>}
           <p className="text-base font-bold text-slate-100">Total: {fmt(grand)}</p>
         </div>
       ) : (

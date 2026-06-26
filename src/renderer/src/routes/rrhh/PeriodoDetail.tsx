@@ -6,7 +6,7 @@ import {
 import {
   ArrowLeft, TrendingUp, TrendingDown, FolderOpen,
   ExternalLink, CheckCircle2, AlertTriangle,
-  Loader2, X, FileSpreadsheet, Search, ChevronDown, Umbrella, Gift
+  Loader2, X, FileSpreadsheet, Search, ChevronDown
 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import {
@@ -427,13 +427,13 @@ export default function PeriodoDetail() {
               <div className="mt-1 space-y-0.5">
                 <p className="text-[10px] text-slate-500">Sueldos: {fmt(totalSueldos)}</p>
                 {totalVacaciones > 0 && (
-                  <p className="text-[10px] text-sky-400 flex items-center gap-0.5">
-                    <Umbrella size={9} /> Vacaciones: {fmt(totalVacaciones)}
+                  <p className="text-[10px] text-sky-400">
+                    Vacaciones: {fmt(totalVacaciones)}
                   </p>
                 )}
                 {hasSac && (
-                  <p className="text-[10px] text-amber-400 flex items-center gap-0.5">
-                    <Gift size={9} /> SAC: {fmt(totalSac)}
+                  <p className="text-[10px] text-amber-400">
+                    SAC: {fmt(totalSac)}
                   </p>
                 )}
               </div>

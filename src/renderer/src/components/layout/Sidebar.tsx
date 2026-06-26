@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutList, Columns3, Settings, Loader2,
@@ -9,6 +9,26 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
+
+function ContainerShipIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={25} height={25} viewBox="0 0 60 50" fill="none" aria-hidden="true">
+      <path d="M4 34 L8 42 H54 L58 34 L54 30 H8 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+      <line x1="8" y1="30" x2="54" y2="30" stroke="currentColor" strokeWidth="1.4"/>
+      <rect x="10" y="22" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.5"/>
+      <rect x="18" y="22" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.5"/>
+      <rect x="26" y="22" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.5"/>
+      <rect x="34" y="22" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.5"/>
+      <rect x="10" y="17" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.35"/>
+      <rect x="18" y="17" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.35"/>
+      <rect x="26" y="17" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.35"/>
+      <rect x="34" y="17" width="7" height="5" rx="0.5" fill="currentColor" opacity="0.35"/>
+      <rect x="43" y="13" width="10" height="17" rx="1" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.3"/>
+      <rect x="46" y="9" width="3" height="5" rx="0.5" fill="currentColor" opacity="0.5"/>
+      <line x1="11" y1="12" x2="11" y2="22" stroke="currentColor" strokeWidth="1.2" opacity="0.6"/>
+    </svg>
+  )
+}
 import { usePermissions } from '../../hooks/usePermissions'
 import { useUIStore } from '../../store/ui.store'
 import { useQuery, useMutation } from '@tanstack/react-query'
@@ -23,7 +43,7 @@ type WorkspaceKey = 'trabajo' | 'empresa' | 'comex' | 'finanzas' | 'agenda' | 'r
 const WORKSPACES: Array<{
   key: WorkspaceKey
   label: string
-  Icon: LucideIcon
+  Icon: LucideIcon | React.ComponentType<{ size?: number }>
   color: string
   activeBg: string
   paths: string[]
@@ -47,7 +67,7 @@ const WORKSPACES: Array<{
   {
     key: 'comex',
     label: 'Comex',
-    Icon: Package,
+    Icon: ContainerShipIcon,
     color: '#f59e0b',
     activeBg: 'rgba(245,158,11,.15)',
     paths: ['/comex'],
@@ -267,7 +287,7 @@ export default function Sidebar() {
           disabled={syncMutation.isPending || !syncStatus?.isAuthenticated}
           title={syncStatus?.isAuthenticated ? 'Sincronizar Google Drive' : 'Drive no conectado'}
           className={cn(
-            'relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-100',
+            'relative w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100',
             syncStatus?.isAuthenticated
               ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
               : 'text-slate-600 cursor-not-allowed'
@@ -280,6 +300,7 @@ export default function Sidebar() {
           {syncStatus?.isAuthenticated && (
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
           )}
+          <span className="text-[8px] leading-none font-medium tracking-wide">Drive</span>
         </button>
 
         <button
@@ -289,9 +310,10 @@ export default function Sidebar() {
             }
           }}
           title="Salir"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-900/30 transition-all duration-100"
+          className="w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] text-slate-500 hover:text-red-400 hover:bg-red-900/30 transition-all duration-100"
         >
           <LogOut size={15} />
+          <span className="text-[8px] leading-none font-medium tracking-wide">Salir</span>
         </button>
       </div>
 

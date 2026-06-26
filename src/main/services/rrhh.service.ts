@@ -28,18 +28,20 @@ function parseFecha(str: string): { mes: number; anio: number } | null {
   return null
 }
 
-// Show native confirm dialog (returns true = replace, false = keep)
-async function askReplace(nombre: string): Promise<boolean> {
+// Show native confirm dialog (returns 'replace' | 'keep' | 'cancel')
+async function askReplace(nombre: string): Promise<'replace' | 'keep' | 'cancel'> {
   const result = await dialog.showMessageBox({
     type: 'question',
-    buttons: ['Reemplazar', 'Conservar existente'],
+    buttons: ['Reemplazar', 'Conservar existente', 'Cancelar'],
     defaultId: 0,
-    cancelId: 1,
+    cancelId: 2,
     title: 'Colaborador duplicado',
     message: `"${nombre}" ya tiene datos en este período.`,
     detail: '¿Querés reemplazar los datos existentes o conservarlos?',
   })
-  return result.response === 0
+  if (result.response === 0) return 'replace'
+  if (result.response === 1) return 'keep'
+  return 'cancel'
 }
 
 export async function savePayroll(empresa: RrhhEmpresa, filePath: string): Promise<SavePayrollResult> {
@@ -101,8 +103,9 @@ export async function savePayroll(empresa: RrhhEmpresa, filePath: string): Promi
       })
       const existing = await getSueldoByPeriodoColaborador(periodo.id, colaborador.id)
       if (existing) {
-        const replace = await askReplace(emp.apellidoYNombres)
-        if (replace) {
+        const action = await askReplace(emp.apellidoYNombres)
+        if (action === 'cancel') throw new Error('Importación cancelada por el usuario')
+        if (action === 'replace') {
           await upsertSueldo(empresa, {
             periodoId: periodo.id,
             colaboradorId: colaborador.id,
@@ -111,7 +114,7 @@ export async function savePayroll(empresa: RrhhEmpresa, filePath: string): Promi
             periodo_abonado: emp.periodoAbonado,
           })
         }
-        // else keep existing — do nothing
+        // 'keep' → do nothing
       } else {
         await upsertSueldo(empresa, {
           periodoId: periodo.id,
@@ -224,8 +227,9 @@ export async function saveVacaciones(empresa: RrhhEmpresa, filePath: string): Pr
     if (existing) {
       // Check if already has vacaciones data
       if (existing.vacaciones_neto !== null) {
-        const replace = await askReplace(`${emp.apellidoYNombres} (vacaciones)`)
-        if (!replace) continue
+        const action = await askReplace(`${emp.apellidoYNombres} (vacaciones)`)
+        if (action === 'cancel') throw new Error('Importación cancelada por el usuario')
+        if (action === 'keep') continue
       }
       await updateSueldoVacaciones({
         periodoId: periodo.id,
@@ -332,8 +336,9 @@ export async function saveSac(empresa: RrhhEmpresa, filePath: string): Promise<S
     const existing = await getSueldoByPeriodoColaborador(periodo.id, colaborador.id)
     if (existing) {
       if (existing.sac_neto !== null) {
-        const replace = await askReplace(`${emp.apellidoYNombres} (SAC)`)
-        if (!replace) continue
+        const action = await askReplace(`${emp.apellidoYNombres} (SAC)`)
+        if (action === 'cancel') throw new Error('Importación cancelada por el usuario')
+        if (action === 'keep') continue
       }
       await updateSueldoSac({
         periodoId: periodo.id,

@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782442499.1702857,
-    "ast_hash": "68f8a68c65a5e9493166fbd4c034b0d0",
+    "mtime": 1782476749.7889347,
+    "ast_hash": "93ba0fdf08af913a712b8ae318610aec",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782443178.0558398,
-    "ast_hash": "dffcfd8b276f49789dfa1c2067135040",
+    "mtime": 1782476933.715998,
+    "ast_hash": "4c19eec0fac3dbaec397d4089c7e7cfb",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782442455.05994,
-    "ast_hash": "c470c92a5dd6a1407982170f98d7b018",
+    "mtime": 1782476730.1643858,
+    "ast_hash": "04875bd60e0467f738f60ac793115fa7",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782473065.7161582,
-    "ast_hash": "b9507574db84d006f6e418cacc582c36",
+    "mtime": 1782475273.2262,
+    "ast_hash": "b024da01d3cbebe8634f873af5de12c4",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1095,8 +1095,8 @@
     "semantic_hash": ""
   },
   "src/main/services/payroll-pdf.extractor.ts": {
-    "mtime": 1782174515.4934843,
-    "ast_hash": "48e60313a1668a3b440e7e479fa69cd4",
+    "mtime": 1782488141.796059,
+    "ast_hash": "52a4553001fdc8f2fa970376c5bde945",
     "semantic_hash": ""
   },
   "src/main/services/pdf-reader.service.ts": {
@@ -1110,33 +1110,33 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/SueldosDashboard.tsx": {
-    "mtime": 1782443329.3750124,
-    "ast_hash": "63c103268e87f55b8988dfd11c424e4e",
+    "mtime": 1782477171.2457914,
+    "ast_hash": "16891edd934b5a427538e9fff3038f5e",
     "semantic_hash": ""
   },
   "src/main/database/queries/rrhh.ts": {
-    "mtime": 1782442730.916981,
-    "ast_hash": "12624a93ffb319b4ad5ce6f4dd827872",
+    "mtime": 1782476793.2215736,
+    "ast_hash": "b9c1c127902cbec19a634073f37b6f89",
     "semantic_hash": ""
   },
   "src/main/ipc/rrhh.ipc.ts": {
-    "mtime": 1782443070.2956874,
-    "ast_hash": "1594169209aaa4435042cc0cdddb53f7",
+    "mtime": 1782476913.8427873,
+    "ast_hash": "ea3a1f8551c72e7ee64eddc3c45b6f30",
     "semantic_hash": ""
   },
   "src/main/services/rrhh.service.ts": {
-    "mtime": 1782442921.8152127,
-    "ast_hash": "15751e0c9209b1bab9fe345ae1b14653",
+    "mtime": 1782476873.6598363,
+    "ast_hash": "5c55ab6b90e5072327b310802bd8e167",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useRrhh.ts": {
-    "mtime": 1782443263.1873362,
-    "ast_hash": "baacdbc1e245be693cb70a8e995bb1f8",
+    "mtime": 1782476955.4031768,
+    "ast_hash": "2fcea753ef6df3ef2d465a6343601d06",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/PeriodoDetail.tsx": {
-    "mtime": 1782443368.482587,
-    "ast_hash": "ce18677967536a0871a8b5cd34ef9948",
+    "mtime": 1782477257.9736764,
+    "ast_hash": "0d5e17a5a1135e8e836a87b5f1e945e2",
     "semantic_hash": ""
   },
   "src/main/services/nomina.service.ts": {
