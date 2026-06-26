@@ -1526,8 +1526,8 @@ export function registerComexIpc(): void {
   // ── Cotizaciones USD/EUR propias ─────────────────────────────────────────────
   ipcMain.handle('comex:cotizaciones:list', () => listCotizaciones())
   ipcMain.handle('comex:cotizaciones:add', (
-    _e, moneda: import('@shared/types').ComexMoneda, valor_ars: number, nota?: string
-  ) => addCotizacion(moneda, valor_ars, nota))
+    _e, moneda: import('@shared/types').ComexMoneda, valor_ars: number, nota?: string, created_at_ms?: number
+  ) => addCotizacion(moneda, valor_ars, nota, created_at_ms))
 
   // ── Cotizaciones BCRA (fetch + caché local) ───────────────────────────────
   ipcMain.handle('comex:bcra:rates', (

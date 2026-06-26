@@ -429,7 +429,7 @@ const api = {
     },
     cotizaciones: {
       list: ():                                                 Promise<ComexCotizacion[]> => ipcRenderer.invoke('comex:cotizaciones:list'),
-      add:  (moneda: ComexMoneda, valor_ars: number, nota?: string): Promise<ComexCotizacion> => ipcRenderer.invoke('comex:cotizaciones:add', moneda, valor_ars, nota),
+      add:  (moneda: ComexMoneda, valor_ars: number, nota?: string, created_at_ms?: number): Promise<ComexCotizacion> => ipcRenderer.invoke('comex:cotizaciones:add', moneda, valor_ars, nota, created_at_ms),
     },
     bcra: {
       rates:   (moneda: ComexMoneda): Promise<BcraRateEntry[]> => ipcRenderer.invoke('comex:bcra:rates', moneda),

@@ -625,9 +625,9 @@
     "semantic_hash": "ae69427c911dcd888f06220089c771fc"
   },
   "src/renderer/src/hooks/usePowerSyncStatus.ts": {
-    "mtime": 1781210285.8361228,
-    "ast_hash": "9cbcf651463e36421d07caf0ec0ccf93",
-    "semantic_hash": "9cbcf651463e36421d07caf0ec0ccf93"
+    "mtime": 1782510239.656307,
+    "ast_hash": "2ba5beb77d6fec1fe49b789e9502d9ce",
+    "semantic_hash": ""
   },
   "src/renderer/src/hooks/useProjects.ts": {
     "mtime": 1779700556.6545591,

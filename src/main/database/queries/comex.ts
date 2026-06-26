@@ -1490,11 +1490,12 @@ export async function listCotizaciones(): Promise<ComexCotizacion[]> {
 export async function addCotizacion(
   moneda: ComexMoneda,
   valor_ars: number,
-  nota?: string
+  nota?: string,
+  created_at_ms?: number
 ): Promise<ComexCotizacion> {
   const db  = getPowerSyncDb()
   const id  = randomUUID()
-  const now = Date.now()
+  const now = created_at_ms ?? Date.now()
   await db.execute(
     `INSERT INTO comex_cotizaciones (id, workspace_id, moneda, valor_ars, nota, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,

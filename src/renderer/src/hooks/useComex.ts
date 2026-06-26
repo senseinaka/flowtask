@@ -1069,11 +1069,12 @@ export function useCotizaciones() {
 export function useAddCotizacion() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ moneda, valor_ars, nota }: {
+    mutationFn: ({ moneda, valor_ars, nota, created_at_ms }: {
       moneda: import('@shared/types').ComexMoneda
       valor_ars: number
       nota?: string
-    }) => window.api.comex.cotizaciones.add(moneda, valor_ars, nota),
+      created_at_ms?: number
+    }) => window.api.comex.cotizaciones.add(moneda, valor_ars, nota, created_at_ms),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-cotizaciones'] })
   })
 }

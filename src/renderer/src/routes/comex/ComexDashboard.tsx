@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, DollarSign, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff, ChevronDown } from 'lucide-react'
-import { useComexImports, useComexPlannings, useCotizaciones, useBcraRates } from '../../hooks/useComex'
+import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff, ChevronDown } from 'lucide-react'
+import { useComexImports, useComexPlannings } from '../../hooks/useComex'
 import { PlanningDashboardPanel } from './ComexPlanningSummary'
 import { IMPORT_STATUS_LABELS, IMPORT_STATUS_COLORS } from '@shared/types'
 import type { ImportStatus, ComexImport } from '@shared/types'
 import { cn } from '../../components/ui/utils'
 import { useNavigate } from 'react-router-dom'
-import CotizacionesModal from './CotizacionesModal'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/es'
@@ -807,23 +806,6 @@ export default function ComexDashboard() {
   const { data: plannings = [] } = useComexPlannings({})
   const navigate = useNavigate()
   const today = dayjs()
-  const [showCotizaciones, setShowCotizaciones] = useState(false)
-
-  // Para el badge de cotizaciones en el header
-  const { data: cotizaciones = [] } = useCotizaciones()
-  const { data: bcraUSD = [] } = useBcraRates('USD')
-  const { data: bcraEUR = [] } = useBcraRates('EUR')
-  const latestUSD = cotizaciones.filter(c => c.moneda === 'USD').sort((a,b) => b.created_at - a.created_at)[0]
-  const latestEUR = cotizaciones.filter(c => c.moneda === 'EUR').sort((a,b) => b.created_at - a.created_at)[0]
-  const bcraHoyUSD = bcraUSD.length ? bcraUSD[bcraUSD.length - 1].valor : null
-  const bcraHoyEUR = bcraEUR.length ? bcraEUR[bcraEUR.length - 1].valor : null
-  const pctUSD = latestUSD && bcraHoyUSD ? ((latestUSD.valor_ars - bcraHoyUSD) / bcraHoyUSD) * 100 : null
-  const pctEUR = latestEUR && bcraHoyEUR ? ((latestEUR.valor_ars - bcraHoyEUR) / bcraHoyEUR) * 100 : null
-  const maxPct = Math.max(Math.abs(pctUSD ?? 0), Math.abs(pctEUR ?? 0))
-  const ctBadgeColor = maxPct > 25 ? 'text-red-400 border-red-800/50 bg-red-950/30'
-    : maxPct > 10 ? 'text-amber-400 border-amber-800/50 bg-amber-950/30'
-    : latestUSD   ? 'text-emerald-400 border-emerald-800/50 bg-emerald-950/30'
-    : 'text-slate-500 border-slate-700 bg-slate-800'
 
   if (imports.length === 0) {
     return (
@@ -884,27 +866,12 @@ export default function ComexDashboard() {
             <p className="text-xs text-slate-400">Operaciones de comercio exterior</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowCotizaciones(true)}
-            className={cn(
-              'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors',
-              ctBadgeColor || 'text-slate-400 border-slate-700 hover:text-white hover:border-slate-500'
-            )}
-          >
-            <DollarSign size={12} />
-            USD/EUR
-            {latestUSD && (
-              <span className="opacity-80">{latestUSD.valor_ars.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
-            )}
-          </button>
-          <button
-            onClick={() => navigate('/comex/imports')}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
-          >
-            Ver todas <ChevronRight size={13} />
-          </button>
-        </div>
+        <button
+          onClick={() => navigate('/comex/imports')}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+        >
+          Ver todas <ChevronRight size={13} />
+        </button>
       </div>
 
       {/* ── KPIs ── */}
@@ -1101,9 +1068,6 @@ export default function ComexDashboard() {
         </div>
       )}
 
-      {showCotizaciones && (
-        <CotizacionesModal onClose={() => setShowCotizaciones(false)} />
-      )}
     </div>
   )
 }

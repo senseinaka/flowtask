@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw
+  Database, RefreshCw, DollarSign
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
@@ -185,6 +185,7 @@ export default function Sidebar() {
     { to: '/comex/gestores',      Icon: ShieldCheck,     label: 'Gestores INAL',                    subKey: 'gestores' },
     { to: '/comex/despachantes',  Icon: Briefcase,       label: 'Despachantes',                     subKey: 'despachantes' },
     { to: '/comex/logistics',     Icon: Ship,            label: 'Logística',                        subKey: 'logistics' },
+    { to: '/comex/cotizaciones',  Icon: DollarSign,      label: 'USD/EUR',                          subKey: 'cotizaciones' },
   ].filter((it) => canRead('comex', it.subKey))
 
   const { data: syncStatus } = useQuery<SyncStatus>({

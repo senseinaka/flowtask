@@ -11,6 +11,7 @@ import TeamKanban from './routes/TeamKanban'
 import Contacts from './routes/Contacts'
 import Messages from './routes/Messages'
 import ComexDashboard from './routes/comex/ComexDashboard'
+import CotizacionesPage from './routes/comex/CotizacionesPage'
 import ComexImports from './routes/comex/ComexImports'
 import ComexImportDetail from './routes/comex/ComexImportDetail'
 import ComexSuppliers from './routes/comex/ComexSuppliers'
@@ -74,6 +75,7 @@ const router = createHashRouter([
       { path: 'comex/gestores',    element: <ComexGestores />    },
       { path: 'comex/despachantes',element: <ComexDespachantes /> },
       { path: 'comex/logistics',   element: <ComexLogistics />   },
+      { path: 'comex/cotizaciones', element: <CotizacionesPage /> },
       { path: 'expiry', element: <ExpiryDashboard /> },
       { path: 'finance', element: <FinanceDashboard /> },
       { path: 'company-finance', element: <CompanyFinanceDashboard /> },
