@@ -4,7 +4,7 @@ const xlsx = require('xlsx') as typeof import('xlsx')
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
-import { savePayroll, saveVacaciones } from '../services/rrhh.service'
+import { savePayroll, saveVacaciones, saveSac } from '../services/rrhh.service'
 import {
   listColaboradores, listPeriodos, getPeriodo,
   listSueldosByPeriodo, getHistorialColaborador,
@@ -116,6 +116,10 @@ export function registerRrhhIpc(): void {
 
   ipcMain.handle('rrhh:saveVacaciones', (_e, empresa: RrhhEmpresa, filePath: string) =>
     saveVacaciones(empresa, filePath)
+  )
+
+  ipcMain.handle('rrhh:saveSac', (_e, empresa: RrhhEmpresa, filePath: string) =>
+    saveSac(empresa, filePath)
   )
 
   ipcMain.handle('rrhh:colaboradores:list', (_e, empresa: RrhhEmpresa) =>
@@ -277,6 +281,17 @@ export function registerRrhhIpc(): void {
     if (!win) return null
     const result = await dialog.showOpenDialog(win, {
       title: 'Seleccionar recibo de vacaciones',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      properties: ['openFile'],
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('rrhh:selectSacPdf', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar recibo de SAC / aguinaldo',
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
       properties: ['openFile'],
     })

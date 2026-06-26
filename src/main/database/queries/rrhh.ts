@@ -131,6 +131,17 @@ export async function updatePeriodoVacaciones(id: string, data: {
   )
 }
 
+export async function updatePeriodoSac(id: string, data: {
+  total_sac: number
+  pdf_sac_nombre: string
+  pdf_sac_drive_file_id?: string | null
+}): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_periodos SET total_sac = ?, pdf_sac_nombre = ?, pdf_sac_drive_file_id = ?, updated_at = ? WHERE id = ?`,
+    [data.total_sac, data.pdf_sac_nombre, data.pdf_sac_drive_file_id ?? null, Date.now(), id]
+  )
+}
+
 export async function updatePeriodoStats(id: string, data: {
   total_neto: number
   cantidad_colaboradores: number
@@ -165,6 +176,17 @@ export async function updateSueldoVacaciones(data: {
   await getPowerSyncDb().execute(
     `UPDATE rrhh_sueldos SET vacaciones_neto = ?, vacaciones_dias = ?, updated_at = ? WHERE periodo_id = ? AND colaborador_id = ?`,
     [data.vacaciones_neto, data.vacaciones_dias, Date.now(), data.periodoId, data.colaboradorId]
+  )
+}
+
+export async function updateSueldoSac(data: {
+  periodoId: string
+  colaboradorId: string
+  sac_neto: number
+}): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_sueldos SET sac_neto = ?, updated_at = ? WHERE periodo_id = ? AND colaborador_id = ?`,
+    [data.sac_neto, Date.now(), data.periodoId, data.colaboradorId]
   )
 }
 

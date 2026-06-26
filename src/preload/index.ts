@@ -55,7 +55,7 @@ import type {
   PayrollExtractionResult,
   RrhhColaborador, RrhhPeriodo, RrhhSueldo, RrhhEmpresa,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
-  RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult,
+  RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult, SaveSacResult,
   RrhhColaboradorConStats, RrhhNominaConfig,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
   RrhhLista, RrhhListaTipo, UpsertListaInput,
@@ -1094,8 +1094,10 @@ const api = {
   rrhh: {
     savePayroll:             (empresa: RrhhEmpresa, filePath: string): Promise<SavePayrollResult>    => ipcRenderer.invoke('rrhh:savePayroll', empresa, filePath),
     saveVacaciones:          (empresa: RrhhEmpresa, filePath: string): Promise<SaveVacacionesResult> => ipcRenderer.invoke('rrhh:saveVacaciones', empresa, filePath),
+    saveSac:                 (empresa: RrhhEmpresa, filePath: string): Promise<SaveSacResult>        => ipcRenderer.invoke('rrhh:saveSac', empresa, filePath),
     selectPdf:               (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectPdf'),
     selectVacacionesPdf:     (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectVacacionesPdf'),
+    selectSacPdf:            (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectSacPdf'),
     colaboradores: {
       list:                  (empresa: RrhhEmpresa): Promise<RrhhColaborador[]>                     => ipcRenderer.invoke('rrhh:colaboradores:list', empresa),
       historial:             (colaboradorId: string): Promise<RrhhHistorialEntry[]>               => ipcRenderer.invoke('rrhh:colaboradores:historial', colaboradorId),

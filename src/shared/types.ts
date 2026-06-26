@@ -2898,6 +2898,7 @@ export interface PayrollEmployee {
   fechaIngreso: string
   isVacaciones: boolean
   vacacionesDias: number
+  isSac: boolean
 }
 
 export interface PayrollValidation {
@@ -3157,6 +3158,9 @@ export interface RrhhPeriodo {
   total_vacaciones: number | null
   pdf_vacaciones_nombre: string | null
   pdf_vacaciones_drive_file_id: string | null
+  total_sac: number | null
+  pdf_sac_nombre: string | null
+  pdf_sac_drive_file_id: string | null
   created_at: number
   updated_at: number
 }
@@ -3173,6 +3177,7 @@ export interface RrhhSueldo {
   notas: string | null
   vacaciones_neto: number | null
   vacaciones_dias: number | null
+  sac_neto: number | null
   created_at: number
   updated_at: number
 }
@@ -3212,6 +3217,13 @@ export interface RrhhHistorialEntry {
 }
 
 export interface SaveVacacionesResult {
+  periodo: RrhhPeriodo
+  colaboradoresActualizados: number
+  colaboradoresNuevos: number
+  colaboradoresSinMatch: string[]
+}
+
+export interface SaveSacResult {
   periodo: RrhhPeriodo
   colaboradoresActualizados: number
   colaboradoresNuevos: number

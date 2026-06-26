@@ -165,15 +165,30 @@ Y agregar a sync-rules de PowerSync:
 - SELECT * FROM service_catalog WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 ```
 
-**DDL pendiente de ejecutar en Supabase (RRHH multiempresa, jun 2026):**
+**DDL RRHH multiempresa — APLICADO en Supabase (jun 2026):**
 ```sql
--- Discriminador NAKA/Estación Vertical. DEFAULT 'naka' backfillea la data actual a NAKA.
-ALTER TABLE rrhh_colaboradores ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
-ALTER TABLE rrhh_periodos      ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
-ALTER TABLE rrhh_sueldos       ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
-ALTER TABLE rrhh_nomina_config ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
+-- 1) Discriminador NAKA/Estación Vertical en las 4 tablas
+ALTER TABLE rrhh_colaboradores ADD COLUMN IF NOT EXISTS empresa text NOT NULL DEFAULT 'naka';
+ALTER TABLE rrhh_periodos      ADD COLUMN IF NOT EXISTS empresa text NOT NULL DEFAULT 'naka';
+ALTER TABLE rrhh_sueldos       ADD COLUMN IF NOT EXISTS empresa text NOT NULL DEFAULT 'naka';
+ALTER TABLE rrhh_nomina_config ADD COLUMN IF NOT EXISTS empresa text NOT NULL DEFAULT 'naka';
+
+-- 2) Backfill (el DEFAULT de Postgres es metadata-only y NO se replica → hace falta el UPDATE
+--    explícito para que PowerSync re-emita las filas; la guarda IS DISTINCT FROM 'ev' no pisa EV)
+UPDATE rrhh_colaboradores SET empresa='naka' WHERE empresa IS DISTINCT FROM 'ev';
+UPDATE rrhh_periodos      SET empresa='naka' WHERE empresa IS DISTINCT FROM 'ev';
+UPDATE rrhh_sueldos       SET empresa='naka' WHERE empresa IS DISTINCT FROM 'ev';
+UPDATE rrhh_nomina_config SET empresa='naka' WHERE empresa IS DISTINCT FROM 'ev';
+
+-- 3) DROP de 3 índices UNIQUE secundarios — OBLIGATORIO para multiempresa (chocan apenas dos
+--    empresas comparten mes/año o DNI; trababan ps_crud con 23505). La unicidad la garantiza el código.
+DROP INDEX idx_rrhh_periodo_mes;   -- era UNIQUE(workspace_id, anio, mes)
+DROP INDEX idx_rrhh_colab_doc;     -- era UNIQUE(workspace_id, documento)
+DROP INDEX idx_rrhh_sueldo_uniq;   -- era UNIQUE(workspace_id, periodo_id, colaborador_id)
 ```
-Sync-rules: **sin cambios** (filtran por `workspace_id` con `SELECT *`; la columna nueva fluye sola). Sin UNIQUE secundario (bloquea la cola `ps_crud` con 23505). Sin esto, cualquier carga de RRHH traba la cola de sync.
+Sync-rules: **sin cambios** (filtran por `workspace_id` con `SELECT *`; la columna fluye sola).
+**Lección:** una tabla PowerSync con discriminador de empresa NO debe tener UNIQUE secundario que
+incluya columnas que varían por empresa — ver regla [[feedback-powersync-unique-constraints]].
 
 ### Reglas al crear una tabla sincronizada nueva (Supabase)
 
@@ -1008,8 +1023,9 @@ Submenús: Sueldos NAKA · Nómina NAKA · Sueldos EV · Nómina EV. Títulos "S
   así que `canRead('rrhh','sueldos')` cubre ambas empresas.
 - **Drive** (`drive.service.ts`): NAKA mantiene carpetas legacy ("Sueldos"/"Legajos") para no
   orfanar las existentes; EV usa sufijo ("Sueldos EV"/"Legajos EV"). Cache key de legajos por empresa.
-- **DDL pendiente**: ver "DDL pendiente de ejecutar en Supabase (RRHH multiempresa)" más arriba.
-  **Sin correrlo, la cola `ps_crud` se traba al cargar datos de RRHH.**
+- **DDL aplicado** (jun 2026): columna `empresa` + backfill + **drop de 3 índices UNIQUE secundarios**
+  (`idx_rrhh_periodo_mes`, `idx_rrhh_colab_doc`, `idx_rrhh_sueldo_uniq`) que trababan `ps_crud` con 23505
+  apenas dos empresas comparten mes/año o DNI. Ver "DDL RRHH multiempresa — APLICADO" más arriba.
 
 ### Lógica de re-upload (crítico)
 

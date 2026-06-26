@@ -5,10 +5,11 @@ import { driveService } from './drive.service'
 import { extractPayroll } from './payroll-pdf.extractor'
 import {
   getPeriodoByMes, createPeriodo, updatePeriodoDrive, updatePeriodoStats, updatePeriodoVacaciones,
-  upsertColaborador, upsertSueldo, updateSueldoVacaciones, getSueldoByPeriodoColaborador,
+  updatePeriodoSac, upsertColaborador, upsertSueldo, updateSueldoVacaciones, updateSueldoSac,
+  getSueldoByPeriodoColaborador,
   listSueldosByPeriodo, getAusentesEnPeriodo, getColaboradorByDocumento
 } from '../database/queries/rrhh'
-import type { SavePayrollResult, SaveVacacionesResult, RrhhSmartAlert, RrhhEmpresa } from '@shared/types'
+import type { SavePayrollResult, SaveVacacionesResult, SaveSacResult, RrhhSmartAlert, RrhhEmpresa } from '@shared/types'
 
 const MONTH_NAMES = [
   '', 'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -43,11 +44,11 @@ async function askReplace(nombre: string): Promise<boolean> {
 
 export async function savePayroll(empresa: RrhhEmpresa, filePath: string): Promise<SavePayrollResult> {
   const extraction = await extractPayroll(filePath)
-  // Filter out vacation employees — they are handled separately
-  const employees = extraction.employees.filter(e => !e.isVacaciones)
+  // Filter out vacation and SAC employees — they are handled separately
+  const employees = extraction.employees.filter(e => !e.isVacaciones && !e.isSac)
 
   if (employees.length === 0) {
-    throw new Error('No se encontraron sueldos en el PDF (si es de vacaciones, usá el botón correspondiente)')
+    throw new Error('No se encontraron sueldos en el PDF (si es de vacaciones o SAC, usá el botón correspondiente)')
   }
 
   const first = employees[0]
@@ -280,6 +281,112 @@ export async function saveVacaciones(empresa: RrhhEmpresa, filePath: string): Pr
   })
 
   periodo = { ...periodo, total_vacaciones: totalVacaciones, pdf_vacaciones_nombre: pdfNombre, pdf_vacaciones_drive_file_id: vacDriveFileId }
+
+  return {
+    periodo,
+    colaboradoresActualizados,
+    colaboradoresNuevos,
+    colaboradoresSinMatch,
+  }
+}
+
+export async function saveSac(empresa: RrhhEmpresa, filePath: string): Promise<SaveSacResult> {
+  const extraction = await extractPayroll(filePath)
+  const employees = extraction.employees.filter(e => e.isSac)
+
+  if (employees.length === 0) {
+    throw new Error('No se encontraron registros de SAC / aguinaldo en el PDF')
+  }
+
+  // Detect period from first employee (period string like "6-2026 primer SAC")
+  const first = employees[0]
+  const parsed = parsePeriodoAbonado(first.periodoAbonado) ?? parseFecha(first.fecha)
+  if (!parsed) throw new Error(`No se pudo detectar el período: "${first.periodoAbonado}"`)
+
+  const { mes, anio } = parsed
+  const label = `${MONTH_NAMES[mes]} ${anio}`
+
+  // El SAC se adjunta a un período de sueldos existente; si no existe, se crea
+  let periodo = await getPeriodoByMes(empresa, anio, mes)
+  if (!periodo) {
+    periodo = await createPeriodo(empresa, {
+      anio, mes, label, total_neto: 0,
+      cantidad_colaboradores: 0,
+      pdf_nombre: path.basename(filePath),
+      fecha_pago: first.fecha,
+    })
+  }
+
+  const pdfNombre = path.basename(filePath)
+  let colaboradoresActualizados = 0
+  let colaboradoresNuevos = 0
+  const colaboradoresSinMatch: string[] = []
+
+  for (const emp of employees) {
+    const colaborador = await getColaboradorByDocumento(empresa, emp.documento)
+    if (!colaborador) {
+      colaboradoresSinMatch.push(emp.apellidoYNombres)
+      continue
+    }
+
+    const existing = await getSueldoByPeriodoColaborador(periodo.id, colaborador.id)
+    if (existing) {
+      if (existing.sac_neto !== null) {
+        const replace = await askReplace(`${emp.apellidoYNombres} (SAC)`)
+        if (!replace) continue
+      }
+      await updateSueldoSac({
+        periodoId: periodo.id,
+        colaboradorId: colaborador.id,
+        sac_neto: emp.totalNetoRaw,
+      })
+      colaboradoresActualizados++
+    } else {
+      // Sueldo row doesn't exist — create it (SAC-only row)
+      await upsertSueldo(empresa, {
+        periodoId: periodo.id,
+        colaboradorId: colaborador.id,
+        total_neto: 0,
+        tarea: colaborador.tarea_habitual,
+        periodo_abonado: emp.periodoAbonado,
+      })
+      await updateSueldoSac({
+        periodoId: periodo.id,
+        colaboradorId: colaborador.id,
+        sac_neto: emp.totalNetoRaw,
+      })
+      colaboradoresNuevos++
+    }
+  }
+
+  // Recalculate period total_sac
+  const allSueldos = await listSueldosByPeriodo(periodo.id)
+  const totalSac = allSueldos.reduce((s, e) => s + (e.sac_neto ?? 0), 0)
+
+  // Upload to Drive (al mismo folder del período)
+  let sacDriveFileId: string | null = null
+  if (driveService.isAuthenticated()) {
+    try {
+      if (periodo.pdf_sac_drive_file_id) {
+        try { await driveService.deleteFile(periodo.pdf_sac_drive_file_id) } catch { /* ignorar */ }
+      }
+      const folderId = periodo.pdf_drive_folder_id
+        ?? await driveService.getOrCreateRrhhSueldosMesFolder(empresa, mes, anio)
+      const folderName = `${String(mes).padStart(2, '0')}-${anio}`
+      const fileName = `sac_${folderName}.pdf`
+      sacDriveFileId = await driveService.uploadFileToFolder(filePath, folderId, fileName, 'application/pdf')
+    } catch (err) {
+      console.error('[RRHH] Error subiendo PDF SAC a Drive:', err)
+    }
+  }
+
+  await updatePeriodoSac(periodo.id, {
+    total_sac: totalSac,
+    pdf_sac_nombre: pdfNombre,
+    pdf_sac_drive_file_id: sacDriveFileId,
+  })
+
+  periodo = { ...periodo, total_sac: totalSac, pdf_sac_nombre: pdfNombre, pdf_sac_drive_file_id: sacDriveFileId }
 
   return {
     periodo,

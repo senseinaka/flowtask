@@ -145,6 +145,15 @@ function findVacacionesDias(rows: Map<number, PdfTextItem[]>): number {
   return 0
 }
 
+// SAC / aguinaldo: el recibo trae un concepto "SAC" (código 1120). Señal robusta
+// que NO depende de cómo el PDF parta el campo "Período Abonado" (ej. "6 - 2026 1º SAC").
+function hasSacConcept(rows: Map<number, PdfTextItem[]>): boolean {
+  for (const items of rows.values()) {
+    if (items.some(i => norm(i.str) === 'SAC')) return true
+  }
+  return false
+}
+
 // Total neto: find "TOTAL NETO" label, take the numeric value to its right
 function findTotalNeto(rows: Map<number, PdfTextItem[]>): { raw: number; formatted: string } {
   const pos = findLabel(rows, ['TOTAL NETO'])
@@ -196,6 +205,9 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
   // Vacation detection: período contains "Vacaciones" (case-insensitive)
   const isVacaciones = /vacaciones/i.test(periodo)
   const vacacionesDias = isVacaciones ? findVacacionesDias(leftRows) : 0
+  // SAC / aguinaldo detection: período contiene "SAC"/"aguinaldo" (ej. "6 - 2026 1º SAC"),
+  // o el recibo trae el concepto "SAC" (fallback robusto si el PDF parte el campo período).
+  const isSac = /\bsac\b|aguinaldo/i.test(periodo) || hasSacConcept(leftRows)
 
   if (!apellido) return null
 
@@ -213,6 +225,7 @@ function extractEmployee(pageNum: number, items: PdfTextItem[], pageWidth: numbe
     fechaIngreso,
     isVacaciones,
     vacacionesDias,
+    isSac,
   }
 }
 

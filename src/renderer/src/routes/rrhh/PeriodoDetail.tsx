@@ -6,7 +6,7 @@ import {
 import {
   ArrowLeft, TrendingUp, TrendingDown, FolderOpen,
   ExternalLink, CheckCircle2, AlertTriangle,
-  Loader2, X, FileSpreadsheet, Search, ChevronDown, Umbrella
+  Loader2, X, FileSpreadsheet, Search, ChevronDown, Umbrella, Gift
 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import {
@@ -335,7 +335,9 @@ export default function PeriodoDetail() {
 
   const totalSueldos = sueldos.reduce((s, e) => s + e.total_neto, 0)
   const totalVacaciones = sueldos.reduce((s, e) => s + (e.vacaciones_neto ?? 0), 0)
-  const totalNeto = totalSueldos + totalVacaciones
+  const totalSac = sueldos.reduce((s, e) => s + (e.sac_neto ?? 0), 0)
+  const hasSac = totalSac > 0
+  const totalNeto = totalSueldos + totalVacaciones + totalSac
   const nuevos = sueldos.filter(s => s.es_nuevo).length
 
   function buildXlsRows(rows: RrhhSueldoConColaborador[]) {
@@ -348,6 +350,7 @@ export default function PeriodoDetail() {
       'Antigüedad':         calcAntiguedad(s.colaborador.fecha_ingreso),
       'Mes':                periodoShort(s.periodo_abonado),
       'Total Neto':         s.total_neto,
+      'SAC':                s.sac_neto ?? '',
       'Vacaciones':         s.vacaciones_neto ?? '',
       'Días Vacaciones':    s.vacaciones_dias ?? '',
       'Variación ($)':      s.delta_importe ?? '',
@@ -420,12 +423,19 @@ export default function PeriodoDetail() {
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
             <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Total nómina</p>
             <p className="text-xl font-bold text-slate-100">{fmt(totalNeto)}</p>
-            {totalVacaciones > 0 && (
+            {(totalVacaciones > 0 || hasSac) && (
               <div className="mt-1 space-y-0.5">
                 <p className="text-[10px] text-slate-500">Sueldos: {fmt(totalSueldos)}</p>
-                <p className="text-[10px] text-sky-400 flex items-center gap-0.5">
-                  <Umbrella size={9} /> Vacaciones: {fmt(totalVacaciones)}
-                </p>
+                {totalVacaciones > 0 && (
+                  <p className="text-[10px] text-sky-400 flex items-center gap-0.5">
+                    <Umbrella size={9} /> Vacaciones: {fmt(totalVacaciones)}
+                  </p>
+                )}
+                {hasSac && (
+                  <p className="text-[10px] text-amber-400 flex items-center gap-0.5">
+                    <Gift size={9} /> SAC: {fmt(totalSac)}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -503,6 +513,7 @@ export default function PeriodoDetail() {
                     <SortTh label="Antigüedad" k="antiguedad" current={sortKey} onSort={setSortKey} />
                     <PlainTh label="Mes" className="text-center" />
                     <SortTh label="Total Neto" k="total_neto" current={sortKey} onSort={setSortKey} className="text-right" />
+                    {hasSac && <PlainTh label="SAC" className="text-right" />}
                     <PlainTh label="Vacaciones" className="text-right" />
                     <PlainTh label="Días" className="text-center" />
                     <SortTh label="Variación" k="delta_pct" current={sortKey} onSort={setSortKey} className="text-right" />
@@ -556,6 +567,16 @@ export default function PeriodoDetail() {
                         <span className="font-semibold text-emerald-400">{fmt(s.total_neto)}</span>
                       </td>
 
+                      {/* SAC */}
+                      {hasSac && (
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          {s.sac_neto != null && s.sac_neto > 0
+                            ? <span className="font-semibold text-amber-400">{fmt(s.sac_neto)}</span>
+                            : <span className="text-slate-700">—</span>
+                          }
+                        </td>
+                      )}
+
                       {/* Vacaciones */}
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
                         {s.vacaciones_neto != null && s.vacaciones_neto > 0
@@ -597,7 +618,7 @@ export default function PeriodoDetail() {
                     </tr>
                   ))}
                   {sorted.length === 0 && (
-                    <tr><td colSpan={13} className="px-4 py-8 text-center text-slate-600 text-xs">Sin resultados</td></tr>
+                    <tr><td colSpan={hasSac ? 14 : 13} className="px-4 py-8 text-center text-slate-600 text-xs">Sin resultados</td></tr>
                   )}
                 </tbody>
               </table>

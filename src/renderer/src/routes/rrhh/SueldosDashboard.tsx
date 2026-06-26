@@ -9,7 +9,7 @@ import {
   ExternalLink, Minus
 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
-import { usePeriodos, useSavePayroll, useSaveVacaciones, useDeletePeriodo } from '../../hooks/useRrhh'
+import { usePeriodos, useSavePayroll, useSaveVacaciones, useSaveSac, useDeletePeriodo } from '../../hooks/useRrhh'
 import { useRrhhEmpresa } from './RrhhEmpresaContext'
 import { RRHH_EMPRESA_LABEL } from '@shared/types'
 import type { RrhhPeriodoConStats, SavePayrollResult, SaveVacacionesResult } from '@shared/types'
@@ -31,7 +31,7 @@ function fmtM(n: number): string {
 function KpiBar({ periodos }: { periodos: RrhhPeriodoConStats[] }) {
   const ultimo = periodos[0] ?? null
   if (!ultimo) return null
-  const grand = ultimo.total_neto + (ultimo.total_vacaciones ?? 0)
+  const grand = ultimo.total_neto + (ultimo.total_vacaciones ?? 0) + (ultimo.total_sac ?? 0)
   const promedio = ultimo.cantidad_colaboradores > 0
     ? grand / ultimo.cantidad_colaboradores : 0
 
@@ -68,6 +68,7 @@ interface ChartRow {
   label: string
   sueldos: number
   vacaciones: number
+  sac: number
   labelVal: number  // always 0, used as anchor for the top label
   total: number
   colabs: number
@@ -91,33 +92,44 @@ function NominaChart({ periodos }: { periodos: RrhhPeriodoConStats[] }) {
   const data: ChartRow[] = [...periodos].reverse().map(p => {
     const sueldos    = p.total_neto
     const vacaciones = p.total_vacaciones ?? 0
+    const sac        = p.total_sac ?? 0
     return {
       label:      p.label.split(' ')[0].slice(0, 3),
       sueldos,
       vacaciones,
+      sac,
       labelVal:   0,
-      total:      sueldos + vacaciones,
+      total:      sueldos + vacaciones + sac,
       colabs:     p.cantidad_colaboradores,
     }
   })
 
   const maxVal = Math.max(...data.map(d => d.total))
   const hasAnyVac = data.some(d => d.vacaciones > 0)
+  const hasAnySac = data.some(d => d.sac > 0)
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-slate-400">Evolución de nómina</p>
-        {hasAnyVac && (
+        {(hasAnyVac || hasAnySac) && (
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span className="flex items-center gap-1">
               <span className="inline-block w-2.5 h-2.5 rounded-sm bg-pink-400" />
               Sueldos
             </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-sky-400" />
-              Vacaciones
-            </span>
+            {hasAnyVac && (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-sky-400" />
+                Vacaciones
+              </span>
+            )}
+            {hasAnySac && (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-400" />
+                SAC
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -138,13 +150,16 @@ function NominaChart({ periodos }: { periodos: RrhhPeriodoConStats[] }) {
             formatter={(v: number, name: string) => {
               if (name === 'sueldos')    return [fmt(v), 'Sueldos']
               if (name === 'vacaciones') return [fmt(v), 'Vacaciones']
+              if (name === 'sac')        return [fmt(v), 'SAC']
               return [null, '']
             }}
           />
           {/* Sueldos — bottom of stack */}
           <Bar dataKey="sueldos" fill="#f472b6" stackId="a" maxBarSize={44} isAnimationActive={false} />
-          {/* Vacaciones — top of stack, rounded top corners only when > 0 */}
+          {/* Vacaciones — middle of stack (rounded top when es el segmento superior) */}
           <Bar dataKey="vacaciones" fill="#38bdf8" stackId="a" maxBarSize={44} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+          {/* SAC — top of stack, rounded top corners */}
+          <Bar dataKey="sac" fill="#f59e0b" stackId="a" maxBarSize={44} radius={[3, 3, 0, 0]} isAnimationActive={false} />
           {/* Invisible bar — sits at the very top, carries the total label */}
           <Bar dataKey="labelVal" fill="transparent" stackId="a" maxBarSize={44} isAnimationActive={false}>
             <LabelList
@@ -275,7 +290,7 @@ function UploadZone({
   label, accent, onFilePath, selectFn
 }: {
   label: string
-  accent: 'pink' | 'sky'
+  accent: 'pink' | 'sky' | 'amber'
   onFilePath: (p: string) => void
   selectFn: () => Promise<string | null>
 }) {
@@ -295,10 +310,13 @@ function UploadZone({
     if (p) onFilePath(p)
   }
 
-  const borderActive = accent === 'pink' ? 'border-pink-500 bg-pink-950/10' : 'border-sky-500 bg-sky-950/10'
-  const iconClass    = dragOver
-    ? (accent === 'pink' ? 'text-pink-400' : 'text-sky-400')
-    : (accent === 'sky'  ? 'text-sky-600'  : 'text-slate-500')
+  const ACCENT = {
+    pink:  { active: 'border-pink-500 bg-pink-950/10',   dragIcon: 'text-pink-400',  idleIcon: 'text-slate-500', label: 'text-slate-400' },
+    sky:   { active: 'border-sky-500 bg-sky-950/10',     dragIcon: 'text-sky-400',   idleIcon: 'text-sky-600',   label: 'text-sky-600' },
+    amber: { active: 'border-amber-500 bg-amber-950/10', dragIcon: 'text-amber-400', idleIcon: 'text-amber-600', label: 'text-amber-600' },
+  }[accent]
+  const borderActive = ACCENT.active
+  const iconClass    = dragOver ? ACCENT.dragIcon : ACCENT.idleIcon
 
   return (
     <div
@@ -314,7 +332,7 @@ function UploadZone({
       )}
     >
       <Upload size={16} className={iconClass} />
-      <span className={cn('text-xs', accent === 'sky' && !dragOver ? 'text-sky-600' : 'text-slate-400')}>
+      <span className={cn('text-xs', !dragOver ? ACCENT.label : 'text-slate-400')}>
         {dragOver ? 'Soltá el PDF aquí' : label}
       </span>
     </div>
@@ -329,6 +347,7 @@ export default function SueldosDashboard() {
   const { data: periodos = [], isLoading } = usePeriodos()
   const savePayroll   = useSavePayroll()
   const saveVacaciones = useSaveVacaciones()
+  const saveSac        = useSaveSac()
   const [lastVacResult, setLastVacResult] = useState<SaveVacacionesResult | null>(null)
 
   function handleFile(filePath: string) {
@@ -347,7 +366,13 @@ export default function SueldosDashboard() {
     })
   }
 
-  const isProcessing = savePayroll.isPending || saveVacaciones.isPending
+  function handleSacFile(filePath: string) {
+    saveSac.mutate(filePath, {
+      onSuccess: result => navigate(`/rrhh/sueldos/${empresa}/${result.periodo.id}`)
+    })
+  }
+
+  const isProcessing = savePayroll.isPending || saveVacaciones.isPending || saveSac.isPending
 
   return (
     <div className="h-full flex flex-col p-6 gap-5 overflow-y-auto">
@@ -369,7 +394,7 @@ export default function SueldosDashboard() {
       {periodos.length > 0 && <KpiBar periodos={periodos} />}
 
       {/* Upload zones */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <UploadZone
           label="Sueldos del mes"
           accent="pink"
@@ -381,6 +406,12 @@ export default function SueldosDashboard() {
           accent="sky"
           onFilePath={handleVacFile}
           selectFn={() => window.api.rrhh.selectVacacionesPdf()}
+        />
+        <UploadZone
+          label="SAC / Aguinaldo"
+          accent="amber"
+          onFilePath={handleSacFile}
+          selectFn={() => window.api.rrhh.selectSacPdf()}
         />
       </div>
 
@@ -395,6 +426,12 @@ export default function SueldosDashboard() {
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/20 border border-red-800/40 text-xs text-red-400">
           <AlertTriangle size={13} />
           {saveVacaciones.error?.message}
+        </div>
+      )}
+      {saveSac.isError && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/20 border border-red-800/40 text-xs text-red-400">
+          <AlertTriangle size={13} />
+          {saveSac.error?.message}
         </div>
       )}
 
