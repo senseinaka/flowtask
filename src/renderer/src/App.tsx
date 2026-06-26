@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, type ReactNode } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { MessageCircleQuestion, X, Bot, Loader2, ShieldOff } from 'lucide-react'
 import Sidebar from './components/layout/Sidebar'
@@ -22,6 +22,9 @@ interface Toast {
 let toastCounter = 0
 
 export default function App() {
+  const location = useLocation()
+  const navigate  = useNavigate()
+
   const {
     isTaskFormOpen,
     expandedTaskId, closeExpandedTask,
@@ -29,8 +32,7 @@ export default function App() {
     setSelectedTask
   } = useUIStore()
 
-  // Fase 6.4: sesión de Supabase Auth — `undefined` = todavía cargando,
-  // `null` = sin sesión (mostrar Login), objeto = autenticado.
+  // Fase 6.4: sesión de Supabase Auth
   const [session, setSession] = useState<AuthSession | null | undefined>(undefined)
 
   useEffect(() => {
@@ -38,6 +40,49 @@ export default function App() {
     window.api.on('auth:sessionChanged', (data) => setSession(data as AuthSession | null))
     return () => window.api.off('auth:sessionChanged')
   }, [])
+
+  // ── Redirección inicial: si la pantalla de inicio está desactivada, ir a /tasks ──
+  const didInitRef = useRef(false)
+  useEffect(() => {
+    if (!session || didInitRef.current) return
+    didInitRef.current = true
+    if (location.pathname !== '/') return
+    window.api.wallpaper.getConfig().then(cfg => {
+      if (!cfg.enabled) navigate('/tasks', { replace: true })
+    })
+  }, [session]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Screensaver: navegar a / tras N minutos de inactividad ───────────────────
+  const screensaverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    function scheduleScreensaver() {
+      window.api.wallpaper.getConfig().then(cfg => {
+        if (screensaverTimerRef.current) clearTimeout(screensaverTimerRef.current)
+        if (!cfg.screensaver_enabled) return
+        const ms = (cfg.screensaver_timeout_minutes ?? 5) * 60 * 1000
+        screensaverTimerRef.current = setTimeout(() => {
+          if (location.pathname !== '/') {
+            navigate('/', { state: { fromScreensaver: true, returnTo: location.pathname } })
+          }
+        }, ms)
+      })
+    }
+
+    function resetTimer() {
+      if (location.pathname === '/') return
+      scheduleScreensaver()
+    }
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'wheel'] as const
+    events.forEach(e => window.addEventListener(e, resetTimer))
+    scheduleScreensaver()
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetTimer))
+      if (screensaverTimerRef.current) clearTimeout(screensaverTimerRef.current)
+    }
+  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close personal expanded modal with ESC
   useEffect(() => {

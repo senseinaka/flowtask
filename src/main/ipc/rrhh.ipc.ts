@@ -16,7 +16,7 @@ import {
   updateColaboradorMediaIds,
   listRrhhListas, upsertLista, deleteLista
 } from '../database/queries/rrhh'
-import type { UpsertListaInput, RrhhListaTipo, ConfirmImportInput, ImportParsedRow, RrhhColaborador } from '@shared/types'
+import type { UpsertListaInput, RrhhListaTipo, ConfirmImportInput, ImportParsedRow, RrhhColaborador, RrhhEmpresa } from '@shared/types'
 import {
   generarDesdeUltimoPeriodo, confirmarGenerarNomina, crearCarpetaDriveColaborador
 } from '../services/nomina.service'
@@ -110,20 +110,20 @@ function sanitizeXlsRows(rows: Record<string, unknown>[]): Record<string, unknow
 }
 
 export function registerRrhhIpc(): void {
-  ipcMain.handle('rrhh:savePayroll', (_e, filePath: string) =>
-    savePayroll(filePath)
+  ipcMain.handle('rrhh:savePayroll', (_e, empresa: RrhhEmpresa, filePath: string) =>
+    savePayroll(empresa, filePath)
   )
 
-  ipcMain.handle('rrhh:saveVacaciones', (_e, filePath: string) =>
-    saveVacaciones(filePath)
+  ipcMain.handle('rrhh:saveVacaciones', (_e, empresa: RrhhEmpresa, filePath: string) =>
+    saveVacaciones(empresa, filePath)
   )
 
-  ipcMain.handle('rrhh:colaboradores:list', () =>
-    listColaboradores()
+  ipcMain.handle('rrhh:colaboradores:list', (_e, empresa: RrhhEmpresa) =>
+    listColaboradores(empresa)
   )
 
-  ipcMain.handle('rrhh:periodos:list', () =>
-    listPeriodos()
+  ipcMain.handle('rrhh:periodos:list', (_e, empresa: RrhhEmpresa) =>
+    listPeriodos(empresa)
   )
 
   ipcMain.handle('rrhh:periodos:get', (_e, id: string) =>
@@ -198,46 +198,46 @@ export function registerRrhhIpc(): void {
   )
 
   // ── Nómina: colaboradores ────────────────────────────────────────────────
-  ipcMain.handle('rrhh:nomina:colaboradores:list', () =>
-    listColaboradoresConStats()
+  ipcMain.handle('rrhh:nomina:colaboradores:list', (_e, empresa: RrhhEmpresa) =>
+    listColaboradoresConStats(empresa)
   )
 
   ipcMain.handle('rrhh:nomina:colaboradores:get', (_e, id: string) =>
     getColaboradorById(id)
   )
 
-  ipcMain.handle('rrhh:nomina:colaboradores:upsert', (_e, data: UpsertColaboradorInput) =>
-    upsertColaboradorCompleto(data)
+  ipcMain.handle('rrhh:nomina:colaboradores:upsert', (_e, empresa: RrhhEmpresa, data: UpsertColaboradorInput) =>
+    upsertColaboradorCompleto(empresa, data)
   )
 
   ipcMain.handle('rrhh:nomina:colaboradores:delete', (_e, id: string) =>
     softDeleteColaborador(id)
   )
 
-  ipcMain.handle('rrhh:nomina:colaboradores:asignarLegajo', (_e, id: string) =>
-    asignarLegajo(id)
+  ipcMain.handle('rrhh:nomina:colaboradores:asignarLegajo', (_e, empresa: RrhhEmpresa, id: string) =>
+    asignarLegajo(empresa, id)
   )
 
-  ipcMain.handle('rrhh:nomina:colaboradores:crearDrive', (_e, id: string) =>
-    crearCarpetaDriveColaborador(id)
+  ipcMain.handle('rrhh:nomina:colaboradores:crearDrive', (_e, empresa: RrhhEmpresa, id: string) =>
+    crearCarpetaDriveColaborador(empresa, id)
   )
 
   // ── Nómina: config ───────────────────────────────────────────────────────
-  ipcMain.handle('rrhh:nomina:config:get', () =>
-    getNominaConfig()
+  ipcMain.handle('rrhh:nomina:config:get', (_e, empresa: RrhhEmpresa) =>
+    getNominaConfig(empresa)
   )
 
-  ipcMain.handle('rrhh:nomina:config:upsert', (_e, data: Partial<{ drive_legajos_folder_id: string | null; ultimo_legajo_numero: number }>) =>
-    upsertNominaConfig(data)
+  ipcMain.handle('rrhh:nomina:config:upsert', (_e, empresa: RrhhEmpresa, data: Partial<{ drive_legajos_folder_id: string | null; ultimo_legajo_numero: number }>) =>
+    upsertNominaConfig(empresa, data)
   )
 
   // ── Nómina: generación desde último período ──────────────────────────────
-  ipcMain.handle('rrhh:nomina:generarDesdeUltimo', () =>
-    generarDesdeUltimoPeriodo()
+  ipcMain.handle('rrhh:nomina:generarDesdeUltimo', (_e, empresa: RrhhEmpresa) =>
+    generarDesdeUltimoPeriodo(empresa)
   )
 
-  ipcMain.handle('rrhh:nomina:confirmarGenerar', (_e, input: ConfirmarGenerarInput, crearDrive: boolean) =>
-    confirmarGenerarNomina(input, crearDrive)
+  ipcMain.handle('rrhh:nomina:confirmarGenerar', (_e, empresa: RrhhEmpresa, input: ConfirmarGenerarInput, crearDrive: boolean) =>
+    confirmarGenerarNomina(empresa, input, crearDrive)
   )
 
   // ── Nómina: export XLS ───────────────────────────────────────────────────
@@ -462,7 +462,7 @@ export function registerRrhhIpc(): void {
     return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('rrhh:nomina:parseImport', async (_e, filePath: string) => {
+  ipcMain.handle('rrhh:nomina:parseImport', async (_e, empresa: RrhhEmpresa, filePath: string) => {
     const wb = xlsx.readFile(filePath)
     const ws = wb.Sheets[wb.SheetNames[0]]
     const raw: string[][] = xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
@@ -477,7 +477,7 @@ export function registerRrhhIpc(): void {
       if (idx !== -1) colMap.set(field, idx)
     })
 
-    const existing = await listColaboradores()
+    const existing = await listColaboradores(empresa)
     const byDoc = new Map<string, RrhhColaborador>()
     existing.forEach(c => { if (c.documento) byDoc.set(String(c.documento).trim(), c) })
 
@@ -563,12 +563,12 @@ export function registerRrhhIpc(): void {
     return { rows, stats }
   })
 
-  ipcMain.handle('rrhh:nomina:confirmImport', async (_e, input: ConfirmImportInput) => {
+  ipcMain.handle('rrhh:nomina:confirmImport', async (_e, empresa: RrhhEmpresa, input: ConfirmImportInput) => {
     const { rows, legajoDecisions } = input
     const decisionMap = new Map<number, boolean>()
     legajoDecisions.forEach(d => decisionMap.set(d.rowIndex, d.keep))
 
-    const existing = await listColaboradores()
+    const existing = await listColaboradores(empresa)
     const byId = new Map<string, RrhhColaborador>()
     existing.forEach(c => byId.set(c.id, c))
 
@@ -626,7 +626,7 @@ export function registerRrhhIpc(): void {
       }
       // Si no hay legajo en la planilla y es nuevo colaborador, asignarLegajo se llama en upsertColaboradorCompleto
 
-      await upsertColaboradorCompleto(data)
+      await upsertColaboradorCompleto(empresa, data)
       if (row.status === 'create') created++
       else updated++
     }

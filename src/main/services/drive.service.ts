@@ -8,11 +8,15 @@ import { exportAllProjects } from '../database/queries/projects'
 import { exportAllAttachments } from '../database/queries/attachments'
 import { exportAllReminders } from '../database/queries/reminders'
 import { getDb, getAttachmentsDir } from '../database/db'
-import type { SyncResult, SyncStatus, BackupStatus } from '@shared/types'
+import type { SyncResult, SyncStatus, BackupStatus, RrhhEmpresa } from '@shared/types'
 import path from 'path'
 import fs from 'fs'
 
 const store = new ConfigStore('drive-config')
+
+// Sufijo de carpeta Drive por empresa. NAKA mantiene los nombres legacy
+// ("Sueldos"/"Legajos") para no orfanar las carpetas ya creadas; EV usa sufijo.
+const DRIVE_EMPRESA_SUFFIX: Record<RrhhEmpresa, string> = { naka: '', ev: ' EV' }
 const REDIRECT_PORT = 42813
 const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/oauth2callback`
 const SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -332,17 +336,18 @@ class DriveService {
   }
 
   /**
-   * Summit RRHH / Sueldos / MM-YYYY
-   * e.g. mes=5, anio=2026 → "Summit RRHH/Sueldos/05-2026"
+   * Summit RRHH / Sueldos{ EV} / MM-YYYY
+   * e.g. empresa='naka', mes=5, anio=2026 → "Summit RRHH/Sueldos/05-2026"
+   *      empresa='ev'                     → "Summit RRHH/Sueldos EV/05-2026"
    */
-  async getOrCreateRrhhSueldosMesFolder(mes: number, anio: number): Promise<string> {
+  async getOrCreateRrhhSueldosMesFolder(empresa: RrhhEmpresa, mes: number, anio: number): Promise<string> {
     if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
     const oauth2Client = this.getOAuth2Client()
     oauth2Client.setCredentials(store.get('tokens') as object)
     const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
     const rrhhRoot = await this.getRrhhRootFolder(drive)
-    const sueldosId = await this.getOrCreateFolder(drive, 'Sueldos', rrhhRoot)
+    const sueldosId = await this.getOrCreateFolder(drive, `Sueldos${DRIVE_EMPRESA_SUFFIX[empresa]}`, rrhhRoot)
     const folderName = `${String(mes).padStart(2, '0')}-${anio}`
     return this.getOrCreateFolder(drive, folderName, sueldosId)
   }
@@ -355,32 +360,34 @@ class DriveService {
     return id
   }
 
-  async getOrCreateLegajosFolder(): Promise<string> {
+  async getOrCreateLegajosFolder(empresa: RrhhEmpresa): Promise<string> {
     if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
     const oauth2Client = this.getOAuth2Client()
     oauth2Client.setCredentials(store.get('tokens') as object)
     const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
-    const cached = store.get('rrhhLegajosFolderId', '') as string
+    // Cache key legacy para NAKA; sufijo por empresa para el resto
+    const cacheKey = empresa === 'naka' ? 'rrhhLegajosFolderId' : `rrhhLegajosFolderId_${empresa}`
+    const cached = store.get(cacheKey, '') as string
     if (cached) return cached
 
     const rrhhRoot = await this.getRrhhRootFolder(drive)
-    const id = await this.getOrCreateFolder(drive, 'Legajos', rrhhRoot)
-    store.set('rrhhLegajosFolderId', id)
+    const id = await this.getOrCreateFolder(drive, `Legajos${DRIVE_EMPRESA_SUFFIX[empresa]}`, rrhhRoot)
+    store.set(cacheKey, id)
     return id
   }
 
   /**
-   * Summit RRHH / Legajos / "0001 Juan Pérez" (legajo + nombre)
+   * Summit RRHH / Legajos{ EV} / "0001 Juan Pérez" (legajo + nombre)
    * Crea subfolders default si es nuevo: Documentos, Contratos, Recibos.
    */
-  async getOrCreateColaboradorLegajoFolder(legajo: string, nombre: string): Promise<string> {
+  async getOrCreateColaboradorLegajoFolder(empresa: RrhhEmpresa, legajo: string, nombre: string): Promise<string> {
     if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
     const oauth2Client = this.getOAuth2Client()
     oauth2Client.setCredentials(store.get('tokens') as object)
     const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
-    const legajosRoot = await this.getOrCreateLegajosFolder()
+    const legajosRoot = await this.getOrCreateLegajosFolder(empresa)
     const safeName = `${legajo} ${nombre}`.replace(/[/:*?"<>|]/g, '-').slice(0, 100).trim()
     const folderId = await this.getOrCreateFolder(drive, safeName, legajosRoot)
 

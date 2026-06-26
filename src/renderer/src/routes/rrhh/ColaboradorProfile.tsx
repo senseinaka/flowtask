@@ -15,6 +15,7 @@ import {
   useUpsertColaborador, useRrhhListas,
 } from '../../hooks/useRrhh'
 import type { RrhhColaboradorConStats, UpsertColaboradorInput } from '@shared/types'
+import { useRrhhEmpresa } from './RrhhEmpresaContext'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
 
 type Tab = 'resumen' | 'personal' | 'laboral' | 'sueldos' | 'drive'
@@ -198,6 +199,7 @@ function DeleteDialog({ nombre, onClose, onBaja, onEliminar, pending }: {
 
 export default function ColaboradorProfile() {
   const { id } = useParams<{ id: string }>()
+  const empresa = useRrhhEmpresa()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('resumen')
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -237,7 +239,7 @@ export default function ColaboradorProfile() {
     <div className="flex flex-col h-full bg-slate-900 text-slate-100">
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-700 flex-shrink-0">
-        <button onClick={() => navigate('/rrhh/nomina')}
+        <button onClick={() => navigate(`/rrhh/nomina/${empresa}`)}
           className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -315,10 +317,10 @@ export default function ColaboradorProfile() {
           onClose={() => setDeleteOpen(false)}
           pending={softDelete.isPending || hardDelete.isPending}
           onBaja={() => softDelete.mutate(colaborador.id, {
-            onSuccess: () => { setDeleteOpen(false); navigate('/rrhh/nomina') }
+            onSuccess: () => { setDeleteOpen(false); navigate(`/rrhh/nomina/${empresa}`) }
           })}
           onEliminar={() => hardDelete.mutate(colaborador.id, {
-            onSuccess: () => navigate('/rrhh/nomina')
+            onSuccess: () => navigate(`/rrhh/nomina/${empresa}`)
           })}
         />
       )}

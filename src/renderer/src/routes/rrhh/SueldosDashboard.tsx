@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import { usePeriodos, useSavePayroll, useSaveVacaciones, useDeletePeriodo } from '../../hooks/useRrhh'
+import { useRrhhEmpresa } from './RrhhEmpresaContext'
+import { RRHH_EMPRESA_LABEL } from '@shared/types'
 import type { RrhhPeriodoConStats, SavePayrollResult, SaveVacacionesResult } from '@shared/types'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -323,6 +325,7 @@ function UploadZone({
 
 export default function SueldosDashboard() {
   const navigate = useNavigate()
+  const empresa = useRrhhEmpresa()
   const { data: periodos = [], isLoading } = usePeriodos()
   const savePayroll   = useSavePayroll()
   const saveVacaciones = useSaveVacaciones()
@@ -330,7 +333,7 @@ export default function SueldosDashboard() {
 
   function handleFile(filePath: string) {
     savePayroll.mutate(filePath, {
-      onSuccess: result => navigate(`/rrhh/sueldos/${result.periodo.id}`)
+      onSuccess: result => navigate(`/rrhh/sueldos/${empresa}/${result.periodo.id}`)
     })
   }
 
@@ -339,7 +342,7 @@ export default function SueldosDashboard() {
     saveVacaciones.mutate(filePath, {
       onSuccess: result => {
         setLastVacResult(result)
-        navigate(`/rrhh/sueldos/${result.periodo.id}`)
+        navigate(`/rrhh/sueldos/${empresa}/${result.periodo.id}`)
       }
     })
   }
@@ -351,7 +354,7 @@ export default function SueldosDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-100">Sueldos</h1>
+          <h1 className="text-lg font-semibold text-slate-100">Sueldos {RRHH_EMPRESA_LABEL[empresa]}</h1>
           <p className="text-xs text-slate-500 mt-0.5">Nómina mensual — {periodos.length} período{periodos.length !== 1 ? 's' : ''} cargado{periodos.length !== 1 ? 's' : ''}</p>
         </div>
         {isProcessing && (
@@ -424,7 +427,7 @@ export default function SueldosDashboard() {
               <PeriodoCard
                 key={p.id}
                 periodo={p}
-                onClick={() => navigate(`/rrhh/sueldos/${p.id}`)}
+                onClick={() => navigate(`/rrhh/sueldos/${empresa}/${p.id}`)}
               />
             ))}
           </div>

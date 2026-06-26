@@ -7,11 +7,17 @@ import type {
   RrhhLista, RrhhListaTipo, UpsertListaInput,
   ImportParseResult, ConfirmImportInput,
 } from '@shared/types'
+import { useRrhhEmpresa } from '../routes/rrhh/RrhhEmpresaContext'
+
+// Todos los hooks de datos resuelven la empresa activa desde el context (ruta
+// :empresa) e incluyen `empresa` en el queryKey → la caché de NAKA y EV queda
+// completamente aislada. Las listas (`rrhh:listas`) son compartidas entre empresas.
 
 export function usePeriodos() {
+  const empresa = useRrhhEmpresa()
   return useQuery<RrhhPeriodoConStats[]>({
-    queryKey: ['rrhh:periodos'],
-    queryFn: () => window.api.rrhh.periodos.list(),
+    queryKey: ['rrhh:periodos', empresa],
+    queryFn: () => window.api.rrhh.periodos.list(empresa),
     staleTime: 30_000,
   })
 }
@@ -36,20 +42,22 @@ export function useHistorialColaborador(colaboradorId: string | null) {
 
 export function useSavePayroll() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<SavePayrollResult, Error, string>({
-    mutationFn: (filePath) => window.api.rrhh.savePayroll(filePath),
+    mutationFn: (filePath) => window.api.rrhh.savePayroll(empresa, filePath),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rrhh:periodos'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:periodos', empresa] })
     },
   })
 }
 
 export function useSaveVacaciones() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<SaveVacacionesResult, Error, string>({
-    mutationFn: (filePath) => window.api.rrhh.saveVacaciones(filePath),
+    mutationFn: (filePath) => window.api.rrhh.saveVacaciones(empresa, filePath),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rrhh:periodos'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:periodos', empresa] })
       qc.invalidateQueries({ queryKey: ['rrhh:sueldos'] })
     },
   })
@@ -57,17 +65,19 @@ export function useSaveVacaciones() {
 
 export function useConfirmarPeriodo() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<void, Error, string>({
     mutationFn: (id) => window.api.rrhh.periodos.confirmar(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:periodos'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:periodos', empresa] }),
   })
 }
 
 export function useDeletePeriodo() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<void, Error, string>({
     mutationFn: (id) => window.api.rrhh.periodos.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:periodos'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:periodos', empresa] }),
   })
 }
 
@@ -93,75 +103,84 @@ export function useExportXls() {
 // ── Nómina de Colaboradores ───────────────────────────────────────────────────
 
 export function useNominaColaboradores() {
+  const empresa = useRrhhEmpresa()
   return useQuery<RrhhColaboradorConStats[]>({
-    queryKey: ['rrhh:nomina:colaboradores'],
-    queryFn: () => window.api.rrhh.nomina.colaboradores.list(),
+    queryKey: ['rrhh:nomina:colaboradores', empresa],
+    queryFn: () => window.api.rrhh.nomina.colaboradores.list(empresa),
     staleTime: 30_000,
   })
 }
 
 export function useNominaConfig() {
+  const empresa = useRrhhEmpresa()
   return useQuery<RrhhNominaConfig | null>({
-    queryKey: ['rrhh:nomina:config'],
-    queryFn: () => window.api.rrhh.nomina.config.get(),
+    queryKey: ['rrhh:nomina:config', empresa],
+    queryFn: () => window.api.rrhh.nomina.config.get(empresa),
     staleTime: 60_000,
   })
 }
 
 export function useUpsertColaborador() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<RrhhColaborador, Error, UpsertColaboradorInput>({
-    mutationFn: (data) => window.api.rrhh.nomina.colaboradores.upsert(data),
+    mutationFn: (data) => window.api.rrhh.nomina.colaboradores.upsert(empresa, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] })
-      qc.invalidateQueries({ queryKey: ['rrhh:colaboradores'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] })
+      qc.invalidateQueries({ queryKey: ['rrhh:colaboradores', empresa] })
     },
   })
 }
 
 export function useDeleteColaborador() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<void, Error, string>({
     mutationFn: (id) => window.api.rrhh.nomina.colaboradores.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }
 
 export function useHardDeleteColaborador() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<void, Error, string>({
     mutationFn: (id) => window.api.rrhh.nomina.colaboradores.hardDelete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }
 
 export function useAsignarLegajo() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<string, Error, string>({
-    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.asignarLegajo(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.asignarLegajo(empresa, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }
 
 export function useCrearDriveColaborador() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<string, Error, string>({
-    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.crearDrive(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+    mutationFn: (id) => window.api.rrhh.nomina.colaboradores.crearDrive(empresa, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }
 
 export function useGenerarDesdeUltimo() {
+  const empresa = useRrhhEmpresa()
   return useMutation<GenerarDesdeUltimoResult, Error, void>({
-    mutationFn: () => window.api.rrhh.nomina.generarDesdeUltimo(),
+    mutationFn: () => window.api.rrhh.nomina.generarDesdeUltimo(empresa),
   })
 }
 
 export function useConfirmarGenerar() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<{ creados: number; actualizados: number }, Error, { input: ConfirmarGenerarInput; crearDrive: boolean }>({
-    mutationFn: ({ input, crearDrive }) => window.api.rrhh.nomina.confirmarGenerar(input, crearDrive),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+    mutationFn: ({ input, crearDrive }) => window.api.rrhh.nomina.confirmarGenerar(empresa, input, crearDrive),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }
 
@@ -173,10 +192,11 @@ export function useExportNominaXls() {
 
 export function useUploadColaboradorFoto() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<string, Error, { id: string; localPath: string }>({
     mutationFn: ({ id, localPath }) => window.api.rrhh.nomina.colaboradores.uploadFoto(id, localPath),
     onSuccess: (_fileId, { id }) => {
-      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] })
       qc.invalidateQueries({ queryKey: ['rrhh:foto', id] })
     },
   })
@@ -184,9 +204,10 @@ export function useUploadColaboradorFoto() {
 
 export function useUploadColaboradorCv() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<string, Error, { id: string; localPath: string }>({
     mutationFn: ({ id, localPath }) => window.api.rrhh.nomina.colaboradores.uploadCv(id, localPath),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }
 
@@ -199,7 +220,7 @@ export function useFotoDataUrl(colaboradorId: string | undefined, hasFoto: boole
   })
 }
 
-// ── Listas gestionadas ────────────────────────────────────────────────────────
+// ── Listas gestionadas (compartidas entre empresas) ───────────────────────────
 
 export function useRrhhListas(tipo?: RrhhListaTipo) {
   return useQuery<RrhhLista[]>({
@@ -243,17 +264,19 @@ export function useExportTemplate() {
 }
 
 export function useParseImport() {
+  const empresa = useRrhhEmpresa()
   return useMutation<ImportParseResult, Error, string>({
-    mutationFn: (filePath) => window.api.rrhh.nomina.parseImport(filePath),
+    mutationFn: (filePath) => window.api.rrhh.nomina.parseImport(empresa, filePath),
   })
 }
 
 export function useConfirmImport() {
   const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
   return useMutation<{ created: number; updated: number }, Error, ConfirmImportInput>({
-    mutationFn: (input) => window.api.rrhh.nomina.confirmImport(input),
+    mutationFn: (input) => window.api.rrhh.nomina.confirmImport(empresa, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores'] })
+      qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] })
     },
   })
 }

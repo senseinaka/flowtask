@@ -947,6 +947,7 @@ const user_profiles = new Table(
 const rrhh_colaboradores = new Table(
   {
     workspace_id:            column.text,
+    empresa:                 column.text,
     documento:               column.text,
     cuil:                    column.text,
     nombre:                  column.text,
@@ -991,18 +992,19 @@ const rrhh_colaboradores = new Table(
     created_at:              column.integer,
     updated_at:              column.integer,
   },
-  { indexes: { workspace: ['workspace_id'], documento: ['documento'] } }
+  { indexes: { workspace: ['workspace_id'], documento: ['documento'], empresa: ['empresa'] } }
 )
 
 const rrhh_nomina_config = new Table(
   {
     workspace_id:             column.text,
+    empresa:                  column.text,
     drive_legajos_folder_id:  column.text,
     ultimo_legajo_numero:     column.integer,
     created_at:               column.integer,
     updated_at:               column.integer,
   },
-  { indexes: { workspace: ['workspace_id'] } }
+  { indexes: { workspace: ['workspace_id'], empresa: ['empresa'] } }
 )
 
 const rrhh_listas = new Table(
@@ -1021,6 +1023,7 @@ const rrhh_listas = new Table(
 const rrhh_periodos = new Table(
   {
     workspace_id:                   column.text,
+    empresa:                        column.text,
     anio:                           column.integer,
     mes:                            column.integer,
     label:                          column.text,
@@ -1037,12 +1040,13 @@ const rrhh_periodos = new Table(
     created_at:                     column.integer,
     updated_at:                     column.integer,
   },
-  { indexes: { workspace: ['workspace_id'], periodo: ['anio', 'mes'] } }
+  { indexes: { workspace: ['workspace_id'], periodo: ['anio', 'mes'], empresa: ['empresa'] } }
 )
 
 const rrhh_sueldos = new Table(
   {
     workspace_id:     column.text,
+    empresa:          column.text,
     periodo_id:       column.text,
     colaborador_id:   column.text,
     total_neto:       column.real,
@@ -1054,7 +1058,7 @@ const rrhh_sueldos = new Table(
     created_at:       column.integer,
     updated_at:       column.integer,
   },
-  { indexes: { workspace: ['workspace_id'], periodo: ['periodo_id'], colaborador: ['colaborador_id'] } }
+  { indexes: { workspace: ['workspace_id'], periodo: ['periodo_id'], colaborador: ['colaborador_id'], empresa: ['empresa'] } }
 )
 
 // ── Mercado Pago (4 tablas sync multi-dispositivo; credentials quedan local) ──

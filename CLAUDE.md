@@ -165,6 +165,16 @@ Y agregar a sync-rules de PowerSync:
 - SELECT * FROM service_catalog WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 ```
 
+**DDL pendiente de ejecutar en Supabase (RRHH multiempresa, jun 2026):**
+```sql
+-- Discriminador NAKA/Estación Vertical. DEFAULT 'naka' backfillea la data actual a NAKA.
+ALTER TABLE rrhh_colaboradores ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
+ALTER TABLE rrhh_periodos      ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
+ALTER TABLE rrhh_sueldos       ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
+ALTER TABLE rrhh_nomina_config ADD COLUMN empresa text NOT NULL DEFAULT 'naka';
+```
+Sync-rules: **sin cambios** (filtran por `workspace_id` con `SELECT *`; la columna nueva fluye sola). Sin UNIQUE secundario (bloquea la cola `ps_crud` con 23505). Sin esto, cualquier carga de RRHH traba la cola de sync.
+
 ### Reglas al crear una tabla sincronizada nueva (Supabase)
 
 1. **RLS + policy para `authenticated` + GRANT** (ver template en "DDL pendiente en Supabase"): `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY ... FOR ALL TO authenticated USING (workspace_id = '...') WITH CHECK (...)` + `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated`. Los uploads suben con el JWT del usuario (rol `authenticated`), no con service_role — si falta el GRANT, fallan con `42501 permission denied`; si falta la policy, con RLS violation.
@@ -976,7 +986,30 @@ ALTER TABLE rrhh_colaboradores ADD COLUMN legajo TEXT;
 ALTER TABLE rrhh_colaboradores ADD COLUMN fecha_ingreso TEXT;
 ```
 
-Las tres tablas están en las sync-rules de PowerSync con `workspace_id = 'd61a4071-...'`.
+Las tablas están en las sync-rules de PowerSync con `workspace_id = 'd61a4071-...'`.
+
+### Multiempresa: NAKA + Estación Vertical (jun 2026)
+
+El módulo maneja **dos empresas con datos 100% aislados** vía discriminador `empresa`
+(`'naka'` | `'ev'`) en 4 tablas: `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`,
+`rrhh_nomina_config`. `rrhh_listas` (sectores/puestos/categorías/bancos) es **compartida**.
+Submenús: Sueldos NAKA · Nómina NAKA · Sueldos EV · Nómina EV. Títulos "Sueldos NAKA" /
+"Sueldos Estación Vertical", etc. (`RRHH_EMPRESA_LABEL`).
+
+- **Backend**: cada query/service/IPC recibe `empresa` como **parámetro explícito** (las ops por
+  `id` único no lo necesitan). `getNextLegajoNumber` scopea la secuencia de legajo por empresa.
+  Tipos en `shared/types.ts`: `RrhhEmpresa`, `RRHH_EMPRESAS`, `RRHH_EMPRESA_LABEL`.
+- **Frontend**: `empresa` se resuelve desde la ruta `:empresa` vía `RrhhEmpresaContext`
+  (`RrhhEmpresaLayout` + `useRrhhEmpresa`). Los hooks de `useRrhh.ts` la leen del context y la
+  incluyen en **cada `queryKey`** → la caché de NAKA y EV no se mezcla. **Un solo componente por
+  vista** parametrizado por empresa (no copy-paste) → cualquier cambio aplica a las dos.
+- **Rutas**: `/rrhh/sueldos/:empresa(/:id)` y `/rrhh/nomina/:empresa(/:id)`; las rutas viejas
+  (`/rrhh/sueldos`, `/rrhh/nomina`) redirigen a `/naka`. El guard de permisos matchea por prefijo,
+  así que `canRead('rrhh','sueldos')` cubre ambas empresas.
+- **Drive** (`drive.service.ts`): NAKA mantiene carpetas legacy ("Sueldos"/"Legajos") para no
+  orfanar las existentes; EV usa sufijo ("Sueldos EV"/"Legajos EV"). Cache key de legajos por empresa.
+- **DDL pendiente**: ver "DDL pendiente de ejecutar en Supabase (RRHH multiempresa)" más arriba.
+  **Sin correrlo, la cola `ps_crud` se traba al cargar datos de RRHH.**
 
 ### Lógica de re-upload (crítico)
 
@@ -1126,24 +1159,28 @@ C:\Projects\flowtask\graphify-out\
   manifest.json      ← metadata del último extract
 ```
 
-`graphify-out/` está en `.gitignore` — no se versiona (es un artefacto derivado del código).
+`graphify-out/` versiona en git **solo los outputs legibles** (`graph.html`, `GRAPH_REPORT.md`, `manifest.json`) para poder verlos desde la laptop con `git pull`; los archivos pesados/derivados (`graph.json`, `cache/`, backups `20*/`, dotfiles `.graphify_*`) quedan en `.gitignore`.
 
 ### Binario y entorno
 
 ```
-Binario:  C:\Users\Diego\.local\bin\graphify.exe
-Venv:     C:\Users\Diego\pipx\venvs\graphifyy\
-Python:   C:\Users\Diego\pipx\venvs\graphifyy\Scripts\python.exe
+Binario (shim):  C:\Users\Diego\.local\bin\graphify.exe
+Venv (pipx):     C:\Users\Diego\pipx\venvs\graphifyy\
+Python del venv: C:\Users\Diego\pipx\venvs\graphifyy\Scripts\python.exe
+Exe del venv:    C:\Users\Diego\pipx\venvs\graphifyy\Scripts\graphify.exe
 ```
 
-El comando `graphify` está en el PATH del usuario. Requiere `ANTHROPIC_API_KEY` para el subcomando `extract` (procesa archivos no-código con LLM). Los subcomandos `query`, `path`, `explain`, `cluster-only` NO requieren API key.
+**OJO:** `graphify` **no siempre resuelve en el PATH del shell** (en PowerShell no-interactivo falla con "no se reconoce como cmdlet"). Invocarlo por ruta completa con el exe del venv: `& "C:\Users\Diego\pipx\venvs\graphifyy\Scripts\graphify.exe" <cmd>`. Solo la extracción semántica de archivos no-código necesita `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`; `update`, `cluster-only`, `query`, `path`, `explain` NO requieren API key.
 
-**Para regenerar el grafo desde cero:**
+**Regenerar el grafo (sin LLM):**
 ```powershell
 cd C:\Projects\flowtask
-$env:ANTHROPIC_API_KEY = "sk-ant-..."  # requerido para extract
-& "C:\Users\Diego\.local\bin\graphify.exe" extract .
+$env:PYTHONHASHSEED = 0   # clustering determinístico (igual que el hook)
+$gfy = "C:\Users\Diego\pipx\venvs\graphifyy\Scripts\graphify.exe"
+& $gfy update .                  # RE-ESCANEA el código → incorpora archivos nuevos/modificados (lo correcto tras editar)
+& $gfy cluster-only --no-label   # SOLO recalcula clusters sobre el grafo existente (NO ve archivos nuevos)
 ```
+**Diferencia clave:** tras crear o borrar archivos hay que correr **`update .`** (re-extrae el AST); `cluster-only` solo re-clusteriza lo ya extraído. Usar `--force` en `update` si el rebuild quedó con menos nodos (tras refactors que borran código).
 
 ### Git hooks instalados
 
@@ -1151,10 +1188,10 @@ Los hooks en `C:\Projects\flowtask\.git\hooks\` actualizan el grafo automáticam
 
 | Hook | Qué hace |
 |------|----------|
-| `post-commit` | Corre `graphify cluster-only --no-label` tras cada commit |
+| `post-commit` | Re-extrae los archivos cambiados (`_rebuild_code`, equivalente a `update`) en **background** tras cada commit. Usa el python del venv pipx pinneado en el propio hook. |
 | `post-checkout` | Ídem tras cada checkout de rama |
 
-Esto mantiene `graph.json` y `graph.html` sincronizados con el estado actual del código **sin requerir LLM** (cluster-only no usa API key).
+Esto mantiene `graph.json` y `graph.html` sincronizados con el estado del código **sin requerir LLM**.
 
 ### IPC handlers (`src/main/ipc/cortex.ipc.ts`)
 

@@ -15,6 +15,7 @@ import {
   useUpdateSueldoNotas, useExportXls,
 } from '../../hooks/useRrhh'
 import { useQuery } from '@tanstack/react-query'
+import { useRrhhEmpresa } from './RrhhEmpresaContext'
 import type { RrhhSueldoConColaborador } from '@shared/types'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -273,6 +274,7 @@ function TareaFilter({ tareas, selected, onChange }: {
 
 export default function PeriodoDetail() {
   const { id } = useParams<{ id: string }>()
+  const empresa = useRrhhEmpresa()
   const navigate = useNavigate()
   const { data: periodos = [] } = usePeriodos()
   const { data: sueldos = [], isLoading: loadingSueldos } = useSueldos(id ?? null)
@@ -367,7 +369,7 @@ export default function PeriodoDetail() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 px-6 py-4 border-b border-slate-700 bg-slate-800/50">
-        <button onClick={() => navigate('/rrhh/sueldos')} className="text-slate-400 hover:text-slate-200 transition-colors">
+        <button onClick={() => navigate(`/rrhh/sueldos/${empresa}`)} className="text-slate-400 hover:text-slate-200 transition-colors">
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1 min-w-0">
@@ -405,7 +407,7 @@ export default function PeriodoDetail() {
               Confirmar
             </button>
           )}
-          <button onClick={() => { if (confirm('¿Eliminar este período?')) deletePeriodo.mutate(periodo.id, { onSuccess: () => navigate('/rrhh/sueldos') }) }}
+          <button onClick={() => { if (confirm('¿Eliminar este período?')) deletePeriodo.mutate(periodo.id, { onSuccess: () => navigate(`/rrhh/sueldos/${empresa}`) }) }}
             className="text-xs text-slate-600 hover:text-red-400 px-2 py-1.5 rounded transition-colors">
             Eliminar
           </button>

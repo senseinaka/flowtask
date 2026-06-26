@@ -7,6 +7,8 @@ import {
 import {
   useNominaColaboradores, useExportNominaXls, useDeleteColaborador, useGenerarDesdeUltimo
 } from '../../hooks/useRrhh'
+import { useRrhhEmpresa } from './RrhhEmpresaContext'
+import { RRHH_EMPRESA_LABEL } from '@shared/types'
 import type { RrhhColaboradorConStats, EstadoLaboral } from '@shared/types'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
 import GenerarNominaModal from './GenerarNominaModal'
@@ -47,6 +49,7 @@ type FiltroEstado = 'todos' | EstadoLaboral
 
 export default function NominaDashboard() {
   const navigate = useNavigate()
+  const empresa = useRrhhEmpresa()
   const { data: colaboradores = [], isLoading } = useNominaColaboradores()
   const exportXls = useExportNominaXls()
   const deleteCol = useDeleteColaborador()
@@ -116,7 +119,7 @@ export default function NominaDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 flex-shrink-0">
         <div>
-          <h1 className="text-lg font-semibold text-slate-100">Nómina de colaboradores</h1>
+          <h1 className="text-lg font-semibold text-slate-100">Nómina {RRHH_EMPRESA_LABEL[empresa]}</h1>
           <p className="text-xs text-slate-400 mt-0.5">{colaboradores.length} colaboradores registrados</p>
         </div>
         <div className="flex items-center gap-2">
@@ -233,7 +236,7 @@ export default function NominaDashboard() {
               {filtered.map(c => (
                 <tr
                   key={c.id}
-                  onClick={() => navigate(`/rrhh/nomina/${c.id}`)}
+                  onClick={() => navigate(`/rrhh/nomina/${empresa}/${c.id}`)}
                   className="border-b border-slate-800 hover:bg-slate-800/60 cursor-pointer transition-colors"
                 >
                   <td className="px-4 py-2.5">

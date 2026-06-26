@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createHashRouter, RouterProvider } from 'react-router-dom'
+import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
 import App from './App'
 import TaskList from './routes/TaskList'
 import Kanban from './routes/Kanban'
@@ -39,6 +39,8 @@ import SueldosDashboard from './routes/rrhh/SueldosDashboard'
 import PeriodoDetail from './routes/rrhh/PeriodoDetail'
 import NominaDashboard from './routes/rrhh/NominaDashboard'
 import ColaboradorProfile from './routes/rrhh/ColaboradorProfile'
+import HomeScreen from './routes/home/HomeScreen'
+import RrhhEmpresaLayout from './routes/rrhh/RrhhEmpresaContext'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -52,7 +54,7 @@ const router = createHashRouter([
     path: '/',
     element: <App />,
     children: [
-      { index: true, element: <TaskList /> },
+      { index: true, element: <HomeScreen /> },
       { path: 'tasks', element: <TaskList /> },
       { path: 'kanban', element: <Kanban /> },
       { path: 'contacts', element: <Contacts /> },
@@ -85,10 +87,24 @@ const router = createHashRouter([
       { path: 'contable/recon/:id', element: <ReconPeriodView /> },
       { path: 'contable/mercadopago', element: <MPDashboard /> },
       { path: 'contable/servicios', element: <ServicesDashboard /> },
-      { path: 'rrhh/sueldos', element: <SueldosDashboard /> },
-      { path: 'rrhh/sueldos/:id', element: <PeriodoDetail /> },
-      { path: 'rrhh/nomina', element: <NominaDashboard /> },
-      { path: 'rrhh/nomina/:id', element: <ColaboradorProfile /> }
+      { path: 'rrhh/sueldos', element: <Navigate to="/rrhh/sueldos/naka" replace /> },
+      {
+        path: 'rrhh/sueldos/:empresa',
+        element: <RrhhEmpresaLayout />,
+        children: [
+          { index: true, element: <SueldosDashboard /> },
+          { path: ':id', element: <PeriodoDetail /> }
+        ]
+      },
+      { path: 'rrhh/nomina', element: <Navigate to="/rrhh/nomina/naka" replace /> },
+      {
+        path: 'rrhh/nomina/:empresa',
+        element: <RrhhEmpresaLayout />,
+        children: [
+          { index: true, element: <NominaDashboard /> },
+          { path: ':id', element: <ColaboradorProfile /> }
+        ]
+      }
     ]
   }
 ])

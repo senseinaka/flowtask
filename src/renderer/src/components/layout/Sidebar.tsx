@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat
+  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
@@ -74,7 +74,7 @@ const WORKSPACES: Array<{
     Icon: Users,
     color: '#f472b6',
     activeBg: 'rgba(244,114,182,.12)',
-    paths: ['/rrhh/sueldos'],
+    paths: ['/rrhh'],
   },
   {
     key: 'sistema',
@@ -218,6 +218,23 @@ export default function Sidebar() {
           <rect x="19" y="20" width="8" height="20" rx="2.5" fill="#0e88b6" />
           <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
         </svg>
+      </div>
+
+      {/* Home button */}
+      <div className="flex items-center justify-center py-2 border-b border-slate-700">
+        <NavLink
+          to="/"
+          end
+          title="Pantalla de inicio"
+          className={({ isActive }) =>
+            cn(
+              'w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-100',
+              isActive ? 'text-indigo-400 bg-indigo-400/15' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+            )
+          }
+        >
+          <Home size={15} />
+        </NavLink>
       </div>
 
       {/* Workspace buttons */}
@@ -410,12 +427,19 @@ export default function Sidebar() {
 
           {openPanel === 'rrhh' && (
             <div className="p-2 space-y-0.5">
-              <GroupLabel label="RRHH" color="#f472b6" />
+              <GroupLabel label="NAKA" color="#f472b6" />
               {canRead('rrhh', 'sueldos') && (
-                <PanelLink to="/rrhh/sueldos" icon={Users} label="Sueldos" color="#f472b6" onClick={close} />
+                <PanelLink to="/rrhh/sueldos/naka" icon={Users} label="Sueldos NAKA" color="#f472b6" onClick={close} />
               )}
               {canRead('rrhh', 'sueldos') && (
-                <PanelLink to="/rrhh/nomina" icon={BookUser} label="Nómina" color="#f472b6" onClick={close} />
+                <PanelLink to="/rrhh/nomina/naka" icon={BookUser} label="Nómina NAKA" color="#f472b6" onClick={close} />
+              )}
+              <GroupLabel label="Estación Vertical" color="#f472b6" />
+              {canRead('rrhh', 'sueldos') && (
+                <PanelLink to="/rrhh/sueldos/ev" icon={Users} label="Sueldos EV" color="#f472b6" onClick={close} />
+              )}
+              {canRead('rrhh', 'sueldos') && (
+                <PanelLink to="/rrhh/nomina/ev" icon={BookUser} label="Nómina EV" color="#f472b6" onClick={close} />
               )}
             </div>
           )}

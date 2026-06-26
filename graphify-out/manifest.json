@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782388827.114157,
-    "ast_hash": "eda5ed3621f52348e9c9c552c633c8fc",
+    "mtime": 1782442499.1702857,
+    "ast_hash": "68f8a68c65a5e9493166fbd4c034b0d0",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -155,8 +155,8 @@
     "semantic_hash": ""
   },
   "src/main/index.ts": {
-    "mtime": 1782388844.2899563,
-    "ast_hash": "3d60041655d2c067a14887f6f260f6f3",
+    "mtime": 1782420651.4047062,
+    "ast_hash": "937ef0dd2731bb4e3c1578aff7226d42",
     "semantic_hash": ""
   },
   "src/main/ipc/ai.ipc.ts": {
@@ -345,8 +345,8 @@
     "semantic_hash": "cdf590869d2159456c92616ed8de9c15"
   },
   "src/main/services/drive.service.ts": {
-    "mtime": 1782178876.2138438,
-    "ast_hash": "707d22ee11eb0c0cc2fa3352e592f9c1",
+    "mtime": 1782442840.7186646,
+    "ast_hash": "37d1bc1374e3656f5a0541021bb1bd57",
     "semantic_hash": ""
   },
   "src/main/services/email-smtp.service.ts": {
@@ -445,14 +445,14 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782388859.131222,
-    "ast_hash": "011abae277d79770be6a4d71d0a49e45",
+    "mtime": 1782443178.0558398,
+    "ast_hash": "dffcfd8b276f49789dfa1c2067135040",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
-    "mtime": 1781298234.443613,
-    "ast_hash": "523c8352d8137314fe97ca18b121ed43",
-    "semantic_hash": "523c8352d8137314fe97ca18b121ed43"
+    "mtime": 1782421251.910995,
+    "ast_hash": "4859d4a25c2ab743f80622232baa2060",
+    "semantic_hash": ""
   },
   "src/renderer/src/components/calendar/CalendarLinkButton.tsx": {
     "mtime": 1781561228.8295145,
@@ -465,8 +465,8 @@
     "semantic_hash": "29846cd39af0bc84e09ee1d15aec1223"
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782349982.8017368,
-    "ast_hash": "9d6a38d92e4c704afb939637fe3ae32c",
+    "mtime": 1782443463.43285,
+    "ast_hash": "0ca7abff6eff35001544b70e0e794564",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -670,8 +670,8 @@
     "semantic_hash": "14253e9689dd98fc6d809b1d102ec2f7"
   },
   "src/renderer/src/main.tsx": {
-    "mtime": 1782350007.5735457,
-    "ast_hash": "d009c1bb9e2a44be81319280e71b1eea",
+    "mtime": 1782443291.179647,
+    "ast_hash": "ac0edae21578bbef6a270558c135dd83",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/Calendar.tsx": {
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782388840.0563018,
-    "ast_hash": "034973584fbc363a316ad164ac587ae9",
+    "mtime": 1782442455.05994,
+    "ast_hash": "c470c92a5dd6a1407982170f98d7b018",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782417188.0448728,
-    "ast_hash": "8ea790d2c167830605d691edc3519658",
+    "mtime": 1782470064.1663039,
+    "ast_hash": "439ae294090e24506a48c6f5f86c3e96",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1110,38 +1110,38 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/SueldosDashboard.tsx": {
-    "mtime": 1782178009.2325501,
-    "ast_hash": "1b774190c92ded51eba47410a4235133",
+    "mtime": 1782443329.3750124,
+    "ast_hash": "63c103268e87f55b8988dfd11c424e4e",
     "semantic_hash": ""
   },
   "src/main/database/queries/rrhh.ts": {
-    "mtime": 1782216429.3071983,
-    "ast_hash": "c0488daae5495c03bd043e2a5d66a5b9",
+    "mtime": 1782442730.916981,
+    "ast_hash": "12624a93ffb319b4ad5ce6f4dd827872",
     "semantic_hash": ""
   },
   "src/main/ipc/rrhh.ipc.ts": {
-    "mtime": 1782229047.6905162,
-    "ast_hash": "b94a763855797ba6b7d6fe8d971c9116",
+    "mtime": 1782443070.2956874,
+    "ast_hash": "1594169209aaa4435042cc0cdddb53f7",
     "semantic_hash": ""
   },
   "src/main/services/rrhh.service.ts": {
-    "mtime": 1782174598.451401,
-    "ast_hash": "c84772176e7fea5bd6db48b0b9561259",
+    "mtime": 1782442921.8152127,
+    "ast_hash": "15751e0c9209b1bab9fe345ae1b14653",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useRrhh.ts": {
-    "mtime": 1782229109.7077596,
-    "ast_hash": "8b0cb82e546ceecdc54048f8f2fd1dd7",
+    "mtime": 1782443263.1873362,
+    "ast_hash": "baacdbc1e245be693cb70a8e995bb1f8",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/PeriodoDetail.tsx": {
-    "mtime": 1782174823.1736214,
-    "ast_hash": "da61212c6000b7805fb3fd940d9e5464",
+    "mtime": 1782443368.482587,
+    "ast_hash": "ce18677967536a0871a8b5cd34ef9948",
     "semantic_hash": ""
   },
   "src/main/services/nomina.service.ts": {
-    "mtime": 1782178895.5721114,
-    "ast_hash": "8216b9e191754c4f139fd5f07aa7e00e",
+    "mtime": 1782442956.580903,
+    "ast_hash": "6c8d2cf463c3854c5567dd3f2517ea4d",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/ColaboradorFormDrawer.tsx": {
@@ -1150,8 +1150,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/ColaboradorProfile.tsx": {
-    "mtime": 1782227988.3089442,
-    "ast_hash": "a55ba48380774fc6a1a7434f8e6d5218",
+    "mtime": 1782443436.184203,
+    "ast_hash": "99fd3d0a0e7825094d441098c1316e6c",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/GenerarNominaModal.tsx": {
@@ -1160,8 +1160,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/NominaDashboard.tsx": {
-    "mtime": 1782229224.2675016,
-    "ast_hash": "e16cd2cf749daa9bcc2635bc263a7d9a",
+    "mtime": 1782443413.7361112,
+    "ast_hash": "737d7b9fb8afcd768965433d684cd2af",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/rrhh/RrhhListasAdmin.tsx": {
@@ -1257,6 +1257,36 @@
   "src/renderer/src/routes/contable/services.constants.ts": {
     "mtime": 1782388923.4233763,
     "ast_hash": "ca1fab4c58c0a45f4bc9203619d99f02",
+    "semantic_hash": ""
+  },
+  "src/main/ipc/wallpaper.ipc.ts": {
+    "mtime": 1782420540.9164946,
+    "ast_hash": "8580f15b5a1767f2864f172324c7074e",
+    "semantic_hash": ""
+  },
+  "src/main/services/wallpaper.service.ts": {
+    "mtime": 1782421268.3138115,
+    "ast_hash": "5fd61467dde049174c6d2e76ab7ed26f",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/hooks/useWallpaper.ts": {
+    "mtime": 1782421272.9716327,
+    "ast_hash": "2ad507343ad2e1a5b912044160163d5a",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/home/HomeScreen.tsx": {
+    "mtime": 1782421305.1092417,
+    "ast_hash": "777edf3eedc4541909a2f93be38723b3",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/home/WallpaperSettingsModal.tsx": {
+    "mtime": 1782421327.6635375,
+    "ast_hash": "5b88bfbd64086ef03beabfe8b9c2a070",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/rrhh/RrhhEmpresaContext.tsx": {
+    "mtime": 1782443220.920406,
+    "ast_hash": "e8b664376b9bd38ee6260beae27b39d5",
     "semantic_hash": ""
   }
 }

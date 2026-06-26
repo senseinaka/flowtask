@@ -4,30 +4,30 @@ import type {
   RrhhColaborador, RrhhPeriodo, RrhhSueldo,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
   RrhhColaboradorConStats, RrhhNominaConfig, UpsertColaboradorInput,
-  RrhhLista, RrhhListaTipo, UpsertListaInput
+  RrhhLista, RrhhListaTipo, UpsertListaInput, RrhhEmpresa
 } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 
 // ── Colaboradores ─────────────────────────────────────────────────────────────
 
-export async function listColaboradores(): Promise<RrhhColaborador[]> {
+export async function listColaboradores(empresa: RrhhEmpresa): Promise<RrhhColaborador[]> {
   const db = getPowerSyncDb()
   return db.getAll<RrhhColaborador>(
-    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? ORDER BY nombre ASC`,
-    [WORKSPACE_ID]
+    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? AND empresa = ? ORDER BY nombre ASC`,
+    [WORKSPACE_ID, empresa]
   )
 }
 
-export async function getColaboradorByDocumento(documento: string): Promise<RrhhColaborador | null> {
+export async function getColaboradorByDocumento(empresa: RrhhEmpresa, documento: string): Promise<RrhhColaborador | null> {
   const db = getPowerSyncDb()
   return db.getOptional<RrhhColaborador>(
-    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? AND documento = ?`,
-    [WORKSPACE_ID, documento]
+    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? AND empresa = ? AND documento = ?`,
+    [WORKSPACE_ID, empresa, documento]
   )
 }
 
-export async function upsertColaborador(data: {
+export async function upsertColaborador(empresa: RrhhEmpresa, data: {
   documento: string
   cuil: string
   nombre: string
@@ -36,7 +36,7 @@ export async function upsertColaborador(data: {
   fecha_ingreso?: string
 }): Promise<RrhhColaborador> {
   const db = getPowerSyncDb()
-  const existing = await getColaboradorByDocumento(data.documento)
+  const existing = await getColaboradorByDocumento(empresa, data.documento)
   const now = Date.now()
 
   if (existing) {
@@ -52,9 +52,9 @@ export async function upsertColaborador(data: {
 
   const id = randomUUID()
   await db.execute(
-    `INSERT INTO rrhh_colaboradores (id, workspace_id, documento, cuil, nombre, tarea_habitual, legajo, fecha_ingreso, activo, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [id, WORKSPACE_ID, data.documento, data.cuil, data.nombre, data.tarea_habitual,
+    `INSERT INTO rrhh_colaboradores (id, workspace_id, empresa, documento, cuil, nombre, tarea_habitual, legajo, fecha_ingreso, activo, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [id, WORKSPACE_ID, empresa, data.documento, data.cuil, data.nombre, data.tarea_habitual,
      data.legajo ?? null, data.fecha_ingreso ?? null, now, now]
   )
   return db.getOptional<RrhhColaborador>(`SELECT * FROM rrhh_colaboradores WHERE id = ?`, [id]) as Promise<RrhhColaborador>
@@ -62,11 +62,11 @@ export async function upsertColaborador(data: {
 
 // ── Períodos ──────────────────────────────────────────────────────────────────
 
-export async function listPeriodos(): Promise<RrhhPeriodoConStats[]> {
+export async function listPeriodos(empresa: RrhhEmpresa): Promise<RrhhPeriodoConStats[]> {
   const db = getPowerSyncDb()
   const periodos = await db.getAll<RrhhPeriodo>(
-    `SELECT * FROM rrhh_periodos WHERE workspace_id = ? ORDER BY anio DESC, mes DESC`,
-    [WORKSPACE_ID]
+    `SELECT * FROM rrhh_periodos WHERE workspace_id = ? AND empresa = ? ORDER BY anio DESC, mes DESC`,
+    [WORKSPACE_ID, empresa]
   )
 
   return periodos.map((p, idx) => {
@@ -87,14 +87,14 @@ export async function getPeriodo(id: string): Promise<RrhhPeriodo | null> {
   )
 }
 
-export async function getPeriodoByMes(anio: number, mes: number): Promise<RrhhPeriodo | null> {
+export async function getPeriodoByMes(empresa: RrhhEmpresa, anio: number, mes: number): Promise<RrhhPeriodo | null> {
   return getPowerSyncDb().getOptional<RrhhPeriodo>(
-    `SELECT * FROM rrhh_periodos WHERE workspace_id = ? AND anio = ? AND mes = ?`,
-    [WORKSPACE_ID, anio, mes]
+    `SELECT * FROM rrhh_periodos WHERE workspace_id = ? AND empresa = ? AND anio = ? AND mes = ?`,
+    [WORKSPACE_ID, empresa, anio, mes]
   )
 }
 
-export async function createPeriodo(data: {
+export async function createPeriodo(empresa: RrhhEmpresa, data: {
   anio: number; mes: number; label: string
   total_neto: number; cantidad_colaboradores: number
   pdf_nombre: string; fecha_pago: string
@@ -104,10 +104,10 @@ export async function createPeriodo(data: {
   const now = Date.now()
   await db.execute(
     `INSERT INTO rrhh_periodos
-       (id, workspace_id, anio, mes, label, total_neto, cantidad_colaboradores,
+       (id, workspace_id, empresa, anio, mes, label, total_neto, cantidad_colaboradores,
         pdf_nombre, pdf_drive_file_id, pdf_drive_folder_id, fecha_pago, estado, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'borrador', ?, ?)`,
-    [id, WORKSPACE_ID, data.anio, data.mes, data.label, data.total_neto,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'borrador', ?, ?)`,
+    [id, WORKSPACE_ID, empresa, data.anio, data.mes, data.label, data.total_neto,
      data.cantidad_colaboradores, data.pdf_nombre, data.fecha_pago, now, now]
   )
   return (await getPowerSyncDb().getOptional<RrhhPeriodo>(`SELECT * FROM rrhh_periodos WHERE id = ?`, [id]))!
@@ -202,6 +202,7 @@ export async function listSueldosByPeriodo(periodoId: string): Promise<RrhhSueld
   let prevSueldos: RrhhSueldo[] = []
   if (periodo) {
     const prev = await getPeriodoByMes(
+      periodo.empresa,
       periodo.mes === 1 ? periodo.anio - 1 : periodo.anio,
       periodo.mes === 1 ? 12 : periodo.mes - 1
     )
@@ -242,7 +243,7 @@ export async function listSueldosByPeriodo(periodoId: string): Promise<RrhhSueld
   })
 }
 
-export async function upsertSueldo(data: {
+export async function upsertSueldo(empresa: RrhhEmpresa, data: {
   periodoId: string
   colaboradorId: string
   total_neto: number
@@ -262,9 +263,9 @@ export async function upsertSueldo(data: {
     )
   } else {
     await db.execute(
-      `INSERT INTO rrhh_sueldos (id, workspace_id, periodo_id, colaborador_id, total_neto, tarea, periodo_abonado, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [randomUUID(), WORKSPACE_ID, data.periodoId, data.colaboradorId,
+      `INSERT INTO rrhh_sueldos (id, workspace_id, empresa, periodo_id, colaborador_id, total_neto, tarea, periodo_abonado, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [randomUUID(), WORKSPACE_ID, empresa, data.periodoId, data.colaboradorId,
        data.total_neto, data.tarea, data.periodo_abonado, now, now]
     )
   }
@@ -301,11 +302,11 @@ export async function getHistorialColaborador(colaboradorId: string): Promise<Rr
 
 // ── Colaboradores con stats (Nómina) ──────────────────────────────────────────
 
-export async function listColaboradoresConStats(): Promise<RrhhColaboradorConStats[]> {
+export async function listColaboradoresConStats(empresa: RrhhEmpresa): Promise<RrhhColaboradorConStats[]> {
   const db = getPowerSyncDb()
   const colaboradores = await db.getAll<RrhhColaborador>(
-    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? ORDER BY nombre ASC`,
-    [WORKSPACE_ID]
+    `SELECT * FROM rrhh_colaboradores WHERE workspace_id = ? AND empresa = ? ORDER BY nombre ASC`,
+    [WORKSPACE_ID, empresa]
   )
   if (colaboradores.length === 0) return []
 
@@ -344,7 +345,7 @@ export async function getColaboradorById(id: string): Promise<RrhhColaborador | 
   )
 }
 
-export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): Promise<RrhhColaborador> {
+export async function upsertColaboradorCompleto(empresa: RrhhEmpresa, data: UpsertColaboradorInput): Promise<RrhhColaborador> {
   const db = getPowerSyncDb()
   const now = Date.now()
 
@@ -405,7 +406,7 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
   const id = data.id ?? randomUUID()
   await db.execute(
     `INSERT INTO rrhh_colaboradores
-      (id, workspace_id, documento, cuil, nombre, tarea_habitual,
+      (id, workspace_id, empresa, documento, cuil, nombre, tarea_habitual,
        legajo, fecha_ingreso, activo, estado_laboral,
        fecha_egreso, motivo_egreso, sector, puesto, categoria_laboral,
        tipo_contratacion, jornada, modalidad,
@@ -416,9 +417,9 @@ export async function upsertColaboradorCompleto(data: UpsertColaboradorInput): P
        contacto_emergencia_1_nombre, contacto_emergencia_1_celular, contacto_emergencia_1_vinculo,
        contacto_emergencia_2_nombre, contacto_emergencia_2_celular, contacto_emergencia_2_vinculo,
        created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      id, WORKSPACE_ID, data.documento, data.cuil ?? '', data.nombre,
+      id, WORKSPACE_ID, empresa, data.documento, data.cuil ?? '', data.nombre,
       data.tarea_habitual ?? '', data.legajo ?? null, data.fecha_ingreso ?? null,
       data.estado_laboral ?? 'activo', data.fecha_egreso ?? null,
       data.motivo_egreso ?? null, data.sector ?? null, data.puesto ?? null,
@@ -479,18 +480,18 @@ export async function hardDeleteColaborador(id: string): Promise<void> {
   await db.execute(`DELETE FROM rrhh_colaboradores WHERE id = ?`, [id])
 }
 
-export async function getNextLegajoNumber(): Promise<number> {
+export async function getNextLegajoNumber(empresa: RrhhEmpresa): Promise<number> {
   const db = getPowerSyncDb()
-  // Max legajo numérico ya asignado
+  // Max legajo numérico ya asignado (secuencia independiente por empresa)
   const row = await db.getOptional<{ max_leg: string | null }>(
-    `SELECT MAX(CAST(legajo AS INTEGER)) AS max_leg FROM rrhh_colaboradores WHERE workspace_id = ? AND legajo IS NOT NULL`,
-    [WORKSPACE_ID]
+    `SELECT MAX(CAST(legajo AS INTEGER)) AS max_leg FROM rrhh_colaboradores WHERE workspace_id = ? AND empresa = ? AND legajo IS NOT NULL`,
+    [WORKSPACE_ID, empresa]
   )
   return (Number(row?.max_leg ?? 0)) + 1
 }
 
-export async function asignarLegajo(colaboradorId: string): Promise<string> {
-  const next = await getNextLegajoNumber()
+export async function asignarLegajo(empresa: RrhhEmpresa, colaboradorId: string): Promise<string> {
+  const next = await getNextLegajoNumber(empresa)
   const legajo = String(next).padStart(3, '0')
   await getPowerSyncDb().execute(
     `UPDATE rrhh_colaboradores SET legajo = ?, updated_at = ? WHERE id = ?`,
@@ -501,16 +502,16 @@ export async function asignarLegajo(colaboradorId: string): Promise<string> {
 
 // ── Nómina Config ─────────────────────────────────────────────────────────────
 
-export async function getNominaConfig(): Promise<RrhhNominaConfig | null> {
+export async function getNominaConfig(empresa: RrhhEmpresa): Promise<RrhhNominaConfig | null> {
   return getPowerSyncDb().getOptional<RrhhNominaConfig>(
-    `SELECT * FROM rrhh_nomina_config WHERE workspace_id = ?`, [WORKSPACE_ID]
+    `SELECT * FROM rrhh_nomina_config WHERE workspace_id = ? AND empresa = ?`, [WORKSPACE_ID, empresa]
   )
 }
 
-export async function upsertNominaConfig(data: Partial<Omit<RrhhNominaConfig, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>): Promise<RrhhNominaConfig> {
+export async function upsertNominaConfig(empresa: RrhhEmpresa, data: Partial<Omit<RrhhNominaConfig, 'id' | 'workspace_id' | 'empresa' | 'created_at' | 'updated_at'>>): Promise<RrhhNominaConfig> {
   const db = getPowerSyncDb()
   const now = Date.now()
-  const existing = await getNominaConfig()
+  const existing = await getNominaConfig(empresa)
 
   if (existing) {
     const sets: string[] = []
@@ -525,11 +526,11 @@ export async function upsertNominaConfig(data: Partial<Omit<RrhhNominaConfig, 'i
 
   const id = randomUUID()
   await db.execute(
-    `INSERT INTO rrhh_nomina_config (id, workspace_id, drive_legajos_folder_id, ultimo_legajo_numero, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, WORKSPACE_ID, data.drive_legajos_folder_id ?? null, data.ultimo_legajo_numero ?? 0, now, now]
+    `INSERT INTO rrhh_nomina_config (id, workspace_id, empresa, drive_legajos_folder_id, ultimo_legajo_numero, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, WORKSPACE_ID, empresa, data.drive_legajos_folder_id ?? null, data.ultimo_legajo_numero ?? 0, now, now]
   )
-  return (await getNominaConfig())!
+  return (await getNominaConfig(empresa))!
 }
 
 // ── Ausentes ──────────────────────────────────────────────────────────────────
@@ -540,6 +541,7 @@ export async function getAusentesEnPeriodo(periodoId: string): Promise<RrhhColab
   if (!periodo) return []
 
   const prev = await getPeriodoByMes(
+    periodo.empresa,
     periodo.mes === 1 ? periodo.anio - 1 : periodo.anio,
     periodo.mes === 1 ? 12 : periodo.mes - 1
   )

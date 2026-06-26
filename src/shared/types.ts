@@ -2916,9 +2916,18 @@ export interface PayrollExtractionResult {
 
 // ── RRHH (entidades Supabase/PowerSync) ───────────────────────────────────────
 
+// ── Empresa (multiempresa RRHH: Naka Outdoors + Estación Vertical) ────────────
+export type RrhhEmpresa = 'naka' | 'ev'
+export const RRHH_EMPRESAS: RrhhEmpresa[] = ['naka', 'ev']
+export const RRHH_EMPRESA_LABEL: Record<RrhhEmpresa, string> = {
+  naka: 'NAKA',
+  ev: 'Estación Vertical',
+}
+
 export interface RrhhColaborador {
   id: string
   workspace_id: string
+  empresa: RrhhEmpresa
   documento: string
   cuil: string
   nombre: string
@@ -2977,6 +2986,7 @@ export interface RrhhColaboradorConStats extends RrhhColaborador {
 export interface RrhhNominaConfig {
   id: string
   workspace_id: string
+  empresa: RrhhEmpresa
   drive_legajos_folder_id: string | null
   ultimo_legajo_numero: number
   created_at: number
@@ -3133,6 +3143,7 @@ export interface ConfirmImportInput {
 export interface RrhhPeriodo {
   id: string
   workspace_id: string
+  empresa: RrhhEmpresa
   anio: number
   mes: number
   label: string
@@ -3153,6 +3164,7 @@ export interface RrhhPeriodo {
 export interface RrhhSueldo {
   id: string
   workspace_id: string
+  empresa: RrhhEmpresa
   periodo_id: string
   colaborador_id: string
   total_neto: number

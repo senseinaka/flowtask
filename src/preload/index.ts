@@ -53,7 +53,7 @@ import type {
   KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile,
   KnowledgeThreadDoc,
   PayrollExtractionResult,
-  RrhhColaborador, RrhhPeriodo, RrhhSueldo,
+  RrhhColaborador, RrhhPeriodo, RrhhSueldo, RrhhEmpresa,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
   RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult,
   RrhhColaboradorConStats, RrhhNominaConfig,
@@ -1092,16 +1092,16 @@ const api = {
   },
 
   rrhh: {
-    savePayroll:             (filePath: string): Promise<SavePayrollResult>                        => ipcRenderer.invoke('rrhh:savePayroll', filePath),
-    saveVacaciones:          (filePath: string): Promise<SaveVacacionesResult>                     => ipcRenderer.invoke('rrhh:saveVacaciones', filePath),
+    savePayroll:             (empresa: RrhhEmpresa, filePath: string): Promise<SavePayrollResult>    => ipcRenderer.invoke('rrhh:savePayroll', empresa, filePath),
+    saveVacaciones:          (empresa: RrhhEmpresa, filePath: string): Promise<SaveVacacionesResult> => ipcRenderer.invoke('rrhh:saveVacaciones', empresa, filePath),
     selectPdf:               (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectPdf'),
     selectVacacionesPdf:     (): Promise<string | null>                                            => ipcRenderer.invoke('rrhh:selectVacacionesPdf'),
     colaboradores: {
-      list:                  (): Promise<RrhhColaborador[]>                                        => ipcRenderer.invoke('rrhh:colaboradores:list'),
+      list:                  (empresa: RrhhEmpresa): Promise<RrhhColaborador[]>                     => ipcRenderer.invoke('rrhh:colaboradores:list', empresa),
       historial:             (colaboradorId: string): Promise<RrhhHistorialEntry[]>               => ipcRenderer.invoke('rrhh:colaboradores:historial', colaboradorId),
     },
     periodos: {
-      list:                  (): Promise<RrhhPeriodoConStats[]>                                    => ipcRenderer.invoke('rrhh:periodos:list'),
+      list:                  (empresa: RrhhEmpresa): Promise<RrhhPeriodoConStats[]>                 => ipcRenderer.invoke('rrhh:periodos:list', empresa),
       get:                   (id: string): Promise<RrhhPeriodo | null>                            => ipcRenderer.invoke('rrhh:periodos:get', id),
       confirmar:             (id: string): Promise<void>                                           => ipcRenderer.invoke('rrhh:periodos:confirmar', id),
       delete:                (id: string): Promise<void>                                           => ipcRenderer.invoke('rrhh:periodos:delete', id),
@@ -1119,13 +1119,13 @@ const api = {
     },
     nomina: {
       colaboradores: {
-        list:          (): Promise<RrhhColaboradorConStats[]>                                      => ipcRenderer.invoke('rrhh:nomina:colaboradores:list'),
+        list:          (empresa: RrhhEmpresa): Promise<RrhhColaboradorConStats[]>                  => ipcRenderer.invoke('rrhh:nomina:colaboradores:list', empresa),
         get:           (id: string): Promise<RrhhColaborador | null>                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:get', id),
-        upsert:        (data: UpsertColaboradorInput): Promise<RrhhColaborador>                   => ipcRenderer.invoke('rrhh:nomina:colaboradores:upsert', data),
+        upsert:        (empresa: RrhhEmpresa, data: UpsertColaboradorInput): Promise<RrhhColaborador> => ipcRenderer.invoke('rrhh:nomina:colaboradores:upsert', empresa, data),
         delete:         (id: string): Promise<void>                                                => ipcRenderer.invoke('rrhh:nomina:colaboradores:delete', id),
         hardDelete:     (id: string): Promise<void>                                                => ipcRenderer.invoke('rrhh:nomina:colaboradores:hardDelete', id),
-        asignarLegajo:  (id: string): Promise<string>                                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:asignarLegajo', id),
-        crearDrive:     (id: string): Promise<string>                                              => ipcRenderer.invoke('rrhh:nomina:colaboradores:crearDrive', id),
+        asignarLegajo:  (empresa: RrhhEmpresa, id: string): Promise<string>                        => ipcRenderer.invoke('rrhh:nomina:colaboradores:asignarLegajo', empresa, id),
+        crearDrive:     (empresa: RrhhEmpresa, id: string): Promise<string>                        => ipcRenderer.invoke('rrhh:nomina:colaboradores:crearDrive', empresa, id),
         selectImageFile:(): Promise<string | null>                                                 => ipcRenderer.invoke('rrhh:nomina:colaboradores:selectImageFile'),
         selectCvFile:   (): Promise<string | null>                                                 => ipcRenderer.invoke('rrhh:nomina:colaboradores:selectCvFile'),
         uploadFoto:     (id: string, localPath: string): Promise<string>                           => ipcRenderer.invoke('rrhh:nomina:colaboradores:uploadFoto', id, localPath),
@@ -1133,16 +1133,16 @@ const api = {
         getFotoDataUrl: (id: string): Promise<string | null>                                       => ipcRenderer.invoke('rrhh:nomina:colaboradores:getFotoDataUrl', id),
       },
       config: {
-        get:    (): Promise<RrhhNominaConfig | null>                                               => ipcRenderer.invoke('rrhh:nomina:config:get'),
-        upsert: (data: Partial<{ drive_legajos_folder_id: string | null; ultimo_legajo_numero: number }>): Promise<RrhhNominaConfig> => ipcRenderer.invoke('rrhh:nomina:config:upsert', data),
+        get:    (empresa: RrhhEmpresa): Promise<RrhhNominaConfig | null>                           => ipcRenderer.invoke('rrhh:nomina:config:get', empresa),
+        upsert: (empresa: RrhhEmpresa, data: Partial<{ drive_legajos_folder_id: string | null; ultimo_legajo_numero: number }>): Promise<RrhhNominaConfig> => ipcRenderer.invoke('rrhh:nomina:config:upsert', empresa, data),
       },
-      generarDesdeUltimo: (): Promise<GenerarDesdeUltimoResult>                                   => ipcRenderer.invoke('rrhh:nomina:generarDesdeUltimo'),
-      confirmarGenerar:   (input: ConfirmarGenerarInput, crearDrive: boolean): Promise<{ creados: number; actualizados: number }> => ipcRenderer.invoke('rrhh:nomina:confirmarGenerar', input, crearDrive),
+      generarDesdeUltimo: (empresa: RrhhEmpresa): Promise<GenerarDesdeUltimoResult>               => ipcRenderer.invoke('rrhh:nomina:generarDesdeUltimo', empresa),
+      confirmarGenerar:   (empresa: RrhhEmpresa, input: ConfirmarGenerarInput, crearDrive: boolean): Promise<{ creados: number; actualizados: number }> => ipcRenderer.invoke('rrhh:nomina:confirmarGenerar', empresa, input, crearDrive),
       exportXls:          (rows: Record<string, unknown>[]): Promise<string | null>               => ipcRenderer.invoke('rrhh:nomina:exportXls', rows),
       exportTemplate:     (): Promise<string | null>                                               => ipcRenderer.invoke('rrhh:nomina:exportTemplate'),
       selectImportFile:   (): Promise<string | null>                                               => ipcRenderer.invoke('rrhh:nomina:selectImportFile'),
-      parseImport:        (filePath: string): Promise<ImportParseResult>                           => ipcRenderer.invoke('rrhh:nomina:parseImport', filePath),
-      confirmImport:      (input: ConfirmImportInput): Promise<{ created: number; updated: number }> => ipcRenderer.invoke('rrhh:nomina:confirmImport', input),
+      parseImport:        (empresa: RrhhEmpresa, filePath: string): Promise<ImportParseResult>      => ipcRenderer.invoke('rrhh:nomina:parseImport', empresa, filePath),
+      confirmImport:      (empresa: RrhhEmpresa, input: ConfirmImportInput): Promise<{ created: number; updated: number }> => ipcRenderer.invoke('rrhh:nomina:confirmImport', empresa, input),
     },
     listas: {
       list:   (tipo?: RrhhListaTipo): Promise<RrhhLista[]>                                        => ipcRenderer.invoke('rrhh:listas:list', tipo),
@@ -1182,6 +1182,21 @@ const api = {
       updateRecon: (id: string, status: MpReconciliationStatus): Promise<void>                         => ipcRenderer.invoke('mp:transactions:update-recon', id, status),
       stats:       (connectionId: string): Promise<{ total: number; by_type: { transaction_type: string; count: number; total_amount: number }[]; by_recon: { reconciliation_status: string; count: number }[] }> => ipcRenderer.invoke('mp:transactions:stats', connectionId),
     },
+  },
+
+  wallpaper: {
+    getConfig:   (): Promise<{ enabled: boolean; mode: 'rotating' | 'fixed'; interval_seconds: number; fixed_image_id: string | null; active_image_ids: string[]; screensaver_enabled: boolean; screensaver_timeout_minutes: number }> =>
+      ipcRenderer.invoke('wallpaper:getConfig'),
+    setConfig:   (patch: Partial<{ enabled: boolean; mode: 'rotating' | 'fixed'; interval_seconds: number; fixed_image_id: string | null; active_image_ids: string[]; screensaver_enabled: boolean; screensaver_timeout_minutes: number }>): Promise<{ enabled: boolean; mode: 'rotating' | 'fixed'; interval_seconds: number; fixed_image_id: string | null; active_image_ids: string[]; screensaver_enabled: boolean; screensaver_timeout_minutes: number }> =>
+      ipcRenderer.invoke('wallpaper:setConfig', patch),
+    listImages:  (): Promise<Array<{ id: string; filename: string; dataUrl: string }>> =>
+      ipcRenderer.invoke('wallpaper:listImages'),
+    addImage:    (): Promise<{ id: string; filename: string; dataUrl: string } | null> =>
+      ipcRenderer.invoke('wallpaper:addImage'),
+    deleteImage: (id: string): Promise<void> =>
+      ipcRenderer.invoke('wallpaper:deleteImage', id),
+    getStats:    (): Promise<{ tasksDueToday: number; upcomingAlerts: number }> =>
+      ipcRenderer.invoke('wallpaper:getStats'),
   },
 
   catalog: {

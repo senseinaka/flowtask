@@ -5,15 +5,15 @@ import {
 import { driveService } from './drive.service'
 import type {
   GenerarDesdeUltimoEntry, GenerarDesdeUltimoResult,
-  ConfirmarGenerarInput, UpsertColaboradorInput
+  ConfirmarGenerarInput, UpsertColaboradorInput, RrhhEmpresa
 } from '@shared/types'
 
 /**
  * Lee el período más reciente, cruza los sueldos con los colaboradores existentes
  * y devuelve una vista previa de lo que se va a crear/actualizar.
  */
-export async function generarDesdeUltimoPeriodo(): Promise<GenerarDesdeUltimoResult> {
-  const periodos = await listPeriodos()
+export async function generarDesdeUltimoPeriodo(empresa: RrhhEmpresa): Promise<GenerarDesdeUltimoResult> {
+  const periodos = await listPeriodos(empresa)
   if (periodos.length === 0) throw new Error('No hay períodos liquidados aún')
 
   const ultimo = periodos[0]
@@ -48,6 +48,7 @@ export async function generarDesdeUltimoPeriodo(): Promise<GenerarDesdeUltimoRes
  * Confirma la generación: crea/actualiza colaboradores, opcionalmente crea carpetas Drive.
  */
 export async function confirmarGenerarNomina(
+  empresa: RrhhEmpresa,
   input: ConfirmarGenerarInput,
   crearCarpetasDrive: boolean
 ): Promise<{ creados: number; actualizados: number }> {
@@ -67,7 +68,7 @@ export async function confirmarGenerarNomina(
       estado_laboral: 'activo',
     }
 
-    const col = await upsertColaboradorCompleto(upsertData)
+    const col = await upsertColaboradorCompleto(empresa, upsertData)
 
     if (entry.esNuevo) {
       creados++
@@ -78,7 +79,7 @@ export async function confirmarGenerarNomina(
     // Si solicitó Drive y el colaborador tiene legajo, crear carpeta
     if (crearCarpetasDrive && col.legajo && !col.drive_legajo_folder_id && driveService.isAuthenticated()) {
       try {
-        const folderId = await driveService.getOrCreateColaboradorLegajoFolder(col.legajo, col.nombre)
+        const folderId = await driveService.getOrCreateColaboradorLegajoFolder(empresa, col.legajo, col.nombre)
         await updateColaboradorDrive(col.id, folderId)
       } catch {
         // Drive no critico — continuar
@@ -93,13 +94,13 @@ export async function confirmarGenerarNomina(
  * Crea la carpeta Drive para un colaborador (bajo demanda desde el perfil).
  * Devuelve el folder ID.
  */
-export async function crearCarpetaDriveColaborador(colaboradorId: string): Promise<string> {
+export async function crearCarpetaDriveColaborador(empresa: RrhhEmpresa, colaboradorId: string): Promise<string> {
   const col = await getColaboradorById(colaboradorId)
   if (!col) throw new Error('Colaborador no encontrado')
   if (!col.legajo) throw new Error('El colaborador no tiene legajo asignado')
   if (!driveService.isAuthenticated()) throw new Error('No autenticado con Google Drive')
 
-  const folderId = await driveService.getOrCreateColaboradorLegajoFolder(col.legajo, col.nombre)
+  const folderId = await driveService.getOrCreateColaboradorLegajoFolder(empresa, col.legajo, col.nombre)
   await updateColaboradorDrive(col.id, folderId)
   return folderId
 }

@@ -8,7 +8,7 @@ import {
   upsertColaborador, upsertSueldo, updateSueldoVacaciones, getSueldoByPeriodoColaborador,
   listSueldosByPeriodo, getAusentesEnPeriodo, getColaboradorByDocumento
 } from '../database/queries/rrhh'
-import type { SavePayrollResult, SaveVacacionesResult, RrhhSmartAlert } from '@shared/types'
+import type { SavePayrollResult, SaveVacacionesResult, RrhhSmartAlert, RrhhEmpresa } from '@shared/types'
 
 const MONTH_NAMES = [
   '', 'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -41,7 +41,7 @@ async function askReplace(nombre: string): Promise<boolean> {
   return result.response === 0
 }
 
-export async function savePayroll(filePath: string): Promise<SavePayrollResult> {
+export async function savePayroll(empresa: RrhhEmpresa, filePath: string): Promise<SavePayrollResult> {
   const extraction = await extractPayroll(filePath)
   // Filter out vacation employees — they are handled separately
   const employees = extraction.employees.filter(e => !e.isVacaciones)
@@ -57,20 +57,20 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
   const { mes, anio } = parsed
   const label = `${MONTH_NAMES[mes]} ${anio}`
 
-  let periodo = await getPeriodoByMes(anio, mes)
+  let periodo = await getPeriodoByMes(empresa, anio, mes)
   const totalNeto = employees.reduce((s, e) => s + e.totalNetoRaw, 0)
   const pdfNombre = path.basename(filePath)
 
   if (!periodo) {
     // New period — insert all
-    periodo = await createPeriodo({
+    periodo = await createPeriodo(empresa, {
       anio, mes, label, total_neto: totalNeto,
       cantidad_colaboradores: employees.length,
       pdf_nombre: pdfNombre,
       fecha_pago: first.fecha,
     })
     for (const emp of employees) {
-      const colaborador = await upsertColaborador({
+      const colaborador = await upsertColaborador(empresa, {
         documento: emp.documento,
         cuil: emp.cuil,
         nombre: emp.apellidoYNombres,
@@ -78,7 +78,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
         legajo: emp.legajo || undefined,
         fecha_ingreso: emp.fechaIngreso || undefined,
       })
-      await upsertSueldo({
+      await upsertSueldo(empresa, {
         periodoId: periodo.id,
         colaboradorId: colaborador.id,
         total_neto: emp.totalNetoRaw,
@@ -90,7 +90,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
     // Existing period — check each employee for conflicts
     const colaboradoresIds: string[] = []
     for (const emp of employees) {
-      const colaborador = await upsertColaborador({
+      const colaborador = await upsertColaborador(empresa, {
         documento: emp.documento,
         cuil: emp.cuil,
         nombre: emp.apellidoYNombres,
@@ -102,7 +102,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
       if (existing) {
         const replace = await askReplace(emp.apellidoYNombres)
         if (replace) {
-          await upsertSueldo({
+          await upsertSueldo(empresa, {
             periodoId: periodo.id,
             colaboradorId: colaborador.id,
             total_neto: emp.totalNetoRaw,
@@ -112,7 +112,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
         }
         // else keep existing — do nothing
       } else {
-        await upsertSueldo({
+        await upsertSueldo(empresa, {
           periodoId: periodo.id,
           colaboradorId: colaborador.id,
           total_neto: emp.totalNetoRaw,
@@ -141,7 +141,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
         try { await driveService.deleteFile(periodo.pdf_drive_file_id) } catch { /* ignorar */ }
       }
       const folderName = `${String(mes).padStart(2, '0')}-${anio}`
-      const folderId = await driveService.getOrCreateRrhhSueldosMesFolder(mes, anio)
+      const folderId = await driveService.getOrCreateRrhhSueldosMesFolder(empresa, mes, anio)
       const fileName = `sueldos_${folderName}.pdf`
       const driveFileId = await driveService.uploadFileToFolder(filePath, folderId, fileName, 'application/pdf')
       await updatePeriodoDrive(periodo.id, driveFileId, folderId)
@@ -178,7 +178,7 @@ export async function savePayroll(filePath: string): Promise<SavePayrollResult> 
   }
 }
 
-export async function saveVacaciones(filePath: string): Promise<SaveVacacionesResult> {
+export async function saveVacaciones(empresa: RrhhEmpresa, filePath: string): Promise<SaveVacacionesResult> {
   const extraction = await extractPayroll(filePath)
   const employees = extraction.employees.filter(e => e.isVacaciones)
 
@@ -195,10 +195,10 @@ export async function saveVacaciones(filePath: string): Promise<SaveVacacionesRe
   const label = `${MONTH_NAMES[mes]} ${anio}`
 
   // Period must exist (vacaciones are linked to an existing salary period)
-  let periodo = await getPeriodoByMes(anio, mes)
+  let periodo = await getPeriodoByMes(empresa, anio, mes)
   if (!periodo) {
     // Auto-create the period if it doesn't exist yet
-    periodo = await createPeriodo({
+    periodo = await createPeriodo(empresa, {
       anio, mes, label, total_neto: 0,
       cantidad_colaboradores: 0,
       pdf_nombre: path.basename(filePath),
@@ -213,7 +213,7 @@ export async function saveVacaciones(filePath: string): Promise<SaveVacacionesRe
 
   for (const emp of employees) {
     // Find colaborador by documento
-    const colaborador = await getColaboradorByDocumento(emp.documento)
+    const colaborador = await getColaboradorByDocumento(empresa, emp.documento)
     if (!colaborador) {
       colaboradoresSinMatch.push(emp.apellidoYNombres)
       continue
@@ -235,7 +235,7 @@ export async function saveVacaciones(filePath: string): Promise<SaveVacacionesRe
       colaboradoresActualizados++
     } else {
       // Sueldo row doesn't exist — create it (vacaciones-only row)
-      await upsertSueldo({
+      await upsertSueldo(empresa, {
         periodoId: periodo.id,
         colaboradorId: colaborador.id,
         total_neto: 0,
@@ -264,7 +264,7 @@ export async function saveVacaciones(filePath: string): Promise<SaveVacacionesRe
         try { await driveService.deleteFile(periodo.pdf_vacaciones_drive_file_id) } catch { /* ignorar */ }
       }
       const folderId = periodo.pdf_drive_folder_id
-        ?? await driveService.getOrCreateRrhhSueldosMesFolder(mes, anio)
+        ?? await driveService.getOrCreateRrhhSueldosMesFolder(empresa, mes, anio)
       const folderName = `${String(mes).padStart(2, '0')}-${anio}`
       const fileName = `vacaciones_${folderName}.pdf`
       vacDriveFileId = await driveService.uploadFileToFolder(filePath, folderId, fileName, 'application/pdf')
