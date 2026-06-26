@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Cloud, CloudOff, RefreshCw, AlertTriangle, Copy, Check } from 'lucide-react'
+import { Cloud, CloudOff, RefreshCw, AlertTriangle, Copy, Check, RotateCcw } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 
 function formatLastSync(timestamp: number | null): string {
@@ -15,12 +15,14 @@ function formatLastSync(timestamp: number | null): string {
 
 export default function SyncStatusBadge() {
   const status = usePowerSyncStatus()
-  const [copied,   setCopied]   = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [copied,       setCopied]       = useState(false)
+  const [expanded,     setExpanded]     = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
 
   if (!status) return null
 
-  const syncing = status.uploading || status.downloading || status.connecting
+  const syncing      = status.uploading || status.downloading || status.connecting
+  const isDisconnected = !status.connected && !status.connecting
 
   let icon      = <Cloud size={14} />
   let label     = `Sincronizado · ${formatLastSync(status.lastSyncedAt)}`
@@ -45,7 +47,20 @@ export default function SyncStatusBadge() {
     icon      = <CloudOff size={14} />
     label     = `Sin conexión · ${formatLastSync(status.lastSyncedAt)}`
     className = 'text-slate-400'
-    errorText = status.lastErrorMessage ?? null
+    errorText = status.lastErrorMessage ?? 'Sin detalles del error de conexión.'
+  }
+
+  async function handleReconnect(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (reconnecting) return
+    setReconnecting(true)
+    try {
+      await window.api.powersync.reconnect()
+    } catch (err) {
+      console.error('[SyncStatusBadge] reconnect:', err)
+    } finally {
+      setReconnecting(false)
+    }
   }
 
   function copyLog(e?: React.MouseEvent) {
@@ -57,38 +72,50 @@ export default function SyncStatusBadge() {
     })
   }
 
+  const hasDetail = !!errorText
+
   return (
     <div className="flex flex-col gap-1.5">
       {/* Badge principal */}
       <div
-        onClick={() => errorText && setExpanded(p => !p)}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 select-none ${className} ${errorText ? 'cursor-pointer' : 'cursor-default'}`}
+        onClick={() => hasDetail && setExpanded(p => !p)}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 select-none ${className} ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
       >
         {icon}
         <span className="flex-1 truncate">{label}</span>
-        {errorText && (
+        {hasDetail && (
           <span className="text-[10px] opacity-60 ml-1">{expanded ? '▲' : '▼'}</span>
         )}
       </div>
 
-      {/* Detalle del error — inline, sin posicionamiento flotante */}
-      {errorText && expanded && (
+      {/* Detalle expandible */}
+      {hasDetail && expanded && (
         <div className="bg-slate-950 border border-amber-800/40 rounded-lg p-2.5 text-[10px] text-slate-300 font-mono">
           <p className="break-all leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
             {errorText}
           </p>
           <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-800">
-            <span className="text-slate-600 font-sans">Click derecho para copiar</span>
             <button
               onClick={copyLog}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
-              title="Copiar log"
             >
               {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
               <span className="text-[10px] font-sans">{copied ? 'Copiado' : 'Copiar'}</span>
             </button>
           </div>
         </div>
+      )}
+
+      {/* Botón reconectar — solo cuando está desconectado */}
+      {isDisconnected && (
+        <button
+          onClick={handleReconnect}
+          disabled={reconnecting}
+          className="flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors disabled:opacity-40"
+        >
+          <RotateCcw size={11} className={reconnecting ? 'animate-spin' : ''} />
+          {reconnecting ? 'Reconectando...' : 'Reconectar'}
+        </button>
       )}
     </div>
   )

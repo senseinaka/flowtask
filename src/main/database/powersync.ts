@@ -1417,11 +1417,19 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
   constructor(private endpoint: string) {}
 
   async fetchCredentials() {
-    const env = readEnvLocal()
-    const session = await getSession()
-    if (!session) throw new Error('[PowerSync] Sin sesión de usuario autenticado')
-    const token = signPowerSyncJwt(env, this.endpoint, session.userId)
-    return { endpoint: this.endpoint, token }
+    try {
+      const env = readEnvLocal()
+      const session = await getSession()
+      if (!session) {
+        _lastErrorMessage = '[PowerSync] Sin sesión autenticada — cerraste sesión o el token expiró'
+        throw new Error(_lastErrorMessage)
+      }
+      const token = signPowerSyncJwt(env, this.endpoint, session.userId)
+      return { endpoint: this.endpoint, token }
+    } catch (e) {
+      if (!_lastErrorMessage) _lastErrorMessage = errorMessage(e)
+      throw e
+    }
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
@@ -2078,6 +2086,9 @@ function serializeStatus(status: SyncStatus): PowerSyncStatusInfo {
     console.error('[PowerSync] uploadError:', dataFlow.uploadError)
     console.error('[PowerSync] downloadError:', dataFlow.downloadError)
     _lastErrorMessage = errorMessage(error)
+  } else if (status.connected) {
+    // Conectado sin errores → limpiar mensaje de error anterior
+    _lastErrorMessage = null
   }
   return {
     connected: status.connected,
