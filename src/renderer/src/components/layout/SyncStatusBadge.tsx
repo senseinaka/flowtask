@@ -21,29 +21,29 @@ export default function SyncStatusBadge() {
 
   const syncing = status.uploading || status.downloading || status.connecting
 
-  let icon = <Cloud size={14} />
-  let label = `Sincronizado · ${formatLastSync(status.lastSyncedAt)}`
+  let icon      = <Cloud size={14} />
+  let label     = `Sincronizado · ${formatLastSync(status.lastSyncedAt)}`
   let className = 'text-emerald-400'
   let errorText: string | null = null
 
   if (status.configError) {
-    icon = <AlertTriangle size={14} />
-    label = 'Sync no configurado'
+    icon      = <AlertTriangle size={14} />
+    label     = 'Sync no configurado'
     className = 'text-amber-400'
     errorText = status.configError
   } else if (status.hasError) {
-    icon = <AlertTriangle size={14} />
-    label = 'Error de sincronización'
+    icon      = <AlertTriangle size={14} />
+    label     = 'Error de sincronización'
     className = 'text-amber-400'
     errorText = status.lastErrorMessage ?? null
   } else if (syncing) {
-    icon = <RefreshCw size={14} className="animate-spin" />
-    label = status.connecting ? 'Conectando...' : 'Sincronizando...'
+    icon      = <RefreshCw size={14} className="animate-spin" />
+    label     = status.connecting ? 'Conectando...' : 'Sincronizando...'
     className = 'text-indigo-400'
   } else if (!status.connected) {
-    icon = <CloudOff size={14} />
-    label = `Sin conexión · ${formatLastSync(status.lastSyncedAt)}`
-    className = 'text-slate-500'
+    icon      = <CloudOff size={14} />
+    label     = `Sin conexión · ${formatLastSync(status.lastSyncedAt)}`
+    className = 'text-slate-400'
     errorText = status.lastErrorMessage ?? null
   }
 
@@ -79,7 +79,7 @@ export default function SyncStatusBadge() {
               {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
             </button>
           </div>
-          <p className="text-slate-600 mt-2 text-[10px] font-sans">Click derecho en el badge para copiar · código: 22P02</p>
+          <p className="text-slate-600 mt-2 text-[10px] font-sans">Click derecho en el badge para copiar</p>
         </div>
       )}
     </div>

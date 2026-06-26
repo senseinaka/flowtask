@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782476749.7889347,
-    "ast_hash": "93ba0fdf08af913a712b8ae318610aec",
+    "mtime": 1782493371.894006,
+    "ast_hash": "2fecfd132b484f600a85dbb2936774b2",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -60,9 +60,9 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1781965280.894884,
-    "ast_hash": "be0844aaf91b5ae29ff8dfdcda24fec0",
-    "semantic_hash": "be0844aaf91b5ae29ff8dfdcda24fec0"
+    "mtime": 1782493389.7602823,
+    "ast_hash": "effeb102e18516a409db641cc9db9515",
+    "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
     "mtime": 1782343969.4517217,
@@ -160,9 +160,9 @@
     "semantic_hash": ""
   },
   "src/main/ipc/ai.ipc.ts": {
-    "mtime": 1781399347.9473512,
-    "ast_hash": "f029bcec0e28b7c9ce55d1f20efdb031",
-    "semantic_hash": "f029bcec0e28b7c9ce55d1f20efdb031"
+    "mtime": 1782493428.7187858,
+    "ast_hash": "6859dbd2e5560300ee7ba691fbebcc67",
+    "semantic_hash": ""
   },
   "src/main/ipc/app.ipc.ts": {
     "mtime": 1781370009.2597613,
@@ -200,9 +200,9 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1781787999.966432,
-    "ast_hash": "6973062c017f10131fb99ed96b7dfece",
-    "semantic_hash": "6973062c017f10131fb99ed96b7dfece"
+    "mtime": 1782493414.3323877,
+    "ast_hash": "bf7736283e97d824733067dab79cf859",
+    "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
     "mtime": 1781303379.3683724,
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782476933.715998,
-    "ast_hash": "4c19eec0fac3dbaec397d4089c7e7cfb",
+    "mtime": 1782493449.1191752,
+    "ast_hash": "3cc3f1e9942a116e8645d8e3bcc83faf",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -550,9 +550,9 @@
     "semantic_hash": "707543671e644fb4258bb585f433ade1"
   },
   "src/renderer/src/hooks/useAI.ts": {
-    "mtime": 1780667425.6201422,
-    "ast_hash": "2c7c44fead18e6fa9daaac563f5fc26e",
-    "semantic_hash": "2c7c44fead18e6fa9daaac563f5fc26e"
+    "mtime": 1782493456.570781,
+    "ast_hash": "de968fbd6f4a9fc7b04ea3633b3ee47f",
+    "semantic_hash": ""
   },
   "src/renderer/src/hooks/useAttachments.ts": {
     "mtime": 1779700562.8627977,
@@ -745,9 +745,9 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1781807771.4215162,
-    "ast_hash": "e1d962e93e7bfc588e94e3ad8e3e1790",
-    "semantic_hash": "e1d962e93e7bfc588e94e3ad8e3e1790"
+    "mtime": 1782493715.301908,
+    "ast_hash": "1a4503a0536a7d1a92d5426c39a90d43",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
     "mtime": 1781807330.1324089,
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782476730.1643858,
-    "ast_hash": "04875bd60e0467f738f60ac793115fa7",
+    "mtime": 1782493337.2273247,
+    "ast_hash": "800d2770214e5fc4edf8d6bb8c09d754",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {

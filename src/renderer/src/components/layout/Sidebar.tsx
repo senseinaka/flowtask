@@ -5,8 +5,10 @@ import {
   Users, UserCircle2, Send, Globe2, Package, Building2, Ship, Truck,
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
-  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home
+  ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
+  Database, RefreshCw
 } from 'lucide-react'
+import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
 import { useProjects } from '../../hooks/useProjects'
 
@@ -193,6 +195,28 @@ export default function Sidebar() {
 
   const syncMutation = useMutation({ mutationFn: () => window.api.sync.trigger() })
 
+  const psStatus = usePowerSyncStatus()
+  const [psReconnecting, setPsReconnecting] = useState(false)
+  const psConnected    = psStatus?.connected ?? false
+  const psDisconnected = !!psStatus && !psStatus.connected && !psStatus.connecting && !psStatus.configError
+
+  async function handlePsReconnect() {
+    if (psReconnecting || !psDisconnected) return
+    setPsReconnecting(true)
+    try {
+      await window.api.powersync.reconnect()
+    } catch {
+      // el listener powersync:status actualizará el estado
+    } finally {
+      setTimeout(() => setPsReconnecting(false), 4000)
+    }
+  }
+
+  // Auto-limpiar spinner si PowerSync reconectó antes del timeout
+  useEffect(() => {
+    if (psConnected && psReconnecting) setPsReconnecting(false)
+  }, [psConnected])
+
   // Close on navigation
   useEffect(() => {
     setOpenPanel(null)
@@ -280,8 +304,48 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Bottom: Drive sync + logout */}
+      {/* Bottom: PowerSync + Drive + logout */}
       <div className="flex flex-col items-center gap-1 py-3 border-t border-slate-700">
+
+        {/* PowerSync status — siempre visible; clickeable para reconectar si está desconectado */}
+        <button
+          onClick={handlePsReconnect}
+          disabled={psConnected || psReconnecting}
+          title={
+            psReconnecting ? 'Reconectando...'
+            : psConnected   ? 'Sync conectado'
+            : psDisconnected ? 'Sin conexión — click para reconectar'
+            : 'Sync'
+          }
+          className={cn(
+            'relative w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100',
+            psReconnecting
+              ? 'text-indigo-400 cursor-default'
+              : psConnected
+                ? 'text-slate-400 cursor-default'
+                : psDisconnected
+                  ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-900/25 cursor-pointer'
+                  : 'text-slate-600 cursor-default'
+          )}
+        >
+          {psReconnecting
+            ? <RefreshCw size={15} className="animate-spin" />
+            : <Database size={15} />
+          }
+          {/* dot indicador */}
+          <span
+            className={cn(
+              'absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full',
+              psReconnecting  ? 'bg-indigo-400'
+              : psConnected   ? 'bg-emerald-400'
+              : psDisconnected ? 'bg-amber-400'
+              : 'bg-slate-600'
+            )}
+          />
+          <span className="text-[8px] leading-none font-medium tracking-wide">Sync</span>
+        </button>
+
+        {/* Google Drive */}
         <button
           onClick={() => syncMutation.mutate()}
           disabled={syncMutation.isPending || !syncStatus?.isAuthenticated}

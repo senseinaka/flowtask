@@ -829,8 +829,9 @@ const api = {
   },
 
   powersync: {
-    getStatus: (): Promise<PowerSyncStatusInfo | null> => ipcRenderer.invoke('powersync:getStatus'),
-    restoreComex: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('powersync:restoreComex')
+    getStatus:   (): Promise<PowerSyncStatusInfo | null> => ipcRenderer.invoke('powersync:getStatus'),
+    restoreComex:(): Promise<{ ok: boolean }> => ipcRenderer.invoke('powersync:restoreComex'),
+    reconnect:   (): Promise<{ ok: boolean }> => ipcRenderer.invoke('powersync:reconnect'),
   },
 
   auth: {

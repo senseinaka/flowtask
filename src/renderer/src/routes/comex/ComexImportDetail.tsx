@@ -4629,7 +4629,6 @@ function PLSection({
   const [loading,     setLoading]     = useState(true)
   const [uploading,   setUploading]   = useState(false)
   const [applying,    setApplying]    = useState(false)
-  const [applyAlerts, setApplyAlerts] = useState<string[]>([])
   const [isDragOver,  setIsDragOver]  = useState(false)
   const dragCounter = useRef(0)
 
@@ -4699,35 +4698,15 @@ function PLSection({
 
   const handleApplyTotals = async () => {
     if (!totals) return
-    setApplying(true); setApplyAlerts([])
+    setApplying(true)
     try {
-      const newAlerts: string[] = []
       const customsPatch: Record<string, unknown> = {}
 
-      if (totals.pallets != null) {
-        if (!customs?.cant_pallets) customsPatch.cant_pallets = totals.pallets
-        else if (Math.abs(totals.pallets - customs.cant_pallets) > 0.1)
-          newAlerts.push(`Pallets PL total (${totals.pallets}) difiere del registrado (${customs.cant_pallets})`)
-      }
-      if (totals.cartons != null) {
-        if (!customs?.cant_cartons) customsPatch.cant_cartons = totals.cartons
-        else if (Math.abs(totals.cartons - customs.cant_cartons) > 0.1)
-          newAlerts.push(`Cajas PL total (${totals.cartons}) difiere del registrado (${customs.cant_cartons})`)
-      }
-      if (totals.peso != null) {
-        if (!customs?.peso_bruto_kg) customsPatch.peso_bruto_kg = totals.peso
-        else {
-          const pct = Math.abs(totals.peso - customs.peso_bruto_kg) / customs.peso_bruto_kg * 100
-          if (pct > 2) newAlerts.push(`Peso total PL (${fmtNum(totals.peso)} kg) difiere ${pct.toFixed(1)}% del registrado (${fmtNum(customs.peso_bruto_kg)} kg)`)
-        }
-      }
-      if (totals.vol != null) {
-        if (!customs?.volumen_m3) customsPatch.volumen_m3 = totals.vol
-        else {
-          const pct = Math.abs(totals.vol - customs.volumen_m3) / customs.volumen_m3 * 100
-          if (pct > 2) newAlerts.push(`Volumen total PL (${fmtNum(totals.vol)} m³) difiere ${pct.toFixed(1)}% del registrado (${fmtNum(customs.volumen_m3)} m³)`)
-        }
-      }
+      // Siempre sobreescribir con los totales sumados de todos los PLs
+      if (totals.pallets != null) customsPatch.cant_pallets  = totals.pallets
+      if (totals.cartons != null) customsPatch.cant_cartons  = totals.cartons
+      if (totals.peso    != null) customsPatch.peso_bruto_kg = totals.peso
+      if (totals.vol     != null) customsPatch.volumen_m3    = totals.vol
 
       // Contenedor: tomar del primer PL que lo tenga
       for (const f of plFiles) {
@@ -4742,8 +4721,6 @@ function PLSection({
         await window.api.comex.customs.upsert(importId, customsPatch as Parameters<typeof window.api.comex.customs.upsert>[1])
         qc.invalidateQueries({ queryKey: ['comex-customs', importId] })
       }
-
-      setApplyAlerts(newAlerts)
     } finally { setApplying(false) }
   }
 
@@ -4821,21 +4798,9 @@ function PLSection({
               >
                 {applying
                   ? <><Loader2 size={12} className="animate-spin" /> Aplicando...</>
-                  : <><Check size={12} /> Aplicar {plFiles.length >= 2 ? 'totales' : 'datos'} a Aduana</>
+                  : <><Check size={12} /> Aplicar {plFiles.length >= 2 ? 'totales' : 'datos'} a Datos de la carga</>
                 }
               </button>
-            )}
-
-            {/* Alertas de discrepancia */}
-            {applyAlerts.length > 0 && (
-              <div className="space-y-1">
-                {applyAlerts.map((a, i) => (
-                  <div key={i} className="flex items-start gap-2 px-3 py-2 bg-amber-900/20 border border-amber-700/30 rounded-lg text-xs text-amber-300">
-                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5 text-amber-400" />
-                    <span>{a}</span>
-                  </div>
-                ))}
-              </div>
             )}
 
             {/* Zona drag-drop para agregar más PLs */}
@@ -7376,6 +7341,19 @@ export default function ComexImportDetail() {
             upsertCustoms.mutate({ importId: id, data })
           }
 
+          // Desglose por PL (solo los que tienen datos extraídos)
+          const plsConDatos = plFilesList
+            .map((f, i) => {
+              if (!f.extracted_json) return null
+              try {
+                const d = JSON.parse(f.extracted_json) as import('@shared/types').ExtractedPL
+                return { label: `PL ${i + 1}`, d }
+              } catch { return null }
+            })
+            .filter((x): x is { label: string; d: import('@shared/types').ExtractedPL } => x !== null)
+
+          const fmtN = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 })
+
           return (
             <div className="rounded-lg border border-slate-700/40 bg-slate-800/40 px-4 py-3 space-y-2.5">
               {/* Header */}
@@ -7383,6 +7361,50 @@ export default function ComexImportDetail() {
                 <span className="text-slate-500">📦</span>
                 Datos de carga
               </p>
+
+              {/* Desglose por Packing List */}
+              {plsConDatos.length > 0 && (
+                <div className="rounded-lg border border-emerald-800/30 bg-emerald-950/10 overflow-hidden">
+                  {/* Encabezados de columnas */}
+                  <div className="grid grid-cols-5 gap-0 text-[9px] text-slate-500 uppercase tracking-wider font-semibold px-3 py-1.5 border-b border-emerald-800/20 bg-emerald-950/20">
+                    <span></span>
+                    <span>Cajas</span>
+                    <span>Pallets</span>
+                    <span>Peso bruto</span>
+                    <span>Volumen</span>
+                  </div>
+                  {/* Filas por PL */}
+                  {plsConDatos.map(({ label, d }) => (
+                    <div key={label} className="grid grid-cols-5 gap-0 text-[11px] px-3 py-1.5 border-b border-emerald-800/10 last:border-b-0">
+                      <span className="text-emerald-400 font-bold text-[10px]">{label}</span>
+                      <span className="text-slate-300">{typeof d.cant_cartons  === 'number' ? d.cant_cartons  : '—'}</span>
+                      <span className="text-slate-300">{typeof d.cant_pallets  === 'number' ? d.cant_pallets  : '—'}</span>
+                      <span className="text-slate-300">{typeof d.peso_bruto_kg === 'number' ? `${fmtN(d.peso_bruto_kg)} kg` : '—'}</span>
+                      <span className="text-slate-300">{typeof d.volumen_m3    === 'number' ? `${fmtN(d.volumen_m3)} m³`    : '—'}</span>
+                    </div>
+                  ))}
+                  {/* Fila totales (solo si hay 2+ PLs) */}
+                  {plsConDatos.length >= 2 && (() => {
+                    let cajas = 0, pallets = 0, peso = 0, vol = 0
+                    let hC = false, hP = false, hPe = false, hV = false
+                    for (const { d } of plsConDatos) {
+                      if (typeof d.cant_cartons  === 'number') { cajas   += d.cant_cartons;  hC  = true }
+                      if (typeof d.cant_pallets  === 'number') { pallets += d.cant_pallets;  hP  = true }
+                      if (typeof d.peso_bruto_kg === 'number') { peso    += d.peso_bruto_kg; hPe = true }
+                      if (typeof d.volumen_m3    === 'number') { vol     += d.volumen_m3;    hV  = true }
+                    }
+                    return (
+                      <div className="grid grid-cols-5 gap-0 text-[11px] px-3 py-1.5 bg-emerald-900/20 border-t border-emerald-700/30">
+                        <span className="text-emerald-300 font-bold text-[10px]">Total</span>
+                        <span className="text-emerald-200 font-bold">{hC  ? cajas             : '—'}</span>
+                        <span className="text-emerald-200 font-bold">{hP  ? pallets           : '—'}</span>
+                        <span className="text-emerald-200 font-bold">{hPe ? `${fmtN(peso)} kg` : '—'}</span>
+                        <span className="text-emerald-200 font-bold">{hV  ? `${fmtN(vol)} m³`  : '—'}</span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3">
 

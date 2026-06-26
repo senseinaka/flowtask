@@ -2028,6 +2028,24 @@ export async function disconnectPowerSync(): Promise<void> {
   await _psDb.disconnect()
 }
 
+/**
+ * Reconexión rápida: no corre migraciones, solo hace disconnect → connect.
+ * Usada desde el botón manual de la UI cuando se pierde la conexión.
+ */
+export async function reconnectPowerSync(): Promise<void> {
+  const env = readEnvLocal()
+  const endpoint = env.POWERSYNC_URL
+  if (!endpoint || !env.POWERSYNC_JWT_PRIVATE_KEY_B64 || !env.POWERSYNC_JWT_KID) {
+    throw new Error('Falta configurar .env.local (POWERSYNC_URL, POWERSYNC_JWT_PRIVATE_KEY_B64, POWERSYNC_JWT_KID)')
+  }
+  const session = await getSession()
+  if (!session) throw new Error('Sin sesión de usuario autenticado')
+  const db = getPowerSyncDb()
+  await db.disconnect()
+  await db.connect(new ProductionTokenConnector(endpoint))
+  console.log('[PowerSync] Reconectado a', endpoint, 'como', session.email)
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   if (err && typeof err === 'object') {
