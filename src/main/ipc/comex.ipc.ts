@@ -34,6 +34,7 @@ import {
   listAlarmasCotizacion, addAlarmaCotizacion, updateAlarmaCotizacion, deleteAlarmaCotizacion
 } from '../database/queries/comex'
 import { getBcraRates, refreshBcraRates, getBcraCotizacionHoy } from '../services/bcra.service'
+import { getBnaBilleteHoy } from '../services/bna.service'
 import { generatePlanningRecommendation, generatePlanningAIReport } from '../services/planning-ai.service'
 import type { GeneratePlanningAIReportInput } from '../services/planning-ai.service'
 import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/comex-planning-io.service'
@@ -1537,7 +1538,14 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:bcra:refresh', (
     _e, moneda: import('@shared/types').ComexMoneda
   ) => refreshBcraRates(moneda))
-  ipcMain.handle('comex:bcra:hoy', () => getBcraCotizacionHoy())
+  ipcMain.handle('comex:bcra:hoy', async () => {
+    const [bcra, bna] = await Promise.all([
+      getBcraCotizacionHoy(),
+      getBnaBilleteHoy().catch(() => [] as Awaited<ReturnType<typeof getBnaBilleteHoy>>)
+    ])
+    const bnaMap = new Map(bna.map(b => [b.moneda, b.venta]))
+    return bcra.map(c => ({ ...c, billete_venta: bnaMap.get(c.moneda) ?? null }))
+  })
 
   // ── Alarmas de cotización USD/EUR ─────────────────────────────────────────
   ipcMain.handle('comex:alarmas-cotizacion:list',   () => listAlarmasCotizacion())

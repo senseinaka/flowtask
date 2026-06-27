@@ -77,6 +77,22 @@ export async function getEurArsRateDirect(
   }
 }
 
+/**
+ * Devuelve la cotización BNA billete venta para USD y EUR del último día hábil disponible.
+ */
+export async function getBnaBilleteHoy(): Promise<Array<{ moneda: 'USD' | 'EUR'; venta: number; fecha: string }>> {
+  const all = await fetchAllRates()
+  const result: Array<{ moneda: 'USD' | 'EUR'; venta: number; fecha: string }> = []
+
+  for (const moneda of ['USD', 'EUR'] as const) {
+    const latest = all
+      .filter(r => r.moneda === moneda && r.venta > 0)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))[0]
+    if (latest) result.push({ moneda, venta: latest.venta, fecha: latest.fecha })
+  }
+  return result
+}
+
 /** Invalida el caché (útil en tests o si el usuario lo pide explícitamente) */
 export function invalidateBnaCache(): void {
   _cache   = null

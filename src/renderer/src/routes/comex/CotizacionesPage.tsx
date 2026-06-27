@@ -133,7 +133,7 @@ function BilletesDivisaWidget({
               {/* Divisa */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[9px] text-slate-600 uppercase tracking-wide mb-0.5">divisa venta</p>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide mb-0.5">BCRA divisa</p>
                   <p className={`text-base font-bold ${colorVal}`}>
                     {divisa != null
                       ? `$${fmtARS(divisa)}`
@@ -146,7 +146,7 @@ function BilletesDivisaWidget({
               {/* Billete */}
               <div className="flex items-center justify-between border-t border-slate-700/40 pt-2">
                 <div>
-                  <p className="text-[9px] text-slate-600 uppercase tracking-wide mb-0.5">billete venta</p>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide mb-0.5">BNA billete</p>
                   <p className="text-base font-bold text-slate-300">
                     {billete != null
                       ? `$${fmtARS(billete)}`
