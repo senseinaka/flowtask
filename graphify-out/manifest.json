@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782475273.2262,
-    "ast_hash": "b024da01d3cbebe8634f873af5de12c4",
+    "mtime": 1782525031.3944795,
+    "ast_hash": "ad6941eb08a91ab17b9d77b0646de044",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1290,8 +1290,8 @@
     "semantic_hash": ""
   },
   "src/main/services/bcra.service.ts": {
-    "mtime": 1782511221.0756848,
-    "ast_hash": "f5004a98590e10562718cd8439a85c28",
+    "mtime": 1782524978.8522546,
+    "ast_hash": "9e208bf3f3775028b3c01e25a44bb015",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CotizacionesModal.tsx": {

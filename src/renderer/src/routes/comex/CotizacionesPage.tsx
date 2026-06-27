@@ -167,7 +167,10 @@ function CombinedChart({ cotizaciones, bcraUSD, bcraEUR }: {
   bcraUSD: BcraRateEntry[]
   bcraEUR: BcraRateEntry[]
 }) {
-  const chartData = useMemo(() => {
+  const [rangeMonths, setRangeMonths] = useState<1 | 3 | 6>(6)
+  const [view, setView] = useState<'both' | 'USD' | 'EUR'>('both')
+
+  const fullData = useMemo(() => {
     const fechas = Array.from(
       new Set([...bcraUSD, ...bcraEUR].map(r => r.fecha))
     ).sort()
@@ -194,6 +197,7 @@ function CombinedChart({ cotizaciones, bcraUSD, bcraEUR }: {
     const eurBcra   = new Map(bcraEUR.map(r => [r.fecha, r.valor]))
 
     return fechas.map(fecha => ({
+      ts:        new Date(fecha).getTime(),
       fecha:     dayjs(fecha).format('DD/MM'),
       usdPropio: usdPropio.get(fecha) ?? null,
       usdBcra:   usdBcra.get(fecha)   ?? null,
@@ -202,32 +206,108 @@ function CombinedChart({ cotizaciones, bcraUSD, bcraEUR }: {
     }))
   }, [cotizaciones, bcraUSD, bcraEUR])
 
-  if (!chartData.length) return (
+  // Zoom temporal: recorta a los últimos N meses
+  const chartData = useMemo(() => {
+    if (!fullData.length) return []
+    const cutoff = dayjs().subtract(rangeMonths, 'month').valueOf()
+    const filtered = fullData.filter(d => d.ts >= cutoff)
+    return filtered.length ? filtered : fullData
+  }, [fullData, rangeMonths])
+
+  // Zoom al valor: dominio del eje Y ajustado al min/max visible (no desde 0),
+  // según la(s) moneda(s) elegida(s). Padding del 8% para que no toque los bordes.
+  const yDomain = useMemo<[number, number] | undefined>(() => {
+    const useUSD = view === 'both' || view === 'USD'
+    const useEUR = view === 'both' || view === 'EUR'
+    const vals: number[] = []
+    for (const d of chartData) {
+      if (useUSD) { if (d.usdPropio != null) vals.push(d.usdPropio); if (d.usdBcra != null) vals.push(d.usdBcra) }
+      if (useEUR) { if (d.eurPropio != null) vals.push(d.eurPropio); if (d.eurBcra != null) vals.push(d.eurBcra) }
+    }
+    if (!vals.length) return undefined
+    const min = Math.min(...vals), max = Math.max(...vals)
+    const pad = Math.max((max - min) * 0.08, max * 0.004)
+    return [Math.floor(min - pad), Math.ceil(max + pad)]
+  }, [chartData, view])
+
+  if (!fullData.length) return (
     <div className="h-48 flex items-center justify-center text-slate-600 text-sm">
       Sin datos BCRA — actualizá primero
     </div>
   )
 
   const tickInterval = Math.max(1, Math.floor(chartData.length / 10))
+  const showUSD = view === 'both' || view === 'USD'
+  const showEUR = view === 'both' || view === 'EUR'
+
+  const rangeBtns: Array<{ k: 1 | 3 | 6; label: string }> = [
+    { k: 1, label: '1M' }, { k: 3, label: '3M' }, { k: 6, label: '6M' },
+  ]
+  const viewBtns: Array<{ k: 'both' | 'USD' | 'EUR'; label: string }> = [
+    { k: 'both', label: 'Ambas' }, { k: 'USD', label: 'USD' }, { k: 'EUR', label: 'EUR' },
+  ]
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-        <XAxis dataKey="fecha" tick={{ fill: '#475569', fontSize: 9 }} interval={tickInterval} stroke="#1e293b" />
-        <YAxis tick={{ fill: '#475569', fontSize: 9 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} stroke="#1e293b" width={36} />
-        <Tooltip
-          contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }}
-          labelStyle={{ color: '#94a3b8' }}
-          formatter={(v: number, name: string) => [v != null ? `$ ${fmtARS(v)}` : '—', name]}
-        />
-        <Legend wrapperStyle={{ fontSize: 10, color: '#64748b' }} />
-        <Line dataKey="usdPropio" name="USD propio"  stroke="#60a5fa" strokeWidth={2} dot={false} connectNulls />
-        <Line dataKey="usdBcra"   name="USD BCRA"    stroke="#60a5fa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
-        <Line dataKey="eurPropio" name="EUR propio"  stroke="#a78bfa" strokeWidth={2} dot={false} connectNulls />
-        <Line dataKey="eurBcra"   name="EUR BCRA"    stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
-      </LineChart>
-    </ResponsiveContainer>
+    <div>
+      {/* Controles de zoom */}
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div className="flex gap-1">
+          {viewBtns.map(b => (
+            <button
+              key={b.k}
+              onClick={() => setView(b.k)}
+              className={`px-2.5 py-0.5 text-[11px] rounded-md border transition-colors ${
+                view === b.k
+                  ? 'bg-slate-700 border-slate-500 text-slate-100'
+                  : 'border-slate-700 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {rangeBtns.map(b => (
+            <button
+              key={b.k}
+              onClick={() => setRangeMonths(b.k)}
+              className={`px-2.5 py-0.5 text-[11px] rounded-md border transition-colors ${
+                rangeMonths === b.k
+                  ? 'bg-amber-500/20 border-amber-600/50 text-amber-300'
+                  : 'border-slate-700 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={240}>
+        <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <XAxis dataKey="fecha" tick={{ fill: '#475569', fontSize: 9 }} interval={tickInterval} stroke="#1e293b" />
+          <YAxis
+            tick={{ fill: '#475569', fontSize: 9 }}
+            domain={yDomain ?? ['auto', 'auto']}
+            tickFormatter={v => '$' + Math.round(v).toLocaleString('es-AR')}
+            stroke="#1e293b"
+            width={56}
+            allowDecimals={false}
+          />
+          <Tooltip
+            contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }}
+            labelStyle={{ color: '#94a3b8' }}
+            formatter={(v: number, name: string) => [v != null ? `$ ${fmtARS(v)}` : '—', name]}
+          />
+          <Legend wrapperStyle={{ fontSize: 10, color: '#64748b' }} />
+          {showUSD && <Line dataKey="usdPropio" name="USD propio" stroke="#60a5fa" strokeWidth={2} dot={false} connectNulls />}
+          {showUSD && <Line dataKey="usdBcra"   name="USD BCRA"   stroke="#60a5fa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />}
+          {showEUR && <Line dataKey="eurPropio" name="EUR propio" stroke="#a78bfa" strokeWidth={2} dot={false} connectNulls />}
+          {showEUR && <Line dataKey="eurBcra"   name="EUR BCRA"   stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
 
