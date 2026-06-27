@@ -268,11 +268,15 @@ export async function getBcraCotizacionHoy(): Promise<BcraCotizacionHoy[]> {
     console.warn('[BCRA] No se pudo obtener cotización hoy:', e)
   }
 
-  // Fallback: última fecha disponible en cache
+  // Fallback: última entrada disponible en cache por cada moneda+tipo
   const fallback = db.prepare(
-    `SELECT moneda, tipo, valor FROM bcra_rates_cache
-     WHERE moneda IN ('USD','EUR')
-     GROUP BY moneda, tipo HAVING fecha = MAX(fecha)`
+    `SELECT b.moneda, b.tipo, b.valor
+     FROM bcra_rates_cache b
+     WHERE b.moneda IN ('USD','EUR')
+       AND b.fecha = (
+         SELECT MAX(b2.fecha) FROM bcra_rates_cache b2
+         WHERE b2.moneda = b.moneda AND b2.tipo = b.tipo
+       )`
   ).all() as CacheRow[]
   const lastFecha = db.prepare(
     `SELECT MAX(fecha) AS f FROM bcra_rates_cache WHERE moneda IN ('USD','EUR')`

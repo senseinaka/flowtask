@@ -1290,8 +1290,8 @@
     "semantic_hash": ""
   },
   "src/main/services/bcra.service.ts": {
-    "mtime": 1782570700.0782611,
-    "ast_hash": "50d16ec28ca9b16d1ddd63cf8f537c8a",
+    "mtime": 1782573193.718684,
+    "ast_hash": "1ea5d9d6e2db5bdb29cc3d16aebf7128",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CotizacionesModal.tsx": {
