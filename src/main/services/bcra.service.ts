@@ -14,30 +14,34 @@ const BCRA_BASE = 'https://api.bcra.gob.ar/estadisticascambiarias/v1.0'
 
 // ── Tipos internos de respuesta BCRA ─────────────────────────────────────────
 
+// Estructura real del endpoint /Cotizaciones/{moneda}?fechadesde=&fechahasta=
+// results es un ARRAY de días; cada día trae un detalle por moneda con el valor
+// en `tipoCotizacion` (NÚMERO, cotización en ARS). No existe compra/venta acá.
 interface BcraDetalleDia {
   fecha: string
   detalle: Array<{
     codigoMoneda: string
     descripcion: string
-    tipoCotizacion: string
-    compra: number | null
-    venta: number | null
+    tipoPase: number
+    tipoCotizacion: number
   }>
 }
 
 interface BcraResponse {
   status: number
-  results: {
-    detalle?: BcraDetalleDia[]
-    cantidadResultados?: number
-    totalPaginas?: number
-  }
+  metadata?: { resultset?: { count: number; offset: number; limit: number } }
+  results: BcraDetalleDia[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  // Fecha en hora LOCAL, no UTC. toISOString() devuelve UTC y en Argentina (UTC-3)
+  // de noche salta al día siguiente → el BCRA rechaza fechas "mayores al día actual".
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function sixMonthsAgo(): string {
@@ -57,9 +61,10 @@ async function fetchFromBcra(
   fechaDesde: string,
   fechaHasta: string
 ): Promise<BcraRateEntry[]> {
-  // La API de BCRA devuelve TODAS las monedas; filtramos por codigoMoneda localmente.
-  // No hay sub-path /{moneda} — el endpoint es siempre /Cotizaciones con params de fecha.
-  const url = `${BCRA_BASE}/Cotizaciones?fechadesde=${fechaDesde}&fechahasta=${fechaHasta}`
+  // El rango histórico va por el endpoint CON la moneda en el path. El endpoint
+  // sin moneda (/Cotizaciones) NO acepta fechadesde/fechahasta → 400. El valor de
+  // la cotización (ARS) está en `tipoCotizacion` (número), no en venta/compra.
+  const url = `${BCRA_BASE}/Cotizaciones/${moneda}?fechadesde=${fechaDesde}&fechahasta=${fechaHasta}`
   console.log(`[BCRA] fetch ${moneda}: ${url}`)
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -72,20 +77,18 @@ async function fetchFromBcra(
   }
 
   const json: BcraResponse = await res.json()
-  const detalle = json.results?.detalle ?? []
-  console.log(`[BCRA] ${moneda}: ${detalle.length} días recibidos`)
+  const dias = json.results ?? []
+  console.log(`[BCRA] ${moneda}: ${dias.length} días recibidos`)
 
   const entries: BcraRateEntry[] = []
-  for (const dia of detalle) {
+  for (const dia of dias) {
     const fecha = dia.fecha.slice(0, 10)
-    for (const item of dia.detalle) {
-      if (item.codigoMoneda === moneda && item.tipoCotizacion === 'Divisa' && item.venta != null) {
-        entries.push({ moneda, fecha, valor: item.venta })
-        break
-      }
+    const item = dia.detalle?.find(d => d.codigoMoneda === moneda) ?? dia.detalle?.[0]
+    if (item && item.tipoCotizacion != null && item.tipoCotizacion > 0) {
+      entries.push({ moneda, fecha, valor: item.tipoCotizacion })
     }
   }
-  console.log(`[BCRA] ${moneda}: ${entries.length} entradas Divisa Venta extraídas`)
+  console.log(`[BCRA] ${moneda}: ${entries.length} entradas extraídas`)
   return entries
 }
 

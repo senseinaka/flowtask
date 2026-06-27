@@ -10,7 +10,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 
 ### Módulos actuales
 
-- **Comex (Comercio Exterior):** gestión completa de importaciones de Naka Outdoors. Seguimiento de embarques, documentos para despachante y personal, presupuestos logísticos de operadores de flete, pagos, costos, arancel, proformas, y planificación de pedidos con IA.
+- **Comex (Comercio Exterior):** gestión completa de importaciones de Naka Outdoors. Seguimiento de embarques, documentos para despachante y personal, presupuestos logísticos de operadores de flete, pagos, costos, arancel, proformas, planificación de pedidos con IA, y **cotizaciones USD/EUR** propias vs. la Divisa Venta del BCRA (`/comex/cotizaciones`).
 - **Tareas / Kanban:** sistema de gestión de tareas con tablero kanban, dependencias, recordatorios y delegación.
 - **Agenda / Calendario:** integración con Google Calendar. Sistema para programar envíos de mensajes por WhatsApp con recordatorios automáticos.
 - **Contactos:** agenda de contactos de la empresa.
@@ -203,6 +203,7 @@ Estas tablas viven únicamente en `flowtask.db` porque representan estado local 
 - `attachments` — archivos adjuntos de tareas (binarios locales)
 - `email_*` — módulo de correo (usa `email-db.ts`, caché local de IMAP)
 - `recon_*` — Conciliador Contable: `recon_periods`, `recon_imports`, `recon_invoices`, `recon_cupones`, `recon_ml_ops`, `recon_results`, `recon_audit` (solo el contador opera este módulo en su PC)
+- `bcra_rates_cache` — caché local de cotizaciones diarias del BCRA (módulo Comex → Cotizaciones, migración v95). Se rebaja de la API pública del BCRA; no tiene sentido sincronizar.
 - Tablas de caché y configuración de UI local
 
 ### Función `restoreComexLocalCache` / `restoreCompanyFinanceLocalCache`
@@ -218,9 +219,11 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ```typescript
 // Cada migración es un objeto { version: number, up: (db) => void }
 // Se aplican en orden ascendente; la versión actual se guarda en PRAGMA user_version
-// Versión actual: v81 (user_profiles)
+// Versión actual: v95 (bcra_rates_cache)
 // v80: knowledge_entries + knowledge_global_summaries
 // v81: user_profiles
+// v82–v94: mercadopago_*, accounting_services / service_catalog, RRHH multiempresa + SAC (ver migrations.ts)
+// v95: bcra_rates_cache (caché local de cotizaciones BCRA — NO sincroniza)
 ```
 
 **Reglas:**
@@ -332,7 +335,7 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 |---------|-----|
 | `src/main/database/db.ts` | Singleton de `flowtask.db` (better-sqlite3) |
 | `src/main/database/powersync.ts` | Singleton de PowerSync, schema, conexión, migraciones de datos |
-| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v81) |
+| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v95) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
 | `src/main/database/queries/recon.ts` | CRUD + motor del Conciliador Contable (solo `getDb()`) |
@@ -558,7 +561,36 @@ CREATE INDEX ON user_profiles(workspace_id);
 
 ---
 
+## Módulo Comex → Cotizaciones USD/EUR (junio 2026)
+
+Seguimiento de las cotizaciones propias de USD y EUR (precios al público en ARS) contra la **Divisa Venta** del BCRA, con gráfico de 6 meses, historial y chip de desvío porcentual. Ruta `/comex/cotizaciones` (último ítem del menú Comex).
+
+- **Cotizaciones propias:** tabla PowerSync `comex_cotizaciones` (`moneda`, `valor_ars`, `nota`, `created_at`). Se cargan a mano; la **fecha es editable** (default hoy) → `created_at` = mediodía de la fecha elegida (evita saltos de TZ). Cada moneda es una `MonedaCard` con estado local propio — **no compartir un solo estado entre USD y EUR** (ese fue un bug: editar una borraba el valor de la otra).
+- **BCRA:** `src/main/services/bcra.service.ts` baja la serie diaria de la API pública. **Endpoint correcto:** `/estadisticascambiarias/v1.0/Cotizaciones/{moneda}?fechadesde=&fechahasta=` (CON la moneda en el path — el endpoint sin moneda **no** acepta rango de fechas y da 400). `results` es un **array** de días; el valor en ARS está en `detalle[].tipoCotizacion` (NÚMERO — no existe compra/venta ni un discriminador `'Divisa'`). **Fechas en hora LOCAL** (`getFullYear/Month/Date`, no `toISOString()`): en Argentina (UTC-3) el ISO salta al día siguiente de noche y el BCRA rechaza "fecha mayor al día actual". Cachea en `bcra_rates_cache` (flowtask.db, **local, NO sincroniza**, migración v95) con fetch incremental de los días faltantes.
+- **Archivos:** `CotizacionesPage.tsx`, hooks en `useComex.ts` (`useCotizaciones`, `useAddCotizacion`, `useBcraRates`, `useRefreshBcra`), IPC `comex:cotizaciones:*` y `comex:bcra:*`.
+- **DDL Supabase** (ya aplicado jun 2026): tabla `comex_cotizaciones` con RLS + GRANT para `authenticated` (template estándar) + sync-rule `SELECT * FROM comex_cotizaciones WHERE workspace_id = '...'`.
+
+---
+
 ## Bugs conocidos y sus fixes (historial relevante)
+
+### Fix: PowerSync "Sin conexión" persistente — transporte, reconexión y cola (resuelto — junio 2026)
+
+**Síntoma:** badge en "Sin conexión" indefinido; `SyncStatus` con `connected:false, connecting:false, hasSynced:true` **sin** error de upload/download, `lastSyncedAt` congelado.
+
+Cuatro causas distintas, todas en `powersync.ts` salvo la #4:
+
+1. **NO usar WebSocket como `connectionMethod` en `@powersync/node`.** Se probó `SyncStreamConnectionMethod.WEB_SOCKET` para evitar el idle-drop del HTTP streaming — el handshake WS abre, pero el stream autenticado **no completa y deja de sincronizar del todo** (lastSyncedAt congelado). **El transporte que funciona es el HTTP streaming (default): no pasar `connectionMethod` a `db.connect()`.**
+
+2. **Watchdog de reconexión.** El Rust client queda en `connected:false / connecting:false` sin error tras un cierre limpio del server (idle, deploy) y no reintenta solo. `scheduleWatchdog()` lo detecta en el listener `statusChanged` y llama `_psDb.connect()` directo (sin `disconnect()` previo, que dispararía otro evento idle) a los ~10s. Se cancela al reconectar o ante disconnect intencional (logout → flag `_intentionalDisconnect`).
+
+3. **`uploadData` salta filas con 403/42501 (RLS).** Cualquier `throw` en `uploadData` reintenta la transacción para siempre y **traba toda la cola `ps_crud`** (ver regla de tablas nuevas). Una tabla sin policy/GRANT para `authenticated` devolvía 403 y congelaba el sync de todo. Ahora ese caso se **saltea** (igual que el skip de PGRST205) y se reporta la tabla en el badge — el fix de fondo sigue siendo correr el DDL (RLS+GRANT) de esa tabla.
+
+4. **`usePowerSyncStatus` es singleton** (`src/renderer/.../hooks/usePowerSyncStatus.ts`). `window.api.off(channel)` hace `removeAllListeners`, así que al desmontar un componente (ej. `SyncStatusBadge` al salir de Sistema) se mataba el listener de PowerSync de **todos** (incluido el Sidebar), que quedaba congelado. Ahora hay un único listener IPC a nivel de módulo con un `Set` de suscriptores.
+
+**Diagnóstico de la cola sin abrir la app:** leer `%APPDATA%\flowtask\flowtask\powersync.db` read-only con **Python** sqlite3 (`sqlite3.connect("file:...?mode=ro&immutable=1", uri=True)`) — `better-sqlite3` falla por ABI de Electron (NODE_MODULE_VERSION). `SELECT COUNT(*) FROM ps_crud` = 0 → no hay bloqueo de upload, el problema es solo de conexión.
+
+**Badge + reconexión:** `SyncStatusBadge` muestra el error real (no "[object Object]"), es expandible y tiene botón "Reconectar" cuando está desconectado; el Sidebar tiene indicador "Sync" persistente (dot verde/ámbar) que también reconecta al click.
 
 ### Fix: cargas no guardaban valores — FK constraint (resuelto — junio 2025)
 
