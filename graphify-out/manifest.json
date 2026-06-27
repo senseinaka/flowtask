@@ -35,8 +35,8 @@
     "semantic_hash": "e606c3b06c092bcea4711c844c794210"
   },
   "src/main/database/migrations.ts": {
-    "mtime": 1782575973.0143428,
-    "ast_hash": "aa6d8b387913844dd33823e6a6fb35dc",
+    "mtime": 1782588250.5905774,
+    "ast_hash": "e7752a65cabd8c865ae23c867c144874",
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
@@ -130,9 +130,9 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/recon.ts": {
-    "mtime": 1781901169.8142426,
-    "ast_hash": "3d7c5eb838c45e908e6cc8f5352245e6",
-    "semantic_hash": "3d7c5eb838c45e908e6cc8f5352245e6"
+    "mtime": 1782588260.4205654,
+    "ast_hash": "0aacf755d3e3d33fda46a02770284c9e",
+    "semantic_hash": ""
   },
   "src/main/database/queries/reminders.ts": {
     "mtime": 1779701198.728953,
@@ -275,9 +275,9 @@
     "semantic_hash": "f1a89e2a330a68e671890e7e49d2e606"
   },
   "src/main/ipc/recon.ipc.ts": {
-    "mtime": 1781905209.1333642,
-    "ast_hash": "2ba834817577a86a6dfc5860a39b68fd",
-    "semantic_hash": "2ba834817577a86a6dfc5860a39b68fd"
+    "mtime": 1782588281.8553731,
+    "ast_hash": "2ed2bb48a3f013c41848857f5da069a3",
+    "semantic_hash": ""
   },
   "src/main/ipc/reminders.ipc.ts": {
     "mtime": 1779700460.0792441,
@@ -415,9 +415,9 @@
     "semantic_hash": "a5ed146938171723205083ddfc29c1a6"
   },
   "src/main/services/recon-parsers.service.ts": {
-    "mtime": 1781907530.6253002,
-    "ast_hash": "6326223041b3d1cccacf005ff72810ab",
-    "semantic_hash": "6326223041b3d1cccacf005ff72810ab"
+    "mtime": 1782581974.485468,
+    "ast_hash": "9fefa59aaf3d7058c30f3e399dfb9182",
+    "semantic_hash": ""
   },
   "src/main/services/scheduler.service.ts": {
     "mtime": 1781883989.9486709,
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782576035.1620347,
-    "ast_hash": "dd423548eca8d7307f90b1e63f759f34",
+    "mtime": 1782588286.8356724,
+    "ast_hash": "6c7972306a3ad667d87cbb392a6fb6cb",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -645,9 +645,9 @@
     "semantic_hash": "707ac16550622e203b98b728de07f0e4"
   },
   "src/renderer/src/hooks/useRecon.ts": {
-    "mtime": 1781901612.303127,
-    "ast_hash": "0ee0702fcbdf20394eef147611ee32ac",
-    "semantic_hash": "0ee0702fcbdf20394eef147611ee32ac"
+    "mtime": 1782582099.989319,
+    "ast_hash": "4df5a2462710a73bc363fb6eca64574e",
+    "semantic_hash": ""
   },
   "src/renderer/src/hooks/useReminders.ts": {
     "mtime": 1779700568.7901227,
@@ -670,8 +670,8 @@
     "semantic_hash": "14253e9689dd98fc6d809b1d102ec2f7"
   },
   "src/renderer/src/main.tsx": {
-    "mtime": 1782576101.147292,
-    "ast_hash": "77b7570cad924a96e0effe4b366537e0",
+    "mtime": 1782582256.8897746,
+    "ast_hash": "c5f7f4fcc272a8d9b4bcb38f528248c2",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/Calendar.tsx": {
@@ -820,9 +820,9 @@
     "semantic_hash": "092c886a043aab06c9e759f657b3c07c"
   },
   "src/renderer/src/routes/contable/ReconDashboard.tsx": {
-    "mtime": 1781903232.5538619,
-    "ast_hash": "6d35843e931bc8d8cb4233052c336cd3",
-    "semantic_hash": "6d35843e931bc8d8cb4233052c336cd3"
+    "mtime": 1782582237.7759373,
+    "ast_hash": "190bf73f8b28ec5db79ddb59a369bea2",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconPeriodView.tsx": {
     "mtime": 1781907590.6421504,
@@ -830,9 +830,9 @@
     "semantic_hash": "17b448a8b758a80836f728e9dd24add0"
   },
   "src/renderer/src/routes/contable/ReconTabImportar.tsx": {
-    "mtime": 1781905256.2364714,
-    "ast_hash": "e666fec6903803cafc7c6c89737f9a71",
-    "semantic_hash": "e666fec6903803cafc7c6c89737f9a71"
+    "mtime": 1782588316.2908833,
+    "ast_hash": "7beebe1f24aaccb67eade1cdb934c982",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconTabKPIs.tsx": {
     "mtime": 1781905520.6285448,
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782575985.565418,
-    "ast_hash": "3275cbb35beaa7345244a9b17a508329",
+    "mtime": 1782588256.1489358,
+    "ast_hash": "b0c566a0c4c1fc85c2731f33f608c561",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782580831.562103,
-    "ast_hash": "eaddcb6f6877d615153ad8ae6e0a04f9",
+    "mtime": 1782580879.6603436,
+    "ast_hash": "5034ffcefdad3ad89e002a6756f91902",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1322,6 +1322,11 @@
   "src/renderer/src/routes/agenda/AgendaGrupos.tsx": {
     "mtime": 1782576355.206164,
     "ast_hash": "e19191b02872342a6b1490a465206590",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/ReconConciliacion.tsx": {
+    "mtime": 1782582225.5336704,
+    "ast_hash": "cec37698e50bebab0f4fa15c45079179",
     "semantic_hash": ""
   }
 }

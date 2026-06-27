@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Upload, FileCheck2, AlertCircle, Loader2, X, Check, Trash2, FileText, MousePointerClick } from 'lucide-react'
+import { Upload, FileCheck2, AlertCircle, Loader2, Trash2, FileText, MousePointerClick } from 'lucide-react'
 import type { ReconImportSource, ReconImport } from '@shared/types'
 import { RECON_SOURCE_LABELS } from '@shared/types'
 import { useReconImports, useClearReconSource } from '../../hooks/useRecon'
@@ -19,13 +19,7 @@ function fmtDate(ms: number) {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
   })
 }
-function fmtSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
 
-interface Pending { source: ReconImportSource; filePath: string; buffer?: Uint8Array; filename: string; size: number }
 type Feedback = { ok: boolean; msg: string }
 
 function ImportLogRow({
@@ -167,7 +161,6 @@ export default function ReconTabImportar({
   const clearSource = useClearReconSource()
 
   const [importing,   setImporting]   = useState<ReconImportSource | null>(null)
-  const [pending,     setPending]     = useState<Pending | null>(null)
   const [feedback,    setFeedback]    = useState<Record<string, Feedback>>({})
   const [clearingKey, setClearingKey] = useState<string | null>(null)
   const [dropError,   setDropError]   = useState<ReconImportSource | null>(null)
@@ -215,21 +208,6 @@ export default function ReconTabImportar({
     finally { setImporting(null) }
   }
 
-  async function confirmPending() {
-    if (!pending) return
-    const { source, filePath, buffer, filename } = pending
-    setPending(null)
-    setImporting(source)
-    try {
-      const result = buffer
-        ? await window.api.recon.imports.importFileBuffer(periodId, source, userId, buffer, filename)
-        : await window.api.recon.imports.importFile(periodId, source, userId, filePath)
-      await processResult(source, result)
-    } finally {
-      setImporting(null)
-    }
-  }
-
   async function handleClearSource(source: ReconImportSource) {
     setClearingKey(source)
     try {
@@ -244,11 +222,17 @@ export default function ReconTabImportar({
   }
 
   async function handleFileDrop(source: ReconImportSource, file: File) {
+    setImporting(source)
     try {
-      const buf = await file.arrayBuffer()
-      setPending({ source, filePath: '', buffer: new Uint8Array(buf), filename: file.name, size: file.size })
+      const buf    = await file.arrayBuffer()
+      const result = await window.api.recon.imports.importFileBuffer(
+        periodId, source, userId, new Uint8Array(buf), file.name
+      )
+      await processResult(source, result)
     } catch {
       setFb(source, { ok: false, msg: 'No se pudo leer el archivo' })
+    } finally {
+      setImporting(null)
     }
   }
 
@@ -362,38 +346,6 @@ export default function ReconTabImportar({
         )
       })}
 
-      {/* Confirmation modal for drag & drop */}
-      {pending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl">
-            <h3 className="text-white font-semibold text-sm mb-1">Confirmar carga</h3>
-            <p className="text-xs text-slate-400 mb-1">
-              Fuente: <span className="text-amber-300">{RECON_SOURCE_LABELS[pending.source]}</span>
-            </p>
-            <p className="text-[11px] text-slate-500 mb-4">
-              Los comprobantes que ya existen para este período serán ignorados.
-            </p>
-            <div className="bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-2.5 mb-4">
-              <p className="text-xs text-white font-mono truncate">{pending.filename}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">{fmtSize(pending.size)}</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPending(null)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors"
-              >
-                <X size={12} /> Cancelar
-              </button>
-              <button
-                onClick={confirmPending}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                <Check size={12} /> Cargar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

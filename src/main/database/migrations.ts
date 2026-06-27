@@ -3079,26 +3079,24 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
   {
     version: 98,
     up(db: Database.Database) {
+      try { db.exec(`ALTER TABLE recon_invoices ADD COLUMN fecha TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
       db.exec(`
-        ALTER TABLE recon_invoices ADD COLUMN fecha TEXT NOT NULL DEFAULT '';
-
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_invoices_dedup
-          ON recon_invoices(period_id, comprobante);
-
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_cupones_dedup
-          ON recon_cupones(period_id, cupon);
-
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_mlops_dedup
-          ON recon_ml_ops(period_id, operation_id);
+        DELETE FROM recon_invoices
+          WHERE rowid NOT IN (SELECT MIN(rowid) FROM recon_invoices GROUP BY period_id, comprobante);
+        DELETE FROM recon_cupones
+          WHERE rowid NOT IN (SELECT MIN(rowid) FROM recon_cupones GROUP BY period_id, cupon);
+        DELETE FROM recon_ml_ops
+          WHERE rowid NOT IN (SELECT MIN(rowid) FROM recon_ml_ops GROUP BY period_id, operation_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_invoices_dedup ON recon_invoices(period_id, comprobante);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_cupones_dedup  ON recon_cupones(period_id, cupon);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_mlops_dedup    ON recon_ml_ops(period_id, operation_id);
       `)
     }
   },
   {
     version: 99,
     up(db: Database.Database) {
-      db.exec(`
-        ALTER TABLE recon_imports ADD COLUMN skipped_count INTEGER NOT NULL DEFAULT 0;
-      `)
+      try { db.exec(`ALTER TABLE recon_imports ADD COLUMN skipped_count INTEGER NOT NULL DEFAULT 0`) } catch { /* ya existe */ }
     }
   }
 ]

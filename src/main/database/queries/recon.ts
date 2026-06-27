@@ -175,23 +175,24 @@ export function bulkInsertMLOps(
 }
 
 export function clearReconSource(periodId: string, source: string): number {
-  const res = getDb().prepare(
-    'DELETE FROM recon_invoices WHERE period_id = ? AND source = ?'
-  ).run(periodId, source)
+  const db = getDb()
+  db.prepare('DELETE FROM recon_imports  WHERE period_id = ? AND source = ?').run(periodId, source)
+  const res = db.prepare('DELETE FROM recon_invoices WHERE period_id = ? AND source = ?').run(periodId, source)
   return res.changes
 }
 
 export function clearReconCupones(periodId: string): number {
-  const res = getDb().prepare(
-    'DELETE FROM recon_cupones WHERE period_id = ?'
-  ).run(periodId)
+  const db = getDb()
+  db.prepare(`DELETE FROM recon_imports WHERE period_id = ? AND source IN ('cupones_csv','cupones_xlsx')`).run(periodId)
+  const res = db.prepare('DELETE FROM recon_cupones WHERE period_id = ?').run(periodId)
   return res.changes
 }
 
 export function clearReconMLOps(periodId: string, cuenta: string): number {
-  const res = getDb().prepare(
-    'DELETE FROM recon_ml_ops WHERE period_id = ? AND cuenta = ?'
-  ).run(periodId, cuenta)
+  const db    = getDb()
+  const src   = cuenta === 'principal' ? 'ml_principal' : 'ml_secundaria'
+  db.prepare('DELETE FROM recon_imports  WHERE period_id = ? AND source = ?').run(periodId, src)
+  const res = db.prepare('DELETE FROM recon_ml_ops WHERE period_id = ? AND cuenta = ?').run(periodId, cuenta)
   return res.changes
 }
 

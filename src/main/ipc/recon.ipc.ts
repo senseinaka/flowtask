@@ -115,7 +115,7 @@ export function registerReconIpc(): void {
           }
           default:
             logReconImport({
-              period_id: periodId, source, filename, row_count: 0,
+              period_id: periodId, source, filename, row_count: 0, skipped_count: 0,
               status: 'warning', error_msg: 'Parser no implementado aún', imported_by: importedBy,
             })
             return { ok: false, error: `Fuente "${source}" aún no tiene parser implementado` }
