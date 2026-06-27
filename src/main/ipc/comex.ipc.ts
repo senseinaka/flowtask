@@ -30,9 +30,10 @@ import {
   listPlannings, getPlanning, createPlanning, updatePlanning, deletePlanning, recalculatePlanning,
   updateMilestone,
   listPlanningAIReports, createPlanningAIReport, deletePlanningAIReport,
-  listCotizaciones, addCotizacion
+  listCotizaciones, addCotizacion,
+  listAlarmasCotizacion, addAlarmaCotizacion, updateAlarmaCotizacion, deleteAlarmaCotizacion
 } from '../database/queries/comex'
-import { getBcraRates, refreshBcraRates } from '../services/bcra.service'
+import { getBcraRates, refreshBcraRates, getBcraCotizacionHoy } from '../services/bcra.service'
 import { generatePlanningRecommendation, generatePlanningAIReport } from '../services/planning-ai.service'
 import type { GeneratePlanningAIReportInput } from '../services/planning-ai.service'
 import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/comex-planning-io.service'
@@ -1536,6 +1537,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:bcra:refresh', (
     _e, moneda: import('@shared/types').ComexMoneda
   ) => refreshBcraRates(moneda))
+  ipcMain.handle('comex:bcra:hoy', () => getBcraCotizacionHoy())
+
+  // ── Alarmas de cotización USD/EUR ─────────────────────────────────────────
+  ipcMain.handle('comex:alarmas-cotizacion:list',   () => listAlarmasCotizacion())
+  ipcMain.handle('comex:alarmas-cotizacion:add',    (_e, input) => addAlarmaCotizacion(input))
+  ipcMain.handle('comex:alarmas-cotizacion:update', (_e, id: string, changes) => updateAlarmaCotizacion(id, changes))
+  ipcMain.handle('comex:alarmas-cotizacion:delete', (_e, id: string) => deleteAlarmaCotizacion(id))
 }
 
 function fileToDataUrl(fp: string): string | null {

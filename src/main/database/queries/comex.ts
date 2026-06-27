@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
+import { getDb } from '../db'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
@@ -1504,5 +1505,66 @@ export async function addCotizacion(
   return (await db.getOptional<ComexCotizacion>(
     'SELECT * FROM comex_cotizaciones WHERE id = ?', [id]
   ))!
+}
+
+// ── Alarmas de cotización USD/EUR (local, flowtask.db) ────────────────────────
+
+import type {
+  ComexAlarmaCotizacion, CreateAlarmaCotizacionInput
+} from '@shared/types'
+
+export function listAlarmasCotizacion(): ComexAlarmaCotizacion[] {
+  return getDb().prepare(
+    `SELECT * FROM comex_alarmas_cotizacion ORDER BY created_at DESC`
+  ).all() as ComexAlarmaCotizacion[]
+}
+
+export function listAlarmasCotizacionActivas(): ComexAlarmaCotizacion[] {
+  return getDb().prepare(
+    `SELECT * FROM comex_alarmas_cotizacion WHERE activa = 1`
+  ).all() as ComexAlarmaCotizacion[]
+}
+
+export function addAlarmaCotizacion(input: CreateAlarmaCotizacionInput): ComexAlarmaCotizacion {
+  const id  = randomUUID()
+  const now = Date.now()
+  getDb().prepare(`
+    INSERT INTO comex_alarmas_cotizacion
+      (id, moneda, tipo_cotizacion, tipo_umbral, umbral, direccion, activa, whatsapp_numero, cooldown_horas, ultima_alerta_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+  `).run(
+    id, input.moneda, input.tipo_cotizacion, input.tipo_umbral,
+    input.umbral, input.direccion, input.activa ? 1 : 0,
+    input.whatsapp_numero ?? null, input.cooldown_horas, now
+  )
+  return getDb().prepare(`SELECT * FROM comex_alarmas_cotizacion WHERE id = ?`).get(id) as ComexAlarmaCotizacion
+}
+
+export function updateAlarmaCotizacion(id: string, changes: Partial<Omit<ComexAlarmaCotizacion, 'id' | 'created_at'>>): void {
+  const fields = Object.keys(changes)
+    .filter(k => k !== 'id' && k !== 'created_at')
+    .map(k => `${k} = ?`)
+    .join(', ')
+  if (!fields) return
+  getDb().prepare(`UPDATE comex_alarmas_cotizacion SET ${fields} WHERE id = ?`)
+    .run(...Object.values(changes), id)
+}
+
+export function deleteAlarmaCotizacion(id: string): void {
+  getDb().prepare(`DELETE FROM comex_alarmas_cotizacion WHERE id = ?`).run(id)
+}
+
+export function setUltimaAlertaAt(id: string, ts: number): void {
+  getDb().prepare(`UPDATE comex_alarmas_cotizacion SET ultima_alerta_at = ? WHERE id = ?`).run(ts, id)
+}
+
+export async function getLatestCotizacionByMoneda(): Promise<Record<string, number>> {
+  const rows = await getPowerSyncDb().getAll<{ moneda: string; valor_ars: number }>(
+    `SELECT moneda, valor_ars FROM comex_cotizaciones
+     WHERE workspace_id = ?
+     GROUP BY moneda HAVING created_at = MAX(created_at)`,
+    [WORKSPACE_ID]
+  )
+  return Object.fromEntries(rows.map(r => [r.moneda, r.valor_ars]))
 }
 

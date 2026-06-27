@@ -1096,3 +1096,46 @@ export function useRefreshBcra() {
       qc.invalidateQueries({ queryKey: ['comex-bcra-rates', moneda] })
   })
 }
+
+export function useBcraCotizacionHoy() {
+  return useQuery({
+    queryKey: ['comex-bcra-hoy'],
+    queryFn:  () => window.api.comex.bcra.hoy(),
+    staleTime: 10 * 60 * 1000, // 10 minutos
+    retry: 1,
+  })
+}
+
+export function useAlarmasCotizacion() {
+  return useQuery({
+    queryKey: ['comex-alarmas-cotizacion'],
+    queryFn:  () => window.api.comex.alarmasCotizacion.list(),
+    staleTime: 0,
+  })
+}
+
+export function useAddAlarmaCotizacion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateAlarmaCotizacionInput) =>
+      window.api.comex.alarmasCotizacion.add(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-alarmas-cotizacion'] })
+  })
+}
+
+export function useUpdateAlarmaCotizacion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, changes }: { id: string; changes: Partial<import('@shared/types').ComexAlarmaCotizacion> }) =>
+      window.api.comex.alarmasCotizacion.update(id, changes),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-alarmas-cotizacion'] })
+  })
+}
+
+export function useDeleteAlarmaCotizacion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.alarmasCotizacion.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-alarmas-cotizacion'] })
+  })
+}

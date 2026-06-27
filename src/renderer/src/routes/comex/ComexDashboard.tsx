@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff, ChevronDown } from 'lucide-react'
+import { Globe2, Package, TrendingUp, AlertCircle, Calendar, ChevronRight, Clock, Ship, Maximize2, X, CheckCircle2, ShieldCheck, Mail, ShieldOff, ChevronDown, DollarSign } from 'lucide-react'
 import { useComexImports, useComexPlannings } from '../../hooks/useComex'
 import { PlanningDashboardPanel } from './ComexPlanningSummary'
 import { IMPORT_STATUS_LABELS, IMPORT_STATUS_COLORS } from '@shared/types'

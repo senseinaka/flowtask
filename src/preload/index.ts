@@ -4,7 +4,8 @@ import type {
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
-  ComexCotizacion, ComexMoneda, BcraRateEntry,
+  ComexCotizacion, ComexMoneda, BcraRateEntry, BcraCotizacionHoy,
+  ComexAlarmaCotizacion, CreateAlarmaCotizacionInput,
   BackupStatus, LocalBackupStatus, LocalBackupEntry, RestoreResult,
   Task, Project, Attachment, Reminder, Contact, CreateContactInput,
   DelegatedTask, CreateDelegatedTaskInput,
@@ -432,8 +433,15 @@ const api = {
       add:  (moneda: ComexMoneda, valor_ars: number, nota?: string, created_at_ms?: number): Promise<ComexCotizacion> => ipcRenderer.invoke('comex:cotizaciones:add', moneda, valor_ars, nota, created_at_ms),
     },
     bcra: {
-      rates:   (moneda: ComexMoneda): Promise<BcraRateEntry[]> => ipcRenderer.invoke('comex:bcra:rates', moneda),
-      refresh: (moneda: ComexMoneda): Promise<BcraRateEntry[]> => ipcRenderer.invoke('comex:bcra:refresh', moneda),
+      rates:   (moneda: ComexMoneda): Promise<BcraRateEntry[]>      => ipcRenderer.invoke('comex:bcra:rates', moneda),
+      refresh: (moneda: ComexMoneda): Promise<BcraRateEntry[]>      => ipcRenderer.invoke('comex:bcra:refresh', moneda),
+      hoy:     ():                    Promise<BcraCotizacionHoy[]>  => ipcRenderer.invoke('comex:bcra:hoy'),
+    },
+    alarmasCotizacion: {
+      list:   ():                                                       Promise<ComexAlarmaCotizacion[]> => ipcRenderer.invoke('comex:alarmas-cotizacion:list'),
+      add:    (input: CreateAlarmaCotizacionInput):                     Promise<ComexAlarmaCotizacion>  => ipcRenderer.invoke('comex:alarmas-cotizacion:add', input),
+      update: (id: string, changes: Partial<ComexAlarmaCotizacion>):   Promise<void>                   => ipcRenderer.invoke('comex:alarmas-cotizacion:update', id, changes),
+      delete: (id: string):                                             Promise<void>                   => ipcRenderer.invoke('comex:alarmas-cotizacion:delete', id),
     },
     inal: {
       certs: {

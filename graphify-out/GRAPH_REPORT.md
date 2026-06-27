@@ -1,7 +1,7 @@
-# Graph Report - flowtask  (2026-06-26)
+# Graph Report - flowtask  (2026-06-27)
 
 ## Corpus Check
-- 258 files · ~402,353 words
+- 258 files · ~402,729 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b34942db`
+- Built from commit: `7a0317a6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -693,11 +693,11 @@ Nodes (3): Módulo de email — arquitectura específica, Renderizado de emails 
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `cn()` connect `Community 43` to `Community 129`, `Community 130`, `Community 3`, `Community 131`, `Community 132`, `Community 133`, `Community 1`, `Community 4`, `Community 137`, `Community 13`, `Community 22`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 37`, `Community 40`, `Community 41`, `Community 44`, `Community 46`, `Community 48`, `Community 49`, `Community 54`, `Community 56`, `Community 61`, `Community 63`, `Community 68`, `Community 78`, `Community 86`, `Community 108`, `Community 117`, `Community 119`, `Community 124`, `Community 125`?**
-  _High betweenness centrality (0.142) - this node is a cross-community bridge._
+  _High betweenness centrality (0.137) - this node is a cross-community bridge._
 - **Why does `getDb()` connect `Community 10` to `Community 6`, `Community 9`, `Community 11`, `Community 14`, `Community 15`, `Community 17`, `Community 21`, `Community 28`, `Community 29`, `Community 32`, `Community 33`, `Community 38`, `Community 39`, `Community 47`, `Community 52`, `Community 57`, `Community 59`, `Community 60`, `Community 69`, `Community 80`, `Community 83`, `Community 84`, `Community 94`, `Community 100`?**
-  _High betweenness centrality (0.139) - this node is a cross-community bridge._
+  _High betweenness centrality (0.135) - this node is a cross-community bridge._
 - **Why does `getPowerSyncDb()` connect `Community 2` to `Community 33`, `Community 36`, `Community 5`, `Community 6`, `Community 7`, `Community 39`, `Community 11`, `Community 60`, `Community 15`, `Community 47`, `Community 80`, `Community 118`, `Community 88`, `Community 57`, `Community 122`, `Community 28`, `Community 29`, `Community 62`?**
-  _High betweenness centrality (0.119) - this node is a cross-community bridge._
+  _High betweenness centrality (0.115) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first` to the rest of the system?**

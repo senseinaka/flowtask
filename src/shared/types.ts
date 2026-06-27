@@ -1284,8 +1284,36 @@ export interface ComexCotizacion {
 export interface BcraRateEntry {
   moneda: ComexMoneda
   fecha: string       // 'YYYY-MM-DD'
+  tipo?: 'billete' | 'divisa'
   valor: number
 }
+
+export interface BcraCotizacionHoy {
+  moneda: ComexMoneda
+  fecha: string
+  billete_venta: number | null
+  divisa_venta:  number | null
+}
+
+export type AlarmaDireccion    = 'supera' | 'cae_bajo'
+export type AlarmaTipoUmbral   = 'porcentaje' | 'valor'
+export type AlarmaTipoCotizacion = 'billete' | 'divisa' | 'cualquiera'
+
+export interface ComexAlarmaCotizacion {
+  id:               string
+  moneda:           ComexMoneda
+  tipo_cotizacion:  AlarmaTipoCotizacion
+  tipo_umbral:      AlarmaTipoUmbral
+  umbral:           number
+  direccion:        AlarmaDireccion
+  activa:           number   // 0 | 1
+  whatsapp_numero:  string | null
+  cooldown_horas:   number
+  ultima_alerta_at: number | null
+  created_at:       number
+}
+
+export type CreateAlarmaCotizacionInput = Omit<ComexAlarmaCotizacion, 'id' | 'ultima_alerta_at' | 'created_at'>
 
 export interface ComexPayment {
   id: string

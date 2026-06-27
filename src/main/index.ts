@@ -70,6 +70,7 @@ import { localBackupService } from './services/local-backup.service'
 import { schedulerService } from './services/scheduler.service'
 import { questionsService } from './services/questions.service'
 import { startPolling, stopPolling } from './services/polling.service'
+import { startAlarmasCotizacion, stopAlarmasCotizacion } from './services/cotizacion-alarmas.service'
 import { startProactiveScheduler, stopProactiveScheduler, triggerProactiveNow } from './services/proactive.service'
 import type { ProactiveAlert } from './services/proactive.service'
 
@@ -224,6 +225,9 @@ app.whenReady().then(() => {
   // Polling de mensajes entrantes (reemplaza webhook local — Evolution API está en Railway)
   startPolling()
 
+  // Chequeo periódico de alarmas de cotización USD/EUR
+  startAlarmasCotizacion()
+
   createWindow()
 
   // ── Auto-actualización (electron-updater + GitHub Releases) ──────────────
@@ -256,6 +260,7 @@ app.on('before-quit', (event) => {
   schedulerService.stop()
   stopProactiveScheduler()
   stopPolling()
+  stopAlarmasCotizacion()
   localBackupService.stop()
   if (_backupInterval) clearInterval(_backupInterval)
 

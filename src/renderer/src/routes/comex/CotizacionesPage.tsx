@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react'
 import {
   DollarSign, TrendingUp, RefreshCw, AlertTriangle, Check,
-  Clock, ChevronDown, Edit2
+  Clock, ChevronDown, Edit2, Bell, TrendingDown
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer
 } from 'recharts'
-import { useCotizaciones, useAddCotizacion, useBcraRates, useRefreshBcra } from '../../hooks/useComex'
-import type { ComexMoneda, ComexCotizacion, BcraRateEntry } from '@shared/types'
+import { useCotizaciones, useAddCotizacion, useBcraRates, useRefreshBcra, useBcraCotizacionHoy } from '../../hooks/useComex'
+import type { ComexMoneda, ComexCotizacion, BcraRateEntry, BcraCotizacionHoy } from '@shared/types'
+import CotizacionAlarmasModal from './CotizacionAlarmasModal'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
@@ -32,6 +33,108 @@ function DesvioChip({ pct }: { pct: number }) {
       {pct > 0 ? <TrendingUp size={10}/> : <ChevronDown size={10}/>}
       {pct > 0 ? '+' : ''}{pct.toFixed(1)}% vs BCRA
     </span>
+  )
+}
+
+// ── Widget billete/divisa de hoy ──────────────────────────────────────────────
+
+function DiffChip({ pct }: { pct: number }) {
+  const abs = Math.abs(pct)
+  const color =
+    abs < 2  ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800/40' :
+    abs < 5  ? 'text-amber-400   bg-amber-950/60   border-amber-800/40'   :
+               'text-red-400     bg-red-950/60     border-red-800/40'
+  const Icon = pct >= 0 ? TrendingUp : TrendingDown
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${color}`}>
+      <Icon size={9} />
+      {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+    </span>
+  )
+}
+
+function BilletesDivisaWidget({
+  hoy,
+  cotizaciones,
+  onAlarmas,
+}: {
+  hoy: BcraCotizacionHoy[]
+  cotizaciones: ComexCotizacion[]
+  onAlarmas: () => void
+}) {
+  const latestNaka = (moneda: ComexMoneda) =>
+    cotizaciones
+      .filter(c => c.moneda === moneda)
+      .sort((a, b) => b.created_at - a.created_at)[0]?.valor_ars ?? null
+
+  const MONEDAS: { moneda: ComexMoneda; label: string; colorLabel: string; colorVal: string }[] = [
+    { moneda: 'USD', label: 'Dólar',  colorLabel: 'text-blue-400',   colorVal: 'text-blue-300'   },
+    { moneda: 'EUR', label: 'Euro',   colorLabel: 'text-purple-400', colorVal: 'text-purple-300' },
+  ]
+
+  return (
+    <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] font-medium text-slate-400">
+          BCRA · cotización oficial hoy
+        </p>
+        <button
+          onClick={onAlarmas}
+          className="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 border border-amber-800/40 rounded-lg px-2.5 py-1 transition-colors"
+        >
+          <Bell size={11} /> Alarmas
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {MONEDAS.map(({ moneda, label, colorLabel, colorVal }) => {
+          const entry    = hoy.find(h => h.moneda === moneda)
+          const naka     = latestNaka(moneda)
+          const billete  = entry?.billete_venta ?? null
+          const divisa   = entry?.divisa_venta  ?? null
+
+          const diffBillete = naka && billete ? (billete - naka) / naka * 100 : null
+          const diffDivisa  = naka && divisa  ? (divisa  - naka) / naka * 100 : null
+
+          return (
+            <div key={moneda} className="bg-slate-900/60 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${colorLabel}`}>{moneda}</span>
+                <span className="text-[10px] text-slate-600">{label}</span>
+              </div>
+
+              {/* Divisa */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">divisa venta</p>
+                  <p className={`text-base font-bold ${colorVal}`}>
+                    {divisa != null ? `$${fmtARS(divisa)}` : <span className="text-slate-600 text-sm">—</span>}
+                  </p>
+                </div>
+                {diffDivisa !== null && <DiffChip pct={diffDivisa} />}
+              </div>
+
+              {/* Billete */}
+              <div className="flex items-center justify-between border-t border-slate-700/40 pt-2">
+                <div>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">billete venta</p>
+                  <p className="text-base font-bold text-slate-300">
+                    {billete != null ? `$${fmtARS(billete)}` : <span className="text-slate-600 text-sm">—</span>}
+                  </p>
+                </div>
+                {diffBillete !== null && <DiffChip pct={diffBillete} />}
+              </div>
+
+              {naka && (
+                <p className="text-[9px] text-slate-600 pt-0.5">
+                  Naka: ${fmtARS(naka)}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -367,11 +470,13 @@ function HistorialTable({ cotizaciones, bcraUSD, bcraEUR }: {
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function CotizacionesPage() {
-  const [tab, setTab] = useState<'actual' | 'historial'>('actual')
+  const [tab, setTab]             = useState<'actual' | 'historial'>('actual')
+  const [showAlarmas, setShowAlarmas] = useState(false)
 
-  const { data: cotizaciones = [] } = useCotizaciones()
+  const { data: cotizaciones = [] }               = useCotizaciones()
   const { data: bcraUSD = [], isLoading: loadingUSD } = useBcraRates('USD')
   const { data: bcraEUR = [], isLoading: loadingEUR } = useBcraRates('EUR')
+  const { data: cotizHoy = [] }                   = useBcraCotizacionHoy()
   const addCotizacion = useAddCotizacion()
   const refreshBcra   = useRefreshBcra()
   const [refreshing, setRefreshing] = useState(false)
@@ -439,8 +544,19 @@ export default function CotizacionesPage() {
         ))}
       </div>
 
+      {showAlarmas && <CotizacionAlarmasModal onClose={() => setShowAlarmas(false)} />}
+
       {tab === 'actual' && (
         <>
+          {/* Cotización billete/divisa hoy */}
+          {cotizHoy.length > 0 && (
+            <BilletesDivisaWidget
+              hoy={cotizHoy}
+              cotizaciones={cotizaciones}
+              onAlarmas={() => setShowAlarmas(true)}
+            />
+          )}
+
           {/* BCRA refresh */}
           <div className="flex items-center gap-2 text-[11px] text-slate-500">
             <Clock size={11} />

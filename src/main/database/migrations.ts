@@ -3003,6 +3003,43 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         CREATE INDEX IF NOT EXISTS idx_bcra_moneda_fecha ON bcra_rates_cache(moneda, fecha);
       `)
     }
+  },
+  {
+    version: 96,
+    up: (db) => {
+      // Extiende bcra_rates_cache para almacenar billete y divisa por separado.
+      // Recrea la tabla con PK (moneda, fecha, tipo); migra datos existentes como 'divisa'.
+      // Crea tabla local de alarmas de cotización (no sincroniza con Supabase).
+      db.exec(`
+        CREATE TABLE bcra_rates_cache_v2 (
+          moneda     TEXT NOT NULL,
+          fecha      TEXT NOT NULL,
+          tipo       TEXT NOT NULL DEFAULT 'divisa',
+          valor      REAL NOT NULL,
+          fetched_at INTEGER NOT NULL,
+          PRIMARY KEY (moneda, fecha, tipo)
+        );
+        INSERT INTO bcra_rates_cache_v2 (moneda, fecha, tipo, valor, fetched_at)
+          SELECT moneda, fecha, 'divisa', valor, fetched_at FROM bcra_rates_cache;
+        DROP TABLE bcra_rates_cache;
+        ALTER TABLE bcra_rates_cache_v2 RENAME TO bcra_rates_cache;
+        CREATE INDEX IF NOT EXISTS idx_bcra_moneda_fecha ON bcra_rates_cache(moneda, fecha);
+
+        CREATE TABLE IF NOT EXISTS comex_alarmas_cotizacion (
+          id               TEXT PRIMARY KEY,
+          moneda           TEXT NOT NULL,
+          tipo_cotizacion  TEXT NOT NULL DEFAULT 'divisa',
+          tipo_umbral      TEXT NOT NULL DEFAULT 'porcentaje',
+          umbral           REAL NOT NULL,
+          direccion        TEXT NOT NULL DEFAULT 'supera',
+          activa           INTEGER NOT NULL DEFAULT 1,
+          whatsapp_numero  TEXT,
+          cooldown_horas   INTEGER NOT NULL DEFAULT 24,
+          ultima_alerta_at INTEGER,
+          created_at       INTEGER NOT NULL
+        );
+      `)
+    }
   }
 ]
 
