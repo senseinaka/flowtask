@@ -56,7 +56,7 @@ const WORKSPACES: Array<{
     Icon: LayoutList,
     color: '#818cf8',
     activeBg: 'rgba(129,140,248,.18)',
-    paths: ['/tasks', '/kanban', '/team', '/contacts', '/messages'],
+    paths: ['/tasks', '/kanban', '/team', '/messages'],
   },
   {
     key: 'empresa',
@@ -88,7 +88,7 @@ const WORKSPACES: Array<{
     Icon: CalendarDays,
     color: '#60a5fa',
     activeBg: 'rgba(96,165,250,.12)',
-    paths: ['/calendario', '/email'],
+    paths: ['/calendario', '/email', '/agenda'],
   },
   {
     key: 'rrhh',
@@ -408,9 +408,6 @@ export default function Sidebar() {
                   <PanelLink to="/team/kanban" icon={Columns3} label="Kanban — Equipo"       color="#818cf8" onClick={close} />
                 </>
               )}
-              {canRead('contacts') && (
-                <PanelLink to="/contacts" icon={UserCircle2} label="Contactos" color="#818cf8" onClick={close} />
-              )}
               {canRead('messages') && (
                 <PanelLink to="/messages" icon={Send} label="Mensajes" color="#818cf8" onClick={close} />
               )}
@@ -506,6 +503,12 @@ export default function Sidebar() {
           {openPanel === 'agenda' && (
             <div className="p-2 space-y-0.5">
               <GroupLabel label="Agenda" color="#60a5fa" />
+              {canRead('contacts') && (
+                <PanelLink to="/agenda/contactos" icon={UserCircle2} label="Contactos"  color="#60a5fa" onClick={close} />
+              )}
+              {canRead('contacts') && (
+                <PanelLink to="/agenda/grupos"    icon={Users}       label="Grupos"     color="#60a5fa" onClick={close} />
+              )}
               {canRead('calendar') && (
                 <PanelLink to="/calendario" icon={CalendarDays} label="Calendario" color="#60a5fa" onClick={close} />
               )}

@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782570790.2283084,
-    "ast_hash": "77ddec9c88b4a8b84e751591bc3b8052",
+    "mtime": 1782573831.4246593,
+    "ast_hash": "130a2a2f0e22008fabd9d1ffea3f26c1",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
@@ -315,9 +315,9 @@
     "semantic_hash": "4ff076bb6524d558e97609db2477a93e"
   },
   "src/main/services/bna.service.ts": {
-    "mtime": 1780491990.1175394,
-    "ast_hash": "a79edf371cd8d0d6cf2e6d5b760b6ec5",
-    "semantic_hash": "a79edf371cd8d0d6cf2e6d5b760b6ec5"
+    "mtime": 1782573815.624176,
+    "ast_hash": "8711ba92a84d4d3d84fac8f371aa8b89",
+    "semantic_hash": ""
   },
   "src/main/services/chat.service.ts": {
     "mtime": 1781399559.1280494,
@@ -1300,8 +1300,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CotizacionesPage.tsx": {
-    "mtime": 1782572780.203735,
-    "ast_hash": "ecf68da3b7744e64d3671864a5bc8263",
+    "mtime": 1782573856.807783,
+    "ast_hash": "59ccc60cc259101826ec3cf5b51f1973",
     "semantic_hash": ""
   },
   "src/main/services/cotizacion-alarmas.service.ts": {

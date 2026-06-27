@@ -3040,6 +3040,40 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         );
       `)
     }
+  },
+  {
+    version: 97,
+    up(db: Database.Database) {
+      db.exec(`
+        ALTER TABLE contacts ADD COLUMN company TEXT NOT NULL DEFAULT '';
+        ALTER TABLE contacts ADD COLUMN role    TEXT NOT NULL DEFAULT '';
+        ALTER TABLE contacts ADD COLUMN phones  TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE contacts ADD COLUMN emails  TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE contacts ADD COLUMN tags    TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE contacts ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0;
+
+        UPDATE contacts SET phones = json_array(phone) WHERE phone IS NOT NULL AND phone != '';
+        UPDATE contacts SET emails = json_array(email) WHERE email IS NOT NULL AND email != '';
+
+        CREATE TABLE IF NOT EXISTS agenda_grupos (
+          id          TEXT PRIMARY KEY,
+          nombre      TEXT NOT NULL,
+          descripcion TEXT NOT NULL DEFAULT '',
+          color       TEXT NOT NULL DEFAULT '#6366f1',
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS agenda_grupo_miembros (
+          grupo_id   TEXT NOT NULL REFERENCES agenda_grupos(id) ON DELETE CASCADE,
+          contact_id TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+          added_at   INTEGER NOT NULL,
+          PRIMARY KEY (grupo_id, contact_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_grupo_miembros_contact ON agenda_grupo_miembros(contact_id);
+      `)
+    }
   }
 ]
 

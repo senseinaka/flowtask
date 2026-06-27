@@ -148,40 +148,83 @@ export const DELEGATED_STATUS_LABELS: Record<DelegatedStatus, string> = {
   cancelled: 'Cancelado'
 }
 
-export type ContactType = 'collaborator' | 'family' | 'friend' | 'other'
+export type ContactType = 'collaborator' | 'family' | 'friend' | 'other' | 'client' | 'provider'
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   collaborator: 'Colaborador',
   family: 'Familiar',
   friend: 'Amigo',
-  other: 'Otro'
+  other: 'Otro',
+  client: 'Cliente',
+  provider: 'Proveedor'
 }
 
 export const CONTACT_TYPE_COLORS: Record<ContactType, string> = {
   collaborator: '#6366f1',
   family: '#10b981',
   friend: '#f59e0b',
-  other: '#64748b'
+  other: '#64748b',
+  client: '#3b82f6',
+  provider: '#f97316'
+}
+
+export interface ContactPhone {
+  numero: string
+  etiqueta: 'personal' | 'trabajo' | 'otro'
+}
+
+export interface ContactEmail {
+  direccion: string
+  etiqueta: 'personal' | 'trabajo' | 'otro'
 }
 
 export interface Contact {
   id: string
   name: string
-  phone: string
-  email: string
+  phone: string       // legacy — primer teléfono sin formato
+  email: string       // legacy — primer email
   notes: string
   type: ContactType
   avatar_color: string
   created_at: number
   updated_at: number
+  // campos v97
+  company: string
+  role: string
+  phones: ContactPhone[]
+  emails: ContactEmail[]
+  tags: string[]
+  favorito: number    // 0 | 1
 }
 
 export interface CreateContactInput {
   name: string
-  phone: string
+  phone?: string
   email?: string
   notes?: string
   type?: ContactType
+  company?: string
+  role?: string
+  phones?: ContactPhone[]
+  emails?: ContactEmail[]
+  tags?: string[]
+  favorito?: number
+}
+
+export interface AgendaGrupo {
+  id: string
+  nombre: string
+  descripcion: string
+  color: string
+  created_at: number
+  updated_at: number
+  member_count?: number
+}
+
+export interface CreateAgendaGrupoInput {
+  nombre: string
+  descripcion?: string
+  color?: string
 }
 
 // ─── WhatsApp Questions ───────────────────────────────────────────────────────

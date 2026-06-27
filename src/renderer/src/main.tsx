@@ -42,6 +42,8 @@ import NominaDashboard from './routes/rrhh/NominaDashboard'
 import ColaboradorProfile from './routes/rrhh/ColaboradorProfile'
 import HomeScreen from './routes/home/HomeScreen'
 import RrhhEmpresaLayout from './routes/rrhh/RrhhEmpresaContext'
+import AgendaContactos from './routes/agenda/AgendaContactos'
+import AgendaGrupos from './routes/agenda/AgendaGrupos'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -98,6 +100,8 @@ const router = createHashRouter([
           { path: ':id', element: <PeriodoDetail /> }
         ]
       },
+      { path: 'agenda/contactos', element: <AgendaContactos /> },
+      { path: 'agenda/grupos',    element: <AgendaGrupos /> },
       { path: 'rrhh/nomina', element: <Navigate to="/rrhh/nomina/naka" replace /> },
       {
         path: 'rrhh/nomina/:empresa',

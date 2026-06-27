@@ -8,6 +8,7 @@ import type {
   ComexAlarmaCotizacion, CreateAlarmaCotizacionInput,
   BackupStatus, LocalBackupStatus, LocalBackupEntry, RestoreResult,
   Task, Project, Attachment, Reminder, Contact, CreateContactInput,
+  AgendaGrupo, CreateAgendaGrupoInput,
   DelegatedTask, CreateDelegatedTaskInput,
   MessageTemplate, ScheduledMessage, CreateScheduledMessageInput,
   MessageStatus, MessageRecurrence,
@@ -176,6 +177,22 @@ const api = {
       ipcRenderer.invoke('contacts:update', id, data),
     delete: (id: string): Promise<void> =>
       ipcRenderer.invoke('contacts:delete', id)
+  },
+
+  agenda: {
+    grupos: {
+      list:         ():                                               Promise<AgendaGrupo[]>  => ipcRenderer.invoke('agenda:grupos:list'),
+      get:          (id: string):                                     Promise<AgendaGrupo | null> => ipcRenderer.invoke('agenda:grupos:get', id),
+      create:       (input: CreateAgendaGrupoInput):                  Promise<AgendaGrupo>    => ipcRenderer.invoke('agenda:grupos:create', input),
+      update:       (id: string, data: Partial<AgendaGrupo>):        Promise<AgendaGrupo | null> => ipcRenderer.invoke('agenda:grupos:update', id, data),
+      delete:       (id: string):                                     Promise<void>           => ipcRenderer.invoke('agenda:grupos:delete', id),
+      members:      (grupoId: string):                                Promise<Contact[]>      => ipcRenderer.invoke('agenda:grupos:members', grupoId),
+      addMember:    (grupoId: string, contactId: string):             Promise<void>           => ipcRenderer.invoke('agenda:grupos:addMember', grupoId, contactId),
+      removeMember: (grupoId: string, contactId: string):             Promise<void>           => ipcRenderer.invoke('agenda:grupos:removeMember', grupoId, contactId),
+    },
+    contactos: {
+      grupos: (contactId: string): Promise<AgendaGrupo[]> => ipcRenderer.invoke('agenda:contactos:grupos', contactId),
+    }
   },
 
   messages: {
