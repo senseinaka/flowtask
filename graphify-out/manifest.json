@@ -35,8 +35,8 @@
     "semantic_hash": "e606c3b06c092bcea4711c844c794210"
   },
   "src/main/database/migrations.ts": {
-    "mtime": 1782509471.7168765,
-    "ast_hash": "cdf82680b49d7a9be7b801c1934271fa",
+    "mtime": 1782570648.6819966,
+    "ast_hash": "f6f965fe527bfb8e51250cff55d55bfe",
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782511246.4018586,
-    "ast_hash": "9edb82ceaf5e1dc9e9c284db1f6b4c0f",
+    "mtime": 1782570737.7010345,
+    "ast_hash": "9b120efa41e2f05c6c74f121cc4efbba",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -155,8 +155,8 @@
     "semantic_hash": ""
   },
   "src/main/index.ts": {
-    "mtime": 1782420651.4047062,
-    "ast_hash": "937ef0dd2731bb4e3c1578aff7226d42",
+    "mtime": 1782570814.572834,
+    "ast_hash": "0b625f78a238c8c1c287b6936c4aa1ec",
     "semantic_hash": ""
   },
   "src/main/ipc/ai.ipc.ts": {
@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782511259.3781312,
-    "ast_hash": "4363b3f415133bc1093824835a49a891",
+    "mtime": 1782570790.2283084,
+    "ast_hash": "77ddec9c88b4a8b84e751591bc3b8052",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782511273.302736,
-    "ast_hash": "0c545d5cdfa0a0646dfae4e788c3e6ca",
+    "mtime": 1782570837.0359542,
+    "ast_hash": "26a125af7f488bcb7561e2b655531929",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -565,8 +565,8 @@
     "semantic_hash": "51422174c1c6b3cac35c0ecca6d8329b"
   },
   "src/renderer/src/hooks/useComex.ts": {
-    "mtime": 1782511288.5410664,
-    "ast_hash": "236e5985864226d3fa6dc2cd2cd6488b",
+    "mtime": 1782570847.9675949,
+    "ast_hash": "48721e4772cc0e61ae001d80ed153aad",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCompanyFinance.ts": {
@@ -730,8 +730,8 @@
     "semantic_hash": "b92f65893a9b0883e56c28f7b9ff8fca"
   },
   "src/renderer/src/routes/comex/ComexDashboard.tsx": {
-    "mtime": 1782511443.367049,
-    "ast_hash": "923663be858cfed40974ff46318bd887",
+    "mtime": 1782568377.484362,
+    "ast_hash": "c648e187531fd62b406b4ce8da0ab630",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexDespachantes.tsx": {
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782509445.5272253,
-    "ast_hash": "2bfe76afc3af4909cc8cbeaad1031287",
+    "mtime": 1782570657.5547264,
+    "ast_hash": "0c728c5a965c47c6adc6be5aa53adaf4",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -1290,8 +1290,8 @@
     "semantic_hash": ""
   },
   "src/main/services/bcra.service.ts": {
-    "mtime": 1782524978.8522546,
-    "ast_hash": "9e208bf3f3775028b3c01e25a44bb015",
+    "mtime": 1782570700.0782611,
+    "ast_hash": "50d16ec28ca9b16d1ddd63cf8f537c8a",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CotizacionesModal.tsx": {
@@ -1300,8 +1300,18 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CotizacionesPage.tsx": {
-    "mtime": 1782525292.7646816,
-    "ast_hash": "aea79bb65a2e75afa79c11c081ada047",
+    "mtime": 1782570935.0490391,
+    "ast_hash": "8a5ed923bf1b1eac7eaa8b223e7cbdc1",
+    "semantic_hash": ""
+  },
+  "src/main/services/cotizacion-alarmas.service.ts": {
+    "mtime": 1782570761.0495179,
+    "ast_hash": "08478e5b13be94ae1ac6a83f6d68a44a",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/comex/CotizacionAlarmasModal.tsx": {
+    "mtime": 1782570890.9674811,
+    "ast_hash": "94269df1d285105cd53552582781083e",
     "semantic_hash": ""
   }
 }
