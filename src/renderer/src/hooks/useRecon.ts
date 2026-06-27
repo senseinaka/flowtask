@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
-  ReconPeriod, ReconImport, ReconInvoice, ReconMLOp, ReconResult, ReconKPIs,
-  CreateReconPeriodInput, ReconEstado, ReconPeriodStatus
+  ReconPeriod, ReconImport, ReconInvoice, ReconMLOp, ReconResult, ReconResultEnriched, ReconKPIs,
+  CreateReconPeriodInput, ReconEstado, ReconPeriodStatus, ReconResultFilters
 } from '@shared/types'
 
 function invalidatePeriod(qc: ReturnType<typeof useQueryClient>, periodId: string): void {
@@ -90,6 +90,27 @@ export function useReconResults(periodId: string, estado?: ReconEstado) {
     queryFn: (): Promise<ReconResult[]> => window.api.recon.results.list(periodId, estado),
     enabled: !!periodId,
     staleTime: 10_000,
+  })
+}
+
+export function useAllReconResults(filters?: ReconResultFilters) {
+  return useQuery({
+    queryKey: ['recon-results-all', filters ?? {}],
+    queryFn: (): Promise<ReconResultEnriched[]> => window.api.recon.results.listAll(filters),
+    staleTime: 15_000,
+  })
+}
+
+export function useClearReconSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ periodId, source }: { periodId: string; source: string }): Promise<{ deleted: number }> =>
+      window.api.recon.imports.clearSource(periodId, source),
+    onSuccess: (_, { periodId }) => {
+      qc.invalidateQueries({ queryKey: ['recon-imports', periodId] })
+      qc.invalidateQueries({ queryKey: ['recon-invoices', periodId] })
+      qc.invalidateQueries({ queryKey: ['recon-mlops', periodId] })
+    },
   })
 }
 

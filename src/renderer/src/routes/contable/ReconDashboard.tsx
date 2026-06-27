@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BookOpen, ArrowLeftRight, Plus, Trash2, ChevronRight } from 'lucide-react'
+import { BookOpen, ArrowLeftRight, Plus, Trash2, ChevronRight, LayoutList } from 'lucide-react'
 import { useReconPeriods, useCreateReconPeriod, useDeleteReconPeriod } from '../../hooks/useRecon'
 import { useAuthSession } from '../../hooks/useCalendar'
 import {
@@ -86,13 +86,22 @@ export default function ReconDashboard() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus size={14} />
-          Nuevo período
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/contable/recon/conciliacion')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors"
+          >
+            <LayoutList size={14} />
+            Conciliación
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus size={14} />
+            Nuevo período
+          </button>
+        </div>
       </div>
 
       {/* Content */}

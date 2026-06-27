@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto'
 import { getDb } from '../db'
 import type {
-  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
-  CreateReconPeriodInput, ReconPeriodStatus, ReconEstado, ReconImportSource
+  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconResultEnriched, ReconKPIs,
+  CreateReconPeriodInput, ReconPeriodStatus, ReconEstado, ReconImportSource, ReconResultFilters
 } from '@shared/types'
 import type { ParsedInvoice, ParsedCupon, ParsedMLOp } from '../../services/recon-parsers.service'
 
@@ -57,22 +57,23 @@ export function listReconImports(periodId: string): ReconImport[] {
 }
 
 export function logReconImport(data: {
-  period_id:   string
-  source:      ReconImportSource
-  filename:    string
-  row_count:   number
-  status:      'ok' | 'error' | 'warning'
-  error_msg:   string
-  imported_by: string
+  period_id:    string
+  source:       ReconImportSource
+  filename:     string
+  row_count:    number
+  skipped_count: number
+  status:       'ok' | 'error' | 'warning'
+  error_msg:    string
+  imported_by:  string
 }): ReconImport {
   const db  = getDb()
   const id  = randomUUID()
   const now = Date.now()
   db.prepare(`
     INSERT INTO recon_imports
-      (id, period_id, source, filename, row_count, status, error_msg, imported_at, imported_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.period_id, data.source, data.filename, data.row_count,
+      (id, period_id, source, filename, row_count, skipped_count, status, error_msg, imported_at, imported_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.period_id, data.source, data.filename, data.row_count, data.skipped_count,
          data.status, data.error_msg, now, data.imported_by)
   return db.prepare('SELECT * FROM recon_imports WHERE id = ?').get(id) as ReconImport
 }
@@ -99,67 +100,99 @@ export function listReconMLOps(periodId: string): ReconMLOp[] {
 
 // ── Bulk inserts ──────────────────────────────────────────────────────────────
 
-export function bulkInsertInvoices(periodId: string, rows: ParsedInvoice[], source: string): number {
+export function bulkInsertInvoices(
+  periodId: string,
+  rows: ParsedInvoice[],
+  source: string
+): { inserted: number; skipped: number } {
   const db   = getDb()
-  db.prepare('DELETE FROM recon_invoices WHERE period_id = ? AND source = ?').run(periodId, source)
-
   const stmt = db.prepare(`
-    INSERT INTO recon_invoices
-      (id, period_id, comprobante, tipo, concepto, total,
+    INSERT OR IGNORE INTO recon_invoices
+      (id, period_id, comprobante, tipo, concepto, total, fecha,
        importe_tarjetas, importe_efectivo, importe_transferencia, importe_cta_cte, importe_otros, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
+  let inserted = 0
   db.transaction(() => {
     for (const r of rows) {
-      stmt.run(
-        randomUUID(), periodId, r.comprobante, r.tipo, r.concepto, r.total,
+      const res = stmt.run(
+        randomUUID(), periodId, r.comprobante, r.tipo, r.concepto, r.total, r.fecha ?? '',
         r.importe_tarjetas, r.importe_efectivo, r.importe_transferencia,
         r.importe_cta_cte, r.importe_otros, source
       )
+      inserted += res.changes
     }
   })()
-  return rows.length
+  return { inserted, skipped: rows.length - inserted }
 }
 
-export function bulkInsertCupones(periodId: string, rows: ParsedCupon[]): number {
+export function bulkInsertCupones(
+  periodId: string,
+  rows: ParsedCupon[]
+): { inserted: number; skipped: number } {
   const db   = getDb()
-  db.prepare('DELETE FROM recon_cupones WHERE period_id = ?').run(periodId)
-
   const stmt = db.prepare(`
-    INSERT INTO recon_cupones
+    INSERT OR IGNORE INTO recon_cupones
       (id, period_id, cupon, plan, total, nombre, condicion, fecha_ingreso, cuotas)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
+  let inserted = 0
   db.transaction(() => {
     for (const r of rows) {
-      stmt.run(randomUUID(), periodId, r.cupon, r.plan, r.total,
-               r.nombre, r.condicion, r.fecha_ingreso, r.cuotas)
+      const res = stmt.run(randomUUID(), periodId, r.cupon, r.plan, r.total,
+                           r.nombre, r.condicion, r.fecha_ingreso, r.cuotas)
+      inserted += res.changes
     }
   })()
-  return rows.length
+  return { inserted, skipped: rows.length - inserted }
 }
 
-export function bulkInsertMLOps(periodId: string, rows: ParsedMLOp[], cuenta: string): number {
+export function bulkInsertMLOps(
+  periodId: string,
+  rows: ParsedMLOp[],
+  cuenta: string
+): { inserted: number; skipped: number } {
   const db   = getDb()
-  db.prepare('DELETE FROM recon_ml_ops WHERE period_id = ? AND cuenta = ?').run(periodId, cuenta)
-
   const stmt = db.prepare(`
-    INSERT INTO recon_ml_ops
+    INSERT OR IGNORE INTO recon_ml_ops
       (id, period_id, operation_id, status, status_detail,
        transaction_amount, mp_fee, shipping_cost, counterpart_name,
        external_reference, reason, date_created, date_approved, cuenta)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
+  let inserted = 0
   db.transaction(() => {
     for (const r of rows) {
-      stmt.run(
+      const res = stmt.run(
         randomUUID(), periodId, r.operation_id, r.status, r.status_detail,
         r.transaction_amount, r.mp_fee, r.shipping_cost, r.counterpart_name,
         r.external_reference, r.reason, r.date_created, r.date_approved, cuenta
       )
+      inserted += res.changes
     }
   })()
-  return rows.length
+  return { inserted, skipped: rows.length - inserted }
+}
+
+export function clearReconSource(periodId: string, source: string): number {
+  const res = getDb().prepare(
+    'DELETE FROM recon_invoices WHERE period_id = ? AND source = ?'
+  ).run(periodId, source)
+  return res.changes
+}
+
+export function clearReconCupones(periodId: string): number {
+  const res = getDb().prepare(
+    'DELETE FROM recon_cupones WHERE period_id = ?'
+  ).run(periodId)
+  return res.changes
+}
+
+export function clearReconMLOps(periodId: string, cuenta: string): number {
+  const res = getDb().prepare(
+    'DELETE FROM recon_ml_ops WHERE period_id = ? AND cuenta = ?'
+  ).run(periodId, cuenta)
+  return res.changes
 }
 
 // ── Resultados ────────────────────────────────────────────────────────────────
@@ -175,6 +208,38 @@ export function listReconResults(periodId: string, estado?: ReconEstado): ReconR
   return db.prepare(`
     SELECT * FROM recon_results WHERE period_id = ? ORDER BY rowid ASC
   `).all(periodId) as ReconResult[]
+}
+
+export function listAllReconResults(filters?: ReconResultFilters): ReconResultEnriched[] {
+  const wheres: string[] = ['rp.workspace_id = ?']
+  const params: unknown[] = [WORKSPACE_ID]
+
+  if (filters?.periodMonth !== undefined) {
+    wheres.push('rp.period_month = ?')
+    params.push(filters.periodMonth)
+  }
+  if (filters?.periodYear !== undefined) {
+    wheres.push('rp.period_year = ?')
+    params.push(filters.periodYear)
+  }
+  if (filters?.estado) {
+    wheres.push('r.estado = ?')
+    params.push(filters.estado)
+  }
+
+  return getDb().prepare(`
+    SELECT
+      r.*,
+      rp.period_month, rp.period_year,
+      ri.comprobante, ri.concepto, ri.total, ri.importe_tarjetas, ri.fecha,
+      ml.operation_id, ml.transaction_amount, ml.counterpart_name
+    FROM recon_results r
+    JOIN  recon_periods  rp ON rp.id = r.period_id
+    LEFT JOIN recon_invoices ri ON ri.id = r.invoice_id
+    LEFT JOIN recon_ml_ops   ml ON ml.id = r.ml_op_id
+    WHERE ${wheres.join(' AND ')}
+    ORDER BY rp.period_year DESC, rp.period_month DESC, r.rowid ASC
+  `).all(...params) as ReconResultEnriched[]
 }
 
 export function updateReconResult(id: string, data: {

@@ -13,7 +13,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Comex (Comercio Exterior):** gestión completa de importaciones de Naka Outdoors. Seguimiento de embarques, documentos para despachante y personal, presupuestos logísticos de operadores de flete, pagos, costos, arancel, proformas, planificación de pedidos con IA, y **cotizaciones USD/EUR** propias vs. la Divisa Venta del BCRA (`/comex/cotizaciones`).
 - **Tareas / Kanban:** sistema de gestión de tareas con tablero kanban, dependencias, recordatorios y delegación.
 - **Agenda / Calendario:** integración con Google Calendar. Sistema para programar envíos de mensajes por WhatsApp con recordatorios automáticos.
-- **Contactos:** agenda de contactos de la empresa.
+- **Agenda / Contactos:** agenda completa de contactos. Multi-teléfono, multi-email, empresa, cargo, etiquetas, favoritos, grupos y notas. Rutas `/agenda/contactos` (detalle) y `/agenda/grupos` (gestión de grupos). Tabla `contacts` en `flowtask.db` — local, no sincroniza. Grupos en `agenda_grupos` y `agenda_grupo_miembros` (local).
 - **Presupuestos / CRM:** generación de presupuestos y seguimiento comercial tipo CRM.
 - **Finanzas personales:** módulo para llevar todas las cuentas mensuales personales de Diego (movimientos, conceptos recurrentes, cargas múltiples).
 - **Finanzas empresa:** módulo equivalente para las cuentas mensuales de Naka Outdoors.
@@ -203,7 +203,9 @@ Estas tablas viven únicamente en `flowtask.db` porque representan estado local 
 - `attachments` — archivos adjuntos de tareas (binarios locales)
 - `email_*` — módulo de correo (usa `email-db.ts`, caché local de IMAP)
 - `recon_*` — Conciliador Contable: `recon_periods`, `recon_imports`, `recon_invoices`, `recon_cupones`, `recon_ml_ops`, `recon_results`, `recon_audit` (solo el contador opera este módulo en su PC)
-- `bcra_rates_cache` — caché local de cotizaciones diarias del BCRA (módulo Comex → Cotizaciones, migración v95). Se rebaja de la API pública del BCRA; no tiene sentido sincronizar.
+- `bcra_rates_cache` — caché local de cotizaciones diarias del BCRA (migración v95). Se baja de la API pública del BCRA y de argentinadatos.com (BNA); no tiene sentido sincronizar.
+- `agenda_grupos`, `agenda_grupo_miembros` — grupos de contactos (migración v97). Local-only porque `contacts` también es local.
+- `comex_alarmas_cotizacion` — alarmas de cotización USD/EUR (migración v96). Local porque disparan WA desde este dispositivo.
 - Tablas de caché y configuración de UI local
 
 ### Función `restoreComexLocalCache` / `restoreCompanyFinanceLocalCache`
@@ -219,11 +221,14 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ```typescript
 // Cada migración es un objeto { version: number, up: (db) => void }
 // Se aplican en orden ascendente; la versión actual se guarda en PRAGMA user_version
-// Versión actual: v95 (bcra_rates_cache)
+// Versión actual: v97
 // v80: knowledge_entries + knowledge_global_summaries
 // v81: user_profiles
-// v82–v94: mercadopago_*, accounting_services / service_catalog, RRHH multiempresa + SAC (ver migrations.ts)
-// v95: bcra_rates_cache (caché local de cotizaciones BCRA — NO sincroniza)
+// v82–v94: mercadopago_*, accounting_services / service_catalog, RRHH multiempresa + SAC
+// v95: bcra_rates_cache (caché BCRA — local)
+// v96: comex_alarmas_cotizacion (alarmas USD/EUR — local)
+// v97: contacts extendida (company, role, phones JSON, emails JSON, tags JSON, favorito);
+//      agenda_grupos + agenda_grupo_miembros — local, NO sincroniza
 ```
 
 **Reglas:**
@@ -335,7 +340,7 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 |---------|-----|
 | `src/main/database/db.ts` | Singleton de `flowtask.db` (better-sqlite3) |
 | `src/main/database/powersync.ts` | Singleton de PowerSync, schema, conexión, migraciones de datos |
-| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v95) |
+| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v97) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
 | `src/main/database/queries/recon.ts` | CRUD + motor del Conciliador Contable (solo `getDb()`) |
@@ -563,12 +568,86 @@ CREATE INDEX ON user_profiles(workspace_id);
 
 ## Módulo Comex → Cotizaciones USD/EUR (junio 2026)
 
-Seguimiento de las cotizaciones propias de USD y EUR (precios al público en ARS) contra la **Divisa Venta** del BCRA, con gráfico de 6 meses, historial y chip de desvío porcentual. Ruta `/comex/cotizaciones` (último ítem del menú Comex).
+Seguimiento de las cotizaciones propias de USD y EUR (precios Naka al público en ARS) vs. las cotizaciones oficiales del BCRA (divisa) y BNA (billete), con gráfico de 6 meses, alarmas por WhatsApp y chip de desvío porcentual. Ruta `/comex/cotizaciones`.
 
-- **Cotizaciones propias:** tabla PowerSync `comex_cotizaciones` (`moneda`, `valor_ars`, `nota`, `created_at`). Se cargan a mano; la **fecha es editable** (default hoy) → `created_at` = mediodía de la fecha elegida (evita saltos de TZ). Cada moneda es una `MonedaCard` con estado local propio — **no compartir un solo estado entre USD y EUR** (ese fue un bug: editar una borraba el valor de la otra).
-- **BCRA:** `src/main/services/bcra.service.ts` baja la serie diaria de la API pública. **Endpoint correcto:** `/estadisticascambiarias/v1.0/Cotizaciones/{moneda}?fechadesde=&fechahasta=` (CON la moneda en el path — el endpoint sin moneda **no** acepta rango de fechas y da 400). `results` es un **array** de días; el valor en ARS está en `detalle[].tipoCotizacion` (NÚMERO — no existe compra/venta ni un discriminador `'Divisa'`). **Fechas en hora LOCAL** (`getFullYear/Month/Date`, no `toISOString()`): en Argentina (UTC-3) el ISO salta al día siguiente de noche y el BCRA rechaza "fecha mayor al día actual". Cachea en `bcra_rates_cache` (flowtask.db, **local, NO sincroniza**, migración v95) con fetch incremental de los días faltantes.
-- **Archivos:** `CotizacionesPage.tsx`, hooks en `useComex.ts` (`useCotizaciones`, `useAddCotizacion`, `useBcraRates`, `useRefreshBcra`), IPC `comex:cotizaciones:*` y `comex:bcra:*`.
-- **DDL Supabase** (ya aplicado jun 2026): tabla `comex_cotizaciones` con RLS + GRANT para `authenticated` (template estándar) + sync-rule `SELECT * FROM comex_cotizaciones WHERE workspace_id = '...'`.
+### Cotizaciones propias (PowerSync)
+
+Tabla `comex_cotizaciones` (`moneda`, `valor_ars`, `nota`, `created_at`). Se cargan a mano; la **fecha es editable** (default hoy) → `created_at` = mediodía de la fecha elegida (evita saltos de TZ). Cada moneda es una `MonedaCard` con estado local propio — **no compartir un solo estado entre USD y EUR** (ese fue un bug: editar una borraba el valor de la otra).
+
+**DDL Supabase** (ya aplicado jun 2026): tabla `comex_cotizaciones` con RLS + GRANT para `authenticated` + sync-rule `SELECT * FROM comex_cotizaciones WHERE workspace_id = '...'`.
+
+### Cotizaciones BCRA + BNA (local, NO sincroniza)
+
+- **BCRA Divisa:** `src/main/services/bcra.service.ts`. **Endpoint con moneda en path:** `/estadisticascambiarias/v1.0/Cotizaciones/{moneda}?fechadesde=&fechahasta=` (el endpoint genérico `/Cotizaciones` sin moneda no acepta rango de fechas). `results` es array de días; valor en ARS en `detalle[].tipoCotizacion` (número). **Fechas en hora LOCAL** (`getFullYear/Month/Date`, no `toISOString()`): en UTC-3 el ISO salta de día de noche. Cache en `bcra_rates_cache` (flowtask.db, migración v95) con fetch incremental.
+- **BNA Billete:** `src/main/services/bna.service.ts`. Fuente: `https://api.argentinadatos.com/v1/cotizaciones/` (devuelve `{ moneda, casa, compra, venta, fecha }`). `getBnaBilleteHoy()` filtra el más reciente por moneda. IPC `comex:bcra:hoy` mergea BCRA divisa + BNA billete en un solo response: `{ moneda, fecha, divisa_venta, billete_venta }`. Si es fin de semana/feriado, el servicio BCRA devuelve el último valor conocido de la cache con la fecha real del registro (no la fecha de hoy).
+- **Cache fallback:** si BCRA no devuelve datos para hoy (fines de semana), se usa la última fecha disponible en `bcra_rates_cache` vía subquery correlated `WHERE fecha = (SELECT MAX(fecha) FROM bcra_rates_cache WHERE moneda = ...)`. La fecha real del dato se muestra en UI ("viernes 27/06" etc.) para que el usuario sepa que no es de hoy.
+
+### Alarmas de cotización (local)
+
+Tabla `comex_alarmas_cotizacion` (flowtask.db, migración v96). Campos: `moneda`, `tipo_cotizacion` (divisa/billete), `tipo_umbral` (porcentaje/absoluto), `umbral`, `direccion` (supera/baja), `activa`, `whatsapp_numero`, `cooldown_horas`, `ultima_alerta_at`. El servicio `bcra-alarmas.service.ts` evalúa las alarmas al pedir cotizaciones y envía WA via Evolution API cuando se cumple la condición. IPC: `comex:alarmas:*`.
+
+### Archivos clave
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/services/bcra.service.ts` | BCRA divisa: fetch, cache incremental, fallback fin de semana |
+| `src/main/services/bna.service.ts` | BNA billete: argentinadatos.com, caché en memoria 30 min |
+| `src/main/ipc/comex.ipc.ts` | `comex:bcra:hoy` mergea BCRA + BNA; `comex:alarmas:*` |
+| `src/renderer/src/routes/comex/CotizacionesPage.tsx` | UI: BilletesDivisaWidget, MonedaCard, AlarmasInlinePanel, gráfico 6m |
+| `src/renderer/src/routes/comex/CotizacionAlarmasModal.tsx` | Modal CRUD de alarmas |
+
+---
+
+## Módulo Agenda → Contactos y Grupos (junio 2026)
+
+### Propósito
+
+Agenda de contactos de la empresa con soporte multi-dispositivo (local-only). Permite registrar personas con múltiples teléfonos, correos, etiquetas, empresa, cargo, favoritos y notas. Los contactos se agrupan en **Grupos** (para usar en alertas, WhatsApp, etc.). Accesible desde el panel lateral en Agenda.
+
+### Tablas (flowtask.db — local, NO sincronizan)
+
+| Tabla | Contenido |
+|-------|-----------|
+| `contacts` | Contactos. Extendida en v97: `company`, `role`, `phones TEXT` (JSON array de `{numero, etiqueta}`), `emails TEXT` (JSON), `tags TEXT` (JSON), `favorito INTEGER`. Columnas legacy `phone`/`email` (strings) mantenidas para backward compat — se actualizan en sync con el primer elemento del array. |
+| `agenda_grupos` | Grupos de contactos (`id`, `nombre`, `descripcion`, `color`, `created_at`, `updated_at`). |
+| `agenda_grupo_miembros` | Membresías (`grupo_id`, `contact_id`, `added_at`, PK compuesta). ON DELETE CASCADE en ambas FKs. |
+
+### Schema de `phones` / `emails` en DB
+
+```typescript
+// Stored as JSON string in SQLite
+interface ContactPhone { numero: string; etiqueta: 'personal' | 'trabajo' | 'otro' }
+interface ContactEmail { direccion: string; etiqueta: 'personal' | 'trabajo' | 'otro' }
+
+// La migración v97 usa json_array(phone) → ["1234567890"] (string crudo, no objeto)
+// parseContact() normaliza esto a [{numero, etiqueta:'personal'}] automáticamente
+```
+
+**CRÍTICO:** la migración v97 corre `json_array(phone)` que produce `["numero"]` (array de strings), no `[{numero,etiqueta}]`. `parseContact()` en `queries/contacts.ts` detecta si el elemento es `string` y lo convierte a `ContactPhone`. Nuevas escrituras siempre guardan objetos correctamente.
+
+### Archivos clave
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/database/queries/contacts.ts` | CRUD contactos + CRUD grupos/membresías. `parseContact()` normaliza JSON arrays desde DB. |
+| `src/main/ipc/contacts.ipc.ts` | IPC contactos (`contacts:*`) + grupos (`agenda:grupos:*`, `agenda:contactos:grupos`) |
+| `src/renderer/src/hooks/useContacts.ts` | Hooks: `useContacts`, `useCreateContact`, `useUpdateContact`, `useDeleteContact`, `useAgendaGrupos`, `useCreateGrupo`, `useUpdateGrupo`, `useDeleteGrupo`, `useGrupoMembers`, `useAddGrupoMember`, `useRemoveGrupoMember`, `useContactGrupos` |
+| `src/renderer/src/routes/agenda/AgendaContactos.tsx` | Panel 2 columnas con resize persistido (localStorage `agenda-contacts-split`): lista alfabética + detalle inline editable. Multi-teléfono, multi-email, grupos, etiquetas (tag input), notas, favorito, quick-WA. |
+| `src/renderer/src/routes/agenda/AgendaGrupos.tsx` | Gestión de grupos: lista + detalle con miembros + buscador para agregar. |
+
+### Resize del panel izquierdo
+
+`AgendaContactos.tsx` tiene un divider arrastrable entre la lista y el detalle. El ancho se guarda en `localStorage` bajo la clave `agenda-contacts-split` (200–480 px). El filtro de tipos usa `flex-wrap` para que todos los chips sean visibles a cualquier ancho.
+
+### Rutas
+
+```
+/agenda/contactos   → AgendaContactos.tsx
+/agenda/grupos      → AgendaGrupos.tsx
+/contacts           → Contacts.tsx (legacy, mantenido pero no linkado en sidebar)
+```
+
+El sidebar Agenda incluye "Contactos" → `/agenda/contactos` y "Grupos" → `/agenda/grupos`. Desapareció del sidebar Trabajo.
 
 ---
 
@@ -820,10 +899,11 @@ Al hacer click en cualquier celda del grid se abre el `DayZoomModal` (en vez de 
 
 ### Contactos (agenda)
 
-- Tabla `contacts` en `flowtask.db` (local-only, no sincroniza)
-- Campo `phone`: almacenado solo dígitos (strip de caracteres no-numéricos al guardar)
+Movidos al módulo **Agenda** en junio 2026. Ver sección "Módulo Agenda → Contactos" más abajo.
+
 - Hook: `useContacts()` en `src/renderer/src/hooks/useContacts.ts`
-- IPC: `window.api.contacts.list()`
+- IPC: `window.api.contacts.list()` / `window.api.agenda.grupos.*` / `window.api.agenda.contactos.*`
+- Ruta: `/agenda/contactos`
 
 ---
 
@@ -1189,13 +1269,13 @@ Cortex es el módulo de Summit que expone el grafo de dependencias del código f
 - Descripción de nodos (`graphify explain`)
 - Visualización interactiva animada del grafo completo
 
-### Stats del grafo (actualizado junio 2026)
+### Stats del grafo (regenerado 27/06/2026)
 
 | Métrica | Valor |
 |---------|-------|
-| Nodos | 3 228 |
-| Aristas | 6 782 |
-| Comunidades | 128 |
+| Nodos | 3 436 |
+| Aristas | 7 344 |
+| Comunidades | 130 |
 
 ### Archivos
 

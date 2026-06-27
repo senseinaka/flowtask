@@ -3074,6 +3074,32 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         CREATE INDEX IF NOT EXISTS idx_grupo_miembros_contact ON agenda_grupo_miembros(contact_id);
       `)
     }
+  },
+
+  {
+    version: 98,
+    up(db: Database.Database) {
+      db.exec(`
+        ALTER TABLE recon_invoices ADD COLUMN fecha TEXT NOT NULL DEFAULT '';
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_invoices_dedup
+          ON recon_invoices(period_id, comprobante);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_cupones_dedup
+          ON recon_cupones(period_id, cupon);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_mlops_dedup
+          ON recon_ml_ops(period_id, operation_id);
+      `)
+    }
+  },
+  {
+    version: 99,
+    up(db: Database.Database) {
+      db.exec(`
+        ALTER TABLE recon_imports ADD COLUMN skipped_count INTEGER NOT NULL DEFAULT 0;
+      `)
+    }
   }
 ]
 

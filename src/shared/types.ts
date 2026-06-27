@@ -2698,6 +2698,7 @@ export interface ReconImport {
   source: ReconImportSource
   filename: string
   row_count: number
+  skipped_count: number
   status: 'pending' | 'ok' | 'error' | 'warning'
   error_msg: string
   imported_at: number
@@ -2717,6 +2718,7 @@ export interface ReconInvoice {
   importe_cta_cte: number
   importe_otros: number
   source: string
+  fecha: string
 }
 
 export interface ReconCupon {
@@ -2762,6 +2764,46 @@ export interface ReconResult {
   override_by: string
   override_at: number | null
   notes: string
+}
+
+export interface ReconResultEnriched extends ReconResult {
+  period_month: number
+  period_year: number
+  comprobante: string | null
+  concepto: string | null
+  total: number | null
+  importe_tarjetas: number | null
+  fecha: string | null
+  operation_id: string | null
+  transaction_amount: number | null
+  counterpart_name: string | null
+}
+
+export interface ReconResultFilters {
+  periodMonth?: number
+  periodYear?: number
+  estado?: ReconEstado
+}
+
+export interface ReconAllKPIs {
+  total: number
+  conciliado: number
+  diferencias: number
+  sinML: number
+  totalMonto: number
+}
+
+export interface ReconImportResult {
+  ok: boolean
+  inserted?: number
+  skipped?: number
+  filename?: string
+  canceled?: boolean
+  error?: string
+}
+
+export interface ReconClearResult {
+  deleted: number
 }
 
 export interface ReconAudit {

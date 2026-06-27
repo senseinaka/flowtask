@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/contacts.ts": {
-    "mtime": 1782576387.7514377,
-    "ast_hash": "3ccb23f2ca9156e5032672d9be8c1b0f",
+    "mtime": 1782577030.496771,
+    "ast_hash": "01d5937d75be5c623cf5828c09b7862f",
     "semantic_hash": ""
   },
   "src/main/database/queries/delegated-attachments.ts": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782525031.3944795,
-    "ast_hash": "ad6941eb08a91ab17b9d77b0646de044",
+    "mtime": 1782580831.562103,
+    "ast_hash": "eaddcb6f6877d615153ad8ae6e0a04f9",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1315,8 +1315,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/agenda/AgendaContactos.tsx": {
-    "mtime": 1782576344.858293,
-    "ast_hash": "30552eed85193dcb933261a6ba98f228",
+    "mtime": 1782577284.2346973,
+    "ast_hash": "39381a88ade40fe62cbb2905e0e1c8ba",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/agenda/AgendaGrupos.tsx": {

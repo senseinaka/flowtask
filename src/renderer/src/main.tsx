@@ -30,8 +30,9 @@ import Calendar from './routes/Calendar'
 import QuotesDashboard from './routes/quotes/QuotesDashboard'
 import QuoteDetail from './routes/quotes/QuoteDetail'
 import EmailDashboard from './routes/email/EmailDashboard'
-import ReconDashboard from './routes/contable/ReconDashboard'
-import ReconPeriodView from './routes/contable/ReconPeriodView'
+import ReconDashboard    from './routes/contable/ReconDashboard'
+import ReconPeriodView   from './routes/contable/ReconPeriodView'
+import ReconConciliacion from './routes/contable/ReconConciliacion'
 import MPDashboard from './routes/contable/MPDashboard'
 import ServicesDashboard from './routes/contable/ServicesDashboard'
 import KnowledgeDashboard from './routes/knowledge/KnowledgeDashboard'
@@ -88,6 +89,7 @@ const router = createHashRouter([
       { path: 'cortex', element: <CortexDashboard /> },
       { path: 'email', element: <EmailDashboard /> },
       { path: 'contable/recon', element: <ReconDashboard /> },
+      { path: 'contable/recon/conciliacion', element: <ReconConciliacion /> },
       { path: 'contable/recon/:id', element: <ReconPeriodView /> },
       { path: 'contable/mercadopago', element: <MPDashboard /> },
       { path: 'contable/servicios', element: <ServicesDashboard /> },

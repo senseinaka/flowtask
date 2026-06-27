@@ -12,6 +12,7 @@ export interface ParsedInvoice {
   importe_transferencia: number
   importe_cta_cte:       number
   importe_otros:         number
+  fecha:                 string   // YYYY-MM extraído del metadata del archivo (nivel mes)
 }
 
 export interface ParsedCupon {
@@ -113,6 +114,23 @@ function findCol(headers: string[], keywords: string[]): number {
   return -1
 }
 
+// Extrae "YYYY-MM" del metadata de las primeras 3 filas de un archivo Flexxus.
+// Busca patrones de fecha en celdas de texto: DD/MM/YYYY, MM/YYYY, o YYYY-MM.
+function extractFlexxusPeriod(rows: unknown[][]): string {
+  for (let i = 0; i < Math.min(3, rows.length); i++) {
+    for (const cell of rows[i]) {
+      const s = str(cell)
+      let m = s.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/)
+      if (m) return `${m[3]}-${m[2]}`
+      m = s.match(/\b(\d{2})\/(\d{4})\b/)
+      if (m) return `${m[2]}-${m[1]}`
+      m = s.match(/\b(\d{4})-(\d{2})\b/)
+      if (m) return `${m[1]}-${m[2]}`
+    }
+  }
+  return ''
+}
+
 // ── 1. FLEXXUS / FONDOS VTAS WEB (XLSX) ──────────────────────────────────────
 //
 // Layout:
@@ -154,6 +172,7 @@ export function parseFlexxus(buffer: Buffer): ParsedInvoice[] {
     throw new Error('Flexxus: no se encontró la sección "Ingresos Ventas" con su header')
   }
 
+  const fecha = extractFlexxusPeriod(rows)
   const hdr = rows[headerRowIdx].map(h => str(h).toLowerCase())
   const C_CONC  = findCol(hdr, ['concepto'])
   const C_TOT   = findCol(hdr, ['total'])
@@ -182,6 +201,7 @@ export function parseFlexxus(buffer: Buffer): ParsedInvoice[] {
       importe_transferencia: C_TRANS !== -1 ? num(r[C_TRANS]) : 0,
       importe_cta_cte:       C_CTA   !== -1 ? num(r[C_CTA])   : 0,
       importe_otros:         C_OTROS !== -1 ? num(r[C_OTROS]) : 0,
+      fecha,
     })
   }
 

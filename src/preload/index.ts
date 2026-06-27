@@ -51,8 +51,8 @@ import type {
   AddQuoteActivityInput,
   EmailAccount, EmailMessage, EmailAttachment,
   CreateEmailAccountInput, SendEmailInput, EmailListFilters,
-  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconKPIs,
-  CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado,
+  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconResultEnriched, ReconKPIs,
+  CreateReconPeriodInput, ReconImportSource, ReconPeriodStatus, ReconEstado, ReconResultFilters,
   KnowledgeEntry, KnowledgeGlobalSummary, KnowledgeListFilters, KnowledgeSource, KnowledgeEntryFile,
   KnowledgeThreadDoc,
   PayrollExtractionResult,
@@ -1039,13 +1039,23 @@ const api = {
     imports: {
       list: (periodId: string): Promise<ReconImport[]> =>
         ipcRenderer.invoke('recon:imports:list', periodId),
+      importFileBuffer: (
+        periodId: string,
+        source: ReconImportSource,
+        importedBy: string,
+        data: Uint8Array,
+        filename: string
+      ): Promise<{ ok: boolean; count?: number; skipped?: number; filename?: string; error?: string }> =>
+        ipcRenderer.invoke('recon:import:buffer', periodId, source, importedBy, data, filename),
       importFile: (
         periodId: string,
         source: ReconImportSource,
         importedBy: string,
         filePath?: string
-      ): Promise<{ ok: boolean; count?: number; filename?: string; canceled?: boolean; error?: string }> =>
+      ): Promise<{ ok: boolean; count?: number; skipped?: number; filename?: string; canceled?: boolean; error?: string }> =>
         ipcRenderer.invoke('recon:import', periodId, source, importedBy, filePath),
+      clearSource: (periodId: string, source: string): Promise<{ deleted: number }> =>
+        ipcRenderer.invoke('recon:source:clear', periodId, source),
     },
     data: {
       invoices: (periodId: string): Promise<ReconInvoice[]> =>
@@ -1060,6 +1070,8 @@ const api = {
     results: {
       list: (periodId: string, estado?: ReconEstado): Promise<ReconResult[]> =>
         ipcRenderer.invoke('recon:results:list', periodId, estado),
+      listAll: (filters?: ReconResultFilters): Promise<ReconResultEnriched[]> =>
+        ipcRenderer.invoke('recon:results:listAll', filters),
       update: (id: string, data: { estado?: ReconEstado; notes?: string; override_by?: string }): Promise<void> =>
         ipcRenderer.invoke('recon:results:update', id, data),
     },
