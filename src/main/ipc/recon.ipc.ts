@@ -7,7 +7,7 @@ import type { ReconEstado, ReconImportSource, CreateReconPeriodInput, ReconPerio
 import {
   listReconPeriods, getReconPeriod, createReconPeriod,
   updateReconPeriodStatus, deleteReconPeriod,
-  listReconImports, logReconImport,
+  listReconImports, logReconImport, deleteReconImport,
   listReconInvoices, listReconCupones, listReconMLOps,
   bulkInsertInvoices, bulkInsertCupones, bulkInsertMLOps,
   clearReconSource, clearReconCupones, clearReconMLOps,
@@ -83,46 +83,47 @@ export function registerReconIpc(): void {
       }
 
       try {
-        const buffer = readFileSync(filePath)
-        let inserted = 0
-        let skipped  = 0
+        const buffer   = readFileSync(filePath)
+        const importId = randomUUID()
+        let inserted   = 0
+        let skipped    = 0
 
         switch (source) {
           case 'flexxus': {
             const rows = parseFlexxus(buffer)
-            ;({ inserted, skipped } = bulkInsertInvoices(periodId, rows, 'flexxus'))
+            ;({ inserted, skipped } = bulkInsertInvoices(periodId, rows, 'flexxus', importId))
             break
           }
           case 'cupones_csv': {
             const rows = parseCuponesCSV(buffer)
-            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows))
+            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows, importId))
             break
           }
           case 'cupones_xlsx': {
             const rows = parseCuponesXLSX(buffer)
-            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows))
+            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows, importId))
             break
           }
           case 'ml_principal': {
             const rows = parseML(buffer)
-            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'principal'))
+            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'principal', importId))
             break
           }
           case 'ml_secundaria': {
             const rows = parseML(buffer)
-            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'secundaria'))
+            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'secundaria', importId))
             break
           }
           default:
             logReconImport({
-              period_id: periodId, source, filename, row_count: 0, skipped_count: 0,
+              id: randomUUID(), period_id: periodId, source, filename, row_count: 0, skipped_count: 0,
               status: 'warning', error_msg: 'Parser no implementado aún', imported_by: importedBy,
             })
             return { ok: false, error: `Fuente "${source}" aún no tiene parser implementado` }
         }
 
         logReconImport({
-          period_id: periodId, source, filename, row_count: inserted,
+          id: importId, period_id: periodId, source, filename, row_count: inserted,
           skipped_count: skipped, status: 'ok', error_msg: '', imported_by: importedBy,
         })
         return { ok: true, count: inserted, skipped, filename }
@@ -130,7 +131,7 @@ export function registerReconIpc(): void {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         logReconImport({
-          period_id: periodId, source, filename, row_count: 0,
+          id: randomUUID(), period_id: periodId, source, filename, row_count: 0,
           skipped_count: 0, status: 'error', error_msg: msg, imported_by: importedBy,
         })
         return { ok: false, error: msg }
@@ -150,42 +151,44 @@ export function registerReconIpc(): void {
         let inserted = 0
         let skipped  = 0
 
+        const importId = randomUUID()
+
         switch (source) {
           case 'flexxus': {
             const rows = parseFlexxus(buffer)
-            ;({ inserted, skipped } = bulkInsertInvoices(periodId, rows, 'flexxus'))
+            ;({ inserted, skipped } = bulkInsertInvoices(periodId, rows, 'flexxus', importId))
             break
           }
           case 'cupones_csv': {
             const rows = parseCuponesCSV(buffer)
-            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows))
+            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows, importId))
             break
           }
           case 'cupones_xlsx': {
             const rows = parseCuponesXLSX(buffer)
-            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows))
+            ;({ inserted, skipped } = bulkInsertCupones(periodId, rows, importId))
             break
           }
           case 'ml_principal': {
             const rows = parseML(buffer)
-            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'principal'))
+            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'principal', importId))
             break
           }
           case 'ml_secundaria': {
             const rows = parseML(buffer)
-            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'secundaria'))
+            ;({ inserted, skipped } = bulkInsertMLOps(periodId, rows, 'secundaria', importId))
             break
           }
           default:
             logReconImport({
-              period_id: periodId, source, filename, row_count: 0,
+              id: randomUUID(), period_id: periodId, source, filename, row_count: 0,
               skipped_count: 0, status: 'warning', error_msg: 'Parser no implementado aún', imported_by: importedBy,
             })
             return { ok: false, error: `Fuente "${source}" aún no tiene parser implementado` }
         }
 
         logReconImport({
-          period_id: periodId, source, filename, row_count: inserted,
+          id: importId, period_id: periodId, source, filename, row_count: inserted,
           skipped_count: skipped, status: 'ok', error_msg: '', imported_by: importedBy,
         })
         return { ok: true, count: inserted, skipped, filename }
@@ -193,7 +196,7 @@ export function registerReconIpc(): void {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         logReconImport({
-          period_id: periodId, source, filename, row_count: 0,
+          id: randomUUID(), period_id: periodId, source, filename, row_count: 0,
           skipped_count: 0, status: 'error', error_msg: msg, imported_by: importedBy,
         })
         return { ok: false, error: msg }
@@ -202,6 +205,11 @@ export function registerReconIpc(): void {
       }
     }
   )
+
+  ipcMain.handle('recon:import:delete', (_e, importId: string) => {
+    deleteReconImport(importId)
+    return { ok: true }
+  })
 
   // ── Acceso a datos del período ───────────────────────────────────────────
 

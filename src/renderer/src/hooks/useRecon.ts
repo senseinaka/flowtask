@@ -101,6 +101,20 @@ export function useAllReconResults(filters?: ReconResultFilters) {
   })
 }
 
+export function useDeleteReconImport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (importId: string): Promise<{ ok: boolean }> =>
+      window.api.recon.imports.deleteImport(importId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recon-imports'] })
+      qc.invalidateQueries({ queryKey: ['recon-invoices'] })
+      qc.invalidateQueries({ queryKey: ['recon-mlops'] })
+      qc.invalidateQueries({ queryKey: ['recon-results-all'] })
+    },
+  })
+}
+
 export function useClearReconSource() {
   const qc = useQueryClient()
   return useMutation({

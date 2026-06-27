@@ -3098,6 +3098,14 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
     up(db: Database.Database) {
       try { db.exec(`ALTER TABLE recon_imports ADD COLUMN skipped_count INTEGER NOT NULL DEFAULT 0`) } catch { /* ya existe */ }
     }
+  },
+  {
+    version: 100,
+    up(db: Database.Database) {
+      try { db.exec(`ALTER TABLE recon_invoices ADD COLUMN import_id TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
+      try { db.exec(`ALTER TABLE recon_cupones  ADD COLUMN import_id TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
+      try { db.exec(`ALTER TABLE recon_ml_ops   ADD COLUMN import_id TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
+    }
   }
 ]
 

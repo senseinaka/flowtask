@@ -1054,6 +1054,8 @@ const api = {
         filePath?: string
       ): Promise<{ ok: boolean; count?: number; skipped?: number; filename?: string; canceled?: boolean; error?: string }> =>
         ipcRenderer.invoke('recon:import', periodId, source, importedBy, filePath),
+      deleteImport: (importId: string): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke('recon:import:delete', importId),
       clearSource: (periodId: string, source: string): Promise<{ deleted: number }> =>
         ipcRenderer.invoke('recon:source:clear', periodId, source),
     },

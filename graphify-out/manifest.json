@@ -35,8 +35,8 @@
     "semantic_hash": "e606c3b06c092bcea4711c844c794210"
   },
   "src/main/database/migrations.ts": {
-    "mtime": 1782588250.5905774,
-    "ast_hash": "e7752a65cabd8c865ae23c867c144874",
+    "mtime": 1782590061.6225567,
+    "ast_hash": "352735a5d14d5218f27c23947bcf9f33",
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/recon.ts": {
-    "mtime": 1782588260.4205654,
-    "ast_hash": "0aacf755d3e3d33fda46a02770284c9e",
+    "mtime": 1782592251.9470499,
+    "ast_hash": "ac26cffda383258d44a303ba7ce7a8f0",
     "semantic_hash": ""
   },
   "src/main/database/queries/reminders.ts": {
@@ -275,8 +275,8 @@
     "semantic_hash": "f1a89e2a330a68e671890e7e49d2e606"
   },
   "src/main/ipc/recon.ipc.ts": {
-    "mtime": 1782588281.8553731,
-    "ast_hash": "2ed2bb48a3f013c41848857f5da069a3",
+    "mtime": 1782592337.9638574,
+    "ast_hash": "f05d0b9956348a397476749faf62105b",
     "semantic_hash": ""
   },
   "src/main/ipc/reminders.ipc.ts": {
@@ -830,8 +830,8 @@
     "semantic_hash": "17b448a8b758a80836f728e9dd24add0"
   },
   "src/renderer/src/routes/contable/ReconTabImportar.tsx": {
-    "mtime": 1782588316.2908833,
-    "ast_hash": "7beebe1f24aaccb67eade1cdb934c982",
+    "mtime": 1782592312.1244533,
+    "ast_hash": "aaaaf55259c1db99164d8e9c08c0f065",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconTabKPIs.tsx": {

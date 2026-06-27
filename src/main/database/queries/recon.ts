@@ -57,6 +57,7 @@ export function listReconImports(periodId: string): ReconImport[] {
 }
 
 export function logReconImport(data: {
+  id:           string
   period_id:    string
   source:       ReconImportSource
   filename:     string
@@ -67,15 +68,24 @@ export function logReconImport(data: {
   imported_by:  string
 }): ReconImport {
   const db  = getDb()
-  const id  = randomUUID()
   const now = Date.now()
   db.prepare(`
     INSERT INTO recon_imports
       (id, period_id, source, filename, row_count, skipped_count, status, error_msg, imported_at, imported_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.period_id, data.source, data.filename, data.row_count, data.skipped_count,
+  `).run(data.id, data.period_id, data.source, data.filename, data.row_count, data.skipped_count,
          data.status, data.error_msg, now, data.imported_by)
-  return db.prepare('SELECT * FROM recon_imports WHERE id = ?').get(id) as ReconImport
+  return db.prepare('SELECT * FROM recon_imports WHERE id = ?').get(data.id) as ReconImport
+}
+
+export function deleteReconImport(importId: string): void {
+  const db = getDb()
+  db.transaction(() => {
+    db.prepare('DELETE FROM recon_invoices WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_cupones  WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_ml_ops   WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_imports  WHERE id = ?').run(importId)
+  })()
 }
 
 // ── Acceso a datos del período ────────────────────────────────────────────────
@@ -103,14 +113,15 @@ export function listReconMLOps(periodId: string): ReconMLOp[] {
 export function bulkInsertInvoices(
   periodId: string,
   rows: ParsedInvoice[],
-  source: string
+  source: string,
+  importId: string
 ): { inserted: number; skipped: number } {
   const db   = getDb()
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO recon_invoices
       (id, period_id, comprobante, tipo, concepto, total, fecha,
-       importe_tarjetas, importe_efectivo, importe_transferencia, importe_cta_cte, importe_otros, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       importe_tarjetas, importe_efectivo, importe_transferencia, importe_cta_cte, importe_otros, source, import_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   let inserted = 0
   db.transaction(() => {
@@ -118,7 +129,7 @@ export function bulkInsertInvoices(
       const res = stmt.run(
         randomUUID(), periodId, r.comprobante, r.tipo, r.concepto, r.total, r.fecha ?? '',
         r.importe_tarjetas, r.importe_efectivo, r.importe_transferencia,
-        r.importe_cta_cte, r.importe_otros, source
+        r.importe_cta_cte, r.importe_otros, source, importId
       )
       inserted += res.changes
     }
@@ -128,19 +139,20 @@ export function bulkInsertInvoices(
 
 export function bulkInsertCupones(
   periodId: string,
-  rows: ParsedCupon[]
+  rows: ParsedCupon[],
+  importId: string
 ): { inserted: number; skipped: number } {
   const db   = getDb()
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO recon_cupones
-      (id, period_id, cupon, plan, total, nombre, condicion, fecha_ingreso, cuotas)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, period_id, cupon, plan, total, nombre, condicion, fecha_ingreso, cuotas, import_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   let inserted = 0
   db.transaction(() => {
     for (const r of rows) {
       const res = stmt.run(randomUUID(), periodId, r.cupon, r.plan, r.total,
-                           r.nombre, r.condicion, r.fecha_ingreso, r.cuotas)
+                           r.nombre, r.condicion, r.fecha_ingreso, r.cuotas, importId)
       inserted += res.changes
     }
   })()
@@ -150,15 +162,16 @@ export function bulkInsertCupones(
 export function bulkInsertMLOps(
   periodId: string,
   rows: ParsedMLOp[],
-  cuenta: string
+  cuenta: string,
+  importId: string
 ): { inserted: number; skipped: number } {
   const db   = getDb()
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO recon_ml_ops
       (id, period_id, operation_id, status, status_detail,
        transaction_amount, mp_fee, shipping_cost, counterpart_name,
-       external_reference, reason, date_created, date_approved, cuenta)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       external_reference, reason, date_created, date_approved, cuenta, import_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   let inserted = 0
   db.transaction(() => {
@@ -166,7 +179,7 @@ export function bulkInsertMLOps(
       const res = stmt.run(
         randomUUID(), periodId, r.operation_id, r.status, r.status_detail,
         r.transaction_amount, r.mp_fee, r.shipping_cost, r.counterpart_name,
-        r.external_reference, r.reason, r.date_created, r.date_approved, cuenta
+        r.external_reference, r.reason, r.date_created, r.date_approved, cuenta, importId
       )
       inserted += res.changes
     }

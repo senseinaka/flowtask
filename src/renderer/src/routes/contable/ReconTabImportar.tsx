@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Upload, FileCheck2, AlertCircle, Loader2, Trash2, FileText, MousePointerClick } from 'lucide-react'
 import type { ReconImportSource, ReconImport } from '@shared/types'
 import { RECON_SOURCE_LABELS } from '@shared/types'
-import { useReconImports, useClearReconSource } from '../../hooks/useRecon'
+import { useReconImports, useClearReconSource, useDeleteReconImport } from '../../hooks/useRecon'
 import { cn } from '../../components/ui/utils'
 
 const SOURCES: { key: ReconImportSource; color: string; ext: string; accepts: string[] }[] = [
@@ -23,14 +23,14 @@ function fmtDate(ms: number) {
 type Feedback = { ok: boolean; msg: string }
 
 function ImportLogRow({
-  imp, onClear, clearing
+  imp, onDelete, deleting
 }: {
   imp: ReconImport
-  onClear: () => void
-  clearing: boolean
+  onDelete: (id: string) => void
+  deleting: boolean
 }) {
-  const ok      = imp.status === 'ok'
-  const allDup  = ok && imp.row_count === 0 && imp.skipped_count > 0
+  const ok     = imp.status === 'ok'
+  const allDup = ok && imp.row_count === 0 && imp.skipped_count > 0
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 border border-slate-700/40 rounded-lg">
       <FileText size={11} className={ok ? (allDup ? 'text-amber-400' : 'text-emerald-400') : 'text-red-400'} />
@@ -58,12 +58,12 @@ function ImportLogRow({
         )}
       </div>
       <button
-        onClick={onClear}
-        disabled={clearing}
-        title="Quitar datos de esta fuente"
+        onClick={() => onDelete(imp.id)}
+        disabled={deleting}
+        title="Borrar este archivo y sus datos"
         className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
       >
-        {clearing ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+        {deleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
       </button>
     </div>
   )
@@ -160,9 +160,12 @@ export default function ReconTabImportar({
   const { data: imports = [], refetch } = useReconImports(periodId)
   const clearSource = useClearReconSource()
 
+  const deleteImport = useDeleteReconImport()
+
   const [importing,   setImporting]   = useState<ReconImportSource | null>(null)
   const [feedback,    setFeedback]    = useState<Record<string, Feedback>>({})
   const [clearingKey, setClearingKey] = useState<string | null>(null)
+  const [deletingId,  setDeletingId]  = useState<string | null>(null)
   const [dropError,   setDropError]   = useState<ReconImportSource | null>(null)
 
   const importsBySource = useMemo(() => {
@@ -316,8 +319,12 @@ export default function ReconTabImportar({
                   <ImportLogRow
                     key={imp.id}
                     imp={imp}
-                    onClear={() => handleClearSource(src.key)}
-                    clearing={isClearing}
+                    onDelete={async (id) => {
+                      setDeletingId(id)
+                      try { await deleteImport.mutateAsync(id) }
+                      finally { setDeletingId(null) }
+                    }}
+                    deleting={deletingId === imp.id}
                   />
                 ))}
               </div>
