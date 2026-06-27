@@ -18,13 +18,33 @@ function parseContact(raw: Record<string, unknown>): Contact {
   let emails: ContactEmail[] = []
   let tags: string[] = []
 
-  try { phones = JSON.parse(raw.phones as string) } catch { /* empty */ }
-  try { emails = JSON.parse(raw.emails as string) } catch { /* empty */ }
-  try { tags   = JSON.parse(raw.tags   as string) } catch { /* empty */ }
+  try {
+    const parsed = JSON.parse(raw.phones as string)
+    if (Array.isArray(parsed)) {
+      // La migración v97 guarda json_array(phone) que produce ["numero"], no [{numero,etiqueta}]
+      phones = parsed
+        .map((p: unknown) => typeof p === 'string' ? { numero: p, etiqueta: 'personal' as const } : p as ContactPhone)
+        .filter((p: ContactPhone) => p.numero)
+    }
+  } catch { /* empty */ }
 
-  // Backward compat: si phones está vacío pero existe la columna legacy phone, construir array
-  if (!phones.length && raw.phone && typeof raw.phone === 'string' && raw.phone !== '') {
-    phones = [{ numero: raw.phone as string, etiqueta: 'personal' }]
+  try {
+    const parsed = JSON.parse(raw.emails as string)
+    if (Array.isArray(parsed)) {
+      emails = parsed
+        .map((e: unknown) => typeof e === 'string' ? { direccion: e, etiqueta: 'personal' as const } : e as ContactEmail)
+        .filter((e: ContactEmail) => e.direccion)
+    }
+  } catch { /* empty */ }
+
+  try { tags = JSON.parse(raw.tags as string) } catch { /* empty */ }
+
+  // Backward compat: si no hay arrays pero hay columna legacy
+  if (!phones.length && typeof raw.phone === 'string' && raw.phone !== '') {
+    phones = [{ numero: raw.phone, etiqueta: 'personal' }]
+  }
+  if (!emails.length && typeof raw.email === 'string' && raw.email !== '') {
+    emails = [{ direccion: raw.email, etiqueta: 'personal' }]
   }
 
   return {
@@ -32,9 +52,9 @@ function parseContact(raw: Record<string, unknown>): Contact {
     phones,
     emails,
     tags,
-    company:  (raw.company  as string)  ?? '',
-    role:     (raw.role     as string)  ?? '',
-    favorito: (raw.favorito as number)  ?? 0,
+    company:  (raw.company  as string) ?? '',
+    role:     (raw.role     as string) ?? '',
+    favorito: (raw.favorito as number) ?? 0,
   }
 }
 

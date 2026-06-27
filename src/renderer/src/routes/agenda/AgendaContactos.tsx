@@ -523,12 +523,48 @@ const TYPE_FILTERS: Array<{ key: ContactType | 'all' | 'fav'; label: string }> =
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+const SPLIT_KEY     = 'agenda-contacts-split'
+const SPLIT_DEFAULT = 280
+const SPLIT_MIN     = 200
+const SPLIT_MAX     = 480
+
 export default function AgendaContactos() {
   const { data: contacts = [], isLoading } = useContacts()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search,     setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState<ContactType | 'all' | 'fav'>('all')
   const [showModal,  setShowModal]  = useState(false)
+
+  const [leftWidth, setLeftWidth] = useState<number>(() => {
+    const saved = localStorage.getItem(SPLIT_KEY)
+    return saved ? Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, parseInt(saved, 10))) : SPLIT_DEFAULT
+  })
+  const containerRef  = useRef<HTMLDivElement>(null)
+  const isResizing    = useRef(false)
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault()
+    isResizing.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    function onMove(ev: MouseEvent) {
+      if (!isResizing.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const next = Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, ev.clientX - rect.left))
+      setLeftWidth(next)
+      localStorage.setItem(SPLIT_KEY, String(Math.round(next)))
+    }
+    function onUp() {
+      isResizing.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   const filtered = useMemo(() => {
     let list = contacts
@@ -565,9 +601,9 @@ export default function AgendaContactos() {
   const selectedContact = contacts.find(c => c.id === selectedId) ?? null
 
   return (
-    <div className="flex h-full bg-slate-900 overflow-hidden">
+    <div ref={containerRef} className="flex h-full bg-slate-900 overflow-hidden">
       {/* ── Left panel ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col border-r border-slate-700" style={{ width: 280 }}>
+      <div className="flex flex-col flex-shrink-0" style={{ width: leftWidth }}>
         {/* Header */}
         <div className="p-3 border-b border-slate-700 space-y-2">
           <div className="flex items-center justify-between">
@@ -592,13 +628,13 @@ export default function AgendaContactos() {
         </div>
 
         {/* Filter strip */}
-        <div className="flex gap-1 px-2 py-1.5 overflow-x-auto border-b border-slate-700/50 scrollbar-hide">
+        <div className="flex flex-wrap gap-1 px-2 py-2 border-b border-slate-700/50">
           {TYPE_FILTERS.map(f => (
             <button
               key={f.key}
               onClick={() => setTypeFilter(f.key)}
               className={cn(
-                'flex-shrink-0 text-xs px-2 py-0.5 rounded-full transition-colors',
+                'text-xs px-2 py-0.5 rounded-full transition-colors',
                 typeFilter === f.key
                   ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40'
                   : 'text-slate-500 hover:text-slate-300'
@@ -668,6 +704,15 @@ export default function AgendaContactos() {
         <div className="px-3 py-1.5 border-t border-slate-700 text-[10px] text-slate-600">
           {filtered.length} de {contacts.length} contactos
         </div>
+      </div>
+
+      {/* ── Resize handle ──────────────────────────────────────────────────── */}
+      <div
+        className="w-1 flex-shrink-0 bg-slate-700 hover:bg-blue-500 active:bg-blue-400 cursor-col-resize transition-colors relative group"
+        onMouseDown={startResize}
+      >
+        {/* Wider invisible hit area */}
+        <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
       </div>
 
       {/* ── Right panel ────────────────────────────────────────────────────── */}
