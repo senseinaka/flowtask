@@ -260,18 +260,22 @@ export async function getBcraCotizacionHoy(): Promise<BcraCotizacionHoy[]> {
     const updated = db.prepare(
       `SELECT moneda, tipo, valor FROM bcra_rates_cache WHERE fecha = ? AND moneda IN ('USD','EUR')`
     ).all(hoy) as CacheRow[]
-    return buildCotizacionHoy(updated, hoy)
+    // Si hay datos para hoy, usarlos; si no (fin de semana / feriado), caer al fallback
+    if (updated.length >= 2) {
+      return buildCotizacionHoy(updated, hoy)
+    }
   } catch (e) {
     console.warn('[BCRA] No se pudo obtener cotización hoy:', e)
-    // Fallback: última fecha disponible en cache
-    const fallback = db.prepare(
-      `SELECT moneda, tipo, valor FROM bcra_rates_cache
-       WHERE moneda IN ('USD','EUR')
-       GROUP BY moneda, tipo HAVING fecha = MAX(fecha)`
-    ).all() as CacheRow[]
-    const lastFecha = db.prepare(
-      `SELECT MAX(fecha) AS f FROM bcra_rates_cache WHERE moneda IN ('USD','EUR')`
-    ).get() as { f: string | null }
-    return buildCotizacionHoy(fallback, lastFecha?.f ?? hoy)
   }
+
+  // Fallback: última fecha disponible en cache
+  const fallback = db.prepare(
+    `SELECT moneda, tipo, valor FROM bcra_rates_cache
+     WHERE moneda IN ('USD','EUR')
+     GROUP BY moneda, tipo HAVING fecha = MAX(fecha)`
+  ).all() as CacheRow[]
+  const lastFecha = db.prepare(
+    `SELECT MAX(fecha) AS f FROM bcra_rates_cache WHERE moneda IN ('USD','EUR')`
+  ).get() as { f: string | null }
+  return buildCotizacionHoy(fallback, lastFecha?.f ?? hoy)
 }

@@ -1300,8 +1300,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CotizacionesPage.tsx": {
-    "mtime": 1782570935.0490391,
-    "ast_hash": "8a5ed923bf1b1eac7eaa8b223e7cbdc1",
+    "mtime": 1782572780.203735,
+    "ast_hash": "ecf68da3b7744e64d3671864a5bc8263",
     "semantic_hash": ""
   },
   "src/main/services/cotizacion-alarmas.service.ts": {
