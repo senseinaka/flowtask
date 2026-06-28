@@ -498,7 +498,7 @@ export default function Sidebar() {
                 <PanelLink to="/contable/servicios"     icon={Repeat}          label="Servicios"      color="#34d399" onClick={close} />
               )}
               {canRead('contable', 'cajas') && (
-                <PanelLink to="/contable/cajas"         icon={Vault}           label="Cajas"          color="#34d399" onClick={close} />
+                <PanelLink to="/contable/cajas"         icon={Banknote}        label="Cajas"          color="#34d399" onClick={close} />
               )}
             </div>
           )}

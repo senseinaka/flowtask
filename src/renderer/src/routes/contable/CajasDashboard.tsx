@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Vault, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2 } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import { useCashboxesWithBalances, parseCurrencies, fmtAmount } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency, CashboxStatus } from '@shared/types'
@@ -191,7 +191,7 @@ export default function CajasDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-3">
-          <Vault size={20} className="text-emerald-400" />
+          <Banknote size={20} className="text-emerald-400" />
           <h1 className="text-base font-semibold text-slate-100">Cajas</h1>
         </div>
       </div>

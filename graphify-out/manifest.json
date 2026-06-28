@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782661387.249856,
-    "ast_hash": "2fb1d1e68a5c04f9d19411ab0ddbe934",
+    "mtime": 1782672891.26679,
+    "ast_hash": "a1625752b209401dd0bed627c00e16cc",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -465,8 +465,8 @@
     "semantic_hash": "29846cd39af0bc84e09ee1d15aec1223"
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782655399.8455887,
-    "ast_hash": "c4a8c9b1082574f95024f9727f0f28c7",
+    "mtime": 1782676086.7705033,
+    "ast_hash": "31406a60215601b51d8e257ec43019fe",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -1330,23 +1330,23 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/cajas.ts": {
-    "mtime": 1782661369.7317824,
-    "ast_hash": "3ce9152e3b24e96135020b962e66b866",
+    "mtime": 1782672471.3787143,
+    "ast_hash": "eb1c32552f4bd349379a7b9525c2a04b",
     "semantic_hash": ""
   },
   "src/main/ipc/cajas.ipc.ts": {
-    "mtime": 1782661379.6645937,
-    "ast_hash": "4bee7cdd4752e595ca0478e544457f7f",
+    "mtime": 1782672503.5781946,
+    "ast_hash": "8660bcdf2d3763e52ddd235b00b36c07",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCajas.ts": {
-    "mtime": 1782661393.648631,
-    "ast_hash": "74a2ef67cd0141ff9d250c101379ac8b",
+    "mtime": 1782672255.2708955,
+    "ast_hash": "91531739b06ce845c9b1d3c4d86a8f47",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/CajasDashboard.tsx": {
-    "mtime": 1782655700.6601913,
-    "ast_hash": "2f2b77296f278fbe629243423e9352d3",
+    "mtime": 1782672548.303403,
+    "ast_hash": "ff0b57bf8d030fa445cf2169b32df7d9",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/NuevoMovimientoModal.tsx": {
@@ -1357,6 +1357,31 @@
   "supabase_cajas_tables.sql": {
     "mtime": 1782655336.3135424,
     "ast_hash": "8b3d590d4325c76e20ef35ce14593670",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/CierreDiarioModal.tsx": {
+    "mtime": 1782672304.2299194,
+    "ast_hash": "bd426378f5fecf12d7639b901b2c5e93",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/ConteoRapidoModal.tsx": {
+    "mtime": 1782664463.125608,
+    "ast_hash": "9157795a09d0fa933e39dcc7e04f6199",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/DiferenciasModal.tsx": {
+    "mtime": 1782669831.1989713,
+    "ast_hash": "350ac767bfaf47e200c938f272338a8c",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/PermisosModal.tsx": {
+    "mtime": 1782670850.9731789,
+    "ast_hash": "053c64e60ab0bdef25995a9302616e6b",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/ReporteModal.tsx": {
+    "mtime": 1782672528.5792232,
+    "ast_hash": "bf021e4900c0b657156d4e00ad85ae95",
     "semantic_hash": ""
   }
 }
