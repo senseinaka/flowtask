@@ -58,6 +58,7 @@ import { registerPdfIpc } from './ipc/pdf.ipc'
 import { registerRrhhIpc } from './ipc/rrhh.ipc'
 import { registerMercadoPagoIpc } from './ipc/mercadopago.ipc'
 import { registerAccountingServicesIpc } from './ipc/accounting-services.ipc'
+import { registerCajasIpc } from './ipc/cajas.ipc'
 import { registerServiceCatalogIpc } from './ipc/service-catalog.ipc'
 import { registerWallpaperIpc } from './ipc/wallpaper.ipc'
 import { startEmailAutoSync } from './services/email.service'
@@ -171,6 +172,7 @@ app.whenReady().then(() => {
   registerRrhhIpc()
   registerMercadoPagoIpc()
   registerAccountingServicesIpc()
+  registerCajasIpc()
   registerServiceCatalogIpc()
   registerWallpaperIpc()
   startEmailAutoSync()

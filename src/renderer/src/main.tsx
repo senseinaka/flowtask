@@ -45,6 +45,7 @@ import HomeScreen from './routes/home/HomeScreen'
 import RrhhEmpresaLayout from './routes/rrhh/RrhhEmpresaContext'
 import AgendaContactos from './routes/agenda/AgendaContactos'
 import AgendaGrupos from './routes/agenda/AgendaGrupos'
+import CajasDashboard from './routes/contable/CajasDashboard'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -93,6 +94,7 @@ const router = createHashRouter([
       { path: 'contable/recon/:id', element: <ReconPeriodView /> },
       { path: 'contable/mercadopago', element: <MPDashboard /> },
       { path: 'contable/servicios', element: <ServicesDashboard /> },
+      { path: 'contable/cajas',    element: <CajasDashboard /> },
       { path: 'rrhh/sueldos', element: <Navigate to="/rrhh/sueldos/naka" replace /> },
       {
         path: 'rrhh/sueldos/:empresa',

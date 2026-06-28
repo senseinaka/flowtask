@@ -3685,3 +3685,176 @@ export interface AccountingServiceFilters {
   internal_owner?: string
   search?: string
 }
+
+// ─── Cajas Internas ───────────────────────────────────────────────────────────
+
+export type CashCurrency     = 'ARS' | 'USD' | 'EUR'
+export type CashboxStatus    = 'ok' | 'pending_count' | 'with_difference' | 'blocked' | 'closed'
+export type MovementType     = 'income' | 'expense' | 'transfer' | 'adjustment' | 'bank_deposit' | 'opening' | 'correction'
+export type MovementStatus   = 'draft' | 'confirmed' | 'cancelled' | 'pending_approval'
+export type CountType        = 'quick_count' | 'daily_close' | 'formal_audit'
+export type CountStatus      = 'pending' | 'confirmed' | 'with_difference' | 'cancelled'
+export type DifferenceStatus = 'pending' | 'under_review' | 'resolved' | 'written_off'
+
+export const CASHBOX_STATUS_LABELS: Record<CashboxStatus, string> = {
+  ok:               'OK',
+  pending_count:    'Conteo pendiente',
+  with_difference:  'Con diferencia',
+  blocked:          'Bloqueada',
+  closed:           'Cerrada',
+}
+
+export const CASHBOX_STATUS_COLORS: Record<CashboxStatus, string> = {
+  ok:              '#10b981',
+  pending_count:   '#f59e0b',
+  with_difference: '#ef4444',
+  blocked:         '#6366f1',
+  closed:          '#64748b',
+}
+
+export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
+  income:       'Ingreso',
+  expense:      'Egreso',
+  transfer:     'Transferencia',
+  adjustment:   'Ajuste',
+  bank_deposit: 'Depósito bancario',
+  opening:      'Apertura',
+  correction:   'Corrección',
+}
+
+export const CASH_DENOMINATIONS: Record<CashCurrency, number[]> = {
+  ARS: [20000, 10000, 2000, 1000, 500, 200, 100, 50],
+  USD: [100, 50, 20, 10, 5, 1],
+  EUR: [500, 200, 100, 50, 20, 10, 5],
+}
+
+export interface CashCompany {
+  id: string
+  workspace_id: string
+  name: string
+  code: string
+  active: number
+  created_at: string
+}
+
+export interface Cashbox {
+  id: string
+  workspace_id: string
+  company_id: string
+  name: string
+  description: string
+  currencies: string        // JSON: '["ARS","USD"]'
+  status: CashboxStatus
+  responsible_user_id: string
+  requires_count_hours: number | null
+  active: number
+  created_at: string
+}
+
+export interface CashboxPermission {
+  id: string
+  workspace_id: string
+  cashbox_id: string
+  user_id: string
+  permission_key: string
+  granted_by: string
+  created_at: string
+}
+
+export interface CashCategory {
+  id: string
+  workspace_id: string
+  company_id: string
+  name: string
+  type: 'income' | 'expense'
+  active: number
+  created_at: string
+}
+
+export interface CashMovement {
+  id: string
+  workspace_id: string
+  cashbox_id: string
+  type: MovementType
+  status: MovementStatus
+  reference_date: string
+  category_id: string
+  source_cashbox_id: string
+  dest_cashbox_id: string
+  notes: string
+  confirmed_by: string
+  confirmed_at: string
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CashMovementAmount {
+  id: string
+  workspace_id: string
+  movement_id: string
+  currency: CashCurrency
+  amount: number
+  created_at: string
+}
+
+export interface CashCount {
+  id: string
+  workspace_id: string
+  cashbox_id: string
+  count_type: CountType
+  status: CountStatus
+  counted_by: string
+  confirmed_by: string
+  notes: string
+  created_at: string
+}
+
+export interface CashCountDetail {
+  id: string
+  workspace_id: string
+  count_id: string
+  currency: CashCurrency
+  denomination: number
+  quantity: number
+  created_at: string
+}
+
+export interface CashDifference {
+  id: string
+  workspace_id: string
+  cashbox_id: string
+  count_id: string
+  currency: CashCurrency
+  system_amount: number
+  counted_amount: number
+  difference: number
+  status: DifferenceStatus
+  resolution_notes: string
+  resolved_by: string
+  created_at: string
+}
+
+export interface CashAuditLog {
+  id: string
+  workspace_id: string
+  cashbox_id: string
+  action: string
+  user_id: string
+  details: string
+  created_at: string
+}
+
+// Tipo enriquecido: caja con saldo calculado
+export interface CashboxWithBalance extends Cashbox {
+  balances: Partial<Record<CashCurrency, number>>
+  last_count_at?: string
+  company?: CashCompany
+}
+
+export interface CashMovementWithAmounts extends CashMovement {
+  amounts: CashMovementAmount[]
+  category?: CashCategory
+  source_cashbox?: Cashbox
+  dest_cashbox?: Cashbox
+}

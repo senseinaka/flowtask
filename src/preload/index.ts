@@ -68,6 +68,8 @@ import type {
   MpSyncResult, MpTestConnectionResult, MpReconciliationStatus,
   AccountingService, AccountingServicePayment, AccountingServiceFilters,
   CreateAccountingServiceInput, RegisterServicePaymentInput, ServiceStatus,
+  CashCompany, Cashbox, CashCategory, CashMovement, CashCount, CashDifference,
+  CashboxStatus,
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1271,6 +1273,49 @@ const api = {
       ipcRenderer.invoke('catalog:upsert', input),
     delete: (id: string): Promise<void> =>
       ipcRenderer.invoke('catalog:delete', id),
+  },
+
+  cajas: {
+    companies:  (): Promise<CashCompany[]>
+      => ipcRenderer.invoke('cajas:companies'),
+    cashboxes:  (): Promise<Cashbox[]>
+      => ipcRenderer.invoke('cajas:cashboxes'),
+    cashbox:    (id: string): Promise<Cashbox | null>
+      => ipcRenderer.invoke('cajas:cashbox', id),
+    balances:   (): Promise<{ cashbox_id: string; currency: string; balance: number }[]>
+      => ipcRenderer.invoke('cajas:balances'),
+    lastCounts: (): Promise<{ cashbox_id: string; last_count_at: string }[]>
+      => ipcRenderer.invoke('cajas:lastCounts'),
+    categories: (type?: 'income' | 'expense'): Promise<CashCategory[]>
+      => ipcRenderer.invoke('cajas:categories', type),
+    movements: {
+      list:   (cashboxId: string, limit?: number): Promise<CashMovement[]>
+        => ipcRenderer.invoke('cajas:movements:list', cashboxId, limit),
+      create: (input: unknown): Promise<string>
+        => ipcRenderer.invoke('cajas:movements:create', input),
+      transfer: (input: {
+        source_cashbox_id: string
+        dest_cashbox_id: string
+        amounts: { currency: string; amount: number }[]
+        notes?: string
+        reference_date: string
+      }): Promise<void>
+        => ipcRenderer.invoke('cajas:movements:transfer', input),
+    },
+    counts: {
+      list:   (cashboxId: string, limit?: number): Promise<CashCount[]>
+        => ipcRenderer.invoke('cajas:counts:list', cashboxId, limit),
+      create: (input: unknown): Promise<string>
+        => ipcRenderer.invoke('cajas:counts:create', input),
+    },
+    differences: {
+      list:   (cashboxId: string): Promise<CashDifference[]>
+        => ipcRenderer.invoke('cajas:differences:list', cashboxId),
+      create: (input: unknown): Promise<void>
+        => ipcRenderer.invoke('cajas:differences:create', input),
+    },
+    setStatus: (id: string, status: CashboxStatus): Promise<void>
+      => ipcRenderer.invoke('cajas:cashbox:setStatus', id, status),
   },
 
   services: {

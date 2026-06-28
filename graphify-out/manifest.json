@@ -35,8 +35,8 @@
     "semantic_hash": "e606c3b06c092bcea4711c844c794210"
   },
   "src/main/database/migrations.ts": {
-    "mtime": 1782593109.9668815,
-    "ast_hash": "112aff4573e90de364ef383ca03e9a27",
+    "mtime": 1782594824.3253186,
+    "ast_hash": "a4f6e2464cb9604f3b214e14d094d467",
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/recon.ts": {
-    "mtime": 1782593138.3492186,
-    "ast_hash": "a1e2589226d86859af01c291990608cc",
+    "mtime": 1782594951.482131,
+    "ast_hash": "1ca00d592b97c1cd61dc6c8957e0432d",
     "semantic_hash": ""
   },
   "src/main/database/queries/reminders.ts": {
@@ -275,8 +275,8 @@
     "semantic_hash": "f1a89e2a330a68e671890e7e49d2e606"
   },
   "src/main/ipc/recon.ipc.ts": {
-    "mtime": 1782593175.577662,
-    "ast_hash": "c41af5bcf1792d1eae10f6bf276f307f",
+    "mtime": 1782595459.3960052,
+    "ast_hash": "e61fb81ddb22c57871b1f1457553cf4a",
     "semantic_hash": ""
   },
   "src/main/ipc/reminders.ipc.ts": {
@@ -415,8 +415,8 @@
     "semantic_hash": "a5ed146938171723205083ddfc29c1a6"
   },
   "src/main/services/recon-parsers.service.ts": {
-    "mtime": 1782581974.485468,
-    "ast_hash": "9fefa59aaf3d7058c30f3e399dfb9182",
+    "mtime": 1782594870.5969214,
+    "ast_hash": "6b837f48b96281449b01a6bfc4bbfbe6",
     "semantic_hash": ""
   },
   "src/main/services/scheduler.service.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782593180.1195707,
-    "ast_hash": "6582f6685d73faebe0fc82d8c351f8af",
+    "mtime": 1782595486.9261086,
+    "ast_hash": "2a321c98e3e352c34a831a1f2912c29f",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -645,8 +645,8 @@
     "semantic_hash": "707ac16550622e203b98b728de07f0e4"
   },
   "src/renderer/src/hooks/useRecon.ts": {
-    "mtime": 1782593184.8487532,
-    "ast_hash": "bb84e639785b45297df4e87aa63c35d5",
+    "mtime": 1782595032.6466773,
+    "ast_hash": "08a22d34e817cccbf9694af13665ce26",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useReminders.ts": {
@@ -830,19 +830,19 @@
     "semantic_hash": "17b448a8b758a80836f728e9dd24add0"
   },
   "src/renderer/src/routes/contable/ReconTabImportar.tsx": {
-    "mtime": 1782593350.5721092,
-    "ast_hash": "ab2bc88fb1f2bfbf5d6f2d3db6de2090",
+    "mtime": 1782595062.43347,
+    "ast_hash": "36e27d7e88fe47f6cdb3b2dee87b6478",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconTabKPIs.tsx": {
-    "mtime": 1781905520.6285448,
-    "ast_hash": "938743f2c4194bac9567cf87130be85b",
-    "semantic_hash": "938743f2c4194bac9567cf87130be85b"
+    "mtime": 1782595573.0903115,
+    "ast_hash": "a13f76ba402061b3b72e2983048e1c5b",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconTabResultados.tsx": {
-    "mtime": 1781907562.2261548,
-    "ast_hash": "9863a3bd9435c15bb3026d9f7d2a0496",
-    "semantic_hash": "9863a3bd9435c15bb3026d9f7d2a0496"
+    "mtime": 1782595422.6733277,
+    "ast_hash": "c00ee022eaecaa24d3973c5136e5e081",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/email/EmailDashboard.tsx": {
     "mtime": 1781646563.906332,
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782588256.1489358,
-    "ast_hash": "b0c566a0c4c1fc85c2731f33f608c561",
+    "mtime": 1782594812.2869034,
+    "ast_hash": "a5cf878729350f1f746fbe99a67eb65a",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {

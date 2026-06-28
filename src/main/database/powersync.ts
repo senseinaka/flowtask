@@ -1294,6 +1294,96 @@ const service_catalog = new Table(
   }
 )
 
+// ── Cajas Internas ────────────────────────────────────────────────────────────
+
+const cash_companies = new Table(
+  { workspace_id: column.text, name: column.text, code: column.text, active: column.integer, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const cashboxes = new Table(
+  {
+    workspace_id:        column.text,
+    company_id:          column.text,
+    name:                column.text,
+    description:         column.text,
+    currencies:          column.text,
+    status:              column.text,
+    responsible_user_id: column.text,
+    requires_count_hours:column.integer,
+    active:              column.integer,
+    created_at:          column.text,
+  },
+  { indexes: { workspace: ['workspace_id'], company: ['company_id'] } }
+)
+
+const cashbox_permissions = new Table(
+  { workspace_id: column.text, cashbox_id: column.text, user_id: column.text, permission_key: column.text, granted_by: column.text, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'], user: ['user_id'] } }
+)
+
+const cash_categories = new Table(
+  { workspace_id: column.text, company_id: column.text, name: column.text, type: column.text, active: column.integer, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const cash_movements = new Table(
+  {
+    workspace_id:      column.text,
+    cashbox_id:        column.text,
+    type:              column.text,
+    status:            column.text,
+    reference_date:    column.text,
+    category_id:       column.text,
+    source_cashbox_id: column.text,
+    dest_cashbox_id:   column.text,
+    notes:             column.text,
+    confirmed_by:      column.text,
+    confirmed_at:      column.text,
+    created_by:        column.text,
+    created_at:        column.text,
+    updated_at:        column.text,
+  },
+  { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'], status: ['status'] } }
+)
+
+const cash_movement_amounts = new Table(
+  { workspace_id: column.text, movement_id: column.text, currency: column.text, amount: column.real, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'], movement: ['movement_id'] } }
+)
+
+const cash_counts = new Table(
+  { workspace_id: column.text, cashbox_id: column.text, count_type: column.text, status: column.text, counted_by: column.text, confirmed_by: column.text, notes: column.text, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'] } }
+)
+
+const cash_count_details = new Table(
+  { workspace_id: column.text, count_id: column.text, currency: column.text, denomination: column.real, quantity: column.integer, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'], count: ['count_id'] } }
+)
+
+const cash_differences = new Table(
+  {
+    workspace_id:     column.text,
+    cashbox_id:       column.text,
+    count_id:         column.text,
+    currency:         column.text,
+    system_amount:    column.real,
+    counted_amount:   column.real,
+    difference:       column.real,
+    status:           column.text,
+    resolution_notes: column.text,
+    resolved_by:      column.text,
+    created_at:       column.text,
+  },
+  { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'] } }
+)
+
+const cash_audit_logs = new Table(
+  { workspace_id: column.text, cashbox_id: column.text, action: column.text, user_id: column.text, details: column.text, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -1360,6 +1450,16 @@ export const AppSchema = new Schema({
   accounting_services,
   accounting_service_payments,
   service_catalog,
+  cash_companies,
+  cashboxes,
+  cashbox_permissions,
+  cash_categories,
+  cash_movements,
+  cash_movement_amounts,
+  cash_counts,
+  cash_count_details,
+  cash_differences,
+  cash_audit_logs,
 })
 
 /**
@@ -2215,6 +2315,9 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog'], throttleMs: 1000 }
+    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
+        'cash_companies', 'cashboxes', 'cashbox_permissions', 'cash_categories',
+        'cash_movements', 'cash_movement_amounts', 'cash_counts', 'cash_count_details',
+        'cash_differences', 'cash_audit_logs'], throttleMs: 1000 }
   )
 }

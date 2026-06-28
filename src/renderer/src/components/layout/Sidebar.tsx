@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw, DollarSign
+  Database, RefreshCw, DollarSign, Vault
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
@@ -496,6 +496,9 @@ export default function Sidebar() {
               )}
               {canRead('contable', 'servicios') && (
                 <PanelLink to="/contable/servicios"     icon={Repeat}          label="Servicios"      color="#34d399" onClick={close} />
+              )}
+              {canRead('contable', 'cajas') && (
+                <PanelLink to="/contable/cajas"         icon={Vault}           label="Cajas"          color="#34d399" onClick={close} />
               )}
             </div>
           )}

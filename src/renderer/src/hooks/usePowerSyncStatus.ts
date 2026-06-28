@@ -38,6 +38,7 @@ export function usePowerSyncStatus() {
       qc.invalidateQueries({ queryKey: ['task'] })
       qc.invalidateQueries({ queryKey: ['task-deps'] })
       qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['cajas'] })
     })
 
     _subs.add(setStatus)
