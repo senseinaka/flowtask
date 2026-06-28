@@ -1345,8 +1345,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/CajasDashboard.tsx": {
-    "mtime": 1782672548.303403,
-    "ast_hash": "ff0b57bf8d030fa445cf2169b32df7d9",
+    "mtime": 1782676100.7681806,
+    "ast_hash": "b2b4db3e6d90de77c5e11c52bf05e5fe",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/NuevoMovimientoModal.tsx": {
