@@ -188,6 +188,110 @@ export async function createTransfer(
   }
 }
 
+// ─── Reporte / export ────────────────────────────────────────────────────────
+
+export async function getMovementsForReport(
+  cashboxId: string,
+  dateFrom:  string,
+  dateTo:    string
+): Promise<{
+  fecha: string; tipo: string; categoria: string
+  moneda: string; importe: number; notas: string; registrado_por: string
+}[]> {
+  return getPowerSyncDb().getAll(
+    `SELECT m.reference_date AS fecha, m.type AS tipo,
+            COALESCE(c.name, '') AS categoria,
+            a.currency AS moneda, a.amount AS importe,
+            m.notes AS notas, m.created_by AS registrado_por
+     FROM cash_movements m
+     LEFT JOIN cash_movement_amounts a ON a.movement_id = m.id
+     LEFT JOIN cash_categories c ON c.id = m.category_id
+     WHERE m.cashbox_id = ? AND m.workspace_id = ? AND m.status = 'confirmed'
+       AND m.reference_date BETWEEN ? AND ?
+     ORDER BY m.reference_date, m.created_at, a.currency`,
+    [cashboxId, WORKSPACE_ID, dateFrom, dateTo]
+  )
+}
+
+export async function getDifferencesForReport(cashboxId: string): Promise<{
+  fecha: string; moneda: string; sistema: number; contado: number
+  diferencia: number; estado: string; resolucion: string; resuelto_por: string
+}[]> {
+  return getPowerSyncDb().getAll(
+    `SELECT created_at AS fecha, currency AS moneda,
+            system_amount AS sistema, counted_amount AS contado,
+            difference AS diferencia, status AS estado,
+            resolution_notes AS resolucion, resolved_by AS resuelto_por
+     FROM cash_differences
+     WHERE cashbox_id = ? AND workspace_id = ?
+     ORDER BY created_at DESC`,
+    [cashboxId, WORKSPACE_ID]
+  )
+}
+
+export async function getCountsForReport(cashboxId: string): Promise<{
+  fecha: string; tipo: string; estado: string; contado_por: string; notas: string
+}[]> {
+  return getPowerSyncDb().getAll(
+    `SELECT created_at AS fecha, count_type AS tipo,
+            status AS estado, counted_by AS contado_por, notes AS notas
+     FROM cash_counts
+     WHERE cashbox_id = ? AND workspace_id = ?
+     ORDER BY created_at DESC`,
+    [cashboxId, WORKSPACE_ID]
+  )
+}
+
+// ─── Resumen diario ───────────────────────────────────────────────────────────
+
+export async function getDailyMovementsSummary(
+  cashboxId: string,
+  date: string
+): Promise<{ type: string; currency: string; total: number }[]> {
+  return getPowerSyncDb().getAll<{ type: string; currency: string; total: number }>(
+    `SELECT m.type, a.currency, COALESCE(SUM(a.amount), 0) AS total
+     FROM cash_movements m
+     JOIN cash_movement_amounts a ON a.movement_id = m.id
+     WHERE m.cashbox_id = ? AND m.workspace_id = ? AND m.status = 'confirmed'
+       AND m.reference_date = ?
+     GROUP BY m.type, a.currency`,
+    [cashboxId, WORKSPACE_ID, date]
+  )
+}
+
+// ─── Permisos por caja ───────────────────────────────────────────────────────
+
+import type { CashboxPermission } from '@shared/types'
+
+export async function getCashboxPermissions(cashboxId: string): Promise<CashboxPermission[]> {
+  return getPowerSyncDb().getAll<CashboxPermission>(
+    'SELECT * FROM cashbox_permissions WHERE cashbox_id = ? AND workspace_id = ? ORDER BY user_id, permission_key',
+    [cashboxId, WORKSPACE_ID]
+  )
+}
+
+export async function grantCashboxPermission(input: {
+  cashbox_id:     string
+  user_id:        string
+  permission_key: string
+  granted_by:     string
+}): Promise<void> {
+  const id  = `${input.cashbox_id}.${input.user_id}.${input.permission_key}`
+  const now = new Date().toISOString()
+  await getPowerSyncDb().execute(
+    `INSERT OR IGNORE INTO cashbox_permissions
+      (id, workspace_id, cashbox_id, user_id, permission_key, granted_by, created_at)
+     VALUES (?,?,?,?,?,?,?)`,
+    [id, WORKSPACE_ID, input.cashbox_id, input.user_id, input.permission_key, input.granted_by, now]
+  )
+}
+
+export async function revokeCashboxPermission(id: string): Promise<void> {
+  await getPowerSyncDb().execute(
+    'DELETE FROM cashbox_permissions WHERE id = ?', [id]
+  )
+}
+
 // ─── Conteos ──────────────────────────────────────────────────────────────────
 
 export async function listCashCounts(cashboxId: string, limit = 20): Promise<CashCount[]> {
@@ -253,6 +357,16 @@ export async function createCashDifference(
       input.currency, input.system_amount, input.counted_amount, diff,
       new Date().toISOString(),
     ]
+  )
+}
+
+export async function updateCashDifference(
+  id: string,
+  input: { status: 'resolved' | 'written_off'; resolution_notes: string; resolved_by: string }
+): Promise<void> {
+  await getPowerSyncDb().execute(
+    'UPDATE cash_differences SET status = ?, resolution_notes = ?, resolved_by = ? WHERE id = ?',
+    [input.status, input.resolution_notes, input.resolved_by, id]
   )
 }
 

@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw, DollarSign, Vault
+  Database, RefreshCw, DollarSign, Banknote
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'

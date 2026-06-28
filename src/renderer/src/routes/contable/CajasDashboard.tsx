@@ -4,6 +4,14 @@ import { cn } from '../../components/ui/utils'
 import { useCashboxesWithBalances, parseCurrencies, fmtAmount } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency, CashboxStatus } from '@shared/types'
 import { CASHBOX_STATUS_LABELS, CASHBOX_STATUS_COLORS } from '@shared/types'
+import NuevoMovimientoModal from './NuevoMovimientoModal'
+import ConteoRapidoModal from './ConteoRapidoModal'
+import DiferenciasModal from './DiferenciasModal'
+import PermisosModal from './PermisosModal'
+import CierreDiarioModal from './CierreDiarioModal'
+import ReporteModal from './ReporteModal'
+
+type ActiveModal = 'income' | 'expense' | 'transfer' | 'count' | 'differences' | 'permissions' | 'close' | 'report' | null
 
 const CURRENCY_SYMBOLS: Record<CashCurrency, string> = { ARS: '$', USD: 'USD', EUR: '€' }
 
@@ -130,6 +138,12 @@ export default function CajasDashboard() {
   const { companies, cashboxes, isLoading } = useCashboxesWithBalances()
   const [companyFilter, setCompanyFilter] = useState<string>('all')
   const [selectedId, setSelectedId]       = useState<string | null>(null)
+  const [activeModal, setActiveModal]     = useState<ActiveModal>(null)
+
+  const selectedBox = useMemo(
+    () => cashboxes.find(b => b.id === selectedId) ?? null,
+    [cashboxes, selectedId]
+  )
 
   // ── KPIs globales ──────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -251,14 +265,68 @@ export default function CajasDashboard() {
           </div>
         )}
 
-        {/* Panel de acciones — E3 */}
-        {selectedId && (
+        {/* Panel de acciones */}
+        {selectedId && selectedBox && (
           <SelectedPanel
-            box={cashboxes.find(b => b.id === selectedId)!}
-            onClose={() => setSelectedId(null)}
+            box={selectedBox}
+            onClose={() => { setSelectedId(null); setActiveModal(null) }}
+            onAction={setActiveModal}
           />
         )}
       </div>
+
+      {/* Modal movimiento */}
+      {activeModal && activeModal !== 'count' && selectedBox && (
+        <NuevoMovimientoModal
+          box={selectedBox}
+          allBoxes={cashboxes}
+          initialTipo={activeModal}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* Modal conteo */}
+      {activeModal === 'count' && selectedBox && (
+        <ConteoRapidoModal
+          box={selectedBox}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* Modal reporte */}
+      {activeModal === 'report' && selectedBox && (
+        <ReporteModal
+          box={selectedBox}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* Modal cierre diario */}
+      {activeModal === 'close' && selectedBox && (
+        <CierreDiarioModal
+          box={selectedBox}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* Modal permisos */}
+      {activeModal === 'permissions' && selectedBox && (
+        <PermisosModal
+          box={selectedBox}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* Modal diferencias */}
+      {activeModal === 'differences' && selectedBox && (
+        <DiferenciasModal
+          box={selectedBox}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -301,7 +369,15 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   )
 }
 
-function SelectedPanel({ box, onClose }: { box: CashboxWithBalance; onClose: () => void }) {
+function SelectedPanel({
+  box,
+  onClose,
+  onAction,
+}: {
+  box: CashboxWithBalance
+  onClose: () => void
+  onAction: (tipo: ActiveModal) => void
+}) {
   const currencies = parseCurrencies(box.currencies)
   return (
     <div className="bg-slate-800/80 border border-emerald-700/40 rounded-xl p-4">
@@ -309,42 +385,47 @@ function SelectedPanel({ box, onClose }: { box: CashboxWithBalance; onClose: () 
         <div>
           <span className="text-sm font-medium text-slate-100">{box.name}</span>
           <span className="text-xs text-slate-500 ml-2">{box.company?.name}</span>
+          {currencies.length > 1 && (
+            <span className="text-[10px] text-slate-600 ml-2">· {currencies.join(' · ')}</span>
+          )}
         </div>
-        <button
-          onClick={onClose}
-          className="text-slate-500 hover:text-slate-300 text-lg leading-none"
-        >×</button>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
       </div>
       <div className="flex gap-2 flex-wrap">
-        <ActionBtn label="Ingresar"     color="emerald" disabled />
-        <ActionBtn label="Egresar"      color="slate"   disabled />
-        <ActionBtn label="Transferir"   color="slate"   disabled />
-        <ActionBtn label="Contar caja"  color="slate"   disabled />
-        <ActionBtn label="Historial"    color="slate"   disabled />
+        <ActionBtn label="Ingresar"   color="emerald" onClick={() => onAction('income')} />
+        <ActionBtn label="Egresar"    color="red"     onClick={() => onAction('expense')} />
+        <ActionBtn label="Transferir" color="sky"     onClick={() => onAction('transfer')} />
+        <ActionBtn label="Contar caja"  color="slate" onClick={() => onAction('count')} />
+        <ActionBtn label="Cierre diario" color="sky"   onClick={() => onAction('close')} />
+        <ActionBtn label="Diferencias"  color="slate" onClick={() => onAction('differences')} />
+        <ActionBtn label="Permisos"     color="slate" onClick={() => onAction('permissions')} />
+        <ActionBtn label="Exportar"     color="slate" onClick={() => onAction('report')} />
       </div>
-      <p className="text-[10px] text-slate-600 mt-3">
-        Acciones disponibles en E3 — próximamente.
-        {currencies.length > 1 && ` Monedas: ${currencies.join(', ')}.`}
-      </p>
     </div>
   )
 }
 
 function ActionBtn({
-  label, color, disabled,
+  label, color, onClick, disabled,
 }: {
   label: string
-  color: 'emerald' | 'slate'
+  color: 'emerald' | 'red' | 'sky' | 'slate'
+  onClick?: () => void
   disabled?: boolean
 }) {
+  const colorCls = {
+    emerald: 'bg-emerald-900/40 text-emerald-300 border-emerald-700 hover:bg-emerald-900/60',
+    red:     'bg-red-900/30 text-red-300 border-red-800 hover:bg-red-900/50',
+    sky:     'bg-sky-900/30 text-sky-300 border-sky-800 hover:bg-sky-900/50',
+    slate:   'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700',
+  }[color]
   return (
     <button
+      onClick={onClick}
       disabled={disabled}
       className={cn(
         'px-3 py-1.5 rounded-lg text-xs border transition-colors',
-        color === 'emerald'
-          ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700 hover:bg-emerald-900/60'
-          : 'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700',
+        colorCls,
         disabled && 'opacity-40 cursor-not-allowed'
       )}
     >

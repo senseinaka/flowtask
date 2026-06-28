@@ -118,6 +118,32 @@ export function useCreateTransfer() {
   })
 }
 
+export function useUpdateCashDifference() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, resolution_notes }: {
+      id: string
+      status: 'resolved' | 'written_off'
+      resolution_notes: string
+    }) => window.api.cajas.differences.update(id, { status, resolution_notes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cajas', 'differences'] })
+      qc.invalidateQueries({ queryKey: ['cajas', 'cashboxes'] })
+    },
+  })
+}
+
+export function useCreateCashDifference() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.api.cajas.differences.create>[0]) =>
+      window.api.cajas.differences.create(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cajas', 'differences'] })
+    },
+  })
+}
+
 export function useSetCashboxStatus() {
   const qc = useQueryClient()
   return useMutation({
@@ -125,6 +151,48 @@ export function useSetCashboxStatus() {
       window.api.cajas.setStatus(id, status),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cajas', 'cashboxes'] })
+    },
+  })
+}
+
+// ─── Resumen diario ───────────────────────────────────────────────────────────
+
+export function useDailyMovementsSummary(cashboxId: string, date: string) {
+  return useQuery({
+    queryKey: ['cajas', 'daily', cashboxId, date],
+    queryFn:  () => window.api.cajas.daily.summary(cashboxId, date),
+    enabled:  !!cashboxId && !!date,
+  })
+}
+
+// ─── Permisos ─────────────────────────────────────────────────────────────────
+
+export function useCashboxPermissions(cashboxId: string) {
+  return useQuery({
+    queryKey: ['cajas', 'permissions', cashboxId],
+    queryFn:  () => window.api.cajas.permissions.list(cashboxId),
+    enabled:  !!cashboxId,
+  })
+}
+
+export function useGrantCashboxPermission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { cashbox_id: string; user_id: string; permission_key: string }) =>
+      window.api.cajas.permissions.grant(input),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['cajas', 'permissions', v.cashbox_id] })
+    },
+  })
+}
+
+export function useRevokeCashboxPermission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }: { id: string; cashbox_id: string }) =>
+      window.api.cajas.permissions.revoke(id),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['cajas', 'permissions', v.cashbox_id] })
     },
   })
 }
