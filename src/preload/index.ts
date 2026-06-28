@@ -1066,6 +1066,10 @@ const api = {
         ipcRenderer.invoke('recon:data:cupones', periodId),
       mlops: (periodId: string): Promise<ReconMLOp[]> =>
         ipcRenderer.invoke('recon:data:mlops', periodId),
+      naveOps: (periodId: string): Promise<import('@shared/types').ReconNaveOp[]> =>
+        ipcRenderer.invoke('recon:data:naveops', periodId),
+      extracto: (periodId: string): Promise<import('@shared/types').ReconExtractoRow[]> =>
+        ipcRenderer.invoke('recon:data:extracto', periodId),
     },
     run: (periodId: string): Promise<{ ok: boolean; inserted?: number; error?: string }> =>
       ipcRenderer.invoke('recon:run', periodId),
@@ -1081,6 +1085,8 @@ const api = {
       get: (periodId: string): Promise<ReconKPIs> =>
         ipcRenderer.invoke('recon:kpis:get', periodId),
     },
+    export: (periodId: string): Promise<{ ok: boolean; filePath?: string; canceled?: boolean; error?: string }> =>
+      ipcRenderer.invoke('recon:export', periodId),
   },
 
   knowledge: {

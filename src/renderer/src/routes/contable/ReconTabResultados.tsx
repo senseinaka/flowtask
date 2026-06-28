@@ -2,14 +2,18 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   Table2, Layers, Columns2, LayoutGrid,
   Maximize2, Minimize2, Search, X, ChevronDown, ChevronUp,
-  CheckSquare, Square, ChevronsUpDown
+  CheckSquare, Square, ChevronsUpDown, Download,
+  CreditCard, ShoppingCart, ArrowLeftRight,
 } from 'lucide-react'
 import { Play } from 'lucide-react'
 import {
   RECON_ESTADO_LABELS, RECON_ESTADO_COLORS,
-  type ReconEstado, type ReconInvoice, type ReconMLOp,
+  type ReconEstado, type ReconInvoice, type ReconMLOp, type ReconNaveOp, type ReconExtractoRow,
 } from '@shared/types'
-import { useReconResults, useReconInvoices, useReconMLOps, useUpdateReconResult } from '../../hooks/useRecon'
+import {
+  useReconResults, useReconInvoices, useReconMLOps, useUpdateReconResult,
+  useReconNaveOps, useReconExtracto,
+} from '../../hooks/useRecon'
 import { cn } from '../../components/ui/utils'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -20,8 +24,11 @@ function fmt(n: number) {
 
 const TODOS_ESTADOS: ReconEstado[] = [
   'conciliado', 'dif_menor', 'conciliado_monto', 'diferencia_monto',
-  'rechazado_ml', 'no_cobrado_ml', 'pendiente', 'requiere_revision', 'manual',
+  'rechazado_ml', 'no_cobrado_ml', 'sin_match_nave', 'sin_match_ml', 'sin_match_trans',
+  'pendiente', 'requiere_revision', 'manual',
 ]
+
+type ResultTab = 'all' | 'nave' | 'ml' | 'trans'
 
 // ── tipos ────────────────────────────────────────────────────────────────────
 
@@ -31,12 +38,25 @@ interface EnrichedRow {
   id: string
   estado: ReconEstado
   diferencia: number
+  result_type: 'nave' | 'ml' | 'trans' | null
+  cupon_grupo: string
   invoice?: ReconInvoice
   mlOp?: ReconMLOp
+  naveOp?: ReconNaveOp
+  extracto?: ReconExtractoRow
   invoice_id?: string | null
   ml_op_id?: string | null
+  nave_op_id?: string | null
+  extracto_id?: string | null
   notes?: string
 }
+
+const RESULT_TABS: { key: ResultTab; label: string; icon: React.ElementType }[] = [
+  { key: 'all',   label: 'Todos',           icon: Table2         },
+  { key: 'nave',  label: 'Cupones NAVE',    icon: CreditCard     },
+  { key: 'ml',    label: 'Cupones ML',      icon: ShoppingCart   },
+  { key: 'trans', label: 'Transferencias',  icon: ArrowLeftRight },
+]
 
 // ── badges ───────────────────────────────────────────────────────────────────
 
@@ -542,49 +562,76 @@ export default function ReconTabResultados({
   const { data: results = [], isLoading } = useReconResults(periodId)
   const { data: invoices = [] }           = useReconInvoices(periodId)
   const { data: mlOps   = [] }            = useReconMLOps(periodId)
+  const { data: naveOps = [] }            = useReconNaveOps(periodId)
+  const { data: extracto = [] }           = useReconExtracto(periodId)
 
   const [viewMode,      setViewMode]      = useState<ViewMode>('compact')
   const [isFullscreen,  setIsFullscreen]  = useState(false)
   const [search,        setSearch]        = useState('')
   const [estadoFilter,  setEstadoFilter]  = useState<ReconEstado | undefined>(initialEstado)
+  const [resultTab,     setResultTab]     = useState<ResultTab>('all')
   const [expandedId,    setExpandedId]    = useState<string | null>(null)
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set())
   const [focusedIndex,  setFocusedIndex]  = useState(-1)
   const [batchTarget,   setBatchTarget]   = useState<ReconEstado | null>(null)
+  const [exporting,     setExporting]     = useState(false)
   const update = useUpdateReconResult()
 
   // Sync initialEstado when prop changes (drill-down from KPIs)
   useEffect(() => { if (initialEstado !== undefined) setEstadoFilter(initialEstado) }, [initialEstado])
 
-  const invoiceMap = useMemo(
-    () => new Map(invoices.map(i => [i.id, i])),
-    [invoices]
-  )
-  const mlOpMap = useMemo(
-    () => new Map(mlOps.map(op => [op.id, op])),
-    [mlOps]
-  )
+  const invoiceMap = useMemo(() => new Map(invoices.map(i => [i.id, i])), [invoices])
+  const mlOpMap    = useMemo(() => new Map(mlOps.map(op => [op.id, op])), [mlOps])
+  const naveOpMap  = useMemo(() => new Map(naveOps.map(op => [op.id, op])), [naveOps])
+  const extractoMap = useMemo(() => new Map(extracto.map(e => [e.id, e])), [extracto])
 
   const allRows: EnrichedRow[] = useMemo(() => results.map(r => ({
     ...r,
-    invoice: r.invoice_id ? invoiceMap.get(r.invoice_id) : undefined,
-    mlOp:    r.ml_op_id   ? mlOpMap.get(r.ml_op_id)     : undefined,
-  })), [results, invoiceMap, mlOpMap])
+    invoice: r.invoice_id   ? invoiceMap.get(r.invoice_id)   : undefined,
+    mlOp:    r.ml_op_id     ? mlOpMap.get(r.ml_op_id)        : undefined,
+    naveOp:  r.nave_op_id   ? naveOpMap.get(r.nave_op_id)    : undefined,
+    extracto: r.extracto_id ? extractoMap.get(r.extracto_id) : undefined,
+  })), [results, invoiceMap, mlOpMap, naveOpMap, extractoMap])
 
   const rows = useMemo(() => {
-    let filtered = estadoFilter ? allRows.filter(r => r.estado === estadoFilter) : allRows
+    let filtered = allRows
+    if (resultTab !== 'all') {
+      filtered = filtered.filter(r => r.result_type === resultTab)
+    }
+    if (estadoFilter) {
+      filtered = filtered.filter(r => r.estado === estadoFilter)
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       filtered = filtered.filter(r =>
-        (r.invoice?.comprobante ?? '').toLowerCase().includes(q) ||
-        (r.invoice?.concepto    ?? '').toLowerCase().includes(q) ||
-        (r.mlOp?.counterpart_name ?? '').toLowerCase().includes(q) ||
-        (r.mlOp?.operation_id   ?? '').toLowerCase().includes(q) ||
-        String(r.invoice?.total ?? '').includes(q)
+        (r.invoice?.comprobante         ?? '').toLowerCase().includes(q) ||
+        (r.invoice?.concepto            ?? '').toLowerCase().includes(q) ||
+        (r.mlOp?.counterpart_name       ?? '').toLowerCase().includes(q) ||
+        (r.mlOp?.operation_id           ?? '').toLowerCase().includes(q) ||
+        (r.naveOp?.operation_id         ?? '').toLowerCase().includes(q) ||
+        (r.extracto?.leyenda            ?? '').toLowerCase().includes(q) ||
+        String(r.invoice?.total         ?? '').includes(q)
       )
     }
     return filtered
-  }, [allRows, estadoFilter, search])
+  }, [allRows, resultTab, estadoFilter, search])
+
+  // Count rows per result_type tab
+  const countByTab = useMemo(() => ({
+    all:   allRows.length,
+    nave:  allRows.filter(r => r.result_type === 'nave').length,
+    ml:    allRows.filter(r => r.result_type === 'ml').length,
+    trans: allRows.filter(r => r.result_type === 'trans').length,
+  }), [allRows])
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      await window.api.recon.export(periodId)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // Keyboard navigation (compact view)
   const onKey = useCallback((e: KeyboardEvent) => {
@@ -644,6 +691,31 @@ export default function ReconTabResultados({
         isFullscreen && 'fixed inset-0 z-[100] bg-slate-900 p-6 overflow-auto'
       )}
     >
+      {/* Sub-tabs: tipo de resultado */}
+      <div className="flex gap-1 border-b border-slate-700 pb-0">
+        {RESULT_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => { setResultTab(tab.key); setEstadoFilter(undefined) }}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors',
+              resultTab === tab.key
+                ? 'border-amber-500 text-amber-300'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            )}
+          >
+            <tab.icon size={12} />
+            {tab.label}
+            <span className={cn(
+              'px-1.5 py-0.5 rounded-full text-[10px] font-semibold ml-0.5',
+              resultTab === tab.key ? 'bg-amber-700/40 text-amber-200' : 'bg-slate-700 text-slate-400'
+            )}>
+              {countByTab[tab.key]}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Modo de vista */}
@@ -681,6 +753,17 @@ export default function ReconTabResultados({
             </button>
           )}
         </div>
+
+        {/* Export */}
+        <button
+          onClick={handleExport}
+          disabled={exporting || allRows.length === 0}
+          title="Exportar a Excel"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-emerald-400 hover:border-emerald-700 transition-colors text-xs disabled:opacity-40"
+        >
+          <Download size={13} />
+          {exporting ? 'Exportando…' : 'Excel'}
+        </button>
 
         {/* Pantalla completa */}
         <button

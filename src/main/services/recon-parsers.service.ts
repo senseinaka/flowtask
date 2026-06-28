@@ -18,11 +18,24 @@ export interface ParsedInvoice {
 export interface ParsedCupon {
   cupon:         string
   plan:          string
+  tarjeta:       string   // NAVE | WEB MERCADOPAGO | MERCADOPAGO LOCAL | etc.
   total:         number
   nombre:        string
   condicion:     string
   fecha_ingreso: string   // YYYY-MM-DD o vacío
   cuotas:        number
+}
+
+export interface ParsedNaveOp {
+  operation_id: string
+  monto_bruto:  number
+  status:       string
+}
+
+export interface ParsedExtractoRow {
+  leyenda:     string
+  descripcion: string
+  credito:     number
 }
 
 export interface ParsedMLOp {
@@ -226,13 +239,14 @@ export function parseCuponesCSV(buffer: Buffer): ParsedCupon[] {
 
   const hdr = lines[0].split(';').map(h => stripExcelEq(str(h)).toLowerCase())
 
-  const C_CUPON  = findCol(hdr, ['cupón', 'cupon', 'número cup', 'nro cup'])
-  const C_PLAN   = findCol(hdr, ['plan'])
-  const C_TOTAL  = findCol(hdr, ['total', 'importe', 'monto'])
-  const C_NOMBRE = findCol(hdr, ['nombre', 'titular', 'cliente'])
-  const C_CONDIC = findCol(hdr, ['condici'])
-  const C_FECHA  = findCol(hdr, ['fecha'])
-  const C_CUOTAS = findCol(hdr, ['cuota'])
+  const C_CUPON   = findCol(hdr, ['cupón', 'cupon', 'número cup', 'nro cup'])
+  const C_PLAN    = findCol(hdr, ['plan'])
+  const C_TARJETA = findCol(hdr, ['tarjeta'])
+  const C_TOTAL   = findCol(hdr, ['total', 'importe', 'monto'])
+  const C_NOMBRE  = findCol(hdr, ['nombre', 'titular', 'cliente'])
+  const C_CONDIC  = findCol(hdr, ['condici'])
+  const C_FECHA   = findCol(hdr, ['fecha'])
+  const C_CUOTAS  = findCol(hdr, ['cuota'])
 
   const result: ParsedCupon[] = []
 
@@ -246,12 +260,13 @@ export function parseCuponesCSV(buffer: Buffer): ParsedCupon[] {
 
     result.push({
       cupon,
-      plan:          C_PLAN   !== -1 ? parts[C_PLAN]   : '',
+      plan:          C_PLAN    !== -1 ? parts[C_PLAN]    : '',
+      tarjeta:       C_TARJETA !== -1 ? parts[C_TARJETA] : '',
       total,
-      nombre:        C_NOMBRE !== -1 ? parts[C_NOMBRE] : '',
-      condicion:     C_CONDIC !== -1 ? parts[C_CONDIC] : '',
-      fecha_ingreso: C_FECHA  !== -1 ? parts[C_FECHA]  : '',
-      cuotas:        C_CUOTAS !== -1 ? Math.round(num(parts[C_CUOTAS])) || 1 : 1,
+      nombre:        C_NOMBRE  !== -1 ? parts[C_NOMBRE]  : '',
+      condicion:     C_CONDIC  !== -1 ? parts[C_CONDIC]  : '',
+      fecha_ingreso: C_FECHA   !== -1 ? parts[C_FECHA]   : '',
+      cuotas:        C_CUOTAS  !== -1 ? Math.round(num(parts[C_CUOTAS])) || 1 : 1,
     })
   }
 
@@ -283,31 +298,130 @@ export function parseCuponesXLSX(buffer: Buffer): ParsedCupon[] {
   }
 
   const hdr = rows[headerRowIdx].map(c => str(c).toLowerCase())
-  const C_CUPON  = findCol(hdr, ['número cup', 'nro cup', 'cupon', 'cupón'])
-  const C_PLAN   = findCol(hdr, ['plan'])
-  const C_TOTAL  = findCol(hdr, ['total', 'importe', 'monto'])
-  const C_NOMBRE = findCol(hdr, ['nombre', 'titular', 'cliente'])
-  const C_CONDIC = findCol(hdr, ['condici'])
-  const C_FECHA  = findCol(hdr, ['fecha'])
-  const C_CUOTAS = findCol(hdr, ['cuota'])
+  const C_CUPON   = findCol(hdr, ['número cup', 'nro cup', 'cupon', 'cupón'])
+  const C_PLAN    = findCol(hdr, ['plan'])
+  const C_TARJETA = findCol(hdr, ['tarjeta'])
+  const C_TOTAL   = findCol(hdr, ['total', 'importe', 'monto'])
+  const C_NOMBRE  = findCol(hdr, ['nombre', 'titular', 'cliente'])
+  const C_CONDIC  = findCol(hdr, ['condici'])
+  const C_FECHA   = findCol(hdr, ['fecha'])
+  const C_CUOTAS  = findCol(hdr, ['cuota'])
 
   const result: ParsedCupon[] = []
 
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
-    const r         = rows[i]
-    const cuponRaw  = C_CUPON !== -1 ? r[C_CUPON] : null
-    const totalRaw  = C_TOTAL !== -1 ? r[C_TOTAL] : null
-    const total     = num(totalRaw)
+    const r        = rows[i]
+    const cuponRaw = C_CUPON !== -1 ? r[C_CUPON] : null
+    const totalRaw = C_TOTAL !== -1 ? r[C_TOTAL] : null
+    const total    = num(totalRaw)
     if (!cuponRaw && total === 0) continue
 
     result.push({
       cupon:         str(cuponRaw),
-      plan:          C_PLAN   !== -1 ? str(r[C_PLAN])   : '',
+      plan:          C_PLAN    !== -1 ? str(r[C_PLAN])          : '',
+      tarjeta:       C_TARJETA !== -1 ? str(r[C_TARJETA])       : '',
       total,
-      nombre:        C_NOMBRE !== -1 ? str(r[C_NOMBRE]) : '',
-      condicion:     C_CONDIC !== -1 ? str(r[C_CONDIC]) : '',
-      fecha_ingreso: C_FECHA  !== -1 ? formatDateStr(r[C_FECHA]) : '',
-      cuotas:        C_CUOTAS !== -1 ? Math.round(num(r[C_CUOTAS])) || 1 : 1,
+      nombre:        C_NOMBRE  !== -1 ? str(r[C_NOMBRE])        : '',
+      condicion:     C_CONDIC  !== -1 ? str(r[C_CONDIC])        : '',
+      fecha_ingreso: C_FECHA   !== -1 ? formatDateStr(r[C_FECHA]) : '',
+      cuotas:        C_CUOTAS  !== -1 ? Math.round(num(r[C_CUOTAS])) || 1 : 1,
+    })
+  }
+
+  return result
+}
+
+// ── 5. NAVE XLS ───────────────────────────────────────────────────────────────
+//
+// Header en fila 4 (índice 3). Columnas clave:
+//   Código de operación, Monto bruto, Estado
+
+export function parseNave(buffer: Buffer): ParsedNaveOp[] {
+  const wb   = XLSX.read(buffer, { type: 'buffer' })
+  const ws   = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null }) as unknown[][]
+
+  if (rows.length < 5) throw new Error('NAVE: el archivo tiene menos de 5 filas')
+
+  // Header puede estar en fila 3 (0-indexed) — buscar la primera que contenga "operación" o "código"
+  let headerIdx = 3
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const r = rows[i].map(c => str(c).toLowerCase())
+    if (r.some(c => c.includes('operaci') || c.includes('código') || c.includes('codigo'))) {
+      headerIdx = i
+      break
+    }
+  }
+
+  const hdr      = rows[headerIdx].map(c => str(c).toLowerCase())
+  const C_OPID   = findCol(hdr, ['código de operaci', 'codigo de operaci', 'operaci', 'código oper', 'codigo'])
+  const C_MONTO  = findCol(hdr, ['monto bruto', 'monto'])
+  const C_STATUS = findCol(hdr, ['estado'])
+
+  if (C_OPID === -1) throw new Error('NAVE: no se encontró la columna "Código de operación"')
+  if (C_MONTO === -1) throw new Error('NAVE: no se encontró la columna "Monto bruto"')
+
+  const result: ParsedNaveOp[] = []
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i]
+    if (!r || r.every(c => c === null)) continue
+    const opId = str(r[C_OPID])
+    if (!opId) continue
+    result.push({
+      operation_id: opId,
+      monto_bruto:  num(r[C_MONTO]),
+      status:       C_STATUS !== -1 ? str(r[C_STATUS]) : '',
+    })
+  }
+
+  if (result.length === 0) throw new Error('NAVE: no se encontraron operaciones en el archivo')
+  return result
+}
+
+// ── 6. EXTRACTO BANCARIO XLS ──────────────────────────────────────────────────
+//
+// Header en fila 1 (índice 0). Filtrar solo filas cuya Descripción
+// contenga "Transf" o "Coelsa" y Créditos > 0.
+
+export function parseExtracto(buffer: Buffer): ParsedExtractoRow[] {
+  const wb   = XLSX.read(buffer, { type: 'buffer' })
+  const ws   = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null }) as unknown[][]
+
+  if (rows.length < 2) return []
+
+  // Buscar header dinámicamente (primera fila que tenga "crédito" o "leyenda")
+  let headerIdx = 0
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const r = rows[i].map(c => str(c).toLowerCase())
+    if (r.some(c => c.includes('crédit') || c.includes('credit') || c.includes('leyenda'))) {
+      headerIdx = i
+      break
+    }
+  }
+
+  const hdr    = rows[headerIdx].map(c => str(c).toLowerCase())
+  const C_DESC = findCol(hdr, ['descripci'])
+  const C_LEY  = findCol(hdr, ['leyendas adicionales1', 'leyenda adicional', 'leyenda'])
+  const C_CRED = findCol(hdr, ['créditos', 'creditos', 'crédito', 'credito'])
+
+  if (C_CRED === -1) throw new Error('Extracto: no se encontró la columna "Créditos"')
+
+  const result: ParsedExtractoRow[] = []
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i]
+    if (!r || r.every(c => c === null)) continue
+
+    const desc    = C_DESC !== -1 ? str(r[C_DESC]).toLowerCase() : ''
+    const credito = num(r[C_CRED])
+
+    if (!desc.includes('transf') && !desc.includes('coelsa')) continue
+    if (credito <= 0) continue
+
+    result.push({
+      leyenda:     C_LEY  !== -1 ? str(r[C_LEY])  : '',
+      descripcion: C_DESC !== -1 ? str(r[C_DESC]) : '',
+      credito,
     })
   }
 

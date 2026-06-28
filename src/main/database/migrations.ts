@@ -3106,6 +3106,44 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       try { db.exec(`ALTER TABLE recon_cupones  ADD COLUMN import_id TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
       try { db.exec(`ALTER TABLE recon_ml_ops   ADD COLUMN import_id TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
     }
+  },
+  {
+    version: 101,
+    up(db: Database.Database) {
+      // Nuevas tablas de cobros
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS recon_nave_ops (
+          id           TEXT PRIMARY KEY,
+          period_id    TEXT NOT NULL,
+          operation_id TEXT NOT NULL,
+          monto_bruto  REAL NOT NULL DEFAULT 0,
+          status       TEXT NOT NULL DEFAULT '',
+          import_id    TEXT NOT NULL DEFAULT ''
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_nave_ops_dedup
+          ON recon_nave_ops(period_id, operation_id);
+
+        CREATE TABLE IF NOT EXISTS recon_extracto (
+          id          TEXT PRIMARY KEY,
+          period_id   TEXT NOT NULL,
+          leyenda     TEXT NOT NULL DEFAULT '',
+          descripcion TEXT NOT NULL DEFAULT '',
+          credito     REAL NOT NULL DEFAULT 0,
+          import_id   TEXT NOT NULL DEFAULT ''
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_recon_extracto_dedup
+          ON recon_extracto(period_id, leyenda, credito);
+      `)
+      // Columna tarjeta en cupones (distingue NAVE vs ML)
+      try { db.exec(`ALTER TABLE recon_cupones ADD COLUMN tarjeta TEXT NOT NULL DEFAULT ''`) } catch { /* ya existe */ }
+      // Dropear el UNIQUE de cupones por cupon — los cupones ML pueden repetir Nro Cupón (cuotas)
+      try { db.exec(`DROP INDEX IF EXISTS idx_recon_cupones_dedup`) } catch { /* ok */ }
+      // Nuevas columnas en recon_results
+      try { db.exec(`ALTER TABLE recon_results ADD COLUMN result_type TEXT`) } catch { /* ya existe */ }
+      try { db.exec(`ALTER TABLE recon_results ADD COLUMN nave_op_id  TEXT`) } catch { /* ya existe */ }
+      try { db.exec(`ALTER TABLE recon_results ADD COLUMN extracto_id TEXT`) } catch { /* ya existe */ }
+      try { db.exec(`ALTER TABLE recon_results ADD COLUMN cupon_grupo TEXT NOT NULL DEFAULT '[]'`) } catch { /* ya existe */ }
+    }
   }
 ]
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
-  ReconPeriod, ReconImport, ReconInvoice, ReconMLOp, ReconResult, ReconResultEnriched, ReconKPIs,
+  ReconPeriod, ReconImport, ReconInvoice, ReconMLOp, ReconNaveOp, ReconExtractoRow,
+  ReconResult, ReconResultEnriched, ReconKPIs,
   CreateReconPeriodInput, ReconEstado, ReconPeriodStatus, ReconResultFilters
 } from '@shared/types'
 
@@ -84,6 +85,24 @@ export function useReconMLOps(periodId: string) {
   })
 }
 
+export function useReconNaveOps(periodId: string) {
+  return useQuery({
+    queryKey: ['recon-naveops', periodId],
+    queryFn: (): Promise<ReconNaveOp[]> => window.api.recon.data.naveOps(periodId),
+    enabled: !!periodId,
+    staleTime: 60_000,
+  })
+}
+
+export function useReconExtracto(periodId: string) {
+  return useQuery({
+    queryKey: ['recon-extracto', periodId],
+    queryFn: (): Promise<ReconExtractoRow[]> => window.api.recon.data.extracto(periodId),
+    enabled: !!periodId,
+    staleTime: 60_000,
+  })
+}
+
 export function useReconResults(periodId: string, estado?: ReconEstado) {
   return useQuery({
     queryKey: ['recon-results', periodId, estado ?? 'all'],
@@ -110,6 +129,8 @@ export function useDeleteReconImport() {
       qc.invalidateQueries({ queryKey: ['recon-imports'] })
       qc.invalidateQueries({ queryKey: ['recon-invoices'] })
       qc.invalidateQueries({ queryKey: ['recon-mlops'] })
+      qc.invalidateQueries({ queryKey: ['recon-naveops'] })
+      qc.invalidateQueries({ queryKey: ['recon-extracto'] })
       qc.invalidateQueries({ queryKey: ['recon-results-all'] })
     },
   })
@@ -124,6 +145,8 @@ export function useClearReconSource() {
       qc.invalidateQueries({ queryKey: ['recon-imports', periodId] })
       qc.invalidateQueries({ queryKey: ['recon-invoices', periodId] })
       qc.invalidateQueries({ queryKey: ['recon-mlops', periodId] })
+      qc.invalidateQueries({ queryKey: ['recon-naveops', periodId] })
+      qc.invalidateQueries({ queryKey: ['recon-extracto', periodId] })
     },
   })
 }

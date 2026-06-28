@@ -1,17 +1,18 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Upload, FileCheck2, AlertCircle, Loader2, Trash2, FileText, MousePointerClick } from 'lucide-react'
+import { Upload, FileCheck2, AlertCircle, Loader2, Trash2, FileText, MousePointerClick, CheckCircle2 } from 'lucide-react'
 import type { ReconImportSource, ReconImport } from '@shared/types'
 import { RECON_SOURCE_LABELS } from '@shared/types'
 import { useReconImports, useClearReconSource, useDeleteReconImport } from '../../hooks/useRecon'
 import { cn } from '../../components/ui/utils'
 
-const SOURCES: { key: ReconImportSource; color: string; ext: string; accepts: string[] }[] = [
-  { key: 'flexxus',       color: '#f59e0b', ext: 'XLSX', accepts: ['.xlsx'] },
-  { key: 'ml_principal',  color: '#3b82f6', ext: 'XLS',  accepts: ['.xls', '.xlsx'] },
-  { key: 'ml_secundaria', color: '#8b5cf6', ext: 'XLS',  accepts: ['.xls', '.xlsx'] },
-  { key: 'cupones_csv',   color: '#10b981', ext: 'CSV',  accepts: ['.csv'] },
-  { key: 'cupones_xlsx',  color: '#06b6d4', ext: 'XLSX', accepts: ['.xlsx', '.xls'] },
+const SOURCES: { key: ReconImportSource; color: string; ext: string; accepts: string[]; hint: string }[] = [
+  { key: 'flexxus',       color: '#f59e0b', ext: 'XLSX', accepts: ['.xlsx'],       hint: 'Fondos_Vtas_Web_[mes].XLSX' },
+  { key: 'cupones_csv',   color: '#10b981', ext: 'CSV',  accepts: ['.csv'],        hint: 'Cupones_[mes].csv'           },
+  { key: 'nave',          color: '#f97316', ext: 'XLS',  accepts: ['.xls','.xlsx'], hint: 'NAVE_[mes].xls'             },
+  { key: 'ml_principal',  color: '#3b82f6', ext: 'XLS',  accepts: ['.xls','.xlsx'], hint: 'Cobros_ML_principal_[mes].xls' },
+  { key: 'ml_secundaria', color: '#8b5cf6', ext: 'XLS',  accepts: ['.xls','.xlsx'], hint: 'Cobros_ML_secundaria_[mes].xls' },
+  { key: 'extracto',      color: '#06b6d4', ext: 'XLS',  accepts: ['.xls','.xlsx'], hint: 'Extracto_minorista_[mes].xls'  },
 ]
 
 function fmtDate(ms: number) {
@@ -246,17 +247,37 @@ export default function ReconTabImportar({
     setTimeout(() => setDropError(null), 2500)
   }
 
+  const sourcesWithData = useMemo(() =>
+    new Set(imports.filter(i => i.status === 'ok').map(i => i.source)),
+  [imports])
+
+  const loaded  = SOURCES.filter(s => sourcesWithData.has(s.key)).length
+  const total   = SOURCES.length
+  const pct     = Math.round((loaded / total) * 100)
+  const allDone = loaded === total
+
   return (
     <div className="space-y-3">
 
-      {/* Leyenda D&D */}
-      <div className="flex items-start gap-2.5 bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 mb-1">
-        <MousePointerClick size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-slate-400">
-          Podés <span className="text-amber-300 font-medium">arrastrar y soltar</span> archivos directamente
-          sobre la zona punteada de cada fuente, o usar el botón <strong className="text-slate-300">Cargar</strong>.
-          Cada archivo que sumes agrega solo los datos nuevos; los duplicados se ignoran automáticamente.
-        </p>
+      {/* Progreso */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            <MousePointerClick size={12} className="text-amber-400" />
+            <span className="text-xs text-slate-400">
+              <span className="text-amber-300 font-medium">Arrastrá o cargá</span> cada archivo en su sección
+            </span>
+          </div>
+          <span className={cn('text-xs font-semibold', allDone ? 'text-emerald-400' : 'text-slate-400')}>
+            {loaded} / {total}
+          </span>
+        </div>
+        <div className="w-full bg-slate-700/50 rounded-full h-1.5">
+          <div
+            className={cn('h-1.5 rounded-full transition-all duration-500', allDone ? 'bg-emerald-500' : 'bg-amber-500')}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
       </div>
 
       {SOURCES.map(src => {
@@ -284,9 +305,13 @@ export default function ReconTabImportar({
                 {src.ext}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white">{RECON_SOURCE_LABELS[src.key]}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-white">{RECON_SOURCE_LABELS[src.key]}</p>
+                  {sourcesWithData.has(src.key) && <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />}
+                </div>
+                <p className="text-[10px] text-slate-600 font-mono">{src.hint}</p>
                 {totalNew > 0 && (
-                  <p className="text-[10px] text-emerald-500">{totalNew} filas cargadas en total</p>
+                  <p className="text-[10px] text-emerald-500">{totalNew} filas</p>
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">

@@ -35,8 +35,8 @@
     "semantic_hash": "e606c3b06c092bcea4711c844c794210"
   },
   "src/main/database/migrations.ts": {
-    "mtime": 1782590061.6225567,
-    "ast_hash": "352735a5d14d5218f27c23947bcf9f33",
+    "mtime": 1782593109.9668815,
+    "ast_hash": "112aff4573e90de364ef383ca03e9a27",
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/recon.ts": {
-    "mtime": 1782592251.9470499,
-    "ast_hash": "ac26cffda383258d44a303ba7ce7a8f0",
+    "mtime": 1782593138.3492186,
+    "ast_hash": "a1e2589226d86859af01c291990608cc",
     "semantic_hash": ""
   },
   "src/main/database/queries/reminders.ts": {
@@ -275,8 +275,8 @@
     "semantic_hash": "f1a89e2a330a68e671890e7e49d2e606"
   },
   "src/main/ipc/recon.ipc.ts": {
-    "mtime": 1782592337.9638574,
-    "ast_hash": "f05d0b9956348a397476749faf62105b",
+    "mtime": 1782593175.577662,
+    "ast_hash": "c41af5bcf1792d1eae10f6bf276f307f",
     "semantic_hash": ""
   },
   "src/main/ipc/reminders.ipc.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782588286.8356724,
-    "ast_hash": "6c7972306a3ad667d87cbb392a6fb6cb",
+    "mtime": 1782593180.1195707,
+    "ast_hash": "6582f6685d73faebe0fc82d8c351f8af",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -645,8 +645,8 @@
     "semantic_hash": "707ac16550622e203b98b728de07f0e4"
   },
   "src/renderer/src/hooks/useRecon.ts": {
-    "mtime": 1782582099.989319,
-    "ast_hash": "4df5a2462710a73bc363fb6eca64574e",
+    "mtime": 1782593184.8487532,
+    "ast_hash": "bb84e639785b45297df4e87aa63c35d5",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useReminders.ts": {
@@ -830,8 +830,8 @@
     "semantic_hash": "17b448a8b758a80836f728e9dd24add0"
   },
   "src/renderer/src/routes/contable/ReconTabImportar.tsx": {
-    "mtime": 1782592312.1244533,
-    "ast_hash": "aaaaf55259c1db99164d8e9c08c0f065",
+    "mtime": 1782593350.5721092,
+    "ast_hash": "ab2bc88fb1f2bfbf5d6f2d3db6de2090",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconTabKPIs.tsx": {

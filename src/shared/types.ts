@@ -2667,6 +2667,8 @@ export type ReconImportSource =
   | 'ml_principal'
   | 'ml_secundaria'
   | 'fondos'
+  | 'nave'
+  | 'extracto'
 
 export type ReconEstado =
   | 'conciliado'
@@ -2678,6 +2680,9 @@ export type ReconEstado =
   | 'pendiente'
   | 'requiere_revision'
   | 'manual'
+  | 'sin_match_nave'
+  | 'sin_match_ml'
+  | 'sin_match_trans'
 
 export interface ReconPeriod {
   id: string
@@ -2726,6 +2731,7 @@ export interface ReconCupon {
   period_id: string
   cupon: string
   plan: string
+  tarjeta: string
   total: number
   nombre: string
   condicion: string
@@ -2750,12 +2756,34 @@ export interface ReconMLOp {
   cuenta: string
 }
 
+export interface ReconNaveOp {
+  id: string
+  period_id: string
+  operation_id: string
+  monto_bruto: number
+  status: string
+  import_id: string
+}
+
+export interface ReconExtractoRow {
+  id: string
+  period_id: string
+  leyenda: string
+  descripcion: string
+  credito: number
+  import_id: string
+}
+
 export interface ReconResult {
   id: string
   period_id: string
   invoice_id: string | null
   cupon_id: string | null
   ml_op_id: string | null
+  nave_op_id: string | null
+  extracto_id: string | null
+  result_type: 'nave' | 'ml' | 'trans' | null
+  cupon_grupo: string
   estado: ReconEstado
   diferencia: number
   match_score: number
@@ -2852,7 +2880,10 @@ export const RECON_ESTADO_LABELS: Record<ReconEstado, string> = {
   no_cobrado_ml:     'No cobrado ML',
   pendiente:         'Pendiente',
   requiere_revision: 'Requiere revisión',
-  manual:            'Manual'
+  manual:            'Manual',
+  sin_match_nave:    'Sin match NAVE',
+  sin_match_ml:      'Sin match ML',
+  sin_match_trans:   'Sin match Trans.',
 }
 
 export const RECON_ESTADO_COLORS: Record<ReconEstado, string> = {
@@ -2864,17 +2895,22 @@ export const RECON_ESTADO_COLORS: Record<ReconEstado, string> = {
   no_cobrado_ml:     '#94a3b8',
   pendiente:         '#64748b',
   requiere_revision: '#a855f7',
-  manual:            '#06b6d4'
+  manual:            '#06b6d4',
+  sin_match_nave:    '#6366f1',
+  sin_match_ml:      '#6366f1',
+  sin_match_trans:   '#6366f1',
 }
 
 export const RECON_SOURCE_LABELS: Record<ReconImportSource, string> = {
-  flexxus:       'Fondos Vtas Web (Flexxus)',
+  flexxus:       'Fondos Vtas Web',
   planilla2:     'Facturas + Clientes',
   cupones_csv:   'Cupones CSV',
   cupones_xlsx:  'Cupones XLSX',
   ml_principal:  'ML Principal',
   ml_secundaria: 'ML Secundaria',
-  fondos:        'Fondos / Banco'
+  fondos:        'Fondos / Banco',
+  nave:          'NAVE ops',
+  extracto:      'Extracto bancario',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

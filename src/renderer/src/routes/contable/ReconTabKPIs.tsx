@@ -8,7 +8,9 @@ function fmt(n: number) {
 
 const ESTADO_ORDER: ReconEstado[] = [
   'conciliado', 'dif_menor', 'conciliado_monto', 'diferencia_monto',
-  'rechazado_ml', 'no_cobrado_ml', 'pendiente', 'requiere_revision', 'manual',
+  'rechazado_ml', 'no_cobrado_ml',
+  'sin_match_nave', 'sin_match_ml', 'sin_match_trans',
+  'pendiente', 'requiere_revision', 'manual',
 ]
 
 export default function ReconTabKPIs({

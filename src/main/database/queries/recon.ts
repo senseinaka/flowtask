@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto'
 import { getDb } from '../db'
 import type {
-  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconResult, ReconResultEnriched, ReconKPIs,
+  ReconPeriod, ReconImport, ReconInvoice, ReconCupon, ReconMLOp, ReconNaveOp, ReconExtractoRow,
+  ReconResult, ReconResultEnriched, ReconKPIs,
   CreateReconPeriodInput, ReconPeriodStatus, ReconEstado, ReconImportSource, ReconResultFilters
 } from '@shared/types'
-import type { ParsedInvoice, ParsedCupon, ParsedMLOp } from '../../services/recon-parsers.service'
+import type { ParsedInvoice, ParsedCupon, ParsedMLOp, ParsedNaveOp, ParsedExtractoRow } from '../../services/recon-parsers.service'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 
@@ -81,10 +82,12 @@ export function logReconImport(data: {
 export function deleteReconImport(importId: string): void {
   const db = getDb()
   db.transaction(() => {
-    db.prepare('DELETE FROM recon_invoices WHERE import_id = ?').run(importId)
-    db.prepare('DELETE FROM recon_cupones  WHERE import_id = ?').run(importId)
-    db.prepare('DELETE FROM recon_ml_ops   WHERE import_id = ?').run(importId)
-    db.prepare('DELETE FROM recon_imports  WHERE id = ?').run(importId)
+    db.prepare('DELETE FROM recon_invoices  WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_cupones   WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_ml_ops    WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_nave_ops  WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_extracto  WHERE import_id = ?').run(importId)
+    db.prepare('DELETE FROM recon_imports   WHERE id = ?').run(importId)
   })()
 }
 
@@ -106,6 +109,18 @@ export function listReconMLOps(periodId: string): ReconMLOp[] {
   return getDb().prepare(`
     SELECT * FROM recon_ml_ops WHERE period_id = ? ORDER BY date_approved ASC
   `).all(periodId) as ReconMLOp[]
+}
+
+export function listReconNaveOps(periodId: string): ReconNaveOp[] {
+  return getDb().prepare(`
+    SELECT * FROM recon_nave_ops WHERE period_id = ? ORDER BY operation_id ASC
+  `).all(periodId) as ReconNaveOp[]
+}
+
+export function listReconExtracto(periodId: string): ReconExtractoRow[] {
+  return getDb().prepare(`
+    SELECT * FROM recon_extracto WHERE period_id = ? ORDER BY rowid ASC
+  `).all(periodId) as ReconExtractoRow[]
 }
 
 // ── Bulk inserts ──────────────────────────────────────────────────────────────
@@ -143,16 +158,59 @@ export function bulkInsertCupones(
   importId: string
 ): { inserted: number; skipped: number } {
   const db   = getDb()
+  // Sin INSERT OR IGNORE: los cupones ML pueden repetir el mismo Nro Cupón (cuotas)
   const stmt = db.prepare(`
-    INSERT OR IGNORE INTO recon_cupones
-      (id, period_id, cupon, plan, total, nombre, condicion, fecha_ingreso, cuotas, import_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO recon_cupones
+      (id, period_id, cupon, plan, tarjeta, total, nombre, condicion, fecha_ingreso, cuotas, import_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   let inserted = 0
   db.transaction(() => {
     for (const r of rows) {
-      const res = stmt.run(randomUUID(), periodId, r.cupon, r.plan, r.total,
-                           r.nombre, r.condicion, r.fecha_ingreso, r.cuotas, importId)
+      stmt.run(randomUUID(), periodId, r.cupon, r.plan, r.tarjeta ?? '', r.total,
+               r.nombre, r.condicion, r.fecha_ingreso, r.cuotas, importId)
+      inserted++
+    }
+  })()
+  return { inserted, skipped: 0 }
+}
+
+export function bulkInsertNaveOps(
+  periodId: string,
+  rows: ParsedNaveOp[],
+  importId: string
+): { inserted: number; skipped: number } {
+  const db   = getDb()
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO recon_nave_ops
+      (id, period_id, operation_id, monto_bruto, status, import_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `)
+  let inserted = 0
+  db.transaction(() => {
+    for (const r of rows) {
+      const res = stmt.run(randomUUID(), periodId, r.operation_id, r.monto_bruto, r.status, importId)
+      inserted += res.changes
+    }
+  })()
+  return { inserted, skipped: rows.length - inserted }
+}
+
+export function bulkInsertExtracto(
+  periodId: string,
+  rows: ParsedExtractoRow[],
+  importId: string
+): { inserted: number; skipped: number } {
+  const db   = getDb()
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO recon_extracto
+      (id, period_id, leyenda, descripcion, credito, import_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `)
+  let inserted = 0
+  db.transaction(() => {
+    for (const r of rows) {
+      const res = stmt.run(randomUUID(), periodId, r.leyenda, r.descripcion, r.credito, importId)
       inserted += res.changes
     }
   })()
@@ -202,10 +260,24 @@ export function clearReconCupones(periodId: string): number {
 }
 
 export function clearReconMLOps(periodId: string, cuenta: string): number {
-  const db    = getDb()
-  const src   = cuenta === 'principal' ? 'ml_principal' : 'ml_secundaria'
+  const db  = getDb()
+  const src = cuenta === 'principal' ? 'ml_principal' : 'ml_secundaria'
   db.prepare('DELETE FROM recon_imports  WHERE period_id = ? AND source = ?').run(periodId, src)
   const res = db.prepare('DELETE FROM recon_ml_ops WHERE period_id = ? AND cuenta = ?').run(periodId, cuenta)
+  return res.changes
+}
+
+export function clearReconNave(periodId: string): number {
+  const db = getDb()
+  db.prepare(`DELETE FROM recon_imports WHERE period_id = ? AND source = 'nave'`).run(periodId)
+  const res = db.prepare('DELETE FROM recon_nave_ops WHERE period_id = ?').run(periodId)
+  return res.changes
+}
+
+export function clearReconExtracto(periodId: string): number {
+  const db = getDb()
+  db.prepare(`DELETE FROM recon_imports WHERE period_id = ? AND source = 'extracto'`).run(periodId)
+  const res = db.prepare('DELETE FROM recon_extracto WHERE period_id = ?').run(periodId)
   return res.changes
 }
 
@@ -284,6 +356,10 @@ interface ResultInsert {
   invoice_id:       string | null
   cupon_id:         string | null
   ml_op_id:         string | null
+  nave_op_id:       string | null
+  extracto_id:      string | null
+  result_type:      'nave' | 'ml' | 'trans' | null
+  cupon_grupo:      string
   estado:           ReconEstado
   diferencia:       number
   match_score:      number
@@ -291,135 +367,136 @@ interface ResultInsert {
   no_cobrado_razon: string
 }
 
+function isNave(tarjeta: string): boolean {
+  return tarjeta.toUpperCase().includes('NAVE')
+}
+
 export function runReconEngine(periodId: string): { inserted: number } {
   const db = getDb()
 
-  const invoices = db.prepare(
-    'SELECT * FROM recon_invoices WHERE period_id = ?'
-  ).all(periodId) as ReconInvoice[]
+  const invoices = db.prepare('SELECT * FROM recon_invoices WHERE period_id = ?').all(periodId) as ReconInvoice[]
+  const cupones  = db.prepare('SELECT * FROM recon_cupones  WHERE period_id = ?').all(periodId) as ReconCupon[]
+  const mlOps    = db.prepare('SELECT * FROM recon_ml_ops   WHERE period_id = ?').all(periodId) as ReconMLOp[]
+  const naveOps  = db.prepare('SELECT * FROM recon_nave_ops WHERE period_id = ?').all(periodId) as ReconNaveOp[]
+  const extracto = db.prepare('SELECT * FROM recon_extracto WHERE period_id = ?').all(periodId) as ReconExtractoRow[]
 
-  const mlOps = db.prepare(
-    'SELECT * FROM recon_ml_ops WHERE period_id = ?'
-  ).all(periodId) as ReconMLOp[]
-
-  const usedMlIds  = new Set<string>()
-  const usedInvIds = new Set<string>()
   const results: ResultInsert[] = []
+  const usedNaveIds     = new Set<string>()
+  const usedMlIds       = new Set<string>()
+  const usedExtractoIds = new Set<string>()
 
-  // ── Nivel 1: external_reference == comprobante ────────────────────────────
-  for (const inv of invoices) {
-    if (inv.importe_tarjetas === 0) continue
-    const match = mlOps.find(op =>
-      !usedMlIds.has(op.id) &&
-      !REJECTED_STATUSES.has(op.status) &&
-      op.external_reference &&
-      op.external_reference.trim() === inv.comprobante.trim()
-    )
-    if (!match) continue
-    usedMlIds.add(match.id)
-    usedInvIds.add(inv.id)
-
-    const diff = inv.importe_tarjetas - match.transaction_amount
-    const pct  = Math.abs(diff) / Math.max(inv.importe_tarjetas, 0.01)
-    results.push({
-      invoice_id: inv.id, cupon_id: null, ml_op_id: match.id,
-      estado:       pct < 0.01 ? 'conciliado' : pct < 0.05 ? 'dif_menor' : 'diferencia_monto',
-      diferencia:   diff,
-      match_score:  1.0,
-      match_method: 'external_reference',
-      no_cobrado_razon: '',
-    })
-  }
-
-  // ── Nivel 2: monto exacto ≤1% ─────────────────────────────────────────────
-  for (const inv of invoices) {
-    if (usedInvIds.has(inv.id) || inv.importe_tarjetas === 0) continue
-    const match = mlOps.find(op =>
-      !usedMlIds.has(op.id) &&
-      !REJECTED_STATUSES.has(op.status) &&
-      Math.abs(op.transaction_amount - inv.importe_tarjetas) /
-        Math.max(inv.importe_tarjetas, 0.01) < 0.01
-    )
-    if (!match) continue
-    usedMlIds.add(match.id)
-    usedInvIds.add(inv.id)
-    results.push({
-      invoice_id: inv.id, cupon_id: null, ml_op_id: match.id,
-      estado:       'conciliado_monto',
-      diferencia:   inv.importe_tarjetas - match.transaction_amount,
-      match_score:  0.9,
-      match_method: 'amount_exact',
-      no_cobrado_razon: '',
-    })
-  }
-
-  // ── Nivel 3: monto fuzzy ≤5% ─────────────────────────────────────────────
-  for (const inv of invoices) {
-    if (usedInvIds.has(inv.id) || inv.importe_tarjetas === 0) continue
-    const candidates = mlOps
-      .filter(op => !usedMlIds.has(op.id) && !REJECTED_STATUSES.has(op.status))
-      .map(op => ({
-        op,
-        pct: Math.abs(op.transaction_amount - inv.importe_tarjetas) /
-               Math.max(inv.importe_tarjetas, 0.01),
-      }))
-      .filter(c => c.pct <= 0.05)
-      .sort((a, b) => a.pct - b.pct)
-
-    const best = candidates[0]
-    if (!best) continue
-    usedMlIds.add(best.op.id)
-    usedInvIds.add(inv.id)
-    results.push({
-      invoice_id: inv.id, cupon_id: null, ml_op_id: best.op.id,
-      estado:       'dif_menor',
-      diferencia:   inv.importe_tarjetas - best.op.transaction_amount,
-      match_score:  1 - best.pct,
-      match_method: 'amount_fuzzy',
-      no_cobrado_razon: '',
-    })
-  }
-
-  // ── Facturas sin match ────────────────────────────────────────────────────
-  for (const inv of invoices) {
-    if (usedInvIds.has(inv.id)) continue
-    if (inv.importe_tarjetas === 0) {
-      let razon = ''
-      if (inv.importe_efectivo > 0)         razon = 'Efectivo'
-      else if (inv.importe_cta_cte > 0)     razon = 'Cta. Cte.'
-      else if (inv.importe_transferencia > 0) razon = 'Transferencia'
-      else if (inv.importe_otros > 0)        razon = 'Otros'
+  // ── Pass 1: Cupones NAVE ──────────────────────────────────────────────────
+  const cuponesNave = cupones.filter(c => isNave(c.tarjeta))
+  for (const cupon of cuponesNave) {
+    const naveOp = naveOps.find(op => !usedNaveIds.has(op.id) && op.operation_id === cupon.cupon)
+    if (naveOp) {
+      usedNaveIds.add(naveOp.id)
+      const diff = cupon.total - naveOp.monto_bruto
       results.push({
-        invoice_id: inv.id, cupon_id: null, ml_op_id: null,
-        estado: 'no_cobrado_ml', diferencia: 0,
-        match_score: 0, match_method: '', no_cobrado_razon: razon,
+        invoice_id: null, cupon_id: cupon.id, ml_op_id: null,
+        nave_op_id: naveOp.id, extracto_id: null, result_type: 'nave', cupon_grupo: '[]',
+        estado:       Math.abs(diff) <= 1 ? 'conciliado' : 'diferencia_monto',
+        diferencia:   diff, match_score: 1, match_method: 'cupon_nave', no_cobrado_razon: '',
       })
     } else {
       results.push({
-        invoice_id: inv.id, cupon_id: null, ml_op_id: null,
-        estado: 'pendiente', diferencia: inv.importe_tarjetas,
-        match_score: 0, match_method: '', no_cobrado_razon: '',
+        invoice_id: null, cupon_id: cupon.id, ml_op_id: null,
+        nave_op_id: null, extracto_id: null, result_type: 'nave', cupon_grupo: '[]',
+        estado: 'sin_match_nave',
+        diferencia: cupon.total, match_score: 0, match_method: '', no_cobrado_razon: '',
       })
     }
   }
 
-  // ── Ops ML sin match ──────────────────────────────────────────────────────
-  for (const op of mlOps) {
-    if (usedMlIds.has(op.id)) continue
-    results.push({
-      invoice_id: null, cupon_id: null, ml_op_id: op.id,
-      estado:     REJECTED_STATUSES.has(op.status) ? 'rechazado_ml' : 'pendiente',
-      diferencia: -op.transaction_amount,
-      match_score: 0, match_method: '', no_cobrado_razon: '',
-    })
+  // ── Pass 2: Cupones ML (agrupados por Nro Cupón, suma de totales) ─────────
+  const cuponesML = cupones.filter(c => !isNave(c.tarjeta))
+  const mlGroups  = new Map<string, { ids: string[]; total: number; nombre: string }>()
+  for (const c of cuponesML) {
+    if (!mlGroups.has(c.cupon)) mlGroups.set(c.cupon, { ids: [], total: 0, nombre: c.nombre })
+    const g = mlGroups.get(c.cupon)!
+    g.ids.push(c.id)
+    g.total += c.total
+  }
+
+  for (const [cuponNum, group] of mlGroups) {
+    // Buscar en ops aprobadas (principal primero por orden de cuenta)
+    const mlOp = mlOps.find(op =>
+      !usedMlIds.has(op.id) &&
+      op.operation_id === cuponNum &&
+      op.status === 'approved'
+    )
+    if (mlOp) {
+      usedMlIds.add(mlOp.id)
+      const diff = group.total - mlOp.transaction_amount
+      results.push({
+        invoice_id: null, cupon_id: group.ids[0], ml_op_id: mlOp.id,
+        nave_op_id: null, extracto_id: null, result_type: 'ml',
+        cupon_grupo: JSON.stringify(group.ids),
+        estado:       Math.abs(diff) <= 1 ? 'conciliado' : 'diferencia_monto',
+        diferencia:   diff, match_score: 1, match_method: 'cupon_ml', no_cobrado_razon: '',
+      })
+    } else {
+      const rejectedOp = mlOps.find(op => op.operation_id === cuponNum && REJECTED_STATUSES.has(op.status))
+      results.push({
+        invoice_id: null, cupon_id: group.ids[0], ml_op_id: rejectedOp?.id ?? null,
+        nave_op_id: null, extracto_id: null, result_type: 'ml',
+        cupon_grupo: JSON.stringify(group.ids),
+        estado:       rejectedOp ? 'rechazado_ml' : 'sin_match_ml',
+        diferencia:   group.total, match_score: 0, match_method: '', no_cobrado_razon: '',
+      })
+    }
+  }
+
+  // ── Pass 3: Transferencias bancarias (fuzzy por nombre) ───────────────────
+  const transInvoices = invoices.filter(inv => inv.importe_transferencia > 0)
+  for (const inv of transInvoices) {
+    const words = inv.concepto
+      .split(/\s+/)
+      .map(w => w.toLowerCase().replace(/[^a-z0-9áéíóúñ]/g, ''))
+      .filter(w => w.length > 3)
+
+    let bestRow: ReconExtractoRow | null = null
+    let bestScore = -1
+
+    for (const row of extracto) {
+      if (usedExtractoIds.has(row.id)) continue
+      const leyLower = row.leyenda.toLowerCase()
+      const matchCount = words.filter(w => leyLower.includes(w)).length
+      if (matchCount === 0) continue
+
+      const amtRatio = Math.abs(inv.importe_transferencia - row.credito) / Math.max(inv.importe_transferencia, 1)
+      if (amtRatio > 0.3) continue  // diferencia > 30% → descartar
+
+      const score = matchCount * 10 - amtRatio * 100
+      if (score > bestScore) { bestScore = score; bestRow = row }
+    }
+
+    if (bestRow) {
+      usedExtractoIds.add(bestRow.id)
+      const diff = inv.importe_transferencia - bestRow.credito
+      results.push({
+        invoice_id: inv.id, cupon_id: null, ml_op_id: null,
+        nave_op_id: null, extracto_id: bestRow.id, result_type: 'trans', cupon_grupo: '[]',
+        estado:       Math.abs(diff) <= 1 ? 'conciliado' : 'diferencia_monto',
+        diferencia:   diff, match_score: 1, match_method: 'nombre_fuzzy', no_cobrado_razon: '',
+      })
+    } else {
+      results.push({
+        invoice_id: inv.id, cupon_id: null, ml_op_id: null,
+        nave_op_id: null, extracto_id: null, result_type: 'trans', cupon_grupo: '[]',
+        estado: 'sin_match_trans',
+        diferencia: inv.importe_transferencia, match_score: 0, match_method: '', no_cobrado_razon: '',
+      })
+    }
   }
 
   // ── Persist ───────────────────────────────────────────────────────────────
   const stmt = db.prepare(`
     INSERT INTO recon_results
-      (id, period_id, invoice_id, cupon_id, ml_op_id, estado, diferencia,
+      (id, period_id, invoice_id, cupon_id, ml_op_id, nave_op_id, extracto_id,
+       result_type, cupon_grupo, estado, diferencia,
        match_score, match_method, no_cobrado_razon, override_by, override_at, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, '')
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, '')
   `)
 
   db.transaction(() => {
@@ -427,9 +504,9 @@ export function runReconEngine(periodId: string): { inserted: number } {
     for (const r of results) {
       stmt.run(
         randomUUID(), periodId,
-        r.invoice_id, r.cupon_id, r.ml_op_id,
-        r.estado, r.diferencia, r.match_score, r.match_method,
-        r.no_cobrado_razon
+        r.invoice_id, r.cupon_id, r.ml_op_id, r.nave_op_id, r.extracto_id,
+        r.result_type, r.cupon_grupo,
+        r.estado, r.diferencia, r.match_score, r.match_method, r.no_cobrado_razon
       )
     }
   })()
