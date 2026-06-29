@@ -13,7 +13,7 @@ const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 
 export async function getCashCompanies(): Promise<CashCompany[]> {
   return getPowerSyncDb().getAll<CashCompany>(
-    'SELECT * FROM cash_companies WHERE workspace_id = ? AND active = 1 ORDER BY name',
+    'SELECT * FROM cash_companies WHERE workspace_id = ? AND active = 1 ORDER BY sort_order ASC, name ASC',
     [WORKSPACE_ID]
   )
 }
@@ -22,9 +22,47 @@ export async function getCashCompanies(): Promise<CashCompany[]> {
 
 export async function getCashboxes(): Promise<Cashbox[]> {
   return getPowerSyncDb().getAll<Cashbox>(
-    'SELECT * FROM cashboxes WHERE workspace_id = ? AND active = 1 ORDER BY company_id, name',
+    'SELECT * FROM cashboxes WHERE workspace_id = ? AND active = 1 ORDER BY sort_order ASC, name ASC',
     [WORKSPACE_ID]
   )
+}
+
+// Renombrar una caja (lápiz editable en el dashboard).
+export async function renameCashbox(id: string, name: string): Promise<void> {
+  await getPowerSyncDb().execute(
+    'UPDATE cashboxes SET name = ? WHERE id = ? AND workspace_id = ?',
+    [name.trim(), id, WORKSPACE_ID]
+  )
+}
+
+// Mueve una caja una posición dentro de su empresa (flechas ◀ ▶).
+// Renormaliza el sort_order de todos los hermanos a 1..N en el nuevo orden,
+// así queda consistente aunque venían empatados (default 0).
+export async function moveCashbox(id: string, direction: 'up' | 'down'): Promise<void> {
+  const db = getPowerSyncDb()
+  const target = (await db.getAll<Cashbox>(
+    'SELECT * FROM cashboxes WHERE id = ? AND workspace_id = ?',
+    [id, WORKSPACE_ID]
+  ))[0]
+  if (!target) return
+
+  const siblings = await db.getAll<Cashbox>(
+    'SELECT * FROM cashboxes WHERE company_id = ? AND workspace_id = ? AND active = 1 ORDER BY sort_order ASC, name ASC',
+    [target.company_id, WORKSPACE_ID]
+  )
+  const idx = siblings.findIndex(s => s.id === id)
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+  if (idx < 0 || swapIdx < 0 || swapIdx >= siblings.length) return
+
+  const reordered = [...siblings]
+  ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]]
+
+  for (let i = 0; i < reordered.length; i++) {
+    await db.execute(
+      'UPDATE cashboxes SET sort_order = ? WHERE id = ? AND workspace_id = ?',
+      [i + 1, reordered[i].id, WORKSPACE_ID]
+    )
+  }
 }
 
 export async function getCashbox(id: string): Promise<Cashbox | null> {

@@ -1297,7 +1297,7 @@ const service_catalog = new Table(
 // ── Cajas Internas ────────────────────────────────────────────────────────────
 
 const cash_companies = new Table(
-  { workspace_id: column.text, name: column.text, code: column.text, active: column.integer, created_at: column.text },
+  { workspace_id: column.text, name: column.text, code: column.text, active: column.integer, sort_order: column.integer, created_at: column.text },
   { indexes: { workspace: ['workspace_id'] } }
 )
 
@@ -1312,6 +1312,7 @@ const cashboxes = new Table(
     responsible_user_id: column.text,
     requires_count_hours:column.integer,
     active:              column.integer,
+    sort_order:          column.integer,
     created_at:          column.text,
   },
   { indexes: { workspace: ['workspace_id'], company: ['company_id'] } }

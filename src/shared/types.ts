@@ -3734,6 +3734,7 @@ export interface CashCompany {
   name: string
   code: string
   active: number
+  sort_order: number
   created_at: string
 }
 
@@ -3748,6 +3749,7 @@ export interface Cashbox {
   responsible_user_id: string
   requires_count_hours: number | null
   active: number
+  sort_order: number
   created_at: string
 }
 

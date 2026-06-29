@@ -26,6 +26,8 @@ import {
   listCashDifferences,
   listAllPendingDifferences,
   updateCashboxStatus,
+  renameCashbox,
+  moveCashbox,
   getCashFlowSeries,
 } from '../database/queries/cajas'
 import {
@@ -191,6 +193,12 @@ export function registerCajasIpc(): void {
 
   ipcMain.handle('cajas:cashbox:setStatus',
     (_e, id: string, status: CashboxStatus) => updateCashboxStatus(id, status))
+
+  ipcMain.handle('cajas:cashbox:rename',
+    (_e, id: string, name: string) => renameCashbox(id, name))
+
+  ipcMain.handle('cajas:cashbox:move',
+    (_e, id: string, direction: 'up' | 'down') => moveCashbox(id, direction))
 
   // ── Comprobantes (adjuntos en Google Drive + metadata en PowerSync) ──────────
   ipcMain.handle('cajas:attachments:list',

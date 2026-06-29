@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2, BarChart3, LayoutGrid } from 'lucide-react'
+import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2, BarChart3, LayoutGrid, Pencil, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
-import { useCashboxesWithBalances, parseCurrencies, fmtAmount } from '../../hooks/useCajas'
+import { useCashboxesWithBalances, parseCurrencies, fmtAmount, useRenameCashbox, useMoveCashbox } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency, CashboxStatus } from '@shared/types'
 import { CASHBOX_STATUS_LABELS, CASHBOX_STATUS_COLORS } from '@shared/types'
 import NuevoMovimientoModal from './NuevoMovimientoModal'
@@ -41,20 +41,44 @@ function CashboxCard({
   box,
   selected,
   onClick,
+  isFirst,
+  isLast,
 }: {
   box: CashboxWithBalance
   selected: boolean
   onClick: () => void
+  isFirst: boolean
+  isLast: boolean
 }) {
   const currencies = parseCurrencies(box.currencies)
   const hasDiff = box.status === 'with_difference'
   const isPending = box.status === 'pending_count'
 
+  const rename = useRenameCashbox()
+  const move   = useMoveCashbox()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(box.name)
+
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    setDraft(box.name)
+    setEditing(true)
+  }
+  function saveEdit() {
+    const trimmed = draft.trim()
+    if (trimmed && trimmed !== box.name) rename.mutate({ id: box.id, name: trimmed })
+    setEditing(false)
+  }
+  function cancelEdit() {
+    setDraft(box.name)
+    setEditing(false)
+  }
+
   return (
-    <button
+    <div
       onClick={onClick}
       className={cn(
-        'text-left bg-slate-800 border rounded-xl p-4 transition-all duration-150 w-full',
+        'text-left bg-slate-800 border rounded-xl p-4 transition-all duration-150 w-full cursor-pointer',
         selected
           ? 'border-emerald-500 ring-1 ring-emerald-500/30'
           : hasDiff
@@ -63,10 +87,42 @@ function CashboxCard({
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-100 truncate">{box.name}</p>
-          {box.description && (
-            <p className="text-[11px] text-slate-500 truncate mt-0.5">{box.description}</p>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <input
+                autoFocus
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') saveEdit()
+                  else if (e.key === 'Escape') cancelEdit()
+                }}
+                className="min-w-0 flex-1 bg-slate-900 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 outline-none"
+              />
+              <button onClick={saveEdit} className="p-1 text-emerald-400 hover:text-emerald-300" title="Guardar">
+                <Check size={14} />
+              </button>
+              <button onClick={cancelEdit} className="p-1 text-slate-500 hover:text-slate-300" title="Cancelar">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-slate-100 truncate">{box.name}</p>
+                <button
+                  onClick={startEdit}
+                  className="shrink-0 p-0.5 text-slate-500 hover:text-emerald-400 transition-colors"
+                  title="Renombrar caja"
+                >
+                  <Pencil size={12} />
+                </button>
+              </div>
+              {box.description && (
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">{box.description}</p>
+              )}
+            </>
           )}
         </div>
         <StatusBadge status={box.status} />
@@ -92,14 +148,34 @@ function CashboxCard({
         })}
       </div>
 
-      <div className="text-[10px] text-slate-600">
-        {box.last_count_at
-          ? `Último conteo: ${new Date(box.last_count_at).toLocaleDateString('es-AR')}`
-          : isPending
-          ? <span className="text-amber-600">Sin conteo registrado</span>
-          : 'Sin conteos'}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] text-slate-600 min-w-0 truncate">
+          {box.last_count_at
+            ? `Último conteo: ${new Date(box.last_count_at).toLocaleDateString('es-AR')}`
+            : isPending
+            ? <span className="text-amber-600">Sin conteo registrado</span>
+            : 'Sin conteos'}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => !isFirst && move.mutate({ id: box.id, direction: 'up' })}
+            disabled={isFirst || move.isPending}
+            className="p-1 rounded text-slate-500 enabled:hover:text-slate-200 enabled:hover:bg-slate-700 disabled:opacity-30 transition-colors"
+            title="Mover antes"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            onClick={() => !isLast && move.mutate({ id: box.id, direction: 'down' })}
+            disabled={isLast || move.isPending}
+            className="p-1 rounded text-slate-500 enabled:hover:text-slate-200 enabled:hover:bg-slate-700 disabled:opacity-30 transition-colors"
+            title="Mover después"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -124,12 +200,14 @@ function CompanySection({
         </span>
       </div>
       <div className="grid grid-cols-3 gap-3">
-        {boxes.map(box => (
+        {boxes.map((box, i) => (
           <CashboxCard
             key={box.id}
             box={box}
             selected={selectedId === box.id}
             onClick={() => onSelect(box.id)}
+            isFirst={i === 0}
+            isLast={i === boxes.length - 1}
           />
         ))}
       </div>

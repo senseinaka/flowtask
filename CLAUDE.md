@@ -1153,8 +1153,8 @@ Todas `cash_*`, se leen/escriben vía `getPowerSyncDb()` con filtro `workspace_i
 
 | Tabla | Contenido |
 |-------|-----------|
-| `cash_companies` | Empresas/entidades dueñas de las cajas |
-| `cashboxes` | Cada caja: nombre, monedas habilitadas, estado (`ok` / `with_difference` / `closed`) |
+| `cash_companies` | Empresas/entidades dueñas de las cajas. `sort_order` controla el orden de las empresas en el dashboard (Naka=0, EV=1) |
+| `cashboxes` | Cada caja: nombre (renombrable desde la UI), `currencies` (monedas habilitadas, JSON), estado (`ok` / `with_difference` / `closed`), `sort_order` (orden visual dentro de su empresa) |
 | `cashbox_permissions` | Permiso por usuario y caja. Claves: `view` / `income` / `expense` / `transfer` / `count`. **ID determinístico** `${cashbox_id}.${user_id}.${perm}` (sin UNIQUE secundario; `INSERT OR IGNORE`) |
 | `cash_categories` | Categorías de movimiento (ingreso / egreso) |
 | `cash_movements` | Cabecera del movimiento: `type` (`income` / `expense` / `transfer`), `status` (`confirmed` / …), fecha, caja, categoría, descripción |
@@ -1186,6 +1186,15 @@ Una transferencia entre cajas crea **dos `cash_movements` con `type='transfer'`*
 - **DiferenciasModal:** lista, resuelve o condona (`write_off`) diferencias. Al resolver la última diferencia pendiente, la caja vuelve a `ok`.
 - **CierreDiarioModal:** resumen del día + conteo de cierre; deja la caja en `closed` (o `with_difference` si no cuadra).
 - **PermisosModal:** asigna/revoca permisos por usuario y caja (ID determinístico).
+
+### Orden, renombrado y monedas de las cajas
+
+- **Orden:** persiste en la columna `sort_order` (en `cashboxes` y `cash_companies`), no depende del nombre. `getCashboxes`/`getCashCompanies` ordenan por `sort_order ASC, name ASC`. El dashboard muestra Naka arriba de EV, y dentro de cada empresa el flujo cobros/ventas → caja 1 → caja 2.
+- **Reordenar (UI):** flechas ◀ ▶ en cada `CashboxCard` (`moveCashbox(id, 'up'|'down')`). Mueve la caja una posición dentro de su empresa renormalizando el `sort_order` de todos los hermanos a 1..N (robusto ante empates en 0).
+- **Renombrar (UI):** lápiz en cada card → input inline (Enter guarda, Esc cancela) → `renameCashbox(id, name)`. Por eso la card es un `<div>` (no `<button>`): lápiz, flechas e input son controles con `stopPropagation`; el click en el cuerpo sigue seleccionando la caja.
+- **Monedas por empresa:** Naka maneja ARS/USD/EUR, Estación Vertical ARS/USD. La card y el modal de movimiento leen `box.currencies`, así que la congruencia se mantiene a nivel data (columna `currencies`). Seed/fix en `supabase_cajas_orden_monedas.sql`.
+
+> **DDL:** la columna `sort_order` y el fix de monedas se aplican con `supabase_cajas_orden_monedas.sql` (ALTER + seed por id estable). No requiere tocar sync-rules (publicación FOR ALL TABLES + `SELECT *` + `powersync_repl` ya tiene SELECT). Aplicar el SQL **antes** de reiniciar la app (el `AppSchema` del cliente ya declara `sort_order`).
 
 ### Export a Excel
 
@@ -1233,7 +1242,7 @@ Banner que avisa de TODAS las diferencias sin resolver del workspace, no solo de
 
 ### IPC (`cajas:*`)
 
-`companies`, `cashboxes`, `cashbox`, `balances`, `lastCounts`, `categories`, `cashbox:setStatus`; `movements:{list,listDetailed,create,transfer}`; `counts:{list,create}`; `differences:{list,pending,create,update}`; `permissions:{list,grant,revoke}`; `daily:summary`; `report:export`; `attachments:{list,add,delete,open}`.
+`companies`, `cashboxes`, `cashbox`, `balances`, `lastCounts`, `categories`, `cashbox:{setStatus,rename,move}`; `movements:{list,listDetailed,create,transfer}`; `counts:{list,create}`; `differences:{list,pending,create,update}`; `permissions:{list,grant,revoke}`; `daily:summary`; `report:export`; `attachments:{list,add,delete,open}`.
 
 ### Setup en Supabase (aplicado jun 2026)
 

@@ -177,6 +177,28 @@ export function useSetCashboxStatus() {
   })
 }
 
+export function useRenameCashbox() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      window.api.cajas.rename(id, name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cajas', 'cashboxes'] })
+    },
+  })
+}
+
+export function useMoveCashbox() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, direction }: { id: string; direction: 'up' | 'down' }) =>
+      window.api.cajas.move(id, direction),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cajas', 'cashboxes'] })
+    },
+  })
+}
+
 // ─── Resumen diario ───────────────────────────────────────────────────────────
 
 export function useDailyMovementsSummary(cashboxId: string, date: string) {
