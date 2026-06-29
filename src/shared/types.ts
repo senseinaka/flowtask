@@ -3835,6 +3835,12 @@ export interface CashDifference {
   created_at: string
 }
 
+// Diferencia pendiente enriquecida para el banner de alertas (workspace-wide)
+export interface PendingDifferenceItem extends CashDifference {
+  cashbox_name: string
+  company_name: string
+}
+
 export interface CashAuditLog {
   id: string
   workspace_id: string
@@ -3857,4 +3863,36 @@ export interface CashMovementWithAmounts extends CashMovement {
   category?: CashCategory
   source_cashbox?: Cashbox
   dest_cashbox?: Cashbox
+}
+
+// Fila enriquecida para el historial de movimientos (categoría + montos + nº de comprobantes)
+export interface CashMovementListItem {
+  id: string
+  cashbox_id: string
+  type: MovementType
+  status: MovementStatus
+  reference_date: string
+  category_id: string
+  category_name: string | null
+  notes: string
+  created_by: string
+  created_at: string
+  amounts_json: string      // JSON array de { currency, amount }
+  attachment_count: number
+}
+
+// ── Adjuntos de Cajas (comprobantes) — metadata en PowerSync, bytes en Google Drive ──
+export type CashAttachmentOwnerType = 'movement' | 'count'
+
+export interface CashAttachment {
+  id: string
+  workspace_id: string
+  owner_type: CashAttachmentOwnerType
+  owner_id: string
+  original_name: string
+  mime_type: string
+  size_bytes: number
+  drive_file_id: string
+  created_by: string
+  created_at: string
 }

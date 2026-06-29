@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2, BarChart3, LayoutGrid } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import { useCashboxesWithBalances, parseCurrencies, fmtAmount } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency, CashboxStatus } from '@shared/types'
@@ -10,8 +10,11 @@ import DiferenciasModal from './DiferenciasModal'
 import PermisosModal from './PermisosModal'
 import CierreDiarioModal from './CierreDiarioModal'
 import ReporteModal from './ReporteModal'
+import MovimientosModal from './MovimientosModal'
+import AlertasDescuadre from './AlertasDescuadre'
+import CajasCharts from './CajasCharts'
 
-type ActiveModal = 'income' | 'expense' | 'transfer' | 'count' | 'differences' | 'permissions' | 'close' | 'report' | null
+type ActiveModal = 'income' | 'expense' | 'transfer' | 'count' | 'differences' | 'permissions' | 'close' | 'report' | 'movements' | null
 
 const CURRENCY_SYMBOLS: Record<CashCurrency, string> = { ARS: '$', USD: 'USD', EUR: '€' }
 
@@ -139,6 +142,7 @@ export default function CajasDashboard() {
   const [companyFilter, setCompanyFilter] = useState<string>('all')
   const [selectedId, setSelectedId]       = useState<string | null>(null)
   const [activeModal, setActiveModal]     = useState<ActiveModal>(null)
+  const [view, setView]                   = useState<'list' | 'charts'>('list')
 
   const selectedBox = useMemo(
     () => cashboxes.find(b => b.id === selectedId) ?? null,
@@ -194,9 +198,21 @@ export default function CajasDashboard() {
           <Banknote size={20} className="text-emerald-400" />
           <h1 className="text-base font-semibold text-slate-100">Cajas</h1>
         </div>
+        <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+          <ViewBtn active={view === 'list'}   onClick={() => setView('list')}   icon={LayoutGrid} label="Cajas" />
+          <ViewBtn active={view === 'charts'} onClick={() => setView('charts')} icon={BarChart3}  label="Gráficos" />
+        </div>
       </div>
 
       <div className="flex flex-col flex-1 overflow-y-auto p-6 gap-5">
+
+        {/* Alertas de descuadre (banner, sólo si hay diferencias pendientes) */}
+        <AlertasDescuadre
+          onResolve={cashboxId => {
+            setSelectedId(cashboxId)
+            setActiveModal('differences')
+          }}
+        />
 
         {/* KPIs */}
         <div className="grid grid-cols-4 gap-3">
@@ -244,8 +260,11 @@ export default function CajasDashboard() {
           ))}
         </div>
 
+        {/* Vista gráficos */}
+        {view === 'charts' && <CajasCharts boxes={filteredBoxes} />}
+
         {/* Grilla por empresa */}
-        {cashboxes.length === 0 ? (
+        {view === 'list' && (cashboxes.length === 0 ? (
           <div className="flex flex-1 items-center justify-center text-slate-500 text-sm">
             Sin cajas registradas. Corré el SQL de seed en Supabase.
           </div>
@@ -263,10 +282,10 @@ export default function CajasDashboard() {
                 />
               ))}
           </div>
-        )}
+        ))}
 
         {/* Panel de acciones */}
-        {selectedId && selectedBox && (
+        {view === 'list' && selectedId && selectedBox && (
           <SelectedPanel
             box={selectedBox}
             onClose={() => { setSelectedId(null); setActiveModal(null) }}
@@ -276,7 +295,7 @@ export default function CajasDashboard() {
       </div>
 
       {/* Modal movimiento */}
-      {activeModal && activeModal !== 'count' && selectedBox && (
+      {(activeModal === 'income' || activeModal === 'expense' || activeModal === 'transfer') && selectedBox && (
         <NuevoMovimientoModal
           box={selectedBox}
           allBoxes={cashboxes}
@@ -298,6 +317,14 @@ export default function CajasDashboard() {
       {/* Modal reporte */}
       {activeModal === 'report' && selectedBox && (
         <ReporteModal
+          box={selectedBox}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {/* Modal movimientos + comprobantes */}
+      {activeModal === 'movements' && selectedBox && (
+        <MovimientosModal
           box={selectedBox}
           onClose={() => setActiveModal(null)}
         />
@@ -369,6 +396,26 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   )
 }
 
+function ViewBtn({ active, onClick, icon: Icon, label }: {
+  active: boolean
+  onClick: () => void
+  icon: React.ElementType
+  label: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
+        active ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'
+      )}
+    >
+      <Icon size={13} />
+      {label}
+    </button>
+  )
+}
+
 function SelectedPanel({
   box,
   onClose,
@@ -395,6 +442,7 @@ function SelectedPanel({
         <ActionBtn label="Ingresar"   color="emerald" onClick={() => onAction('income')} />
         <ActionBtn label="Egresar"    color="red"     onClick={() => onAction('expense')} />
         <ActionBtn label="Transferir" color="sky"     onClick={() => onAction('transfer')} />
+        <ActionBtn label="Movimientos"  color="slate" onClick={() => onAction('movements')} />
         <ActionBtn label="Contar caja"  color="slate" onClick={() => onAction('count')} />
         <ActionBtn label="Cierre diario" color="sky"   onClick={() => onAction('close')} />
         <ActionBtn label="Diferencias"  color="slate" onClick={() => onAction('differences')} />

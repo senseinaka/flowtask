@@ -1384,6 +1384,21 @@ const cash_audit_logs = new Table(
   { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'] } }
 )
 
+const cash_attachments = new Table(
+  {
+    workspace_id:  column.text,
+    owner_type:    column.text,   // 'movement' | 'count'
+    owner_id:      column.text,
+    original_name: column.text,
+    mime_type:     column.text,
+    size_bytes:    column.integer,
+    drive_file_id: column.text,
+    created_by:    column.text,
+    created_at:    column.text,
+  },
+  { indexes: { workspace: ['workspace_id'], owner: ['owner_id'] } }
+)
+
 export const AppSchema = new Schema({
   projects,
   tasks,
@@ -1460,6 +1475,7 @@ export const AppSchema = new Schema({
   cash_count_details,
   cash_differences,
   cash_audit_logs,
+  cash_attachments,
 })
 
 /**
@@ -1553,11 +1569,13 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
 
       switch (op.op) {
         case UpdateType.PUT: {
-          res = await fetch(`${baseUrl}/${op.table}`, {
+          let putData = { ...op.opData, id: op.id } as Record<string, unknown>
+          const doPut = () => fetch(`${baseUrl}/${op.table}`, {
             method: 'POST',
             headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
-            body: JSON.stringify({ ...op.opData, id: op.id })
+            body: JSON.stringify(putData)
           })
+          res = await doPut()
           if (!res.ok && res.status === 404) {
             const body = await res.text()
             if (body.includes('PGRST205')) {
@@ -1567,6 +1585,19 @@ class ProductionTokenConnector implements PowerSyncBackendConnector {
             } else {
               throw new Error(`[PowerSync] PUT ${op.table}/${op.id} -> 404 ${body}`)
             }
+          }
+          // PostgREST puede no conocer una columna (existe en el cliente pero no en
+          // Supabase): quitar cada columna que reporte PGRST204 y reintentar, igual
+          // que en el PATCH. Sin esto, un PUT con columna desconocida devuelve 400 y
+          // se reintenta para siempre, trabando toda la cola ps_crud.
+          while (!res.ok && res.status === 400) {
+            const body = await res.text()
+            const m = body.match(/Could not find the '(\w+)' column/)
+            if (!m) throw new Error(`[PowerSync] PUT ${op.table}/${op.id} -> 400 ${body}`)
+            console.warn(`[PowerSync] PUT ${op.table}/${op.id}: columna '${m[1]}' no existe en Supabase (PGRST204), omitiéndola`)
+            putData = Object.fromEntries(Object.entries(putData).filter(([k]) => k !== m[1]))
+            if (Object.keys(putData).length === 0) { res = new Response(null, { status: 200 }); break }
+            res = await doPut()
           }
           break
         }
@@ -1895,6 +1926,16 @@ async function migrateLegacyTableData(psDb: PowerSyncDatabase, tables: string[])
   for (const table of tables) {
     const { count } = await psDb.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${table}`)
     if (count > 0) continue
+
+    // Algunas tablas (ej. comex_import_pl_files, comex_cotizaciones) nacieron en la
+    // era PowerSync y nunca existieron en flowtask.db: no hay datos legacy que migrar.
+    // Sin esta guarda, flowDb.prepare(...) lanza "no such table" y la excepción aborta
+    // connectPowerSync() antes de db.connect() → la app queda sin sincronizar cada vez
+    // que se recrea powersync.db (recuperación de corrupción, instalación nueva, etc.).
+    const legacyExists = flowDb
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(table)
+    if (!legacyExists) continue
 
     const rows = flowDb.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]
     if (rows.length === 0) continue
@@ -2318,6 +2359,6 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
     { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
         'cash_companies', 'cashboxes', 'cashbox_permissions', 'cash_categories',
         'cash_movements', 'cash_movement_amounts', 'cash_counts', 'cash_count_details',
-        'cash_differences', 'cash_audit_logs'], throttleMs: 1000 }
+        'cash_differences', 'cash_audit_logs', 'cash_attachments'], throttleMs: 1000 }
   )
 }

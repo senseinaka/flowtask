@@ -297,6 +297,19 @@ class DriveService {
     return folderId
   }
 
+  /** Carpeta raíz de comprobantes de Cajas Internas ("Summit Cajas"), cacheada. */
+  async getOrCreateCajasFolder(): Promise<string> {
+    const cached = store.get('cajasFolderId', '') as string
+    if (cached) return cached
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+    const folderId = await this.getOrCreateFolder(drive, 'Summit Cajas')
+    store.set('cajasFolderId', folderId)
+    return folderId
+  }
+
   /**
    * Returns the innermost Drive folder for an entry:
    * Summit Knowledge / "Junio 2026" / "Entry Title"

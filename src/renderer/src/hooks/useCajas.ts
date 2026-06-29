@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import type {
   CashCompany, Cashbox, CashboxWithBalance,
   CashCurrency, CashMovement, CashCount,
+  CashAttachmentOwnerType,
 } from '@shared/types'
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
@@ -14,8 +15,11 @@ const KEYS = {
   lastCounts: ['cajas', 'lastCounts'] as const,
   categories: (type?: string) => ['cajas', 'categories', type ?? 'all'] as const,
   movements:  (id: string)    => ['cajas', 'movements', id]  as const,
+  movementsDetailed: (id: string) => ['cajas', 'movementsDetailed', id] as const,
   counts:     (id: string)    => ['cajas', 'counts', id]     as const,
   differences:(id: string)    => ['cajas', 'differences', id] as const,
+  differencesPending:           ['cajas', 'differences', 'pending'] as const,
+  attachments:(ownerType: string, ownerId: string) => ['cajas', 'attachments', ownerType, ownerId] as const,
 }
 
 // ─── Base queries ─────────────────────────────────────────────────────────────
@@ -63,6 +67,14 @@ export function useCashMovements(cashboxId: string) {
   })
 }
 
+export function useCashMovementsDetailed(cashboxId: string) {
+  return useQuery({
+    queryKey: KEYS.movementsDetailed(cashboxId),
+    queryFn:  () => window.api.cajas.movements.listDetailed(cashboxId),
+    enabled:  !!cashboxId,
+  })
+}
+
 export function useCashCounts(cashboxId: string) {
   return useQuery({
     queryKey: KEYS.counts(cashboxId),
@@ -76,6 +88,16 @@ export function useCashDifferences(cashboxId: string) {
     queryKey: KEYS.differences(cashboxId),
     queryFn:  () => window.api.cajas.differences.list(cashboxId),
     enabled:  !!cashboxId,
+  })
+}
+
+// Todas las diferencias sin resolver del workspace (banner de alertas de descuadre).
+// queryKey ['cajas','differences','pending'] cae bajo el prefijo que invalida
+// useUpdateCashDifference, así que al resolver una se refresca solo.
+export function usePendingDifferences() {
+  return useQuery({
+    queryKey: KEYS.differencesPending,
+    queryFn:  () => window.api.cajas.differences.pending(),
   })
 }
 
@@ -165,6 +187,21 @@ export function useDailyMovementsSummary(cashboxId: string, date: string) {
   })
 }
 
+// ─── Serie temporal para gráficos ─────────────────────────────────────────────
+
+export function useCashFlowSeries(
+  dateFrom: string,
+  dateTo: string,
+  cashboxIds: string[],
+  currency: string = 'ARS'
+) {
+  return useQuery({
+    queryKey: ['cajas', 'flowSeries', dateFrom, dateTo, currency, [...cashboxIds].sort().join(',')],
+    queryFn:  () => window.api.cajas.charts.flowSeries(dateFrom, dateTo, cashboxIds, currency),
+    enabled:  !!dateFrom && !!dateTo,
+  })
+}
+
 // ─── Permisos ─────────────────────────────────────────────────────────────────
 
 export function useCashboxPermissions(cashboxId: string) {
@@ -193,6 +230,40 @@ export function useRevokeCashboxPermission() {
       window.api.cajas.permissions.revoke(id),
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ['cajas', 'permissions', v.cashbox_id] })
+    },
+  })
+}
+
+// ─── Comprobantes (adjuntos en Drive) ─────────────────────────────────────────
+
+export function useCashAttachments(ownerType: CashAttachmentOwnerType, ownerId: string) {
+  return useQuery({
+    queryKey: KEYS.attachments(ownerType, ownerId),
+    queryFn:  () => window.api.cajas.attachments.list(ownerType, ownerId),
+    enabled:  !!ownerId,
+  })
+}
+
+export function useAddCashAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ownerType, ownerId }: { ownerType: CashAttachmentOwnerType; ownerId: string }) =>
+      window.api.cajas.attachments.add(ownerType, ownerId),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: KEYS.attachments(v.ownerType, v.ownerId) })
+      qc.invalidateQueries({ queryKey: ['cajas', 'movementsDetailed'] })
+    },
+  })
+}
+
+export function useDeleteCashAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }: { id: string; ownerType: CashAttachmentOwnerType; ownerId: string }) =>
+      window.api.cajas.attachments.delete(id),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: KEYS.attachments(v.ownerType, v.ownerId) })
+      qc.invalidateQueries({ queryKey: ['cajas', 'movementsDetailed'] })
     },
   })
 }

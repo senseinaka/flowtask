@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import path from 'path'
 import os from 'os'
 import {
@@ -16,6 +16,7 @@ import {
   getCashboxLastCounts,
   getCashCategories,
   listCashMovements,
+  getCashMovementsWithMeta,
   createCashMovement,
   createTransfer,
   listCashCounts,
@@ -23,10 +24,17 @@ import {
   createCashDifference,
   updateCashDifference,
   listCashDifferences,
+  listAllPendingDifferences,
   updateCashboxStatus,
+  getCashFlowSeries,
 } from '../database/queries/cajas'
+import {
+  listCashAttachments,
+  addCashAttachment,
+  deleteCashAttachment,
+} from '../database/queries/cash-attachments'
 import { getSession } from '../services/auth.service'
-import type { CashboxStatus } from '@shared/types'
+import type { CashboxStatus, CashAttachmentOwnerType, CashAttachment } from '@shared/types'
 
 export function registerCajasIpc(): void {
   ipcMain.handle('cajas:companies',   () => getCashCompanies())
@@ -38,6 +46,9 @@ export function registerCajasIpc(): void {
 
   ipcMain.handle('cajas:movements:list',
     (_e, cashboxId: string, limit?: number) => listCashMovements(cashboxId, limit))
+
+  ipcMain.handle('cajas:movements:listDetailed',
+    (_e, cashboxId: string, limit?: number) => getCashMovementsWithMeta(cashboxId, limit))
 
   ipcMain.handle('cajas:movements:create', async (_e, input: Parameters<typeof createCashMovement>[0]) => {
     const session = await getSession()
@@ -69,6 +80,8 @@ export function registerCajasIpc(): void {
 
   ipcMain.handle('cajas:differences:list',
     (_e, cashboxId: string) => listCashDifferences(cashboxId))
+
+  ipcMain.handle('cajas:differences:pending', () => listAllPendingDifferences())
 
   ipcMain.handle('cajas:report:export', async (event, cashboxId: string, cashboxName: string, dateFrom: string, dateTo: string) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -159,6 +172,10 @@ export function registerCajasIpc(): void {
   ipcMain.handle('cajas:daily:summary',
     (_e, cashboxId: string, date: string) => getDailyMovementsSummary(cashboxId, date))
 
+  ipcMain.handle('cajas:charts:flowSeries',
+    (_e, dateFrom: string, dateTo: string, cashboxIds?: string[], currency?: string) =>
+      getCashFlowSeries(dateFrom, dateTo, cashboxIds, currency))
+
   ipcMain.handle('cajas:permissions:list',
     (_e, cashboxId: string) => getCashboxPermissions(cashboxId))
 
@@ -174,4 +191,35 @@ export function registerCajasIpc(): void {
 
   ipcMain.handle('cajas:cashbox:setStatus',
     (_e, id: string, status: CashboxStatus) => updateCashboxStatus(id, status))
+
+  // ── Comprobantes (adjuntos en Google Drive + metadata en PowerSync) ──────────
+  ipcMain.handle('cajas:attachments:list',
+    (_e, ownerType: CashAttachmentOwnerType, ownerId: string) =>
+      listCashAttachments(ownerType, ownerId))
+
+  ipcMain.handle('cajas:attachments:add', async (event, ownerType: CashAttachmentOwnerType, ownerId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return []
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Adjuntar comprobante',
+      filters: [{ name: 'Comprobantes', extensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic'] }],
+      properties: ['openFile', 'multiSelections'],
+    })
+    if (result.canceled || !result.filePaths.length) return []
+
+    const session = await getSession()
+    const createdBy = session?.email ?? session?.userId ?? ''
+    const added: CashAttachment[] = []
+    for (const sourcePath of result.filePaths) {
+      added.push(await addCashAttachment({ ownerType, ownerId, sourcePath, createdBy }))
+    }
+    return added
+  })
+
+  ipcMain.handle('cajas:attachments:delete',
+    (_e, id: string) => deleteCashAttachment(id))
+
+  ipcMain.handle('cajas:attachments:open',
+    (_e, driveFileId: string) =>
+      shell.openExternal(`https://drive.google.com/file/d/${driveFileId}/view`))
 }

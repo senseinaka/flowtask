@@ -24,6 +24,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Knowledge:** captura y organización de información (textos, archivos, imágenes, PDFs) con resúmenes por IA (Haiku) y resúmenes globales por tema. Rutas `/knowledge`. Sincroniza vía PowerSync.
 - **Mercado Pago:** integración con la API de MP para descargar reportes de liquidaciones, sincronizar transacciones, y conciliarlas con operaciones internas. Multi-cuenta. Rutas `/contable/mercadopago`. Tablas PowerSync: `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`.
 - **Contable → Servicios:** gestión de servicios recurrentes: software/SaaS, seguros, hosting, bancarios, suscripciones, etc. Panel de control con vencimientos, historial de pagos/renovaciones, soporte inline para datos de pólizas de seguros. Catálogos editables (categorías, áreas, medios de pago) vía tabla `service_catalog`. Rutas `/contable/servicios`.
+- **Contable → Cajas Internas:** gestión de las cajas de efectivo de la empresa (caja chica, cajas por área, multi-moneda ARS/USD/EUR). Ingresos, egresos, transferencias entre cajas, conteos/arqueos, diferencias, permisos por usuario/caja y cierre diario, con export a Excel. Rutas `/contable/cajas`. 11 tablas PowerSync `cash_*` (incl. `cash_attachments` para comprobantes en Drive).
 - **RRHH — Sueldos:** administración mensual de sueldos por colaborador. Extrae datos de PDFs de recibos de sueldo, los guarda en Supabase via PowerSync, genera alertas inteligentes (nuevos, ausentes, variaciones), compara con el mes anterior y exporta planillas XLS. Los PDFs se almacenan en Google Drive (`Summit RRHH/Sueldos/MM-YYYY/`).
 - **RRHH — Nómina:** módulo de ficha de colaboradores. Registro completo (datos personales, laborales, bancarios, Drive). Genera la nómina desde la última liquidación, asigna legajos automáticos (4 dígitos), crea carpetas Drive en `Summit RRHH/Legajos/XXXX Nombre/` con subcarpetas, muestra historial salarial por colaborador con gráfico de área. Rutas: `/rrhh/nomina` y `/rrhh/nomina/:id`.
 - **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
@@ -136,6 +137,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`, `rrhh_nomina_config`, `rrhh_listas`
 - `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`
 - `accounting_services`, `accounting_service_payments`, `service_catalog`
+- `cash_companies`, `cashboxes`, `cashbox_permissions`, `cash_categories`, `cash_movements`, `cash_movement_amounts`, `cash_counts`, `cash_count_details`, `cash_differences`, `cash_audit_logs`, `cash_attachments` (Cajas Internas; `cash_attachments` con DDL pendiente — comprobantes en Drive)
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 
@@ -196,6 +198,12 @@ incluya columnas que varían por empresa — ver regla [[feedback-powersync-uniq
 
 2. **NUNCA un constraint `UNIQUE` además de la PK (`id`).** PowerSync resuelve conflictos solo por la PK; si dos dispositivos crean la misma fila lógica, la segunda viola el UNIQUE (`23505`) y **bloquea toda la cola de sync para todos**. Para garantizar unicidad, hacer el `id` determinístico sobre la tupla (ej. `insight-${year}-${month}`, `${taskId}__${dependsOnId}`, `file-${fileHash}`) → misma fila lógica = misma PK → PowerSync deduplica solo. (jun 2026: se dropearon 6 UNIQUE secundarias por este motivo.)
 
+3. **El rol de replicación `powersync_repl` necesita `SELECT` sobre la tabla nueva.** La publication `powersync` es `FOR ALL TABLES`, así que la tabla nueva entra sola a la replicación lógica — *pero* el `GRANT ... ON ALL TABLES IN SCHEMA public` que se corrió al configurar PowerSync es un snapshot puntual y **NO cubre las tablas creadas después**. Sin ese grant, la replicación falla con `permission denied for table <tabla>` (error de validación al desplegar las sync-rules) y la tabla **nunca sincroniza**, aunque el resto del schema funcione. Fix puntual: `GRANT SELECT ON <tabla> TO powersync_repl` (o copiar grants de una tabla que ya replica, ej. `comex_suppliers`). **Fix permanente — YA APLICADO (confirmado 28-jun-2026):** existe `ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO powersync_repl`, así que toda tabla nueva creada por `postgres` (ej. desde el SQL Editor de Supabase) hereda el `SELECT` sola — el paso (b) ya no hace falta para esas. Solo se necesita el grant manual si la tabla se crea con otro rol (ej. `supabase_admin`), cuyo default ACL no incluye a `powersync_repl`. Ver "Fix: tablas PowerSync nuevas no sincronizaban".
+
+4. **Agregar la tabla a las sync-rules del servidor PowerSync** (una línea `SELECT * FROM <tabla> WHERE workspace_id = 'd61a4071-...'` por tabla). Las sync-rules se editan y despliegan en el dashboard de PowerSync, **aparte** del schema de Supabase. Si falta, la tabla no baja a ningún dispositivo (síntoma: "Sin registros" aunque Supabase tenga datos).
+
+**Resumen:** crear una tabla sincronizada son TRES pasos que van juntos — (a) DDL con RLS+policy+GRANT a `authenticated`, (b) `SELECT` para `powersync_repl` — **ya automático** vía el `ALTER DEFAULT PRIVILEGES` puesto para `postgres` (regla #3; solo manual si creás la tabla con otro rol), (c) línea en las sync-rules. La publication es `FOR ALL TABLES`, así que NO hay que tocarla. Si falta (a) o (c), no sincroniza y el síntoma varía (`42501`, "sin registros", o nada).
+
 ### ❌ Solo local (NO sincroniza — por diseño)
 
 Estas tablas viven únicamente en `flowtask.db` porque representan estado local del dispositivo que no tiene sentido sincronizar:
@@ -221,7 +229,7 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ```typescript
 // Cada migración es un objeto { version: number, up: (db) => void }
 // Se aplican en orden ascendente; la versión actual se guarda en PRAGMA user_version
-// Versión actual: v97
+// Versión actual: v101
 // v80: knowledge_entries + knowledge_global_summaries
 // v81: user_profiles
 // v82–v94: mercadopago_*, accounting_services / service_catalog, RRHH multiempresa + SAC
@@ -229,6 +237,12 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 // v96: comex_alarmas_cotizacion (alarmas USD/EUR — local)
 // v97: contacts extendida (company, role, phones JSON, emails JSON, tags JSON, favorito);
 //      agenda_grupos + agenda_grupo_miembros — local, NO sincroniza
+// v98–v101: Conciliador — recon_invoices.fecha + índices UNIQUE de dedup (period+comprobante/cupón/
+//      operación), recon_imports.skipped_count, columna import_id en recon_*, y tablas nuevas
+//      recon_nave_ops + recon_extracto (cobros NAVE + extracto bancario). Todas local (flowtask.db).
+//
+// NOTA: las tablas de Cajas Internas (cash_*) NO usan migración de flowtask.db — nacen en PowerSync
+//       (ver AppSchema en powersync.ts). Solo necesitan DDL en Supabase + grant de replicación + sync-rules.
 ```
 
 **Reglas:**
@@ -340,7 +354,7 @@ Todas las tablas tienen `workspace_id TEXT NOT NULL DEFAULT 'd61a4071-1557-4f32-
 |---------|-----|
 | `src/main/database/db.ts` | Singleton de `flowtask.db` (better-sqlite3) |
 | `src/main/database/powersync.ts` | Singleton de PowerSync, schema, conexión, migraciones de datos |
-| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v97) |
+| `src/main/database/migrations.ts` | Migraciones de `flowtask.db` (versión actual: v101) |
 | `src/main/database/queries/finance.ts` | CRUD finanzas personales |
 | `src/main/database/queries/company-finance.ts` | CRUD finanzas empresa |
 | `src/main/database/queries/recon.ts` | CRUD + motor del Conciliador Contable (solo `getDb()`) |
@@ -385,17 +399,21 @@ Conciliación mensual de ventas entre tres fuentes:
 
 **Nunca mover estas tablas a PowerSync** sin coordinar con Diego.
 
-### Migración v78 — 6 tablas en `flowtask.db`
+### Tablas del Conciliador en `flowtask.db` (migración v78, ampliada hasta v101)
 
 | Tabla | Contenido |
 |-------|-----------|
 | `recon_periods` | Períodos de conciliación (mes/año + estado) |
-| `recon_imports` | Log de cada archivo importado por período |
-| `recon_invoices` | Facturas parseadas de Flexxus |
-| `recon_cupones` | Cupones parseados de la procesadora de tarjetas |
-| `recon_ml_ops` | Operaciones parseadas de Mercado Pago |
+| `recon_imports` | Log de cada archivo importado por período (`skipped_count` desde v99) |
+| `recon_invoices` | Facturas parseadas de Flexxus (`fecha` desde v98; dedup UNIQUE `period_id, comprobante`; `import_id` desde v100) |
+| `recon_cupones` | Cupones parseados de la procesadora de tarjetas (dedup UNIQUE `period_id, cupon`) |
+| `recon_ml_ops` | Operaciones parseadas de Mercado Pago (dedup UNIQUE `period_id, operation_id`) |
+| `recon_nave_ops` | Operaciones de cobro NAVE (migración v101) |
+| `recon_extracto` | Movimientos del extracto bancario — crédito por leyenda (migración v101) |
 | `recon_results` | Resultados del motor de matching (uno por factura/operación) |
 | `recon_audit` | Historial de cambios manuales de estado |
+
+Estos índices `UNIQUE` de dedup **son válidos acá** porque el Conciliador es local-only (`flowtask.db`); la regla de "sin UNIQUE además de la PK" aplica solo a las tablas PowerSync ↔ Supabase.
 
 ### Fuentes de importación (`ReconImportSource`)
 
@@ -406,6 +424,8 @@ type ReconImportSource =
   | 'cupones_xlsx'     // XLSX de cupones con sección "TARJETAS DE CREDITO"
   | 'ml_principal'     // XLS Mercado Pago cuenta principal
   | 'ml_secundaria'    // XLS Mercado Pago cuenta secundaria
+  | 'nave'             // operaciones de cobro NAVE
+  | 'extracto'         // extracto bancario (crédito por leyenda)
 ```
 
 ### Estados de conciliación (`ReconEstado`)
@@ -549,20 +569,22 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON user_profiles TO authenticated;
 CREATE INDEX ON user_profiles(workspace_id);
 ```
 
+**`cash_attachments`** (comprobantes de Cajas Internas, Etapa 2): DDL completo en `supabase_cash_attachments.sql` + sync-rule. Ver "Módulo Contable → Cajas Internas → Comprobantes".
+
 ---
 
 ## Módulo Knowledge — estado actual (junio 2026)
 
-**Tablas creadas (migración v80):** `knowledge_entries` + `knowledge_global_summaries`. PowerSync AppSchema y sync listeners ya configurados. Tipos en `src/shared/types.ts` ya definidos (`KnowledgeEntry`, `KnowledgeGlobalSummary`, etc.).
+**Tablas (migración v80):** `knowledge_entries` + `knowledge_global_summaries` (PowerSync ↔ Supabase). Tipos en `src/shared/types.ts` (`KnowledgeEntry`, `KnowledgeGlobalSummary`, etc.).
 
-**Pendiente de implementar:**
+**Implementado (jun 2026) — módulo completo y en uso:**
 - `src/main/database/queries/knowledge.ts` — CRUD
 - `src/main/services/knowledge-ai.service.ts` — resúmenes IA con claude-haiku-4-5
 - `src/main/ipc/knowledge.ipc.ts` — handlers IPC
 - `src/renderer/src/hooks/useKnowledge.ts` — hooks React Query
-- `src/renderer/src/routes/knowledge/KnowledgeDashboard.tsx` — UI
+- `src/renderer/src/routes/knowledge/` — UI: `KnowledgeDashboard.tsx` + QuickCapture, EntryEditor/Card, RichTextEditor, AIPanel, SourcesModal, ThreadDocModal, AttachmentStrip, Helpers. Ruta `/knowledge`.
 
-**DDL Supabase también pendiente.** Ver el plan en `.claude/plans/` para el schema completo.
+**Setup Supabase (verificado 27-jun-2026):** las 2 tablas existen en Supabase y replican OK — `knowledge_entries` con datos en uso (13 filas), `knowledge_global_summaries` lista (0 filas, aún sin resúmenes globales generados). Publication `powersync` FOR ALL TABLES + grant `SELECT` a `powersync_repl` confirmados. No queda setup pendiente.
 
 ---
 
@@ -670,6 +692,18 @@ Cuatro causas distintas, todas en `powersync.ts` salvo la #4:
 **Diagnóstico de la cola sin abrir la app:** leer `%APPDATA%\flowtask\flowtask\powersync.db` read-only con **Python** sqlite3 (`sqlite3.connect("file:...?mode=ro&immutable=1", uri=True)`) — `better-sqlite3` falla por ABI de Electron (NODE_MODULE_VERSION). `SELECT COUNT(*) FROM ps_crud` = 0 → no hay bloqueo de upload, el problema es solo de conexión.
 
 **Badge + reconexión:** `SyncStatusBadge` muestra el error real (no "[object Object]"), es expandible y tiene botón "Reconectar" cuando está desconectado; el Sidebar tiene indicador "Sync" persistente (dot verde/ámbar) que también reconecta al click.
+
+### Fix: tablas PowerSync nuevas no sincronizaban — grants, sync-rules y recreación de powersync.db (resuelto — junio 2026)
+
+Saga al sumar las 10 tablas `cash_*` (Cajas Internas). Varias causas **independientes**, todas reproducibles al crear cualquier tabla sincronizada nueva:
+
+1. **Faltaba el grant de `SELECT` al rol de replicación `powersync_repl`.** Síntoma: error de validación `permission denied for table cash_companies` (y las otras 9) al desplegar las sync-rules. La publication `powersync` es `FOR ALL TABLES` (la tabla entra sola a la replicación), pero el `GRANT ... ON ALL TABLES IN SCHEMA public` de cuando se configuró PowerSync **no alcanza a tablas creadas después**. Fix: `GRANT SELECT` a `powersync_repl` (copiar de `comex_suppliers`). Esto ya quedó resuelto a futuro — hay un `ALTER DEFAULT PRIVILEGES FOR ROLE postgres ... GRANT SELECT ... TO powersync_repl` (confirmado 28-jun-2026), así que las tablas nuevas creadas por `postgres` heredan el grant solas. Ver regla #3 de "Reglas al crear una tabla sincronizada nueva".
+
+2. **Las tablas no estaban en las sync-rules.** Síntoma: "Sin cajas registradas" aunque Supabase tenía los datos y el resto del sync andaba. El bucket del servidor traía ~2900 ops y **cero** de cajas. Fix: una línea `SELECT * FROM <tabla> WHERE workspace_id = '...'` por tabla nueva en el dashboard de PowerSync. De paso se limpiaron 2 duplicados y un typo `}` en el YAML deployado.
+
+3. **Recrear `powersync.db` reintroduce datos viejos en la cola.** Durante el diagnóstico se borró `powersync.db` para forzar un re-sync. Al recrearse, las migraciones legacy (`migrateLegacyTableData`, `restoreComexLocalCache`, etc.) **re-copian cientos de filas de `flowtask.db` a `ps_crud`**, inflando la cola de upload y destapando bugs latentes (ver los dos fixes de connector más abajo). **Borrar `powersync.db` NO es un fix de sync** — solo reintroduce trabajo. Si hay que recuperarse, dejar que la cola drene sola.
+
+4. **`CORRUPT_INDEX` en la transición de iteración de sync-rules.** Al redeployar las sync-rules, PowerSync pasa de una iteración a la siguiente (ej. `11#global` → `12#global`) y reconstruye su estado interno; apareció `powersync_control: internal SQLite call returned CORRUPT_INDEX`. **Lección dura: NUNCA manipular `powersync.db` con Python** (ni `.backup()`, ni consolidar `-wal`/`-shm`). El SQLite de Python es de otra versión que la nativa de PowerSync y **corrompe los índices** que PowerSync espera. Para inspección, abrir SIEMPRE read-only (`mode=ro&immutable=1`); para escribir/recuperar, que lo haga la app. Recuperación: borrar `powersync.db` (+`-wal`/`-shm`) y dejar que la app lo reconstruya desde Supabase (con `ps_crud` ya drenado).
 
 ### Fix: cargas no guardaban valores — FK constraint (resuelto — junio 2025)
 
@@ -1027,7 +1061,7 @@ Movidos al módulo **Agenda** en junio 2026. Ver sección "Módulo Agenda → Co
 
 **Regla:** al crear nuevos plannings, siempre `brand_id = supplier_id`. No crear registros en `comex_brands` para marcas nuevas — usar el campo `brand` de `comex_suppliers`.
 
-**Pendiente en Supabase (aún no aplicado):** ejecutar en el SQL editor:
+**Aplicado en Supabase (27-jun-2026, vía conexión directa Postgres):** las 6 columnas ya existen en `comex_suppliers` (antes faltaban las 6 → el connector tenía que stripearlas con PGRST204). Como la publication es `FOR ALL TABLES`, se replican solas; ya no hace falta el strip de `category` en el connector. SQL aplicado (idempotente):
 ```sql
 ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
 ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS demand_annual DOUBLE PRECISION;
@@ -1036,6 +1070,28 @@ ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS current_stock DOUBLE PRECIS
 ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS safety_stock DOUBLE PRECISION;
 ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS purchase_frequency_days INTEGER;
 ```
+
+### PowerSync: `migrateLegacyTableData` abortaba con "no such table" (resuelto — junio 2026)
+
+**Problema:** `migrateLegacyTableData()` (en `powersync.ts`) recorre una lista de tablas y, para las vacías en `powersync.db`, hace `flowDb.prepare('SELECT * FROM <tabla>')` para bootstrappear datos legacy. Pero algunas tablas **nacieron en la era PowerSync y nunca existieron en `flowtask.db`** (ej. `comex_import_pl_files`, `comex_cotizaciones` y todas las `cash_*`). `prepare()` lanzaba `no such table` → la excepción **abortaba `connectPowerSync()` antes de `db.connect()`**, dejando la app entera sin sincronizar. Solo se disparaba al **recrear** `powersync.db` (recuperación de corrupción, instalación nueva), por eso pasó desapercibido tanto tiempo.
+
+**Fix:** guarda de existencia antes del `SELECT` — `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`; si la tabla legacy no existe, `continue` (no hay datos legacy que migrar para una tabla PowerSync-native).
+
+**Regla:** las tablas PowerSync-only (sin equivalente en `flowtask.db`) ya quedan cubiertas por esta guarda; no hace falta sacarlas de la lista de `migrateLegacyTableData`.
+
+### PowerSync: el connector no stripeaba columnas desconocidas en `PUT` (resuelto — junio 2026)
+
+**Problema:** el `case PATCH` del connector (`ProductionTokenConnector.uploadData`) ya tenía un `while` que, ante `400 PGRST204: Could not find the '<col>' column`, quitaba la columna y reintentaba. El `case PUT` (upsert con `Prefer: resolution=merge-duplicates`) **no tenía ese manejo**: un PUT con una columna que existe en el cliente pero no en Supabase devolvía 400 y se reintentaba para siempre, **trabando toda la cola `ps_crud`**. Lo destapó `comex_suppliers.category` — columna del cliente cuyo DDL en Supabase sigue pendiente (ver "consolidación Marcas → Proveedores/Marcas").
+
+**Fix:** mismo `while` de strip-and-retry del PATCH, ahora también en el PUT. Si el payload queda vacío, se da el op por completado (`200`).
+
+**Regla:** `PATCH` y `PUT` del connector deben tener el MISMO manejo de `PGRST204`/`PGRST205`. Si se toca uno, replicar en el otro.
+
+### IPC: drag-drop de archivos enviaba `number[]` (lento/crasheable para archivos grandes) (resuelto — junio 2026)
+
+**Problema:** El renderer hacía `Array.from(new Uint8Array(buf))` antes de enviar por IPC, creando un array de millones de enteros para PDFs de > ~5MB. La serialización JSON podía bloquear el hilo main o crashear.
+
+**Fix:** El renderer ahora envía el `ArrayBuffer` directamente (structured clone nativo de Electron). Tipos actualizados en `useComex.ts`, `preload/index.ts` y `comex.ipc.ts`.
 
 ---
 
@@ -1082,6 +1138,126 @@ Los defaults se insertan con `id = catalog-${type}-${value}` (ej. `catalog-categ
 ### Reglas de tipo (IMPORTANTE)
 
 `AccountingService.category` y `AccountingService.payment_method` son `string` (no union literal) para soportar valores custom del catálogo. Los helpers `CATEGORY_LABEL` y `PAYMENT_METHOD_LABEL` en `services.constants.ts` siguen siendo `Record<ServiceCategory, string>` para los defaults — usar cast `as ServiceCategory` con `?? rawValue` fallback.
+
+---
+
+## Módulo Contable → Cajas Internas (junio 2026)
+
+### Propósito
+
+Gestión de las cajas de efectivo internas de la empresa: caja chica, cajas por área/sucursal, en múltiples monedas (ARS/USD/EUR). Registra ingresos, egresos y transferencias entre cajas, conteos/arqueos, diferencias, permisos por usuario y caja, y cierre diario. Exporta reportes a Excel. Ruta `/contable/cajas`. Ícono del sidebar: `Banknote` (lucide-react, color `#34d399`).
+
+### Tablas (PowerSync ↔ Supabase — 11 tablas)
+
+Todas `cash_*`, se leen/escriben vía `getPowerSyncDb()` con filtro `workspace_id`. **Nacen en la era PowerSync — NO tienen migración en `flowtask.db`** (están en el `AppSchema` de `powersync.ts`).
+
+| Tabla | Contenido |
+|-------|-----------|
+| `cash_companies` | Empresas/entidades dueñas de las cajas |
+| `cashboxes` | Cada caja: nombre, monedas habilitadas, estado (`ok` / `with_difference` / `closed`) |
+| `cashbox_permissions` | Permiso por usuario y caja. Claves: `view` / `income` / `expense` / `transfer` / `count`. **ID determinístico** `${cashbox_id}.${user_id}.${perm}` (sin UNIQUE secundario; `INSERT OR IGNORE`) |
+| `cash_categories` | Categorías de movimiento (ingreso / egreso) |
+| `cash_movements` | Cabecera del movimiento: `type` (`income` / `expense` / `transfer`), `status` (`confirmed` / …), fecha, caja, categoría, descripción |
+| `cash_movement_amounts` | Montos por moneda de cada movimiento (un movimiento puede tener varias monedas). **El saldo se calcula sumando acá** |
+| `cash_counts` | Conteos / arqueos de caja (cabecera) |
+| `cash_count_details` | Detalle de denominaciones por conteo |
+| `cash_differences` | Diferencias detectadas en arqueos: `status` (`pending` / `resolved` / `written_off`) |
+| `cash_audit_logs` | Log de auditoría de acciones sobre cajas |
+| `cash_attachments` | **Comprobantes (Etapa 2).** Metadata del adjunto: `owner_type` (`movement` / `count`), `owner_id`, `original_name`, `mime_type`, `size_bytes`, `drive_file_id`. **Los bytes viven en Google Drive** (carpeta "Summit Cajas"); acá solo la referencia. **DDL aplicado jun 2026** |
+
+### Cálculo de saldo (no materializado)
+
+El saldo de una caja por moneda **se recalcula siempre** — no hay columna `balance`. Ver `getCashboxBalances()` en `cajas.ts`:
+
+```sql
+SELECT m.cashbox_id, a.currency, COALESCE(SUM(a.amount), 0) AS balance
+FROM cash_movements m
+JOIN cash_movement_amounts a ON a.movement_id = m.id
+-- filtrado por movimientos confirmados + workspace_id, agrupado por caja/moneda
+```
+
+### Transferencias = 2 movimientos
+
+Una transferencia entre cajas crea **dos `cash_movements` con `type='transfer'`**: salida en la caja origen y entrada en la caja destino, cada uno con su `cash_movement_amounts`. Ver `createTransfer()` en `cajas.ts`. No existe un "movimiento de transferencia" único — así el saldo de cada caja sale del mismo `SUM` que el resto.
+
+### Conteos, diferencias y cierre
+
+- **ConteoRapidoModal:** grilla de denominaciones por moneda (ARS/USD/EUR); calcula en vivo la diferencia entre el conteo físico y el saldo teórico. Guarda `cash_counts` + `cash_count_details` y, si hay diferencia, crea `cash_differences` y pone la caja en `with_difference`.
+- **DiferenciasModal:** lista, resuelve o condona (`write_off`) diferencias. Al resolver la última diferencia pendiente, la caja vuelve a `ok`.
+- **CierreDiarioModal:** resumen del día + conteo de cierre; deja la caja en `closed` (o `with_difference` si no cuadra).
+- **PermisosModal:** asigna/revoca permisos por usuario y caja (ID determinístico).
+
+### Export a Excel
+
+`ReporteModal` exporta por rango de fechas vía IPC `cajas:report:export` (main process, librería `xlsx`, `dialog.showSaveDialog`). Tres hojas: **Movimientos / Diferencias / Conteos**. Sanitiza contra inyección de fórmulas (prefija celdas que arrancan con `/^[=+\-@]/`).
+
+### Comprobantes / adjuntos (Etapa 2 — Google Drive + `cash_attachments`)
+
+Permite adjuntar fotos/PDF a cada movimiento. **Arquitectura híbrida:** los **bytes** van a Google Drive (se reutiliza `driveService`, carpeta "Summit Cajas" vía `getOrCreateCajasFolder()`); la **metadata** (nombre, mime, tamaño, `drive_file_id`) va a la tabla PowerSync `cash_attachments` → la referencia sincroniza entre dispositivos y Supabase es la fuente de verdad. Drive es solo el blob store.
+
+- **UI:** botón **"Movimientos"** en el panel de la caja (`CajasDashboard` → `MovimientosModal`). El modal lista los movimientos (query enriquecida `getCashMovementsWithMeta`: categoría + montos vía `json_group_array` + `attachment_count`); cada fila se expande y monta `<CashAttachments>` (carga lazy los adjuntos de ese movimiento, evita N queries al abrir).
+- **`CashAttachments`** (componente reutilizable, recibe `ownerType` + `ownerId`): lista chips, abre en Drive (`shell.openExternal`), sube (file picker en main, multi-select) y borra. Pensado para reusar también en conteos (`owner_type='count'`).
+- **Subida:** `cajas:attachments:add` abre el `dialog.showOpenDialog` en main, sube cada archivo a Drive y hace `INSERT` de la metadata. Si el `INSERT` falla, borra el archivo de Drive (no deja huérfanos). Requiere estar autenticado con Drive (si no, error claro).
+- **Borrado:** `deleteCashAttachment` borra primero el archivo de Drive (best-effort) y después la fila.
+- **id determinístico:** cada comprobante es una fila nueva con `randomUUID()` (sin UNIQUE secundario → sin riesgo de 23505).
+
+> **Sincronización:** la tabla `cash_attachments` ya está en Supabase (`supabase_cash_attachments.sql` aplicado + sync-rule desplegada, jun 2026). Recordatorio del comportamiento del connector: ante tabla inexistente **omite la op (PGRST205) sin trabar la cola**, por eso aplicar el DDL tarde fue seguro.
+
+### Alertas de descuadre (Etapa 2 — banner global)
+
+Banner que avisa de TODAS las diferencias sin resolver del workspace, no solo de la caja seleccionada. Aparece arriba de los KPIs del dashboard y **solo si hay descuadres** (si no, no renderiza nada).
+
+- **Query:** `listAllPendingDifferences()` en `cajas.ts` — todas las `cash_differences` con `status IN ('pending','under_review')`, con JOIN a `cashboxes` + `cash_companies` para mostrar caja y empresa. IPC `cajas:differences:pending`.
+- **Hook:** `usePendingDifferences()` con queryKey `['cajas','differences','pending']` — cae bajo el prefijo `['cajas','differences']` que invalida `useUpdateCashDifference`, así que al resolver una diferencia el banner se refresca solo.
+- **UI:** `AlertasDescuadre.tsx` lista cada descuadre (caja · empresa, antigüedad, monto firmado); las diferencias de > 1 semana se marcan en ámbar. Click en una fila → `setSelectedId(cashbox_id)` + abre el `DiferenciasModal` de esa caja para resolverla.
+- **Alcance:** in-app únicamente. No hay notificaciones del SO (no existe infra nativa de notificaciones en main); quedó como posible mejora futura.
+
+### Archivos clave
+
+| Archivo | Rol |
+|---------|-----|
+| `src/main/database/queries/cajas.ts` | CRUD: companies, cashboxes, permisos, categorías, movimientos, transferencias, conteos, diferencias, summary diario, datos de reporte, `getCashMovementsWithMeta` (historial enriquecido) |
+| `src/main/database/queries/cash-attachments.ts` | Comprobantes: `list/add/delete`. Sube/borra en Drive vía `driveService` + metadata en `cash_attachments` |
+| `src/main/ipc/cajas.ipc.ts` | Handlers `cajas:*` (incluye `cajas:report:export` con XLSX y `cajas:attachments:*`) |
+| `src/renderer/src/hooks/useCajas.ts` | Hooks React Query del módulo |
+| `src/renderer/src/routes/contable/CajasDashboard.tsx` | Panel principal: cajas, saldos por moneda, acciones |
+| `src/renderer/src/routes/contable/NuevoMovimientoModal.tsx` | Alta de ingreso / egreso / transferencia |
+| `src/renderer/src/routes/contable/ConteoRapidoModal.tsx` | Conteo / arqueo con grilla de denominaciones |
+| `src/renderer/src/routes/contable/DiferenciasModal.tsx` | Gestión de diferencias (resolver / condonar) |
+| `src/renderer/src/routes/contable/PermisosModal.tsx` | Permisos por usuario y caja |
+| `src/renderer/src/routes/contable/CierreDiarioModal.tsx` | Cierre diario |
+| `src/renderer/src/routes/contable/ReporteModal.tsx` | Export a Excel (rango de fechas, 3 hojas) |
+| `src/renderer/src/routes/contable/MovimientosModal.tsx` | Historial de movimientos; cada fila se expande para ver/adjuntar comprobantes |
+| `src/renderer/src/routes/contable/CashAttachments.tsx` | Strip de comprobantes reutilizable (lista/abre/sube/borra; Drive) |
+| `src/renderer/src/routes/contable/AlertasDescuadre.tsx` | Banner global de diferencias sin resolver (workspace-wide); click → `DiferenciasModal` de la caja |
+
+### IPC (`cajas:*`)
+
+`companies`, `cashboxes`, `cashbox`, `balances`, `lastCounts`, `categories`, `cashbox:setStatus`; `movements:{list,listDetailed,create,transfer}`; `counts:{list,create}`; `differences:{list,pending,create,update}`; `permissions:{list,grant,revoke}`; `daily:summary`; `report:export`; `attachments:{list,add,delete,open}`.
+
+### Setup en Supabase (aplicado jun 2026)
+
+Las 10 tablas siguen el template estándar (RLS + policy `authenticated` por `workspace_id` + GRANT — ver "Reglas al crear una tabla sincronizada nueva"). Dos pasos extra fueron necesarios y son fáciles de olvidar (ver "Fix: tablas PowerSync nuevas no sincronizaban"):
+
+1. **Grants al rol de replicación:** las tablas se crearon después de configurar PowerSync, así que el `GRANT ON ALL TABLES` original no las cubría → hubo que copiar los grants desde `comex_suppliers`.
+2. **Sync-rules:** una línea por tabla en el dashboard de PowerSync:
+   ```yaml
+   - SELECT * FROM cash_companies        WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cashboxes             WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cashbox_permissions   WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_categories       WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_movements        WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_movement_amounts WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_counts           WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_count_details    WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_differences      WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_audit_logs       WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   ```
+
+**`cash_attachments` (Etapa 2 comprobantes) — APLICADO jun 2026:** la 11.ª tabla ya está en Supabase. Se corrió `supabase_cash_attachments.sql` (CREATE TABLE + RLS policy `authenticated_workspace_all` + GRANT a `authenticated` + grant explícito a `powersync_repl` + index, patrón `authenticated`/`FOR ALL`) y se desplegó la sync-rule:
+```yaml
+- SELECT * FROM cash_attachments      WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+```
 
 ---
 
@@ -1347,11 +1523,3 @@ Esto mantiene `graph.json` y `graph.html` sincronizados con el estado del códig
 **Para usarlo:** Diego puede pedir explícitamente "consultá el grafo antes de empezar" o ejecutar `graphify query` desde Cortex para obtener contexto previo a una sesión de programación.
 
 **Para automatizarlo (opcional):** se pueden crear hooks de Claude Code en `.claude/hooks/` que lean `graphify-out/GRAPH_REPORT.md` e inyecten contexto antes de ciertas herramientas. No está configurado aún.
-
----
-
-### IPC: drag-drop de archivos enviaba `number[]` (lento/crasheable para archivos grandes)
-
-**Problema:** El renderer hacía `Array.from(new Uint8Array(buf))` antes de enviar por IPC, creando un array de millones de enteros para PDFs de > ~5MB. La serialización JSON podía bloquear el hilo main o crashear.
-
-**Fix:** El renderer ahora envía el `ArrayBuffer` directamente (structured clone nativo de Electron). Tipos actualizados en `useComex.ts`, `preload/index.ts` y `comex.ipc.ts`.

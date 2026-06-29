@@ -70,6 +70,8 @@ import type {
   CreateAccountingServiceInput, RegisterServicePaymentInput, ServiceStatus,
   CashCompany, Cashbox, CashCategory, CashMovement, CashCount, CashDifference,
   CashboxPermission, CashboxStatus, DifferenceStatus,
+  CashMovementListItem, CashAttachment, CashAttachmentOwnerType,
+  PendingDifferenceItem,
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
 
@@ -1284,6 +1286,7 @@ const api = {
     categories: (type?: 'income' | 'expense'): Promise<CashCategory[]> => ipcRenderer.invoke('cajas:categories', type),
     movements: {
       list:   (cashboxId: string, limit?: number): Promise<CashMovement[]> => ipcRenderer.invoke('cajas:movements:list', cashboxId, limit),
+      listDetailed: (cashboxId: string, limit?: number): Promise<CashMovementListItem[]> => ipcRenderer.invoke('cajas:movements:listDetailed', cashboxId, limit),
       create: (input: unknown): Promise<string> => ipcRenderer.invoke('cajas:movements:create', input),
       transfer: (input: {
         source_cashbox_id: string
@@ -1298,9 +1301,10 @@ const api = {
       create: (input: unknown): Promise<string> => ipcRenderer.invoke('cajas:counts:create', input),
     },
     differences: {
-      list:   (cashboxId: string): Promise<CashDifference[]> => ipcRenderer.invoke('cajas:differences:list', cashboxId),
-      create: (input: unknown): Promise<void> => ipcRenderer.invoke('cajas:differences:create', input),
-      update: (id: string, input: { status: DifferenceStatus; resolution_notes: string }): Promise<void> => ipcRenderer.invoke('cajas:differences:update', id, input),
+      list:    (cashboxId: string): Promise<CashDifference[]> => ipcRenderer.invoke('cajas:differences:list', cashboxId),
+      pending: (): Promise<PendingDifferenceItem[]> => ipcRenderer.invoke('cajas:differences:pending'),
+      create:  (input: unknown): Promise<void> => ipcRenderer.invoke('cajas:differences:create', input),
+      update:  (id: string, input: { status: DifferenceStatus; resolution_notes: string }): Promise<void> => ipcRenderer.invoke('cajas:differences:update', id, input),
     },
     report: {
       export: (cashboxId: string, cashboxName: string, dateFrom: string, dateTo: string): Promise<string | null> => ipcRenderer.invoke('cajas:report:export', cashboxId, cashboxName, dateFrom, dateTo),
@@ -1308,12 +1312,27 @@ const api = {
     daily: {
       summary: (cashboxId: string, date: string): Promise<{ type: string; currency: string; total: number }[]> => ipcRenderer.invoke('cajas:daily:summary', cashboxId, date),
     },
+    charts: {
+      flowSeries: (
+        dateFrom: string,
+        dateTo: string,
+        cashboxIds?: string[],
+        currency?: string
+      ): Promise<{ period: string; income: number; expense: number; net: number }[]> =>
+        ipcRenderer.invoke('cajas:charts:flowSeries', dateFrom, dateTo, cashboxIds, currency),
+    },
     permissions: {
       list:   (cashboxId: string): Promise<CashboxPermission[]> => ipcRenderer.invoke('cajas:permissions:list', cashboxId),
       grant:  (input: { cashbox_id: string; user_id: string; permission_key: string }): Promise<void> => ipcRenderer.invoke('cajas:permissions:grant', input),
       revoke: (id: string): Promise<void> => ipcRenderer.invoke('cajas:permissions:revoke', id),
     },
     setStatus: (id: string, status: CashboxStatus): Promise<void> => ipcRenderer.invoke('cajas:cashbox:setStatus', id, status),
+    attachments: {
+      list:   (ownerType: CashAttachmentOwnerType, ownerId: string): Promise<CashAttachment[]> => ipcRenderer.invoke('cajas:attachments:list', ownerType, ownerId),
+      add:    (ownerType: CashAttachmentOwnerType, ownerId: string): Promise<CashAttachment[]> => ipcRenderer.invoke('cajas:attachments:add', ownerType, ownerId),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('cajas:attachments:delete', id),
+      open:   (driveFileId: string): Promise<void> => ipcRenderer.invoke('cajas:attachments:open', driveFileId),
+    },
   },
 
   services: {

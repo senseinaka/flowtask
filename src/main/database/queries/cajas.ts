@@ -2,8 +2,9 @@ import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
 import type {
   CashCompany, Cashbox, CashCategory,
-  CashMovement, CashMovementAmount, CashCount, CashCountDetail,
-  CashDifference, CashboxStatus,
+  CashMovement, CashMovementAmount, CashCount,
+  CashDifference, CashboxStatus, CashMovementListItem,
+  PendingDifferenceItem,
 } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
@@ -92,6 +93,33 @@ export async function listCashMovementAmounts(movementId: string): Promise<CashM
   return getPowerSyncDb().getAll<CashMovementAmount>(
     'SELECT * FROM cash_movement_amounts WHERE movement_id = ?',
     [movementId]
+  )
+}
+
+// Historial enriquecido para el modal de movimientos: trae en UNA query la
+// categoría, los montos (JSON array) y la cantidad de comprobantes adjuntos.
+export async function getCashMovementsWithMeta(
+  cashboxId: string,
+  limit = 100
+): Promise<CashMovementListItem[]> {
+  return getPowerSyncDb().getAll<CashMovementListItem>(
+    `SELECT m.id, m.cashbox_id, m.type, m.status, m.reference_date,
+            m.category_id, c.name AS category_name, m.notes,
+            m.created_by, m.created_at,
+            COALESCE((
+              SELECT json_group_array(json_object('currency', a.currency, 'amount', a.amount))
+              FROM cash_movement_amounts a WHERE a.movement_id = m.id
+            ), '[]') AS amounts_json,
+            (
+              SELECT COUNT(*) FROM cash_attachments att
+              WHERE att.owner_type = 'movement' AND att.owner_id = m.id
+            ) AS attachment_count
+     FROM cash_movements m
+     LEFT JOIN cash_categories c ON c.id = m.category_id
+     WHERE m.cashbox_id = ? AND m.workspace_id = ?
+     ORDER BY m.created_at DESC
+     LIMIT ?`,
+    [cashboxId, WORKSPACE_ID, limit]
   )
 }
 
@@ -259,6 +287,47 @@ export async function getDailyMovementsSummary(
   )
 }
 
+// ─── Serie temporal para gráficos (flujo por mes) ─────────────────────────────
+// Agrupa por mes (YYYY-MM) los importes de una moneda. Como los egresos se
+// guardan con signo negativo (ver NuevoMovimientoModal), separamos por signo:
+//   income  = todo lo que entró (amount > 0)   → ingresos + entradas de transfer
+//   expense = todo lo que salió (amount < 0)    → egresos + salidas de transfer
+//   net     = SUM(amount) = variación real del saldo en el período
+// Si se pasa cashboxIds, limita a esas cajas (respeta el filtro de empresa).
+
+export async function getCashFlowSeries(
+  dateFrom: string,
+  dateTo: string,
+  cashboxIds?: string[],
+  currency: string = 'ARS'
+): Promise<{ period: string; income: number; expense: number; net: number }[]> {
+  const conds: string[] = [
+    'm.workspace_id = ?',
+    "m.status = 'confirmed'",
+    'a.currency = ?',
+    'm.reference_date BETWEEN ? AND ?',
+  ]
+  const params: string[] = [WORKSPACE_ID, currency, dateFrom, dateTo]
+
+  if (cashboxIds && cashboxIds.length > 0) {
+    conds.push(`m.cashbox_id IN (${cashboxIds.map(() => '?').join(',')})`)
+    params.push(...cashboxIds)
+  }
+
+  return getPowerSyncDb().getAll<{ period: string; income: number; expense: number; net: number }>(
+    `SELECT substr(m.reference_date, 1, 7) AS period,
+            COALESCE(SUM(CASE WHEN a.amount > 0 THEN a.amount  ELSE 0 END), 0) AS income,
+            COALESCE(SUM(CASE WHEN a.amount < 0 THEN -a.amount ELSE 0 END), 0) AS expense,
+            COALESCE(SUM(a.amount), 0) AS net
+     FROM cash_movements m
+     JOIN cash_movement_amounts a ON a.movement_id = m.id
+     WHERE ${conds.join(' AND ')}
+     GROUP BY period
+     ORDER BY period`,
+    params
+  )
+}
+
 // ─── Permisos por caja ───────────────────────────────────────────────────────
 
 import type { CashboxPermission } from '@shared/types'
@@ -374,5 +443,22 @@ export async function listCashDifferences(cashboxId: string): Promise<CashDiffer
   return getPowerSyncDb().getAll<CashDifference>(
     `SELECT * FROM cash_differences WHERE cashbox_id = ? AND workspace_id = ? ORDER BY created_at DESC`,
     [cashboxId, WORKSPACE_ID]
+  )
+}
+
+// Todas las diferencias sin resolver (pending / under_review) de todo el workspace,
+// con nombre de caja y empresa, para el banner de alertas de descuadre.
+export async function listAllPendingDifferences(): Promise<PendingDifferenceItem[]> {
+  return getPowerSyncDb().getAll<PendingDifferenceItem>(
+    `SELECT d.*,
+            b.name AS cashbox_name,
+            COALESCE(co.name, '') AS company_name
+       FROM cash_differences d
+       JOIN cashboxes b       ON b.id = d.cashbox_id
+       LEFT JOIN cash_companies co ON co.id = b.company_id
+      WHERE d.workspace_id = ?
+        AND d.status IN ('pending', 'under_review')
+      ORDER BY d.created_at ASC`,
+    [WORKSPACE_ID]
   )
 }
