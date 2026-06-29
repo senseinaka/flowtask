@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2, BarChart3, LayoutGrid, Pencil, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
-import { useCashboxesWithBalances, parseCurrencies, fmtAmount, useRenameCashbox, useMoveCashbox } from '../../hooks/useCajas'
+import { useCashboxesWithBalances, parseCurrencies, fmtAmount, useUpdateCashboxInfo, useMoveCashbox } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency, CashboxStatus } from '@shared/types'
 import { CASHBOX_STATUS_LABELS, CASHBOX_STATUS_COLORS } from '@shared/types'
 import NuevoMovimientoModal from './NuevoMovimientoModal'
@@ -54,23 +54,30 @@ function CashboxCard({
   const hasDiff = box.status === 'with_difference'
   const isPending = box.status === 'pending_count'
 
-  const rename = useRenameCashbox()
+  const update = useUpdateCashboxInfo()
   const move   = useMoveCashbox()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft]     = useState(box.name)
+  const [editing, setEditing]   = useState(false)
+  const [draft, setDraft]       = useState(box.name)
+  const [draftDesc, setDraftDesc] = useState(box.description ?? '')
 
   function startEdit(e: React.MouseEvent) {
     e.stopPropagation()
     setDraft(box.name)
+    setDraftDesc(box.description ?? '')
     setEditing(true)
   }
   function saveEdit() {
-    const trimmed = draft.trim()
-    if (trimmed && trimmed !== box.name) rename.mutate({ id: box.id, name: trimmed })
+    const name = draft.trim()
+    const description = draftDesc.trim()
+    if (!name) { cancelEdit(); return }   // el nombre no puede quedar vacío
+    if (name !== box.name || description !== (box.description ?? '')) {
+      update.mutate({ id: box.id, name, description })
+    }
     setEditing(false)
   }
   function cancelEdit() {
     setDraft(box.name)
+    setDraftDesc(box.description ?? '')
     setEditing(false)
   }
 
@@ -89,7 +96,7 @@ function CashboxCard({
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0 flex-1">
           {editing ? (
-            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
               <input
                 autoFocus
                 value={draft}
@@ -98,14 +105,31 @@ function CashboxCard({
                   if (e.key === 'Enter') saveEdit()
                   else if (e.key === 'Escape') cancelEdit()
                 }}
-                className="min-w-0 flex-1 bg-slate-900 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 outline-none"
+                placeholder="Nombre de la caja"
+                className="w-full bg-slate-900 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 outline-none"
               />
-              <button onClick={saveEdit} className="p-1 text-emerald-400 hover:text-emerald-300" title="Guardar">
-                <Check size={14} />
-              </button>
-              <button onClick={cancelEdit} className="p-1 text-slate-500 hover:text-slate-300" title="Cancelar">
-                <X size={14} />
-              </button>
+              <input
+                value={draftDesc}
+                onChange={e => setDraftDesc(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') saveEdit()
+                  else if (e.key === 'Escape') cancelEdit()
+                }}
+                placeholder="Descripción (qué es esta caja)"
+                className="w-full bg-slate-900 border border-slate-600 rounded-md px-2 py-1 text-[11px] text-slate-300 focus:border-emerald-500 outline-none"
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={saveEdit}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-emerald-900/40 text-emerald-300 border border-emerald-700 hover:bg-emerald-900/60"
+                  title="Guardar"
+                >
+                  <Check size={12} /> Guardar
+                </button>
+                <button onClick={cancelEdit} className="p-1 text-slate-500 hover:text-slate-300" title="Cancelar">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -114,7 +138,7 @@ function CashboxCard({
                 <button
                   onClick={startEdit}
                   className="shrink-0 p-0.5 text-slate-500 hover:text-emerald-400 transition-colors"
-                  title="Renombrar caja"
+                  title="Renombrar / editar descripción"
                 >
                   <Pencil size={12} />
                 </button>

@@ -1327,7 +1327,7 @@ const api = {
       revoke: (id: string): Promise<void> => ipcRenderer.invoke('cajas:permissions:revoke', id),
     },
     setStatus: (id: string, status: CashboxStatus): Promise<void> => ipcRenderer.invoke('cajas:cashbox:setStatus', id, status),
-    rename:    (id: string, name: string): Promise<void> => ipcRenderer.invoke('cajas:cashbox:rename', id, name),
+    update:    (id: string, name: string, description: string): Promise<void> => ipcRenderer.invoke('cajas:cashbox:update', id, name, description),
     move:      (id: string, direction: 'up' | 'down'): Promise<void> => ipcRenderer.invoke('cajas:cashbox:move', id, direction),
     attachments: {
       list:   (ownerType: CashAttachmentOwnerType, ownerId: string): Promise<CashAttachment[]> => ipcRenderer.invoke('cajas:attachments:list', ownerType, ownerId),

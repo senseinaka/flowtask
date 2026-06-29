@@ -177,11 +177,11 @@ export function useSetCashboxStatus() {
   })
 }
 
-export function useRenameCashbox() {
+export function useUpdateCashboxInfo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      window.api.cajas.rename(id, name),
+    mutationFn: ({ id, name, description }: { id: string; name: string; description: string }) =>
+      window.api.cajas.update(id, name, description),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cajas', 'cashboxes'] })
     },
@@ -345,13 +345,10 @@ export function parseCurrencies(json: string): CashCurrency[] {
   }
 }
 
-export function fmtAmount(amount: number, currency: CashCurrency): string {
-  if (currency === 'ARS') {
-    return new Intl.NumberFormat('es-AR', {
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(amount)
-  }
+// Montos siempre como enteros (sin centavos), para todas las monedas:
+// las cajas manejan efectivo en valores enteros (ARS, USD y EUR).
+export function fmtAmount(amount: number, _currency: CashCurrency): string {
   return new Intl.NumberFormat('es-AR', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
   }).format(amount)
 }

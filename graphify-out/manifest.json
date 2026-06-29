@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782730036.5819442,
-    "ast_hash": "e06bb6495a06b2c255d1b77b2db687be",
+    "mtime": 1782738420.5724277,
+    "ast_hash": "b5378a0ec0989c6a81901396d5a08e12",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782736383.60065,
-    "ast_hash": "6ac48adb5b67f9c4e70dbc009a68599c",
+    "mtime": 1782738528.2926373,
+    "ast_hash": "4b7565bab3d319398e0a98f7c7e55c86",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782736323.4684043,
-    "ast_hash": "64ccfe06c31edd5852d8f92a3fb5d7c3",
+    "mtime": 1782738403.639526,
+    "ast_hash": "f8f1ec112156d49791c2682260437af6",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782736693.441054,
-    "ast_hash": "b1ad1ea9e895cea80a94cc6e278ff610",
+    "mtime": 1782738797.2668726,
+    "ast_hash": "c4709f5962af25303a64c5fecdd92b2f",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1330,23 +1330,23 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/cajas.ts": {
-    "mtime": 1782736340.615239,
-    "ast_hash": "3dd2d83145d110456f410067345a6ec0",
+    "mtime": 1782738495.5282552,
+    "ast_hash": "633b910d0481047d5d71e3562d54aed7",
     "semantic_hash": ""
   },
   "src/main/ipc/cajas.ipc.ts": {
-    "mtime": 1782736348.7886708,
-    "ast_hash": "e653eb588f92303a39ff602bb1f21def",
+    "mtime": 1782738508.31682,
+    "ast_hash": "135cfba3dec0c1be2633e28dcdf258ac",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCajas.ts": {
-    "mtime": 1782736414.8469036,
-    "ast_hash": "92cca46288aaa9ad44369fce6e13cb9d",
+    "mtime": 1782738537.8360395,
+    "ast_hash": "c0a5ad36d8a0fd9ba45b6d206bb07882",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/CajasDashboard.tsx": {
-    "mtime": 1782736482.70738,
-    "ast_hash": "fce25a3790f4865991e805f19d65d2b5",
+    "mtime": 1782738619.8140264,
+    "ast_hash": "00aca5badda8815a0e8fc563dc158807",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/NuevoMovimientoModal.tsx": {
@@ -1412,6 +1412,11 @@
   "supabase_cash_attachments.sql": {
     "mtime": 1782730808.552416,
     "ast_hash": "788def855dc64c8d3dcc17b5a082c45a",
+    "semantic_hash": ""
+  },
+  "supabase_cajas_orden_monedas.sql": {
+    "mtime": 1782738651.456565,
+    "ast_hash": "12cffcb993460aa6b8e314b7e4098b55",
     "semantic_hash": ""
   }
 }

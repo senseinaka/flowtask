@@ -1154,7 +1154,7 @@ Todas `cash_*`, se leen/escriben vía `getPowerSyncDb()` con filtro `workspace_i
 | Tabla | Contenido |
 |-------|-----------|
 | `cash_companies` | Empresas/entidades dueñas de las cajas. `sort_order` controla el orden de las empresas en el dashboard (Naka=0, EV=1) |
-| `cashboxes` | Cada caja: nombre (renombrable desde la UI), `currencies` (monedas habilitadas, JSON), estado (`ok` / `with_difference` / `closed`), `sort_order` (orden visual dentro de su empresa) |
+| `cashboxes` | Cada caja: `name` + `description` (ambos editables desde la UI con el lápiz), `currencies` (monedas habilitadas, JSON), estado (`ok` / `with_difference` / `closed`), `sort_order` (orden visual dentro de su empresa) |
 | `cashbox_permissions` | Permiso por usuario y caja. Claves: `view` / `income` / `expense` / `transfer` / `count`. **ID determinístico** `${cashbox_id}.${user_id}.${perm}` (sin UNIQUE secundario; `INSERT OR IGNORE`) |
 | `cash_categories` | Categorías de movimiento (ingreso / egreso) |
 | `cash_movements` | Cabecera del movimiento: `type` (`income` / `expense` / `transfer`), `status` (`confirmed` / …), fecha, caja, categoría, descripción |
@@ -1191,10 +1191,13 @@ Una transferencia entre cajas crea **dos `cash_movements` con `type='transfer'`*
 
 - **Orden:** persiste en la columna `sort_order` (en `cashboxes` y `cash_companies`), no depende del nombre. `getCashboxes`/`getCashCompanies` ordenan por `sort_order ASC, name ASC`. El dashboard muestra Naka arriba de EV, y dentro de cada empresa el flujo cobros/ventas → caja 1 → caja 2.
 - **Reordenar (UI):** flechas ◀ ▶ en cada `CashboxCard` (`moveCashbox(id, 'up'|'down')`). Mueve la caja una posición dentro de su empresa renormalizando el `sort_order` de todos los hermanos a 1..N (robusto ante empates en 0).
-- **Renombrar (UI):** lápiz en cada card → input inline (Enter guarda, Esc cancela) → `renameCashbox(id, name)`. Por eso la card es un `<div>` (no `<button>`): lápiz, flechas e input son controles con `stopPropagation`; el click en el cuerpo sigue seleccionando la caja.
+- **Renombrar / editar descripción (UI):** lápiz en cada card → abre DOS inputs inline (nombre + descripción "qué es la caja"); Enter guarda, Esc cancela; botón Guardar → `updateCashboxInfo(id, name, description)` (un solo `UPDATE` de `name` + `description`). El nombre no puede quedar vacío. Por eso la card es un `<div>` (no `<button>`): lápiz, flechas e inputs son controles con `stopPropagation`; el click en el cuerpo sigue seleccionando la caja.
 - **Monedas por empresa:** Naka maneja ARS/USD/EUR, Estación Vertical ARS/USD. La card y el modal de movimiento leen `box.currencies`, así que la congruencia se mantiene a nivel data (columna `currencies`). Seed/fix en `supabase_cajas_orden_monedas.sql`.
+- **Montos sin centavos:** `fmtAmount` formatea TODAS las monedas (ARS/USD/EUR) como enteros (`maximumFractionDigits: 0`). Es la fuente única usada por dashboard, cards, KPIs, charts y modales.
 
 > **DDL:** la columna `sort_order` y el fix de monedas se aplican con `supabase_cajas_orden_monedas.sql` (ALTER + seed por id estable). No requiere tocar sync-rules (publicación FOR ALL TABLES + `SELECT *` + `powersync_repl` ya tiene SELECT). Aplicar el SQL **antes** de reiniciar la app (el `AppSchema` del cliente ya declara `sort_order`).
+
+> **⚠️ RLS de escritura (bug histórico):** las 10 tablas `cash_*` originales (`supabase_cajas_tables.sql`) se crearon con el patrón VIEJO — RLS on + sólo policy de `SELECT` para `authenticated` y GRANT de escritura a `service_role`. Como el cliente sube con el JWT del usuario (rol `authenticated`, no service_role), **todo write de cajas desde la app era rechazado por RLS (42501)**: el connector saltea la fila, completa la transacción, y el siguiente checkpoint pisa el cambio local con el valor viejo → "no se guarda" (se detectó al renombrar). Fix en `supabase_cajas_rls_fix.sql`: policy `authenticated_workspace_all` (FOR ALL) + GRANT write a `authenticated` en las 10 tablas (igual que `cash_attachments`). **Lección:** toda tabla sincronizada necesita policy de escritura + GRANT para `authenticated`, no `service_role`.
 
 ### Export a Excel
 
@@ -1242,7 +1245,7 @@ Banner que avisa de TODAS las diferencias sin resolver del workspace, no solo de
 
 ### IPC (`cajas:*`)
 
-`companies`, `cashboxes`, `cashbox`, `balances`, `lastCounts`, `categories`, `cashbox:{setStatus,rename,move}`; `movements:{list,listDetailed,create,transfer}`; `counts:{list,create}`; `differences:{list,pending,create,update}`; `permissions:{list,grant,revoke}`; `daily:summary`; `report:export`; `attachments:{list,add,delete,open}`.
+`companies`, `cashboxes`, `cashbox`, `balances`, `lastCounts`, `categories`, `cashbox:{setStatus,update,move}`; `movements:{list,listDetailed,create,transfer}`; `counts:{list,create}`; `differences:{list,pending,create,update}`; `permissions:{list,grant,revoke}`; `daily:summary`; `report:export`; `attachments:{list,add,delete,open}`.
 
 ### Setup en Supabase (aplicado jun 2026)
 

@@ -27,11 +27,11 @@ export async function getCashboxes(): Promise<Cashbox[]> {
   )
 }
 
-// Renombrar una caja (lápiz editable en el dashboard).
-export async function renameCashbox(id: string, name: string): Promise<void> {
+// Editar nombre y descripción de una caja (lápiz editable en el dashboard).
+export async function updateCashboxInfo(id: string, name: string, description: string): Promise<void> {
   await getPowerSyncDb().execute(
-    'UPDATE cashboxes SET name = ? WHERE id = ? AND workspace_id = ?',
-    [name.trim(), id, WORKSPACE_ID]
+    'UPDATE cashboxes SET name = ?, description = ? WHERE id = ? AND workspace_id = ?',
+    [name.trim(), description.trim(), id, WORKSPACE_ID]
   )
 }
 
