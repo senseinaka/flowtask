@@ -10,12 +10,7 @@ import {
 } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency } from '@shared/types'
 import { CASH_DENOMINATIONS } from '@shared/types'
-
-function fmtDenom(denom: number, cur: CashCurrency): string {
-  if (cur === 'ARS') return `$ ${new Intl.NumberFormat('es-AR').format(denom)}`
-  if (cur === 'USD') return `USD ${denom}`
-  return `€ ${denom}`
-}
+import { DenominationCounter, denomQty, denomTotal } from './DenominationCounter'
 
 export default function ConteoRapidoModal({
   box,
@@ -39,13 +34,13 @@ export default function ConteoRapidoModal({
   const saving = createCount.isPending || createDiff.isPending || setStatus.isPending
 
   function qty(cur: CashCurrency, denom: number): number {
-    return parseInt(quantities[`${cur}:${denom}`] || '0', 10) || 0
+    return denomQty(quantities, cur, denom)
   }
 
   const totals = useMemo<Partial<Record<CashCurrency, number>>>(() => {
     const result: Partial<Record<CashCurrency, number>> = {}
     for (const cur of currencies) {
-      result[cur] = CASH_DENOMINATIONS[cur].reduce((sum, d) => sum + d * qty(cur, d), 0)
+      result[cur] = denomTotal(quantities, cur)
     }
     return result
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,50 +137,11 @@ export default function ConteoRapidoModal({
 
         {/* Denomination grid */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-          <div className="space-y-1">
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              <span className="text-[10px] text-slate-600 uppercase tracking-wider">Denominación</span>
-              <span className="text-[10px] text-slate-600 uppercase tracking-wider text-center">Cantidad</span>
-              <span className="text-[10px] text-slate-600 uppercase tracking-wider text-right">Subtotal</span>
-            </div>
-
-            {CASH_DENOMINATIONS[activeTab].map(denom => {
-              const q   = qty(activeTab, denom)
-              const sub = denom * q
-              return (
-                <div key={denom} className="grid grid-cols-3 gap-2 items-center">
-                  <span className="text-xs font-mono text-slate-400">
-                    {fmtDenom(denom, activeTab)}
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    value={quantities[`${activeTab}:${denom}`] ?? ''}
-                    onChange={e => setQuantities(prev => ({
-                      ...prev,
-                      [`${activeTab}:${denom}`]: e.target.value.replace(/\D/g, ''),
-                    }))}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 font-mono text-center focus:border-slate-500 outline-none w-full"
-                  />
-                  <span className={cn(
-                    'text-xs font-mono text-right',
-                    sub > 0 ? 'text-slate-200' : 'text-slate-600'
-                  )}>
-                    {sub > 0 ? fmtAmount(sub, activeTab) : '—'}
-                  </span>
-                </div>
-              )
-            })}
-
-            <div className="grid grid-cols-3 gap-2 items-center border-t border-slate-700 pt-2 mt-2">
-              <span className="text-xs text-slate-400 font-medium">Total contado</span>
-              <span />
-              <span className="text-sm font-mono font-semibold text-slate-100 text-right">
-                {fmtAmount(totals[activeTab] ?? 0, activeTab)}
-              </span>
-            </div>
-          </div>
+          <DenominationCounter
+            currency={activeTab}
+            quantities={quantities}
+            setQuantities={setQuantities}
+          />
 
           {/* Resumen de diferencias */}
           <div className="bg-slate-800/60 rounded-xl p-3 space-y-3">

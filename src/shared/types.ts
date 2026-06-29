@@ -1706,6 +1706,15 @@ export interface FinanceConcept {
    * separados (Opción C del plan maestro de consolidación).
    */
   tracks_multiple_entries: number   // 0 | 1
+  /**
+   * Tarifa por hora (jornal) y viático fijo por jornada para conceptos de
+   * "personal doméstico" (ej. Sandra). Cuando `hourly_rate > 0`, al registrar
+   * una carga se puede tipear la cantidad de horas y el monto se calcula como
+   * `horas * hourly_rate + viatic_amount`, autocompletando además la nota.
+   * 0 = no aplica (el concepto se carga sólo por monto, como cualquier otro).
+   */
+  hourly_rate:    number
+  viatic_amount:  number
   is_active:      number   // 0 | 1
   notes:          string
   created_at:     number
@@ -1801,6 +1810,8 @@ export interface CreateFinanceConceptInput {
   recurrence?:     FinanceRecurrence
   recurrence_month?: number | null
   tracks_multiple_entries?: number   // 0 | 1 — ver FinanceConcept.tracks_multiple_entries
+  hourly_rate?:    number   // jornal por hora — ver FinanceConcept.hourly_rate
+  viatic_amount?:  number   // viático fijo por jornada — ver FinanceConcept.hourly_rate
   notes?:          string
 }
 
@@ -3798,6 +3809,30 @@ export interface CashMovementAmount {
   currency: CashCurrency
   amount: number
   created_at: string
+}
+
+// Desglose de billetes (opcional) que compone el importe de un movimiento.
+// Doble chequeo de control: espejo de CashCountDetail pero por movimiento.
+export interface CashMovementBreakdown {
+  id: string
+  workspace_id: string
+  movement_id: string
+  currency: CashCurrency
+  denomination: number
+  quantity: number
+  created_at: string
+}
+
+// Operador de caja (lista propia, independiente del login). El renderer nunca ve
+// el hash/salt del PIN: sólo `has_pin` indica si tiene PIN configurado.
+export interface CashOperator {
+  id: string
+  workspace_id: string
+  name: string
+  active: number
+  has_pin: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface CashCount {

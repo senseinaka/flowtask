@@ -70,7 +70,7 @@ import type {
   CreateAccountingServiceInput, RegisterServicePaymentInput, ServiceStatus,
   CashCompany, Cashbox, CashCategory, CashMovement, CashCount, CashDifference,
   CashboxPermission, CashboxStatus, DifferenceStatus,
-  CashMovementListItem, CashAttachment, CashAttachmentOwnerType,
+  CashMovementListItem, CashAttachment, CashAttachmentOwnerType, CashOperator,
   PendingDifferenceItem,
 } from '@shared/types'
 import type { PermissionLevel } from '@shared/modules'
@@ -1292,6 +1292,7 @@ const api = {
         source_cashbox_id: string
         dest_cashbox_id: string
         amounts: { currency: string; amount: number }[]
+        breakdowns?: { currency: string; denomination: number; quantity: number }[]
         notes?: string
         reference_date: string
       }): Promise<void> => ipcRenderer.invoke('cajas:movements:transfer', input),
@@ -1334,6 +1335,13 @@ const api = {
       add:    (ownerType: CashAttachmentOwnerType, ownerId: string): Promise<CashAttachment[]> => ipcRenderer.invoke('cajas:attachments:add', ownerType, ownerId),
       delete: (id: string): Promise<void> => ipcRenderer.invoke('cajas:attachments:delete', id),
       open:   (driveFileId: string): Promise<void> => ipcRenderer.invoke('cajas:attachments:open', driveFileId),
+    },
+    operators: {
+      list:   (): Promise<CashOperator[]> => ipcRenderer.invoke('cajas:operators:list'),
+      create: (input: { name: string; pin: string }): Promise<CashOperator> => ipcRenderer.invoke('cajas:operators:create', input),
+      update: (input: { id: string; name?: string; pin?: string }): Promise<void> => ipcRenderer.invoke('cajas:operators:update', input),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('cajas:operators:delete', id),
+      verify: (id: string, pin: string): Promise<boolean> => ipcRenderer.invoke('cajas:operators:verify', id, pin),
     },
   },
 

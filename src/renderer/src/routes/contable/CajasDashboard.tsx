@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2, BarChart3, LayoutGrid, Pencil, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Banknote, RefreshCw, Building2, AlertTriangle, Clock, TrendingUp, CheckCircle2, BarChart3, LayoutGrid, Pencil, Check, X, ChevronLeft, ChevronRight, Users } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import { useCashboxesWithBalances, parseCurrencies, fmtAmount, useUpdateCashboxInfo, useMoveCashbox } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency, CashboxStatus } from '@shared/types'
@@ -11,6 +11,7 @@ import PermisosModal from './PermisosModal'
 import CierreDiarioModal from './CierreDiarioModal'
 import ReporteModal from './ReporteModal'
 import MovimientosModal from './MovimientosModal'
+import OperadoresModal from './OperadoresModal'
 import AlertasDescuadre from './AlertasDescuadre'
 import CajasCharts from './CajasCharts'
 
@@ -245,6 +246,7 @@ export default function CajasDashboard() {
   const [selectedId, setSelectedId]       = useState<string | null>(null)
   const [activeModal, setActiveModal]     = useState<ActiveModal>(null)
   const [view, setView]                   = useState<'list' | 'charts'>('list')
+  const [showOperators, setShowOperators] = useState(false)
 
   const selectedBox = useMemo(
     () => cashboxes.find(b => b.id === selectedId) ?? null,
@@ -300,9 +302,19 @@ export default function CajasDashboard() {
           <Banknote size={20} className="text-emerald-400" />
           <h1 className="text-base font-semibold text-slate-100">Cajas</h1>
         </div>
-        <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
-          <ViewBtn active={view === 'list'}   onClick={() => setView('list')}   icon={LayoutGrid} label="Cajas" />
-          <ViewBtn active={view === 'charts'} onClick={() => setView('charts')} icon={BarChart3}  label="Gráficos" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowOperators(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 text-xs font-medium rounded-lg transition-colors"
+            title="Administrar operadores de caja"
+          >
+            <Users size={14} />
+            Operadores
+          </button>
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+            <ViewBtn active={view === 'list'}   onClick={() => setView('list')}   icon={LayoutGrid} label="Cajas" />
+            <ViewBtn active={view === 'charts'} onClick={() => setView('charts')} icon={BarChart3}  label="Gráficos" />
+          </div>
         </div>
       </div>
 
@@ -455,6 +467,10 @@ export default function CajasDashboard() {
           box={selectedBox}
           onClose={() => setActiveModal(null)}
         />
+      )}
+
+      {showOperators && (
+        <OperadoresModal onClose={() => setShowOperators(false)} />
       )}
     </div>
   )

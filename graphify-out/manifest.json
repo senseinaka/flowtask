@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782738528.2926373,
-    "ast_hash": "4b7565bab3d319398e0a98f7c7e55c86",
+    "mtime": 1782740936.0181246,
+    "ast_hash": "bb93c6d3a22feb341d3e8d6c93638644",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782738797.2668726,
-    "ast_hash": "c4709f5962af25303a64c5fecdd92b2f",
+    "mtime": 1782741229.657439,
+    "ast_hash": "c697cac96f237c22b37ac1d207199aaf",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1330,23 +1330,23 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/cajas.ts": {
-    "mtime": 1782738495.5282552,
-    "ast_hash": "633b910d0481047d5d71e3562d54aed7",
+    "mtime": 1782740904.9459047,
+    "ast_hash": "97cf23844d16f581b37a6758a55b0cb6",
     "semantic_hash": ""
   },
   "src/main/ipc/cajas.ipc.ts": {
-    "mtime": 1782738508.31682,
-    "ast_hash": "135cfba3dec0c1be2633e28dcdf258ac",
+    "mtime": 1782740922.423923,
+    "ast_hash": "71fd11c60680b119d875a68216bb2df9",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCajas.ts": {
-    "mtime": 1782738537.8360395,
-    "ast_hash": "c0a5ad36d8a0fd9ba45b6d206bb07882",
+    "mtime": 1782740959.4744904,
+    "ast_hash": "b0d09a571a0564ae4c1070446f9d8f38",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/CajasDashboard.tsx": {
-    "mtime": 1782738619.8140264,
-    "ast_hash": "00aca5badda8815a0e8fc563dc158807",
+    "mtime": 1782741000.642349,
+    "ast_hash": "89fdd35a9934000f6def8364f2102374",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/NuevoMovimientoModal.tsx": {
@@ -1417,6 +1417,11 @@
   "supabase_cajas_orden_monedas.sql": {
     "mtime": 1782738651.456565,
     "ast_hash": "12cffcb993460aa6b8e314b7e4098b55",
+    "semantic_hash": ""
+  },
+  "supabase_cajas_rls_fix.sql": {
+    "mtime": 1782741063.8571496,
+    "ast_hash": "d3d807b2213a77a9fb794f78157ee579",
     "semantic_hash": ""
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { X, Loader2, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, ChevronDown } from 'lucide-react'
+import { X, Loader2, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, ChevronDown, Calculator } from 'lucide-react'
 import { cn } from '../../components/ui/utils'
 import {
   useCashCategories,
@@ -9,6 +9,8 @@ import {
   fmtAmount,
 } from '../../hooks/useCajas'
 import type { CashboxWithBalance, CashCurrency } from '@shared/types'
+import { CASH_DENOMINATIONS } from '@shared/types'
+import { DenominationCounter, denomTotal, denomQty } from './DenominationCounter'
 
 type Tipo = 'income' | 'expense' | 'transfer'
 
@@ -53,6 +55,8 @@ export default function NuevoMovimientoModal({
   const [categoryId,   setCategoryId]   = useState('')
   const [destId,       setDestId]       = useState('')
   const [amounts,      setAmounts]      = useState<Record<string, string>>({})
+  const [quantities,   setQuantities]   = useState<Record<string, string>>({})
+  const [counterOpen,  setCounterOpen]  = useState<Partial<Record<CashCurrency, boolean>>>({})
   const [refDate,      setRefDate]      = useState(today())
   const [notes,        setNotes]        = useState('')
   const [error,        setError]        = useState<string | null>(null)
@@ -66,10 +70,14 @@ export default function NuevoMovimientoModal({
 
   const otherBoxes = allBoxes.filter(b => b.id !== box.id)
 
-  // Parsed amounts
+  // Parsed amounts — si el contador de billetes está abierto para esa moneda, el
+  // importe efectivo es el total de los billetes contados; si no, el valor manual.
   const parsedAmounts = useMemo(
-    () => Object.fromEntries(currencies.map(cur => [cur, parseNum(amounts[cur] ?? '')])),
-    [amounts, currencies]
+    () => Object.fromEntries(currencies.map(cur => [
+      cur,
+      counterOpen[cur] ? denomTotal(quantities, cur) : parseNum(amounts[cur] ?? ''),
+    ])),
+    [amounts, currencies, counterOpen, quantities]
   )
 
   const hasAmount = Object.values(parsedAmounts).some(v => v > 0)
@@ -110,11 +118,21 @@ export default function NuevoMovimientoModal({
         .map(cur => ({ currency: cur, amount: parsedAmounts[cur] ?? 0 }))
         .filter(a => a.amount > 0)
 
+      // Desglose de billetes solo de las monedas donde se usó el contador (doble chequeo).
+      const breakdowns = currencies.flatMap(cur =>
+        counterOpen[cur]
+          ? CASH_DENOMINATIONS[cur]
+              .map(denom => ({ currency: cur, denomination: denom, quantity: denomQty(quantities, cur, denom) }))
+              .filter(b => b.quantity > 0)
+          : []
+      )
+
       if (tipo === 'transfer') {
         await createTrans.mutateAsync({
           source_cashbox_id: box.id,
           dest_cashbox_id:   destId,
           amounts:           amountsList,
+          breakdowns,
           notes,
           reference_date:    refDate,
         })
@@ -130,6 +148,7 @@ export default function NuevoMovimientoModal({
           category_id:    categoryId,
           notes,
           amounts:        signed,
+          breakdowns,
         })
       }
       onSuccess()
@@ -242,19 +261,62 @@ export default function NuevoMovimientoModal({
               Importes
             </label>
             <div className="space-y-2">
-              {currencies.map(cur => (
-                <div key={cur} className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-500 w-8 font-mono">{cur}</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={amounts[cur] ?? ''}
-                    onChange={e => setAmounts(a => ({ ...a, [cur]: e.target.value }))}
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 font-mono focus:border-slate-500 outline-none"
-                  />
-                </div>
-              ))}
+              {currencies.map(cur => {
+                const open = !!counterOpen[cur]
+                const counterTotal = denomTotal(quantities, cur)
+                return (
+                  <div key={cur} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500 w-8 font-mono">{cur}</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        readOnly={open}
+                        value={open
+                          ? (counterTotal > 0 ? fmtAmount(counterTotal, cur) : '')
+                          : (amounts[cur] ?? '')}
+                        onChange={e => setAmounts(a => ({ ...a, [cur]: e.target.value }))}
+                        className={cn(
+                          'flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 font-mono focus:border-slate-500 outline-none',
+                          open && 'opacity-70 cursor-default'
+                        )}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const willOpen = !counterOpen[cur]
+                          // Al cerrar el contador, vuelco el total contado al importe manual.
+                          if (!willOpen) {
+                            const t = denomTotal(quantities, cur)
+                            if (t > 0) setAmounts(a => ({ ...a, [cur]: String(t) }))
+                          }
+                          setCounterOpen(o => ({ ...o, [cur]: willOpen }))
+                        }}
+                        title={open ? 'Ingresar importe manual' : 'Contar billetes'}
+                        className={cn(
+                          'flex items-center justify-center w-8 h-8 rounded-lg border transition-colors shrink-0',
+                          open
+                            ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700'
+                            : 'border-slate-700 text-slate-500 hover:text-slate-300'
+                        )}
+                      >
+                        <Calculator size={14} />
+                      </button>
+                    </div>
+                    {open && (
+                      <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-3">
+                        <DenominationCounter
+                          currency={cur}
+                          quantities={quantities}
+                          setQuantities={setQuantities}
+                          totalLabel="Total billetes"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
 

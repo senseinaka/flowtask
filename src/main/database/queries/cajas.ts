@@ -171,6 +171,7 @@ export async function createCashMovement(
     dest_cashbox_id?: string
     notes?: string
     amounts: { currency: string; amount: number }[]
+    breakdowns?: { currency: string; denomination: number; quantity: number }[]
     created_by: string
   }
 ): Promise<string> {
@@ -200,6 +201,15 @@ export async function createCashMovement(
     )
   }
 
+  // Desglose de billetes (opcional): doble chequeo de control de cómo se compone el importe.
+  for (const b of input.breakdowns ?? []) {
+    if (b.quantity === 0) continue
+    await db.execute(
+      'INSERT INTO cash_movement_breakdowns (id, workspace_id, movement_id, currency, denomination, quantity, created_at) VALUES (?,?,?,?,?,?,?)',
+      [randomUUID(), WORKSPACE_ID, movementId, b.currency, b.denomination, b.quantity, now]
+    )
+  }
+
   return movementId
 }
 
@@ -210,6 +220,7 @@ export async function createTransfer(
     source_cashbox_id: string
     dest_cashbox_id: string
     amounts: { currency: string; amount: number }[]
+    breakdowns?: { currency: string; denomination: number; quantity: number }[]
     notes?: string
     reference_date: string
     created_by: string
@@ -251,6 +262,16 @@ export async function createTransfer(
     if (amount === 0) continue
     await db.execute(INSERT_AMOUNT, [randomUUID(), WORKSPACE_ID, srcId, currency, -Math.abs(amount), now])
     await db.execute(INSERT_AMOUNT, [randomUUID(), WORKSPACE_ID, dstId, currency,  Math.abs(amount), now])
+  }
+
+  const INSERT_BREAKDOWN =
+    'INSERT INTO cash_movement_breakdowns (id, workspace_id, movement_id, currency, denomination, quantity, created_at) VALUES (?,?,?,?,?,?,?)'
+
+  // El mismo billetaje sale del origen y entra al destino → se guarda en ambos movimientos.
+  for (const b of input.breakdowns ?? []) {
+    if (b.quantity === 0) continue
+    await db.execute(INSERT_BREAKDOWN, [randomUUID(), WORKSPACE_ID, srcId, b.currency, b.denomination, b.quantity, now])
+    await db.execute(INSERT_BREAKDOWN, [randomUUID(), WORKSPACE_ID, dstId, b.currency, b.denomination, b.quantity, now])
   }
 }
 

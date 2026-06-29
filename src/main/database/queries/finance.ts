@@ -190,8 +190,8 @@ export async function createFinanceConcept(data: CreateFinanceConceptInput): Pro
   const now = Date.now()
   await db.execute(`
     INSERT INTO finance_concepts
-      (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, tracks_multiple_entries, is_active, notes, created_at, updated_at, workspace_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+      (id, category_id, account_id, name, default_amount, expense_type, payment_method, recurrence, recurrence_month, tracks_multiple_entries, hourly_rate, viatic_amount, is_active, notes, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
   `, [
     id, data.category_id, data.account_id, data.name,
     data.default_amount ?? 0,
@@ -200,6 +200,8 @@ export async function createFinanceConcept(data: CreateFinanceConceptInput): Pro
     data.recurrence ?? 'monthly',
     data.recurrence_month ?? null,
     data.tracks_multiple_entries ?? 0,
+    data.hourly_rate ?? 0,
+    data.viatic_amount ?? 0,
     data.notes ?? '', now, now, WORKSPACE_ID
   ])
   return (await getFinanceConcept(id))!
@@ -212,7 +214,7 @@ export async function updateFinanceConcept(
   const now = Date.now()
   const allowed = ['category_id', 'account_id', 'name', 'default_amount',
                    'expense_type', 'payment_method', 'recurrence', 'recurrence_month',
-                   'tracks_multiple_entries', 'notes', 'is_active'] as const
+                   'tracks_multiple_entries', 'hourly_rate', 'viatic_amount', 'notes', 'is_active'] as const
   const sets: string[] = []
   const vals: unknown[] = []
   for (const key of allowed) {
@@ -236,6 +238,7 @@ type MovementRow = FinanceMovement & {
   c_name: string; c_category_id: string; c_account_id: string; c_default_amount: number
   c_expense_type: string; c_payment_method: string; c_recurrence: string; c_recurrence_month: number | null
   c_tracks_multiple_entries: number
+  c_hourly_rate: number; c_viatic_amount: number
   c_is_active: number; c_notes: string; c_created_at: number; c_updated_at: number
   cat_name: string; cat_icon: string; cat_color: string
   acc_name: string; acc_icon: string; acc_color: string
@@ -258,6 +261,7 @@ function hydrateMovement(r: MovementRow): FinanceMovement {
       recurrence: r.c_recurrence as FinanceConcept['recurrence'],
       recurrence_month: r.c_recurrence_month,
       tracks_multiple_entries: r.c_tracks_multiple_entries,
+      hourly_rate: r.c_hourly_rate, viatic_amount: r.c_viatic_amount,
       is_active: r.c_is_active, notes: r.c_notes,
       created_at: r.c_created_at, updated_at: r.c_updated_at,
       category: { id: r.c_category_id, name: r.cat_name, icon: r.cat_icon, color: r.cat_color, is_default: 0, created_at: 0, updated_at: 0 },
@@ -273,6 +277,7 @@ const MOVEMENT_BASE_SELECT = `
          c.payment_method as c_payment_method, c.recurrence as c_recurrence,
          c.recurrence_month as c_recurrence_month,
          c.tracks_multiple_entries as c_tracks_multiple_entries,
+         c.hourly_rate as c_hourly_rate, c.viatic_amount as c_viatic_amount,
          c.is_active as c_is_active, c.notes as c_notes,
          c.created_at as c_created_at, c.updated_at as c_updated_at,
          cat.name as cat_name, cat.icon as cat_icon, cat.color as cat_color,

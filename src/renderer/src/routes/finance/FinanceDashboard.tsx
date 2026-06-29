@@ -1187,7 +1187,7 @@ function MovementsTable({
                 <tr key={`${m.id}-entries`} className="bg-slate-900/40">
                   <td />
                   <td colSpan={12} className="px-3 py-2">
-                    <MovementEntriesQuickList movementId={m.id} conceptName={m.concept?.name ?? 'Carga'} />
+                    <MovementEntriesQuickList movementId={m.id} conceptName={m.concept?.name ?? 'Carga'} hourlyRate={m.concept?.hourly_rate ?? 0} viaticAmount={m.concept?.viatic_amount ?? 0} />
                   </td>
                 </tr>
               )}
@@ -1307,7 +1307,7 @@ function EntryNoteInput({ value, onSave }: { value: string; onSave: (v: string) 
   )
 }
 
-function MovementEntriesQuickList({ movementId, conceptName }: { movementId: string; conceptName: string }) {
+function MovementEntriesQuickList({ movementId, conceptName, hourlyRate = 0, viaticAmount = 0 }: { movementId: string; conceptName: string; hourlyRate?: number; viaticAmount?: number }) {
   const { data: entries = [], isLoading } = useMovementEntries(movementId)
   const add    = useAddMovementEntry()
   const update = useUpdateMovementEntry()
@@ -1334,6 +1334,29 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
     add.mutate({ movement_id: movementId, amount: draftNum, entry_date: dayjs().valueOf(), note: '' })
     setDraftAmount('')
     addRef.current?.focus()   // queda listo para cargar otra de inmediato
+  }
+
+  // Personal doméstico: si el concepto tiene jornal (hourlyRate > 0) se habilita
+  // "Por horas" — en vez de tipear el monto se ingresan las horas y el sistema
+  // calcula horas × jornal + viático, y arma la nota sola (horas + viático + qué
+  // hizo). Si hourlyRate es 0 el componente funciona igual que siempre.
+  const byHours = hourlyRate > 0
+  const [showHours, setShowHours]   = useState(false)
+  const [hoursInput, setHoursInput] = useState('')
+  const [viaticInput, setViaticInput] = useState(String(viaticAmount || 0))
+  const [taskInput, setTaskInput]   = useState('')
+  const hoursNum  = Number(hoursInput.replace(',', '.'))
+  const viaticNum = Number(viaticInput.replace(',', '.')) || 0
+  const hoursAmount = Number.isFinite(hoursNum) && hoursNum > 0 ? hoursNum * hourlyRate + viaticNum : 0
+  const fmtHoras = (h: number) => (h % 1 === 0 ? String(h) : h.toFixed(1))
+
+  const commitHours = () => {
+    if (!(hoursAmount > 0)) return
+    const note = `${fmtHoras(hoursNum)} h × ${formatCurrency(hourlyRate)}` +
+      (viaticNum > 0 ? ` + ${formatCurrency(viaticNum)} viático` : '') +
+      (taskInput.trim() ? ` — ${taskInput.trim()}` : '')
+    add.mutate({ movement_id: movementId, amount: hoursAmount, entry_date: dayjs().valueOf(), note })
+    setHoursInput(''); setTaskInput(''); setViaticInput(String(viaticAmount || 0)); setShowHours(false)
   }
 
   if (isLoading) {
@@ -1395,8 +1418,90 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
         >
           <Plus size={11} /> Agregar
         </button>
+        {byHours && (
+          <button
+            onClick={() => setShowHours(s => !s)}
+            className={cn(
+              'flex items-center gap-1 text-[11px] font-semibold rounded-lg px-2 py-1 transition-colors border',
+              showHours
+                ? 'text-white bg-purple-600 border-purple-600'
+                : 'text-purple-300 hover:text-white border-dashed border-purple-700/50 hover:bg-purple-600 hover:border-purple-600'
+            )}
+            title="Calcular el monto a partir de las horas trabajadas"
+          >
+            <Clock size={11} /> Por horas
+          </button>
+        )}
         <span className="text-[11px] font-semibold text-purple-300">Total: {formatCurrency(total)}</span>
       </div>
+
+      {byHours && showHours && (
+        <div className="rounded-lg border border-purple-700/40 bg-purple-950/20 p-2.5 mt-1 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[10px] text-slate-400 mb-0.5">Horas</label>
+              <input
+                autoFocus
+                type="text"
+                inputMode="decimal"
+                value={hoursInput}
+                onChange={e => setHoursInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitHours() }
+                  if (e.key === 'Escape') setShowHours(false)
+                }}
+                placeholder="8"
+                className="w-full bg-slate-800 border border-slate-700 focus:border-purple-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-slate-400 mb-0.5">Viático</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={viaticInput}
+                onChange={e => setViaticInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitHours() } }}
+                className="w-full bg-slate-800 border border-slate-700 focus:border-purple-500/60 rounded px-1.5 py-0.5 text-sm text-slate-100 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-slate-400 mb-0.5">Valor hora</label>
+              <input
+                type="text"
+                readOnly
+                value={formatCurrency(hourlyRate)}
+                className="w-full bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-sm text-slate-500 focus:outline-none cursor-default"
+              />
+            </div>
+          </div>
+          <input
+            type="text"
+            value={taskInput}
+            onChange={e => setTaskInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitHours() } }}
+            placeholder="¿Qué hizo ese día? (ej: limpieza general + ventanas)"
+            className="w-full bg-slate-800 border border-slate-700 focus:border-purple-500/60 rounded px-2 py-1 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-400 min-w-0 truncate">
+              {hoursNum > 0
+                ? <>{fmtHoras(hoursNum)} h × {formatCurrency(hourlyRate)}{viaticNum > 0 ? ` + ${formatCurrency(viaticNum)}` : ''} = <span className="font-semibold text-purple-300">{formatCurrency(hoursAmount)}</span></>
+                : 'Ingresá las horas trabajadas'}
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => setShowHours(false)} className="text-[11px] text-slate-500 hover:text-slate-300 px-2 py-1">Cancelar</button>
+              <button
+                onClick={commitHours}
+                disabled={add.isPending || !(hoursAmount > 0)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-2.5 py-1 transition-colors"
+              >
+                <Plus size={11} /> Agregar carga
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1656,7 +1761,7 @@ function CategoryGroupedMovements({
                       <tr style={{ borderLeft: `3px solid ${group.color}40` }} className="bg-slate-900/40">
                         <td />
                         <td colSpan={11} className="px-3 py-2">
-                          <MovementEntriesQuickList movementId={m.id} conceptName={m.concept?.name ?? 'Carga'} />
+                          <MovementEntriesQuickList movementId={m.id} conceptName={m.concept?.name ?? 'Carga'} hourlyRate={m.concept?.hourly_rate ?? 0} viaticAmount={m.concept?.viatic_amount ?? 0} />
                         </td>
                       </tr>
                     )}
@@ -1988,7 +2093,7 @@ function QuickFillMode({
                           <tr className="border-b border-slate-800 bg-slate-900/40">
                             <td className="p-0 w-1" style={{ background: group.catColor + '30' }} />
                             <td colSpan={6} className="px-4 py-2">
-                              <MovementEntriesQuickList movementId={existing!.id} conceptName={c.name} />
+                              <MovementEntriesQuickList movementId={existing!.id} conceptName={c.name} hourlyRate={c.hourly_rate ?? 0} viaticAmount={c.viatic_amount ?? 0} />
                             </td>
                           </tr>
                         )}
@@ -4123,7 +4228,8 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
     category_id: categories[0]?.id ?? '',
     account_id:  accounts[0]?.id ?? '',
     name: '', default_amount: 0, expense_type: 'fixed', payment_method: 'transfer',
-    recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0
+    recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0,
+    hourly_rate: 0, viatic_amount: 0
   })
 
   // Edición de un concepto existente: antes solo se podían tocar nombre,
@@ -4144,7 +4250,9 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
       expense_type:     c.expense_type,
       payment_method:   c.payment_method,
       recurrence:       c.recurrence,
-      recurrence_month: c.recurrence_month
+      recurrence_month: c.recurrence_month,
+      hourly_rate:      c.hourly_rate,
+      viatic_amount:    c.viatic_amount
     })
     setEditingId(c.id)
   }
@@ -4164,7 +4272,8 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
       category_id: categories[0]?.id ?? '',
       account_id:  accounts[0]?.id ?? '',
       name: '', default_amount: 0, expense_type: 'fixed', payment_method: 'transfer',
-      recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0
+      recurrence: 'monthly', recurrence_month: null, notes: '', tracks_multiple_entries: 0,
+      hourly_rate: 0, viatic_amount: 0
     })
     setShowNew(true)
   }
@@ -4304,6 +4413,20 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                   </span>
                 </span>
               </label>
+              <div className="rounded-lg border border-purple-800/30 bg-purple-950/10 p-3 space-y-2">
+                <p className="text-[11px] font-medium text-purple-300">Pago por horas (personal doméstico)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Valor hora (jornal)</label>
+                    <input type="number" value={draft.hourly_rate ?? 0} onChange={e => setDraft(d => ({ ...d, hourly_rate: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Viático por jornada</label>
+                    <input type="number" value={draft.viatic_amount ?? 0} onChange={e => setDraft(d => ({ ...d, viatic_amount: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">Dejá en 0 si este concepto no se paga por horas. Si cargás un valor, al registrar una carga vas a poder tipear las horas y el monto se calcula solo (horas × valor + viático).</p>
+              </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowNew(false)} className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5">Cancelar</button>
                 <button onClick={handleCreate} className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors">
@@ -4414,6 +4537,20 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                         </select>
                       </div>
                     )}
+                  </div>
+                  <div className="rounded-lg border border-purple-800/30 bg-purple-950/10 p-3 space-y-2">
+                    <p className="text-[11px] font-medium text-purple-300">Pago por horas (personal doméstico)</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Valor hora (jornal)</label>
+                        <input type="number" value={editDraft.hourly_rate ?? 0} onChange={e => setEditDraft(d => d && ({ ...d, hourly_rate: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Viático por jornada</label>
+                        <input type="number" value={editDraft.viatic_amount ?? 0} onChange={e => setEditDraft(d => d && ({ ...d, viatic_amount: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500">Dejá en 0 si este concepto no se paga por horas. Si cargás un valor, al registrar una carga vas a poder tipear las horas y el monto se calcula solo.</p>
                   </div>
                   <div className="flex justify-end gap-2 pt-1">
                     <button onClick={cancelEdit} className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5">Cancelar</button>

@@ -24,7 +24,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **Knowledge:** captura y organización de información (textos, archivos, imágenes, PDFs) con resúmenes por IA (Haiku) y resúmenes globales por tema. Rutas `/knowledge`. Sincroniza vía PowerSync.
 - **Mercado Pago:** integración con la API de MP para descargar reportes de liquidaciones, sincronizar transacciones, y conciliarlas con operaciones internas. Multi-cuenta. Rutas `/contable/mercadopago`. Tablas PowerSync: `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`.
 - **Contable → Servicios:** gestión de servicios recurrentes: software/SaaS, seguros, hosting, bancarios, suscripciones, etc. Panel de control con vencimientos, historial de pagos/renovaciones, soporte inline para datos de pólizas de seguros. Catálogos editables (categorías, áreas, medios de pago) vía tabla `service_catalog`. Rutas `/contable/servicios`.
-- **Contable → Cajas Internas:** gestión de las cajas de efectivo de la empresa (caja chica, cajas por área, multi-moneda ARS/USD/EUR). Ingresos, egresos, transferencias entre cajas, conteos/arqueos, diferencias, permisos por usuario/caja y cierre diario, con export a Excel. Rutas `/contable/cajas`. 11 tablas PowerSync `cash_*` (incl. `cash_attachments` para comprobantes en Drive).
+- **Contable → Cajas Internas:** gestión de las cajas de efectivo de la empresa (caja chica, cajas por área, multi-moneda ARS/USD/EUR). Ingresos, egresos, transferencias entre cajas, conteos/arqueos, diferencias, permisos por usuario/caja y cierre diario, con export a Excel. Rutas `/contable/cajas`. 13 tablas PowerSync `cash_*` (incl. `cash_attachments` para comprobantes en Drive, `cash_movement_breakdowns` para el desglose de billetes por movimiento y `cash_operators` para los operadores de caja con PIN de 4 dígitos).
 - **RRHH — Sueldos:** administración mensual de sueldos por colaborador. Extrae datos de PDFs de recibos de sueldo, los guarda en Supabase via PowerSync, genera alertas inteligentes (nuevos, ausentes, variaciones), compara con el mes anterior y exporta planillas XLS. Los PDFs se almacenan en Google Drive (`Summit RRHH/Sueldos/MM-YYYY/`).
 - **RRHH — Nómina:** módulo de ficha de colaboradores. Registro completo (datos personales, laborales, bancarios, Drive). Genera la nómina desde la última liquidación, asigna legajos automáticos (4 dígitos), crea carpetas Drive en `Summit RRHH/Legajos/XXXX Nombre/` con subcarpetas, muestra historial salarial por colaborador con gráfico de área. Rutas: `/rrhh/nomina` y `/rrhh/nomina/:id`.
 - **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
@@ -137,7 +137,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`, `rrhh_nomina_config`, `rrhh_listas`
 - `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`
 - `accounting_services`, `accounting_service_payments`, `service_catalog`
-- `cash_companies`, `cashboxes`, `cashbox_permissions`, `cash_categories`, `cash_movements`, `cash_movement_amounts`, `cash_counts`, `cash_count_details`, `cash_differences`, `cash_audit_logs`, `cash_attachments` (Cajas Internas; `cash_attachments` con DDL pendiente — comprobantes en Drive)
+- `cash_companies`, `cashboxes`, `cashbox_permissions`, `cash_categories`, `cash_movements`, `cash_movement_amounts`, `cash_movement_breakdowns`, `cash_operators`, `cash_counts`, `cash_count_details`, `cash_differences`, `cash_audit_logs`, `cash_attachments` (Cajas Internas; `cash_movement_breakdowns` y `cash_operators` con DDL pendiente — desglose de billetes y operadores con PIN)
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 
@@ -269,6 +269,7 @@ Las migraciones de `flowtask.db` están en `src/main/database/migrations.ts`.
 ### Conceptos clave del módulo
 
 - **Concepto** (`finance_concepts`): template de un gasto recurrente (ej. "Supermercado"). Tiene `tracks_multiple_entries` para indicar que acepta varias cargas por mes.
+- **Pago por horas / personal doméstico** (jun 2026): el concepto personal admite `hourly_rate` (jornal por hora) y `viatic_amount` (viático fijo por jornada). Cuando `hourly_rate > 0`, al registrar una carga en `MovementEntriesQuickList` aparece el botón **"Por horas"**: en vez de tipear el monto se ingresan las horas y el sistema calcula `monto = horas × hourly_rate + viático`, autocompletando la nota (`"8 h × $9.000 + $3.000 viático — limpieza general"`). Caso de uso: Sandra (se le paga semanal por hora + viático). **Sólo la tabla personal `finance_concepts` declara estas 2 columnas** — `company_finance_concepts` queda intacta: en `powersync.ts` se hizo `financeConceptColumnsWithHours = {...financeConceptColumns, hourly_rate, viatic_amount}` usado sólo por `finance_concepts`, y el `concept` embebido de `company-finance.ts hydrateMovement` los expone hardcodeados en 0. DDL = `supabase_finance_concepts_horas.sql` (ALTER ADD COLUMN, no toca sync-rules porque la regla usa `SELECT *`). `finance.ts hydrateMovement` trae `c_hourly_rate`/`c_viatic_amount` (vía `SELECT c.*` aliased) para que el botón también aparezca en la vista de movimientos. Config por concepto: inputs "Valor hora (jornal)" / "Viático por jornada" en el form de Nuevo concepto y en el de edición.
 - **Movimiento** (`finance_movements`): instancia mensual de un concepto (ej. "Supermercado — Junio 2025"). Tiene `amount_actual` que se recalcula como la suma de sus cargas.
 - **Entrada/Carga** (`finance_movement_entries`, `company_finance_movement_entries`): cada pago individual dentro de un movimiento multi-carga. Se leen y escriben exclusivamente via `getPowerSyncDb()` (pure PowerSync, sin dual-write). `addMovementEntry`, `updateMovementEntry` y `removeMovementEntry` usan `writeTransaction` para escribir la entrada y recalcular el movimiento en la misma transacción SQLite.
 
@@ -1147,7 +1148,7 @@ Los defaults se insertan con `id = catalog-${type}-${value}` (ej. `catalog-categ
 
 Gestión de las cajas de efectivo internas de la empresa: caja chica, cajas por área/sucursal, en múltiples monedas (ARS/USD/EUR). Registra ingresos, egresos y transferencias entre cajas, conteos/arqueos, diferencias, permisos por usuario y caja, y cierre diario. Exporta reportes a Excel. Ruta `/contable/cajas`. Ícono del sidebar: `Banknote` (lucide-react, color `#34d399`).
 
-### Tablas (PowerSync ↔ Supabase — 11 tablas)
+### Tablas (PowerSync ↔ Supabase — 13 tablas)
 
 Todas `cash_*`, se leen/escriben vía `getPowerSyncDb()` con filtro `workspace_id`. **Nacen en la era PowerSync — NO tienen migración en `flowtask.db`** (están en el `AppSchema` de `powersync.ts`).
 
@@ -1159,6 +1160,8 @@ Todas `cash_*`, se leen/escriben vía `getPowerSyncDb()` con filtro `workspace_i
 | `cash_categories` | Categorías de movimiento (ingreso / egreso) |
 | `cash_movements` | Cabecera del movimiento: `type` (`income` / `expense` / `transfer`), `status` (`confirmed` / …), fecha, caja, categoría, descripción |
 | `cash_movement_amounts` | Montos por moneda de cada movimiento (un movimiento puede tener varias monedas). **El saldo se calcula sumando acá** |
+| `cash_movement_breakdowns` | **Desglose de billetes por movimiento** (doble chequeo). Espejo de `cash_count_details` pero por `movement_id`. Opcional: solo se llena si el operador usa el contador de billetes al cargar el importe en "Nuevo movimiento". En transferencias se guarda en ambos movimientos. **DDL pendiente** (`supabase_cash_movement_breakdowns.sql`) |
+| `cash_operators` | **Operadores de caja** (lista propia, independiente del login): `name` + `pin_hash`/`pin_salt` (scrypt+salt, PIN numérico de 4 dígitos). Identifica al operador y autoriza acciones sensibles; **no es login**. El renderer nunca ve el hash (sólo `has_pin`); la verificación (`verifyOperatorPin`) corre en main. CRUD en `queries/cash-operators.ts`, IPC `cajas:operators:*`, UI `OperadoresModal` (botón "Operadores" en el header del dashboard). **DDL pendiente** (`supabase_cash_operators.sql`) |
 | `cash_counts` | Conteos / arqueos de caja (cabecera) |
 | `cash_count_details` | Detalle de denominaciones por conteo |
 | `cash_differences` | Diferencias detectadas en arqueos: `status` (`pending` / `resolved` / `written_off`) |
@@ -1260,6 +1263,8 @@ Las 10 tablas siguen el template estándar (RLS + policy `authenticated` por `wo
    - SELECT * FROM cash_categories       WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
    - SELECT * FROM cash_movements        WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
    - SELECT * FROM cash_movement_amounts WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_movement_breakdowns WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
+   - SELECT * FROM cash_operators        WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
    - SELECT * FROM cash_counts           WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
    - SELECT * FROM cash_count_details    WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
    - SELECT * FROM cash_differences      WHERE workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'

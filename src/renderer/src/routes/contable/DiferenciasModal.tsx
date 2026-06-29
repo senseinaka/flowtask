@@ -7,6 +7,8 @@ import {
   useSetCashboxStatus,
   fmtAmount,
 } from '../../hooks/useCajas'
+import { useCashOperators } from '../../hooks/useCashOperators'
+import PinGate from './PinGate'
 import type { CashboxWithBalance, CashDifference, CashCurrency } from '@shared/types'
 
 type InlineAction = { id: string; type: 'resolved' | 'written_off'; notes: string } | null
@@ -160,9 +162,15 @@ export default function DiferenciasModal({
   onClose: () => void
 }) {
   const { data: diffs = [], isLoading } = useCashDifferences(box.id)
+  const { data: operators = [] } = useCashOperators()
   const updateDiff = useUpdateCashDifference()
   const setStatus  = useSetCashboxStatus()
   const [action, setAction] = useState<InlineAction>(null)
+  const [askPin, setAskPin] = useState(false)
+
+  // Resolver / dar de baja es una acción sensible: si hay operadores con PIN,
+  // se exige PIN antes de confirmar. Si todavía no se configuró ninguno, opera igual que antes.
+  const requirePin = operators.some(o => o.has_pin)
 
   const pendingCount = diffs.filter(d => d.status === 'pending' || d.status === 'under_review').length
 
@@ -170,18 +178,27 @@ export default function DiferenciasModal({
     setAction({ id: diff.id, type, notes: '' })
   }
 
-  async function confirmAction() {
+  function confirmAction() {
     if (!action) return
+    if (requirePin) { setAskPin(true); return }
+    void runConfirm()
+  }
+
+  async function runConfirm(operatorName?: string) {
+    if (!action) return
+    const doneId = action.id
+    const notes = operatorName ? `[${operatorName}] ${action.notes}`.trim() : action.notes
     await updateDiff.mutateAsync({
-      id:               action.id,
+      id:               doneId,
       status:           action.type,
-      resolution_notes: action.notes,
+      resolution_notes: notes,
     })
     setAction(null)
+    setAskPin(false)
 
     // Si no quedan diferencias pendientes, marcar caja como ok
     const remaining = diffs.filter(
-      d => d.id !== action.id && (d.status === 'pending' || d.status === 'under_review')
+      d => d.id !== doneId && (d.status === 'pending' || d.status === 'under_review')
     )
     if (remaining.length === 0) {
       await setStatus.mutateAsync({ id: box.id, status: 'ok' })
@@ -189,6 +206,7 @@ export default function DiferenciasModal({
   }
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}
@@ -251,5 +269,16 @@ export default function DiferenciasModal({
         </div>
       </div>
     </div>
+
+    {askPin && action && (
+      <PinGate
+        title={action.type === 'resolved' ? 'Confirmar resolución' : 'Confirmar baja'}
+        description="Ingresá tu PIN de operador para autorizar esta acción."
+        confirmLabel={action.type === 'resolved' ? 'Resolver' : 'Dar de baja'}
+        onCancel={() => setAskPin(false)}
+        onVerified={op => { void runConfirm(op.name) }}
+      />
+    )}
+    </>
   )
 }

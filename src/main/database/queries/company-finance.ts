@@ -258,6 +258,9 @@ function hydrateMovement(r: MovementRow): FinanceMovement {
       recurrence: r.c_recurrence as FinanceConcept['recurrence'],
       recurrence_month: r.c_recurrence_month,
       tracks_multiple_entries: r.c_tracks_multiple_entries,
+      // Finanzas Empresa no usa jornal/viático (company_finance_concepts no los
+      // declara); el concepto embebido los expone en 0 para cumplir el tipo.
+      hourly_rate: 0, viatic_amount: 0,
       is_active: r.c_is_active, notes: r.c_notes,
       created_at: r.c_created_at, updated_at: r.c_updated_at,
       category: { id: r.c_category_id, name: r.cat_name, icon: r.cat_icon, color: r.cat_color, is_default: 0, created_at: 0, updated_at: 0 },

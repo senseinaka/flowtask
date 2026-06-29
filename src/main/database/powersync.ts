@@ -108,7 +108,16 @@ const financeConceptColumns = {
   workspace_id: column.text
 }
 
-const finance_concepts = new Table(financeConceptColumns, {
+// finance_concepts (personal) suma jornal/viático para "personal doméstico".
+// company_finance_concepts NO los necesita, así que sólo la tabla personal
+// extiende el set de columnas base — el módulo de empresa queda intacto.
+const financeConceptColumnsWithHours = {
+  ...financeConceptColumns,
+  hourly_rate: column.real,
+  viatic_amount: column.real
+}
+
+const finance_concepts = new Table(financeConceptColumnsWithHours, {
   indexes: { workspace: ['workspace_id'], category: ['category_id'], account: ['account_id'] }
 })
 const company_finance_concepts = new Table(financeConceptColumns, {
@@ -1353,6 +1362,16 @@ const cash_movement_amounts = new Table(
   { indexes: { workspace: ['workspace_id'], movement: ['movement_id'] } }
 )
 
+const cash_movement_breakdowns = new Table(
+  { workspace_id: column.text, movement_id: column.text, currency: column.text, denomination: column.real, quantity: column.integer, created_at: column.text },
+  { indexes: { workspace: ['workspace_id'], movement: ['movement_id'] } }
+)
+
+const cash_operators = new Table(
+  { workspace_id: column.text, name: column.text, pin_hash: column.text, pin_salt: column.text, active: column.integer, created_at: column.text, updated_at: column.text },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
 const cash_counts = new Table(
   { workspace_id: column.text, cashbox_id: column.text, count_type: column.text, status: column.text, counted_by: column.text, confirmed_by: column.text, notes: column.text, created_at: column.text },
   { indexes: { workspace: ['workspace_id'], cashbox: ['cashbox_id'] } }
@@ -1472,6 +1491,8 @@ export const AppSchema = new Schema({
   cash_categories,
   cash_movements,
   cash_movement_amounts,
+  cash_movement_breakdowns,
+  cash_operators,
   cash_counts,
   cash_count_details,
   cash_differences,
@@ -2359,7 +2380,7 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
     },
     { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
         'cash_companies', 'cashboxes', 'cashbox_permissions', 'cash_categories',
-        'cash_movements', 'cash_movement_amounts', 'cash_counts', 'cash_count_details',
+        'cash_movements', 'cash_movement_amounts', 'cash_movement_breakdowns', 'cash_operators', 'cash_counts', 'cash_count_details',
         'cash_differences', 'cash_audit_logs', 'cash_attachments'], throttleMs: 1000 }
   )
 }

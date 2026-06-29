@@ -35,6 +35,13 @@ import {
   addCashAttachment,
   deleteCashAttachment,
 } from '../database/queries/cash-attachments'
+import {
+  listCashOperators,
+  createCashOperator,
+  updateCashOperator,
+  deleteCashOperator,
+  verifyOperatorPin,
+} from '../database/queries/cash-operators'
 import { getSession } from '../services/auth.service'
 import type { CashboxStatus, CashAttachmentOwnerType, CashAttachment } from '@shared/types'
 
@@ -230,4 +237,11 @@ export function registerCajasIpc(): void {
   ipcMain.handle('cajas:attachments:open',
     (_e, driveFileId: string) =>
       shell.openExternal(`https://drive.google.com/file/d/${driveFileId}/view`))
+
+  // ── Operadores de caja (identificación + PIN de acciones sensibles) ──────────
+  ipcMain.handle('cajas:operators:list',   () => listCashOperators())
+  ipcMain.handle('cajas:operators:create', (_e, input: { name: string; pin: string }) => createCashOperator(input))
+  ipcMain.handle('cajas:operators:update', (_e, input: { id: string; name?: string; pin?: string }) => updateCashOperator(input))
+  ipcMain.handle('cajas:operators:delete', (_e, id: string) => deleteCashOperator(id))
+  ipcMain.handle('cajas:operators:verify', (_e, id: string, pin: string) => verifyOperatorPin(id, pin))
 }
