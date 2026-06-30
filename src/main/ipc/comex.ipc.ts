@@ -893,8 +893,13 @@ export function registerComexIpc(): void {
       const fresh = await getInalVep(vep.id)
       if (fresh && !sender.isDestroyed()) sender.send('comex:inal:veps:updated', fresh)
     }
+
+    // Drive e IA son INDEPENDIENTES → corren EN PARALELO. La extracción del
+    // importe (lo que importa) no debe esperar a Drive: si Drive se cuelga, el
+    // importe igual aparece en ~1s. Cada uno actualiza campos distintos del VEP.
+
+    // ── Drive (en paralelo) ──
     void (async () => {
-      // ── Drive ──
       try {
         if (driveService.isAuthenticated()) {
           const folderId = await resolveVepDriveFolder(importId, importFolderId)
@@ -914,7 +919,10 @@ export function registerComexIpc(): void {
         await pushFresh()
         console.error('[INAL VEP] Drive upload error:', err)
       }
-      // ── IA ──
+    })()
+
+    // ── IA (en paralelo, no espera a Drive) ──
+    void (async () => {
       let importeTotal: number | null = null
       let aiStatus: 'done' | 'error' = 'error'
       try {

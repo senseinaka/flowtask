@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782849470.132312,
-    "ast_hash": "85829f1f447afba38b631b927ee1673a",
+    "mtime": 1782850964.169093,
+    "ast_hash": "eb9d3808ac960137e44304e9c39a6ee0",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
