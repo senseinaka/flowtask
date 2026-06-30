@@ -8,7 +8,7 @@ import type {
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
-  ComexInalCert,
+  ComexInalCert, ComexInalVep,
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
   CreateComexQuoteInput, CreateComexPaymentInput,
@@ -1070,6 +1070,50 @@ export async function deleteInalCert(id: string): Promise<void> {
 
 export async function getInalCert(id: string): Promise<ComexInalCert | null> {
   return (await getPowerSyncDb().getOptional<ComexInalCert>('SELECT * FROM comex_inal_certs WHERE id = ?', [id])) ?? null
+}
+
+// ─── INAL VEPs ────────────────────────────────────────────────────────────────
+
+export async function listInalVeps(importId: string): Promise<ComexInalVep[]> {
+  return getPowerSyncDb().getAll<ComexInalVep>('SELECT * FROM comex_inal_veps WHERE import_id = ? ORDER BY created_at ASC', [importId])
+}
+
+export async function createInalVep(
+  importId: string,
+  originalName: string,
+  opts: { local_stored_name?: string; size_bytes?: number; mime_type?: string } = {}
+): Promise<ComexInalVep> {
+  const db = getPowerSyncDb()
+  const id = randomUUID()
+  const now = Date.now()
+  await db.execute(`
+    INSERT INTO comex_inal_veps
+      (id, import_id, workspace_id, original_name, local_stored_name, size_bytes, mime_type, drive_file_id, drive_status, importe_total, ai_status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'none', NULL, 'processing', ?, ?)
+  `, [id, importId, WORKSPACE_ID, originalName, opts.local_stored_name ?? null, opts.size_bytes ?? null, opts.mime_type ?? null, now, now])
+  return (await db.getOptional<ComexInalVep>('SELECT * FROM comex_inal_veps WHERE id = ?', [id]))!
+}
+
+export async function updateInalVep(id: string, data: Partial<ComexInalVep>): Promise<void> {
+  const db = getPowerSyncDb()
+  const allowed = ['drive_file_id', 'drive_status', 'local_stored_name', 'size_bytes', 'mime_type', 'importe_total', 'ai_status']
+  const sets: string[] = []
+  const vals: unknown[] = []
+  for (const key of allowed) {
+    if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
+  }
+  if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
+  vals.push(id)
+  await db.execute(`UPDATE comex_inal_veps SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function deleteInalVep(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_inal_veps WHERE id = ?', [id])
+}
+
+export async function getInalVep(id: string): Promise<ComexInalVep | null> {
+  return (await getPowerSyncDb().getOptional<ComexInalVep>('SELECT * FROM comex_inal_veps WHERE id = ?', [id])) ?? null
 }
 
 // ─── Gestores INAL ────────────────────────────────────────────────────────────

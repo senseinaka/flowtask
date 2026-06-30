@@ -1135,7 +1135,19 @@ function MovementsTable({
                   )}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
+                  <EditableAmount value={m.amount_actual} onSave={v => {
+                    if (!m.concept?.tracks_multiple_entries) {
+                      if (v != null && v > 0 && m.status !== 'paid') {
+                        onQuickUpdate(m.id, { amount_actual: v, status: 'paid', payment_date: m.payment_date ?? Date.now() })
+                      } else if ((v == null || v === 0) && m.status === 'paid') {
+                        onQuickUpdate(m.id, { amount_actual: v, status: 'pending', payment_date: null })
+                      } else {
+                        onQuickUpdate(m.id, { amount_actual: v })
+                      }
+                    } else {
+                      onQuickUpdate(m.id, { amount_actual: v })
+                    }
+                  }} />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   {diffPct !== null ? (
@@ -1734,7 +1746,19 @@ function CategoryGroupedMovements({
                           : <span className="text-slate-600 text-xs">—</span>}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <EditableAmount value={m.amount_actual} onSave={v => onQuickUpdate(m.id, { amount_actual: v })} />
+                        <EditableAmount value={m.amount_actual} onSave={v => {
+                          if (!m.concept?.tracks_multiple_entries) {
+                            if (v != null && v > 0 && m.status !== 'paid') {
+                              onQuickUpdate(m.id, { amount_actual: v, status: 'paid', payment_date: m.payment_date ?? Date.now() })
+                            } else if ((v == null || v === 0) && m.status === 'paid') {
+                              onQuickUpdate(m.id, { amount_actual: v, status: 'pending', payment_date: null })
+                            } else {
+                              onQuickUpdate(m.id, { amount_actual: v })
+                            }
+                          } else {
+                            onQuickUpdate(m.id, { amount_actual: v })
+                          }
+                        }} />
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {diffPct !== null

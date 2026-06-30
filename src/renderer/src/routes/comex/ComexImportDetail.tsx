@@ -7,7 +7,7 @@ import {
   FileText, DollarSign, Ship, ChevronDown, Edit2,
   FolderOpen, Loader2, Mail, Copy, Upload, CloudOff, Cloud, AlertCircle, ExternalLink, Paperclip,
   ShieldCheck, Shield, ClipboardList, CheckCircle2, Clock, ChevronRight, Bot, Sparkles,
-  ChevronsDown, ChevronsUp, Landmark, FileSpreadsheet, FileDown
+  ChevronsDown, ChevronsUp, Landmark, FileSpreadsheet, FileDown, Receipt
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
@@ -38,7 +38,10 @@ import {
   useUploadNewComexDocument,
   useComexInalCerts,
   useUploadInalCert,
-  useDeleteInalCert
+  useDeleteInalCert,
+  useInalVeps,
+  useUploadInalVep,
+  useDeleteInalVep
 } from '../../hooks/useComex'
 import CustomsSection from './CustomsSection'
 import CostsSection from './CostsSection'
@@ -2478,6 +2481,7 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
   const { data: customs }       = useComexCustoms(importId)
   const { data: tributos = [] } = useComexTributos(importId)
   const { data: extras = [] }   = useComexExtraCosts(importId)
+  const { data: inalVeps = [] } = useInalVeps(imp.inal_required === 1 ? importId : null)
 
   const cotiz    = customs?.dolar_aduana ?? 0
   const currency = imp.currency || 'USD'
@@ -2535,7 +2539,8 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
     ...otrosOrden
   ] as ComexImportExtraCost[]
 
-  const totalCostosARS = totalDerechosARS + totalExtraARS
+  const vepTotalARS    = imp.inal_required === 1 ? inalVeps.reduce((s, v) => s + (v.importe_total ?? 0), 0) : 0
+  const totalCostosARS = totalDerechosARS + totalExtraARS + vepTotalARS
   const pct            = baseARS && baseARS > 0 ? (totalCostosARS / baseARS) * 100 : null
   const barColor       = pct == null ? 'bg-slate-600' : pct < 15 ? 'bg-emerald-500' : pct < 25 ? 'bg-amber-500' : 'bg-red-500'
 
@@ -2742,6 +2747,20 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
               </div>
             )
           })}
+          {imp.inal_required === 1 && vepTotalARS > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5">
+                <Receipt size={11} className="text-violet-400" />
+                <span className="text-slate-400">VEP Libre Circulación ANMAT</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {baseARS && (
+                  <span className="text-slate-600 w-12 text-right">{((vepTotalARS / baseARS) * 100).toFixed(1)}%</span>
+                )}
+                <span className="text-violet-300 w-28 text-right">{fmtM(vepTotalARS)}</span>
+              </div>
+            </div>
+          )}
           {totalCostosARS > 0 && (
             <div className="flex items-center justify-between text-xs pt-2 mt-1 border-t border-slate-700/50">
               <span className="font-semibold text-slate-200">Total costos</span>
@@ -7979,16 +7998,18 @@ export default function ComexImportDetail() {
 
 // ── INAL / ANMAT Section ──────────────────────────────────────────────────────
 
-const INAL_LC_FLOW: InalLCStatus[] = ['pendiente', 'mail_enviado', 'en_tramite', 'finalizado']
+const INAL_LC_FLOW: InalLCStatus[] = ['pendiente', 'mail_enviado', 'vep_pagado', 'en_tramite', 'finalizado']
 const INAL_LC_LABELS: Record<InalLCStatus, string> = {
   pendiente:    'Pendiente',
   mail_enviado: 'Mail enviado a gestor',
+  vep_pagado:   'VEP pagado',
   en_tramite:   'En trámite',
   finalizado:   'Finalizado'
 }
 const INAL_LC_COLORS: Record<InalLCStatus, string> = {
   pendiente:    '#64748b',   // slate
-  mail_enviado: '#60a5fa',   // blue — mail enviado
+  mail_enviado: '#60a5fa',   // blue
+  vep_pagado:   '#a78bfa',   // violet
   en_tramite:   '#f59e0b',   // amber
   finalizado:   '#22c55e'    // green
 }
@@ -8016,6 +8037,31 @@ function InalSection({
   const { data: facturas = [] } = useComexFacturasComerciales(inalOn ? imp.id : null)
   const uploadCert = useUploadInalCert(imp.id)
   const deleteCert = useDeleteInalCert(imp.id)
+
+  const vepFlowIndex = INAL_LC_FLOW.indexOf('vep_pagado')
+  const lcFlowIndex = INAL_LC_FLOW.indexOf(lcStatus)
+  const showVeps = inalOn && lcFlowIndex >= vepFlowIndex
+  const { data: veps = [] } = useInalVeps(showVeps ? imp.id : null)
+  const uploadVep = useUploadInalVep(imp.id)
+  const deleteVep = useDeleteInalVep(imp.id)
+  const [uploadingVep, setUploadingVep] = useState(false)
+
+  const vepTotal = veps.reduce((s, v) => s + (v.importe_total ?? 0), 0)
+
+  const handleSelectVep = async () => {
+    const filePath = await window.api.comex.inal.veps.selectFile()
+    if (!filePath) return
+    setUploadingVep(true)
+    try {
+      await uploadVep.mutateAsync({
+        filePath,
+        importFolderId: imp.drive_folder_id ?? null,
+        vepFolderId: imp.inal_lc_cert_folder_id ?? null
+      })
+    } finally {
+      setUploadingVep(false)
+    }
+  }
 
   // Effective ETA: last non-null in ETA4 → ETA3 → ETA2 → ETA1 → ETD
   const effectiveEta =
@@ -8340,6 +8386,8 @@ function InalSection({
                         <CheckCircle2 size={11} />
                       ) : s === 'en_tramite' && (current || done) ? (
                         <Clock size={11} />
+                      ) : s === 'vep_pagado' && (current || done) ? (
+                        <Receipt size={11} />
                       ) : s === 'mail_enviado' && (current || done) ? (
                         <Mail size={11} />
                       ) : null}
@@ -8407,6 +8455,69 @@ function InalSection({
               </div>
             </div>
           </div>
+
+          {/* ── Comprobantes VEP ANMAT ── */}
+          {showVeps && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">
+                  Comprobantes VEP ANMAT
+                </p>
+                {veps.length > 0 && (
+                  <span className="text-[10px] text-violet-300 font-medium">
+                    Total: ${vepTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={handleSelectVep}
+                disabled={uploadingVep}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-violet-500 text-xs text-slate-400 hover:text-violet-300 transition-colors disabled:opacity-50"
+              >
+                {uploadingVep ? (
+                  <><Loader2 size={12} className="animate-spin" /> Subiendo...</>
+                ) : (
+                  <><Plus size={12} /> Agregar comprobante VEP</>
+                )}
+              </button>
+
+              {veps.length > 0 && (
+                <div className="space-y-1">
+                  {veps.map((vep: import('@shared/types').ComexInalVep) => (
+                    <div key={vep.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/40 rounded-lg group">
+                      <Receipt size={12} className="text-violet-400 flex-shrink-0" />
+                      <span className="flex-1 text-xs text-slate-300 truncate">{vep.original_name}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {vep.ai_status === 'processing' && (
+                          <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                            <Loader2 size={10} className="animate-spin" /> Extrayendo...
+                          </span>
+                        )}
+                        {vep.ai_status === 'done' && vep.importe_total != null && (
+                          <span className="text-[10px] text-violet-300 font-medium">
+                            ${vep.importe_total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
+                        {vep.ai_status === 'error' && (
+                          <span className="text-[10px] text-red-400">Error IA</span>
+                        )}
+                        {vep.drive_status === 'synced' && <Cloud size={11} className="text-emerald-400" />}
+                        {vep.drive_status === 'uploading' && <Loader2 size={11} className="text-cyan-400 animate-spin" />}
+                        {vep.drive_status === 'error' && <CloudOff size={11} className="text-red-400" />}
+                      </div>
+                      <button
+                        onClick={() => deleteVep.mutate(vep.id)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Certificados (solo cuando finalizado) ── */}
           {lcStatus === 'finalizado' && (

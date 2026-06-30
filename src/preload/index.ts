@@ -16,7 +16,7 @@ import type {
   TaskFilters, CreateTaskInput, CreateReminderInput,
   SyncResult, SyncStatus, PowerSyncStatusInfo, UpdateCheckResult, UpdateDownloadProgress,
   TaskStatusLogEntry, TaskType,
-  ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert,
+  ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert, ComexInalVep,
   ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact,
@@ -471,6 +471,12 @@ const api = {
         upload:      (filePath: string, importId: string, importTitle: string, importFolderId: string | null, certFolderId: string | null): Promise<{ cert: ComexInalCert; import: ComexImport }> =>
           ipcRenderer.invoke('comex:inal:certs:upload', filePath, importId, importTitle, importFolderId, certFolderId),
         selectFiles: (): Promise<string[]> => ipcRenderer.invoke('comex:inal:certs:selectFiles'),
+      },
+      veps: {
+        list:       (importId: string):                                                                                        Promise<ComexInalVep[]>                                  => ipcRenderer.invoke('comex:inal:veps:list', importId),
+        selectFile: ():                                                                                                         Promise<string | null>                                   => ipcRenderer.invoke('comex:inal:veps:selectFile'),
+        upload:     (filePath: string, importId: string, importFolderId: string | null, vepFolderId: string | null):          Promise<{ vep: ComexInalVep; vepFolderId: string | null }> => ipcRenderer.invoke('comex:inal:veps:upload', filePath, importId, importFolderId, vepFolderId),
+        delete:     (vepId: string):                                                                                           Promise<void>                                            => ipcRenderer.invoke('comex:inal:veps:delete', vepId),
       },
       pl: {
         selectFile: ():                                Promise<string | null> => ipcRenderer.invoke('comex:inal:pl:selectFile'),

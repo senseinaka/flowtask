@@ -910,6 +910,45 @@ export function useDeleteInalCert(importId: string) {
   })
 }
 
+// ── INAL VEPs ─────────────────────────────────────────────────────────────────
+
+export function useInalVeps(importId: string | null) {
+  return useQuery({
+    queryKey: ['comex-inal-veps', importId],
+    queryFn: () => window.api.comex.inal.veps.list(importId!),
+    enabled: !!importId,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (Array.isArray(data) && data.some((v: import('@shared/types').ComexInalVep) => v.ai_status === 'processing')) return 2000
+      return false
+    }
+  })
+}
+
+export function useUploadInalVep(importId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      filePath, importFolderId, vepFolderId
+    }: {
+      filePath: string; importFolderId: string | null; vepFolderId: string | null
+    }) => window.api.comex.inal.veps.upload(filePath, importId, importFolderId, vepFolderId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comex-inal-veps', importId] })
+    }
+  })
+}
+
+export function useDeleteInalVep(importId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vepId: string) => window.api.comex.inal.veps.delete(vepId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comex-inal-veps', importId] })
+    }
+  })
+}
+
 // ── Gestores ──────────────────────────────────────────────────────────────────
 
 export function useComexGestores() {

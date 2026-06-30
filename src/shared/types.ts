@@ -859,6 +859,7 @@ export const AI_OPERATIONS = [
   'extract_factura_flete',
   'extract_factura_deposito',
   'extract_proforma',
+  'extract_vep_anmat',
   'extract_general',
   'dashboard_chat',
 ] as const
@@ -873,6 +874,7 @@ export const AI_OPERATION_LABELS: Record<AIOperation, string> = {
   extract_factura_flete:   'Extraer factura de flete / agente de carga',
   extract_factura_deposito:'Extraer factura de depósito fiscal',
   extract_proforma:        'Extraer proforma / cotización',
+  extract_vep_anmat:       'Extraer importe VEP ANMAT',
   extract_general:         'Analizar documento (general)',
   dashboard_chat:          'Chat del dashboard',
 }
@@ -886,6 +888,7 @@ export const AI_OPERATION_DEFAULT_MODELS: Record<AIOperation, ClaudeModelId> = {
   extract_factura_flete:   'claude-haiku-4-5',
   extract_factura_deposito:'claude-haiku-4-5',
   extract_proforma:        'claude-haiku-4-5',
+  extract_vep_anmat:       'claude-haiku-4-5',
   extract_general:         'claude-haiku-4-5',
   dashboard_chat:          'claude-sonnet-4-5',
 }
@@ -1225,7 +1228,7 @@ export interface ComexImport {
   updated_at: number
 }
 
-export type InalLCStatus = 'pendiente' | 'mail_enviado' | 'en_tramite' | 'finalizado'
+export type InalLCStatus = 'pendiente' | 'mail_enviado' | 'vep_pagado' | 'en_tramite' | 'finalizado'
 
 export interface ComexInalCert {
   id: string
@@ -1237,6 +1240,22 @@ export interface ComexInalCert {
   drive_file_id: string | null
   drive_status: DriveDocStatus
   created_at: number
+}
+
+export interface ComexInalVep {
+  id: string
+  import_id: string
+  workspace_id: string
+  original_name: string
+  local_stored_name: string | null
+  size_bytes: number | null
+  mime_type: string | null
+  drive_file_id: string | null
+  drive_status: DriveDocStatus
+  importe_total: number | null
+  ai_status: 'processing' | 'done' | 'error'
+  created_at: number
+  updated_at: number
 }
 
 export interface ComexImportItem {

@@ -171,6 +171,7 @@ export default function Sidebar() {
   const asideRef = useRef<HTMLElement>(null)
 
   const [openPanel, setOpenPanel] = useState<WorkspaceKey | null>(null)
+  const [version, setVersion] = useState('')
 
   const comexSubItems: {
     to: string
@@ -222,6 +223,10 @@ export default function Sidebar() {
     if (psConnected && psReconnecting) setPsReconnecting(false)
   }, [psConnected])
 
+  useEffect(() => {
+    window.api.app.getVersion().then(setVersion).catch(() => {})
+  }, [])
+
   // Close on navigation
   useEffect(() => {
     setOpenPanel(null)
@@ -260,29 +265,32 @@ export default function Sidebar() {
       className="flex-shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col relative"
       style={{ width: 60 }}
     >
-      {/* Logo — ascending bar-chart mark (bars-only on dark rail) */}
-      <div className="flex items-center justify-center py-[18px] border-b border-slate-700">
-        <svg width="26" height="26" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      {/* Logo — ascending bar-chart mark + wordmark + version */}
+      <div className="flex flex-col items-center justify-center py-3 gap-1 border-b border-slate-700">
+        <svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true">
           <rect x="9"  y="29" width="8" height="11" rx="2.5" fill="#4b566a" />
           <rect x="19" y="20" width="8" height="20" rx="2.5" fill="#0e88b6" />
           <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
         </svg>
+        <span className="text-[9px] font-bold tracking-widest text-slate-300 uppercase leading-none">Summit</span>
+        {version && <span className="text-[8px] text-slate-500 leading-none">{version}</span>}
       </div>
 
       {/* Home button */}
-      <div className="flex items-center justify-center py-2 border-b border-slate-700">
+      <div className="flex items-center justify-center py-1.5 border-b border-slate-700">
         <NavLink
           to="/"
           end
           title="Pantalla de inicio"
           className={({ isActive }) =>
             cn(
-              'w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-100',
+              'w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100',
               isActive ? 'text-indigo-400 bg-indigo-400/15' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
             )
           }
         >
           <Home size={15} />
+          <span className="text-[8px] leading-none font-medium tracking-wide">Home</span>
         </NavLink>
       </div>
 

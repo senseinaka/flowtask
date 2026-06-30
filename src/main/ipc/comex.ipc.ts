@@ -22,6 +22,7 @@ import {
   createDefaultExtraCosts,
   listProformas, getProforma, createProforma, updateProforma, deleteProforma,
   listInalCerts, createInalCert, updateInalCert, deleteInalCert, getInalCert,
+  listInalVeps, createInalVep, updateInalVep, deleteInalVep, getInalVep,
   listGestores, getGestor, createGestor, updateGestor, deleteGestor,
   createGestorContact, updateGestorContact, deleteGestorContact,
   listDespachantes, createDespachante, updateDespachante, deleteDespachante,
@@ -41,6 +42,7 @@ import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/co
 import { writeImportExcel, writeImportPdf, buildImportExportTitle, sanitizeFileName } from '../services/comex-import-export.service'
 import { driveService } from '../services/drive.service'
 import { resolveAttachmentPath } from '../database/db'
+import { analyzeDocument } from '../services/ai.service'
 import type {
   ComexSupplier, ComexImport, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCostItem,
@@ -786,6 +788,90 @@ export function registerComexIpc(): void {
     // Return fresh record
     const fresh = (await listInalCerts(importId)).find((c) => c.id === cert.id) ?? cert
     return { cert: fresh, import: await getImport(importId) }
+  })
+
+  // ── INAL VEPs ─────────────────────────────────────────────────────────────
+  ipcMain.handle('comex:inal:veps:list', (_e, importId: string) => listInalVeps(importId))
+
+  ipcMain.handle('comex:inal:veps:selectFile', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Seleccionar comprobante VEP ANMAT',
+      filters: [
+        { name: 'PDF / Imagen', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
+        { name: 'Todos', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('comex:inal:veps:upload', async (
+    _e,
+    filePath: string,
+    importId: string,
+    importFolderId: string | null,
+    vepFolderId: string | null
+  ) => {
+    const ext = path.extname(filePath)
+    const storedName = `inal_vep_${randomUUID()}${ext}`
+    const dest = resolveAttachmentPath(storedName)
+    fs.copyFileSync(filePath, dest)
+
+    const stats = fs.statSync(dest)
+    const mimeType = getMimeType(ext)
+    const originalName = path.basename(filePath)
+
+    const vep = await createInalVep(importId, originalName, {
+      local_stored_name: storedName,
+      size_bytes: stats.size,
+      mime_type: mimeType
+    })
+
+    // Drive upload
+    let resolvedVepFolderId = vepFolderId
+    try {
+      if (driveService.isAuthenticated()) {
+        if (!resolvedVepFolderId && importFolderId) {
+          resolvedVepFolderId = await driveService.createSubfolder('VEP ANMAT', importFolderId)
+          await updateImport(importId, { inal_lc_cert_folder_id: resolvedVepFolderId })
+        }
+        if (resolvedVepFolderId) {
+          await updateInalVep(vep.id, { drive_status: 'uploading' })
+          const driveFileId = await driveService.uploadFileToFolder(dest, resolvedVepFolderId, originalName, mimeType)
+          await updateInalVep(vep.id, { drive_file_id: driveFileId, drive_status: 'synced' })
+        }
+      }
+    } catch (err) {
+      await updateInalVep(vep.id, { drive_status: 'error' })
+      console.error('[INAL VEP] Drive upload error:', err)
+    }
+
+    // AI extraction — fire and forget
+    analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' })
+      .then(result => {
+        const raw = result.content.trim().replace(',', '.')
+        const importe = parseFloat(raw)
+        if (!isNaN(importe) && importe > 0) {
+          updateInalVep(vep.id, { importe_total: importe, ai_status: 'done' }).catch(console.error)
+        } else {
+          updateInalVep(vep.id, { ai_status: 'error' }).catch(console.error)
+        }
+      })
+      .catch(() => {
+        updateInalVep(vep.id, { ai_status: 'error' }).catch(console.error)
+      })
+
+    const fresh = await getInalVep(vep.id) ?? vep
+    return { vep: fresh, vepFolderId: resolvedVepFolderId }
+  })
+
+  ipcMain.handle('comex:inal:veps:delete', async (_e, vepId: string) => {
+    const vep = await getInalVep(vepId)
+    if (vep?.local_stored_name) {
+      try { fs.unlinkSync(resolveAttachmentPath(vep.local_stored_name)) } catch { /* ok */ }
+    }
+    await deleteInalVep(vepId)
   })
 
   // ── Tributos del despacho ─────────────────────────────────────────────────

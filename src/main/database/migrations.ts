@@ -3144,6 +3144,28 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       try { db.exec(`ALTER TABLE recon_results ADD COLUMN extracto_id TEXT`) } catch { /* ya existe */ }
       try { db.exec(`ALTER TABLE recon_results ADD COLUMN cupon_grupo TEXT NOT NULL DEFAULT '[]'`) } catch { /* ya existe */ }
     }
+  },
+  {
+    version: 102,
+    up(db: Database.Database) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS comex_inal_veps (
+          id                TEXT PRIMARY KEY,
+          import_id         TEXT NOT NULL,
+          workspace_id      TEXT NOT NULL,
+          original_name     TEXT NOT NULL,
+          local_stored_name TEXT,
+          size_bytes        INTEGER,
+          mime_type         TEXT,
+          drive_file_id     TEXT,
+          drive_status      TEXT NOT NULL DEFAULT 'none',
+          importe_total     REAL,
+          ai_status         TEXT NOT NULL DEFAULT 'processing',
+          created_at        INTEGER NOT NULL,
+          updated_at        INTEGER NOT NULL
+        )
+      `)
+    }
   }
 ]
 

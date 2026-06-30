@@ -686,6 +686,24 @@ const comex_inal_certs = new Table(
   { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
 )
 
+const comex_inal_veps = new Table(
+  {
+    import_id: column.text,
+    workspace_id: column.text,
+    original_name: column.text,
+    local_stored_name: column.text,
+    size_bytes: column.integer,
+    mime_type: column.text,
+    drive_file_id: column.text,
+    drive_status: column.text,
+    importe_total: column.real,
+    ai_status: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
 const comex_import_tributos = new Table(
   {
     import_id: column.text,
@@ -1463,6 +1481,7 @@ export const AppSchema = new Schema({
   comex_import_customs,
   comex_import_costs,
   comex_inal_certs,
+  comex_inal_veps,
   comex_import_tributos,
   comex_import_extra_costs,
   comex_proformas,
@@ -1868,6 +1887,7 @@ const COMEX_IMPORTS_TABLES = [
   'comex_import_customs',
   'comex_import_costs',
   'comex_inal_certs',
+  'comex_inal_veps',
   'comex_import_tributos',
   'comex_import_extra_costs',
   'comex_proformas'

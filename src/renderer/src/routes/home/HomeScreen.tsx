@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Settings, ArrowRight } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import {
   useWallpaperConfig, useWallpaperImages, useWallpaperStats,
   type WallpaperConfig,
@@ -282,16 +282,6 @@ export default function HomeScreen() {
             </div>
           )}
 
-          <button
-            onClick={() => navigate('/tasks')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white transition-colors"
-            style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.28)' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.25)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,.15)')}
-          >
-            Abrir Summit
-            <ArrowRight size={14} />
-          </button>
         </div>
       </div>
 

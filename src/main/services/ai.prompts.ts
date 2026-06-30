@@ -18,6 +18,7 @@ export const PROMPT_LABELS: Partial<Record<AIOperation, string>> = {
   extract_factura_flete:   'Facturas de flete internacional',
   extract_factura_deposito:'Facturas de depósito fiscal',
   extract_factura_local:   'Facturas locales (despachante, etc.)',
+  extract_vep_anmat:       'VEP ANMAT - Libre Circulación',
   extract_general:         'Análisis general de documentos',
 }
 
@@ -397,6 +398,14 @@ const PROMPT_EXTRACT_GENERAL = `Sos un asistente experto en documentos de comerc
 Analizá el documento y respondé de forma clara y estructurada en español.`
 // <PROMPT_END:extract_general>
 
+// <PROMPT_START:extract_vep_anmat>
+const PROMPT_EXTRACT_VEP_ANMAT = `Sos un asistente especializado en comprobantes de pago VEP (Volante Electrónico de Pago) de ANMAT Argentina.
+Buscá en el documento el campo "Importe Total" o "Total a Pagar" y extraé únicamente ese valor numérico.
+Devolvé SOLO el número en formato decimal con punto (ejemplo: 100888.33), sin símbolo de moneda, sin puntos de miles, sin texto adicional.
+Si hay varios importes, devolvé el importe total final del comprobante.
+Si no encontrás el importe, devolvé 0.`
+// <PROMPT_END:extract_vep_anmat>
+
 // ── Export principal ──────────────────────────────────────────────────────────
 
 export const DEFAULT_SYSTEM_PROMPTS: Partial<Record<AIOperation, string>> = {
@@ -406,5 +415,6 @@ export const DEFAULT_SYSTEM_PROMPTS: Partial<Record<AIOperation, string>> = {
   extract_factura_flete:   PROMPT_EXTRACT_FACTURA_FLETE,
   extract_factura_deposito:PROMPT_EXTRACT_FACTURA_DEPOSITO,
   extract_factura_local:   PROMPT_EXTRACT_FACTURA_LOCAL,
+  extract_vep_anmat:       PROMPT_EXTRACT_VEP_ANMAT,
   extract_general:         PROMPT_EXTRACT_GENERAL,
 }
