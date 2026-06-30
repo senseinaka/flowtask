@@ -828,7 +828,7 @@ export function registerComexIpc(): void {
   })
 
   ipcMain.handle('comex:inal:veps:upload', async (
-    _e,
+    e,
     filePath: string,
     importId: string,
     importFolderId: string | null,
@@ -868,23 +868,33 @@ export function registerComexIpc(): void {
       console.error('[INAL VEP] Drive upload error:', err)
     }
 
-    // AI extraction — await inline so the result comes back with the upload response
-    let importeTotal: number | null = null
-    let aiStatus: 'done' | 'error' = 'error'
-    try {
-      const result = await analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' })
-      const parsed = parseVepImporte(result.content)
-      if (parsed !== null) {
-        importeTotal = parsed
-        aiStatus = 'done'
+    // AI extraction EN BACKGROUND — el handler retorna ya (el VEP aparece
+    // al instante con ai_status='processing'); cuando la IA termina, el
+    // resultado se empuja al renderer vía 'comex:inal:veps:updated'.
+    const sender = e.sender
+    void (async () => {
+      let importeTotal: number | null = null
+      let aiStatus: 'done' | 'error' = 'error'
+      try {
+        const result = await analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' })
+        const parsed = parseVepImporte(result.content)
+        if (parsed !== null) {
+          importeTotal = parsed
+          aiStatus = 'done'
+        }
+      } catch (err) {
+        console.error('[INAL VEP] AI extraction error:', err)
       }
-    } catch (err) {
-      console.error('[INAL VEP] AI extraction error:', err)
-    }
-    const aiUpdate: Parameters<typeof updateInalVep>[1] = { ai_status: aiStatus }
-    if (importeTotal !== null) aiUpdate.importe_total = importeTotal
-    await updateInalVep(vep.id, aiUpdate)
+      const aiUpdate: Parameters<typeof updateInalVep>[1] = { ai_status: aiStatus }
+      if (importeTotal !== null) aiUpdate.importe_total = importeTotal
+      await updateInalVep(vep.id, aiUpdate)
+      const updated = await getInalVep(vep.id)
+      if (updated && !sender.isDestroyed()) {
+        sender.send('comex:inal:veps:updated', updated)
+      }
+    })()
 
+    // VEP ya visible: Drive resuelto, ai_status sigue 'processing'
     const fresh = await getInalVep(vep.id) ?? vep
     return { vep: fresh, vepFolderId: resolvedVepFolderId }
   })

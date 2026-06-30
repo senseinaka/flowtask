@@ -1,7 +1,7 @@
 # Graph Report - flowtask  (2026-06-30)
 
 ## Corpus Check
-- 300 files · ~454,217 words
+- 300 files · ~454,278 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3afb0920`
+- Built from commit: `730689ac`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -178,14 +178,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `getEmailMessageByUid()` --calls--> `getDb()`  [INFERRED]
   src/main/database/queries/email.ts → src/main/database/db.ts
+- `ExtraCostRow()` --calls--> `fmt()`  [INFERRED]
+  src/renderer/src/routes/comex/ComexImportDetail.tsx → src/renderer/src/routes/rrhh/PeriodoDetail.tsx
 - `listCashMovementAmounts()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
   src/main/database/queries/cajas.ts → src/main/database/powersync.ts
 - `listPendingJobs()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
   src/main/database/queries/mercadopago.ts → src/main/database/powersync.ts
 - `getQuoteCompany()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
   src/main/database/queries/quotes.ts → src/main/database/powersync.ts
-- `getBlockedBy()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
-  src/main/database/queries/tasks.ts → src/main/database/powersync.ts
 
 ## Import Cycles
 - None detected.
@@ -729,7 +729,7 @@ Cohesion: 0.47
 Nodes (4): ESTADO_ORDER, fmt(), ReconTabKPIs(), useReconKPIs()
 
 ## Knowledge Gaps
-- **1149 isolated node(s):** `COST_SUBFOLDERS`, `MIGRATIONS`, `projects`, `tasks`, `task_dependencies` (+1144 more)
+- **1149 isolated node(s):** `PLANNING_COLUMNS`, `ALARMA_COTIZACION_COLUMNS`, `store`, `ContentBlock`, `FileToBlocksOptions` (+1144 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -737,14 +737,14 @@ Nodes (4): ESTADO_ORDER, fmt(), ReconTabKPIs(), useReconKPIs()
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `cn()` connect `Comex listado importaciones (UI)` to `Finanzas empresa dashboard (UI)`, `Componentes UI compartidos`, `Comex detalle importación (UI)`, `Comex calendario planificación (UI)`, `Finanzas personales dashboard (UI)`, `Cajas gráficos (UI)`, `Cajas internas dashboard (UI)`, `Finanzas entradas de movimiento`, `Cajas operadores y diferencias (UI)`, `Comex gestores y despachantes`, `Vencimientos (UI)`, `Community 143`, `Comex operadores de flete`, `Tareas y Kanban (UI)`, `Finanzas helpers UI`, `Settings y costos extra`, `Tareas delegadas (UI)`, `RRHH detalle período (UI)`, `Mensajes programados (UI)`, `Conciliador resultados (UI)`, `Calendario (UI)`, `Cajas movimientos y adjuntos (UI)`, `Layout app y permisos (UI)`, `Comex costos (UI)`, `Preguntas de tareas (UI)`, `Contactos, agenda y equipo (UI)`, `Admin de permisos (UI)`, `Comex planificaciones (UI)`, `MercadoPago backend`, `Comex tracking y logística (UI)`, `Componentes UI base`, `Settings y config-store`, `RRHH sueldos dashboard (UI)`, `Comex documentos y pagos (UI)`, `Comex alarmas cotización (UI)`, `Conciliador conciliación (UI)`, `Conciliador dashboard (UI)`, `Conciliador importar (UI)`?**
-  _High betweenness centrality (0.143) - this node is a cross-community bridge._
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
 - **Why does `getDb()` connect `Conciliador backend` to `Contactos backend`, `Comex backend (queries/IPC)`, `PowerSync schema y JWT`, `RRHH contexto empresa`, `Google Calendar service`, `Email backend (IMAP/SMTP)`, `Scheduler y recordatorios`, `Bootstrap main y servicios`, `IA service y prompts`, `Community 146`, `Proyectos backend`, `Calendario backend`, `Chat tareas backend`, `Knowledge backend`, `MercadoPago service`, `Drive y BNA service`, `RRHH backend y nómina`, `Delegadas y preguntas backend`, `PowerSync migraciones legacy`, `Comex detalle marca (UI)`, `BCRA y alarmas cotización`, `Permisos backend`, `Fondos de pantalla backend`, `Community 114`, `Delegadas adjuntos/recordatorios backend`?**
-  _High betweenness centrality (0.134) - this node is a cross-community bridge._
+  _High betweenness centrality (0.147) - this node is a cross-community bridge._
 - **Why does `adminSaveUserProfile()` connect `Permisos backend` to `Conciliador backend`, `Admin de permisos (UI)`?**
-  _High betweenness centrality (0.099) - this node is a cross-community bridge._
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `COST_SUBFOLDERS`, `MIGRATIONS`, `projects` to the rest of the system?**
+- **What connects `PLANNING_COLUMNS`, `ALARMA_COTIZACION_COLUMNS`, `store` to the rest of the system?**
   _1149 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Tipos TS compartidos` be split into smaller, more focused modules?**
   _Cohesion score 0.005277044854881266 - nodes in this community are weakly interconnected._

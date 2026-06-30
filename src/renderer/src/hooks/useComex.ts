@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   CreateComexImportInput, CreateComexSupplierInput,
@@ -946,6 +947,30 @@ export function useDeleteInalVep(importId: string) {
       qc.invalidateQueries({ queryKey: ['comex-inal-veps', importId] })
     }
   })
+}
+
+/**
+ * Escucha el push del main cuando la IA termina de extraer el importe del VEP
+ * y actualiza el cache en el lugar (sin refetch). La extracción corre en
+ * background tras el upload, así el VEP aparece al instante en 'processing'.
+ */
+export function useInalVepLiveUpdates(importId: string | null) {
+  const qc = useQueryClient()
+  useEffect(() => {
+    if (!importId) return
+    // Guarda defensiva: si el preload aún no expone onUpdated (dev sin reiniciar),
+    // no romper el componente.
+    if (typeof window.api.comex.inal.veps.onUpdated !== 'function') return
+    const off = window.api.comex.inal.veps.onUpdated((vep: ComexInalVep) => {
+      if (vep.import_id !== importId) return
+      qc.setQueryData<ComexInalVep[]>(['comex-inal-veps', importId], (old = []) => {
+        const idx = old.findIndex(v => v.id === vep.id)
+        if (idx >= 0) { const next = [...old]; next[idx] = vep; return next }
+        return [...old, vep]
+      })
+    })
+    return off
+  }, [importId, qc])
 }
 
 // ── Gestores ──────────────────────────────────────────────────────────────────

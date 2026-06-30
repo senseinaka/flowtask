@@ -477,6 +477,11 @@ const api = {
         selectFiles: ():                                                                                                        Promise<string[]>                                        => ipcRenderer.invoke('comex:inal:veps:selectFiles'),
         upload:      (filePath: string, importId: string, importFolderId: string | null, vepFolderId: string | null):         Promise<{ vep: ComexInalVep; vepFolderId: string | null }> => ipcRenderer.invoke('comex:inal:veps:upload', filePath, importId, importFolderId, vepFolderId),
         delete:      (vepId: string):                                                                                          Promise<void>                                            => ipcRenderer.invoke('comex:inal:veps:delete', vepId),
+        onUpdated:   (callback: (vep: ComexInalVep) => void): (() => void) => {
+          const listener = (_event: Electron.IpcRendererEvent, vep: ComexInalVep): void => callback(vep)
+          ipcRenderer.on('comex:inal:veps:updated', listener)
+          return () => ipcRenderer.removeListener('comex:inal:veps:updated', listener)
+        },
       },
       pl: {
         selectFile: ():                                Promise<string | null> => ipcRenderer.invoke('comex:inal:pl:selectFile'),

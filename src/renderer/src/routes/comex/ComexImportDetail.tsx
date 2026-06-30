@@ -41,7 +41,8 @@ import {
   useDeleteInalCert,
   useInalVeps,
   useUploadInalVep,
-  useDeleteInalVep
+  useDeleteInalVep,
+  useInalVepLiveUpdates
 } from '../../hooks/useComex'
 import CustomsSection from './CustomsSection'
 import CostsSection from './CostsSection'
@@ -8044,6 +8045,7 @@ function InalSection({
   const { data: veps = [] } = useInalVeps(showVeps ? imp.id : null)
   const uploadVep = useUploadInalVep(imp.id)
   const deleteVep = useDeleteInalVep(imp.id)
+  useInalVepLiveUpdates(showVeps ? imp.id : null)
 
   const [vepUploading, setVepUploading] = useState(false)
   const [vepUploadProgress, setVepUploadProgress] = useState<{ current: number; total: number } | null>(null)
