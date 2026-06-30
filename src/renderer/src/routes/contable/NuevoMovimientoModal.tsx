@@ -11,6 +11,7 @@ import {
 import type { CashboxWithBalance, CashCurrency } from '@shared/types'
 import { CASH_DENOMINATIONS } from '@shared/types'
 import { DenominationCounter, denomTotal, denomQty } from './DenominationCounter'
+import { parseAmount } from '../../lib/parseAmount'
 
 type Tipo = 'income' | 'expense' | 'transfer'
 
@@ -30,9 +31,8 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function parseNum(s: string): number {
-  return parseFloat(s.replace(',', '.')) || 0
-}
+// Formato argentino robusto: "1.500.000" → 1500000, "1.234,50" → 1234.5.
+const parseNum = parseAmount
 
 export default function NuevoMovimientoModal({
   box,
@@ -304,6 +304,14 @@ export default function NuevoMovimientoModal({
                         <Calculator size={14} />
                       </button>
                     </div>
+                    {/* Confirmación de cómo se interpretó el importe tipeado.
+                        Usa el valor exacto (con decimales) que se va a guardar,
+                        no fmtAmount que redondea a 0 decimales. */}
+                    {!open && (amounts[cur] ?? '').trim() !== '' && (parsedAmounts[cur] ?? 0) > 0 && (
+                      <p className="pl-10 text-[11px] text-slate-500 font-mono">
+                        = {cur === 'ARS' ? '$' : `${cur} `}{(parsedAmounts[cur] ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}
+                      </p>
+                    )}
                     {open && (
                       <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-3">
                         <DenominationCounter

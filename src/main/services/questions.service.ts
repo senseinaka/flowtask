@@ -145,19 +145,22 @@ class QuestionsService {
       matched = findPendingByCode(effectivePhone, codeMatch[1])
     }
 
-    // Fallback: if only one pending question, use it
+    // El ref_code es OBLIGATORIO siempre: autentica la respuesta contra la
+    // pregunta puntual (el código se envió sólo a ese destinatario). Sin él, un
+    // "1" suelto desde el teléfono —o un mensaje con el `from` manipulado en la
+    // instancia de Evolution— podría aplicar una acción sobre la única pregunta
+    // pendiente sin probar que el remitente la recibió. No hay fallback a
+    // pending[0].
     if (!matched) {
-      if (pending.length === 1) {
-        matched = pending[0]
-      } else {
-        // Multiple pending — ask user to include ref code
-        const codes = pending.map((q) => q.ref_code).join(', ')
-        await whatsappService.sendMessage(
-          phone,
-          `Tenés ${pending.length} preguntas pendientes. Incluí el código al final de tu respuesta (ej: "1 AB3X").\nCódigos activos: ${codes}`
-        )
-        return
-      }
+      const codes = pending.map((q) => q.ref_code).join(', ')
+      const ejemplo = pending[0]?.ref_code ?? 'AB3X'
+      await whatsappService.sendMessage(
+        phone,
+        pending.length === 1
+          ? `Incluí el código al final de tu respuesta para confirmar (ej: "1 ${ejemplo}").`
+          : `Tenés ${pending.length} preguntas pendientes. Incluí el código al final de tu respuesta (ej: "1 ${ejemplo}").\nCódigos activos: ${codes}`
+      )
+      return
     }
 
     // Parse the reply

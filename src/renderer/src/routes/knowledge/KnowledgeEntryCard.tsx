@@ -6,6 +6,7 @@ import dayjs from 'dayjs'
 import { useKnowledgeSubEntries, useThreadDoc, useKnowledgeEntryFiles } from '../../hooks/useKnowledge'
 import KnowledgeAttachmentStrip from './KnowledgeAttachmentStrip'
 import { parseTags, stripHtml, SourceIcon } from './KnowledgeHelpers'
+import { sanitizeHtml } from '../../lib/sanitize'
 import type { KnowledgeEntry, KnowledgeSource } from '@shared/types'
 
 // ── Thread sub-entry ──────────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ function ThreadSubEntry({ sub, dotClass, isLast, isExpanded, rootEntryId, onTogg
             <div className="mt-2 pt-2 border-t border-slate-700/60" onClick={e => e.stopPropagation()}>
               {subHasHtml ? (
                 <div className="text-[12px] text-slate-400 leading-relaxed [&_img]:max-w-full [&_img]:rounded [&_ul]:list-disc [&_ul]:pl-4 [&_a]:text-teal-400"
-                  dangerouslySetInnerHTML={{ __html: sub.body }}/>
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(sub.body) }}/>
               ) : (
                 <p className="text-[12px] text-slate-400 leading-relaxed whitespace-pre-wrap">{subPreview || '(sin contenido)'}</p>
               )}
@@ -171,7 +172,7 @@ export default function KnowledgeEntryCard({
                 <div className="pt-3 border-t border-slate-800">
                   {hasHtml ? (
                     <div className="text-[13px] text-slate-300 leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg [&_ul]:list-disc [&_ul]:pl-4 [&_a]:text-teal-400 [&_a]:underline"
-                      dangerouslySetInnerHTML={{ __html: entry.body }}/>
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(entry.body) }}/>
                   ) : (
                     <p className="text-[13px] text-slate-300 leading-relaxed whitespace-pre-wrap">{entry.body}</p>
                   )}

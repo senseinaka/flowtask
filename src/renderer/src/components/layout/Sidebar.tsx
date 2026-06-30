@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw, DollarSign, Banknote
+  Database, RefreshCw, DollarSign, Banknote, PackageSearch
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
@@ -179,6 +179,7 @@ export default function Sidebar() {
   }[] = [
     { to: '/comex',               Icon: LayoutDashboard, label: 'Dashboard',             end: true, subKey: 'dashboard' },
     { to: '/comex/imports',       Icon: Package,         label: 'Importaciones',                    subKey: 'imports' },
+    { to: '/comex/seguimiento',   Icon: PackageSearch,   label: 'Seguimiento Imp.',                 subKey: 'tracking' },
     { to: '/comex/suppliers',     Icon: Building2,       label: 'Proveedores / Marcas',             subKey: 'suppliers' },
     { to: '/comex/plannings',     Icon: CalendarClock,   label: 'Prog. Pedidos',                    subKey: 'plannings' },
     { to: '/comex/operators',     Icon: Truck,           label: 'Operadores',                       subKey: 'operators' },

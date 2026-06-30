@@ -37,8 +37,12 @@ export default function PinGate({
       if (!ok) { setError('PIN incorrecto'); setPin(''); return }
       const op = operators.find(o => o.id === selId)
       if (op) onVerified(op)
-    } catch {
-      setError('No se pudo verificar el PIN')
+    } catch (e) {
+      // El main lanza un Error con mensaje claro cuando el operador quedó
+      // bloqueado por demasiados intentos; lo mostramos tal cual.
+      const msg = e instanceof Error ? e.message.replace(/^Error:\s*/, '') : ''
+      setError(msg || 'No se pudo verificar el PIN')
+      setPin('')
     } finally {
       setVerifying(false)
     }

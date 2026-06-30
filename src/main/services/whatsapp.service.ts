@@ -8,11 +8,34 @@ const INSTANCE_NAME = 'flowtask'
 
 class WhatsappService {
   private get apiUrl(): string {
-    return (store.get('evolutionApiUrl', DEFAULT_URL) as string).replace(/\/$/, '')
+    const raw = (store.get('evolutionApiUrl', DEFAULT_URL) as string).replace(/\/$/, '')
+    return this.enforceHttps(raw)
+  }
+
+  // El apikey viaja en cada request. Forzar https hacia hosts remotos evita
+  // filtrarlo por la red en texto plano (MITM). Localhost queda exento (dev).
+  private enforceHttps(url: string): string {
+    try {
+      const u = new URL(url)
+      const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '::1'
+      if (u.protocol === 'http:' && !isLocal) {
+        u.protocol = 'https:'
+        console.warn('[WhatsApp] evolutionApiUrl forzada a https para proteger el apikey')
+        return u.toString().replace(/\/$/, '')
+      }
+      return url
+    } catch {
+      return url
+    }
   }
 
   private get apiKey(): string {
-    return store.get('evolutionApiKey', 'flowtask-secret') as string
+    // Sin default hardcodeado: si no está configurado, fail-closed.
+    return (store.get('evolutionApiKey', '') as string) ?? ''
+  }
+
+  private get isConfigured(): boolean {
+    return this.apiKey.trim().length > 0
   }
 
   private headers() {
@@ -20,6 +43,7 @@ class WhatsappService {
   }
 
   async connectInstance(): Promise<{ qr?: string; connected?: boolean; error?: string }> {
+    if (!this.isConfigured) return { error: 'WhatsApp no configurado: falta apikey de Evolution' }
     try {
       // Try to create instance (ignores error if already exists)
       await axios.post(
@@ -54,6 +78,7 @@ class WhatsappService {
   }
 
   async getQR(): Promise<string | null> {
+    if (!this.isConfigured) return null
     try {
       const res = await axios.get(
         `${this.apiUrl}/instance/connect/${INSTANCE_NAME}`,
@@ -71,6 +96,7 @@ class WhatsappService {
    * Mucho más rápido que /group/fetchAllGroups que tarda en Railway.
    */
   async fetchGroups(): Promise<Array<{ jid: string; name: string; size: number }>> {
+    if (!this.isConfigured) return []
     try {
       const res = await axios.post(
         `${this.apiUrl}/chat/findChats/${INSTANCE_NAME}`,
@@ -105,6 +131,7 @@ class WhatsappService {
   }
 
   async testSend(phone: string, text: string): Promise<{ ok: boolean; status?: number; body?: unknown; error?: string }> {
+    if (!this.isConfigured) return { ok: false, error: 'WhatsApp no configurado: falta apikey de Evolution' }
     const number = this.cleanPhone(phone)
     if (!number) return { ok: false, error: 'Número vacío después de limpiar' }
     try {
@@ -133,6 +160,12 @@ class WhatsappService {
   }
 
   saveConfig(url: string, key: string): void {
+    let u: URL
+    try { u = new URL(url) } catch { throw new Error('URL de Evolution inválida') }
+    const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(u.hostname)
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLoopback)) {
+      throw new Error('La URL de Evolution debe usar https:// (http solo en loopback)')
+    }
     store.set('evolutionApiUrl', url)
     store.set('evolutionApiKey', key)
   }

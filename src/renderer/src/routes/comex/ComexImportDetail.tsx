@@ -61,6 +61,7 @@ import type {
   UpsertComexCustomsInput
 } from '@shared/types'
 import { cn, formatBytes } from '../../components/ui/utils'
+import { sanitizeHtml } from '../../lib/sanitize'
 import WhatsAppCargaModal from '../../components/whatsapp/WhatsAppCargaModal'
 import { useAnalyzeComexDocument, useAIConfigured, useAnalyzeDespacho, useAnalyzeBL, useAnalyzePlFile } from '../../hooks/useAI'
 import {
@@ -6298,7 +6299,7 @@ function QuoteRow({
             {previewHtml ? (
               <div
                 className="w-full min-h-[120px] max-h-[320px] overflow-auto rounded border border-slate-600 bg-white p-2 text-xs"
-                dangerouslySetInnerHTML={{ __html: htmlDraft }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlDraft) }}
               />
             ) : (
               <textarea

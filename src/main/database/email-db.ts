@@ -31,8 +31,8 @@ export function closeEmailDb(): void {
 
 function runEmailMigrations(db: Database.Database): void {
   const v = (db.pragma('user_version', { simple: true }) as number) || 0
-  if (v >= 1) return
 
+  if (v < 1) {
   db.transaction(() => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS email_accounts (
@@ -108,6 +108,19 @@ function runEmailMigrations(db: Database.Database): void {
     `)
     db.pragma('user_version = 1')
   })()
+    console.log('[EmailDB] Migration v1 applied — email.db ready')
+  }
 
-  console.log('[EmailDB] Migration v1 applied — email.db ready')
+  if (v < 2) {
+    db.transaction(() => {
+      // Opt-in por cuenta para aceptar certificados TLS inválidos en IMAP.
+      // Por defecto 0 (seguro): imapflow valida certificado y hostname.
+      db.exec(
+        `ALTER TABLE email_accounts
+           ADD COLUMN imap_allow_invalid_cert INTEGER NOT NULL DEFAULT 0`
+      )
+      db.pragma('user_version = 2')
+    })()
+    console.log('[EmailDB] Migration v2 applied — imap_allow_invalid_cert added')
+  }
 }

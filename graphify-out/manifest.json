@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782738420.5724277,
-    "ast_hash": "b5378a0ec0989c6a81901396d5a08e12",
+    "mtime": 1782752077.2176633,
+    "ast_hash": "d6d500f6ebe51f293250e8469d847d87",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -65,8 +65,8 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
-    "mtime": 1782343969.4517217,
-    "ast_hash": "b029c09ca411d5a298bdcb3a2899a152",
+    "mtime": 1782752462.6034956,
+    "ast_hash": "5463a7e92f45ba3a867bc3a6ac888f3f",
     "semantic_hash": ""
   },
   "src/main/database/queries/contacts.ts": {
@@ -100,8 +100,8 @@
     "semantic_hash": "85605ed3d82b346d72ed3a7dc6625726"
   },
   "src/main/database/queries/finance.ts": {
-    "mtime": 1782343966.8575203,
-    "ast_hash": "12f047deca28561914cb91eeeb537de2",
+    "mtime": 1782752457.2004018,
+    "ast_hash": "2b68639dc274df49b83f1e2a12436c79",
     "semantic_hash": ""
   },
   "src/main/database/queries/knowledge.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a6aeb993a1f3e441aac0cfaea9c64c85"
   },
   "src/preload/index.ts": {
-    "mtime": 1782740936.0181246,
-    "ast_hash": "bb93c6d3a22feb341d3e8d6c93638644",
+    "mtime": 1782750011.9166086,
+    "ast_hash": "de255c0987e4f53691eb3019fc35ad92",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -855,8 +855,8 @@
     "semantic_hash": "71c90dfec5815d9050d58bf966e4c254"
   },
   "src/renderer/src/routes/finance/FinanceDashboard.tsx": {
-    "mtime": 1782093529.8039646,
-    "ast_hash": "9511e75c1e04b09ae401c2b423b216a4",
+    "mtime": 1782752327.0998113,
+    "ast_hash": "b281c0f1fed5aa886f7c380a3e1425ff",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/knowledge/KnowledgeDashboard.tsx": {
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782738403.639526,
-    "ast_hash": "f8f1ec112156d49791c2682260437af6",
+    "mtime": 1782752066.1539135,
+    "ast_hash": "2c5e0a5518ab5daa531463d7a149e404",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -955,8 +955,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782741229.657439,
-    "ast_hash": "c697cac96f237c22b37ac1d207199aaf",
+    "mtime": 1782752523.6789112,
+    "ast_hash": "db24a3df51f807f68d124a5a4788c951",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1330,13 +1330,13 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/cajas.ts": {
-    "mtime": 1782740904.9459047,
-    "ast_hash": "97cf23844d16f581b37a6758a55b0cb6",
+    "mtime": 1782748957.178309,
+    "ast_hash": "82f7421238a96c390e7ab08c6aea0c7a",
     "semantic_hash": ""
   },
   "src/main/ipc/cajas.ipc.ts": {
-    "mtime": 1782740922.423923,
-    "ast_hash": "71fd11c60680b119d875a68216bb2df9",
+    "mtime": 1782749982.841539,
+    "ast_hash": "cfbc8b138ef86ca55e5928f5ddc73535",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCajas.ts": {
@@ -1345,13 +1345,13 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/CajasDashboard.tsx": {
-    "mtime": 1782741000.642349,
-    "ast_hash": "89fdd35a9934000f6def8364f2102374",
+    "mtime": 1782750164.6233778,
+    "ast_hash": "eb44dc5a5af09c249f1f02d3f46f1750",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/NuevoMovimientoModal.tsx": {
-    "mtime": 1782661446.0308044,
-    "ast_hash": "9cea64c7993054b647e719da5c6db3a3",
+    "mtime": 1782748992.811021,
+    "ast_hash": "95c934c1747d04d0f3dff93aab70af01",
     "semantic_hash": ""
   },
   "supabase_cajas_tables.sql": {
@@ -1365,13 +1365,13 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ConteoRapidoModal.tsx": {
-    "mtime": 1782664463.125608,
-    "ast_hash": "9157795a09d0fa933e39dcc7e04f6199",
+    "mtime": 1782745587.8131628,
+    "ast_hash": "1f1abc28994721b03ad9b07404a6fd9d",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/DiferenciasModal.tsx": {
-    "mtime": 1782669831.1989713,
-    "ast_hash": "350ac767bfaf47e200c938f272338a8c",
+    "mtime": 1782751220.1634276,
+    "ast_hash": "bddc66ab006fdbfd420e785e53251dd5",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/PermisosModal.tsx": {
@@ -1422,6 +1422,46 @@
   "supabase_cajas_rls_fix.sql": {
     "mtime": 1782741063.8571496,
     "ast_hash": "d3d807b2213a77a9fb794f78157ee579",
+    "semantic_hash": ""
+  },
+  "src/main/database/queries/cash-operators.ts": {
+    "mtime": 1782749924.4120183,
+    "ast_hash": "828efd45d5faffad2828d2a1ee89bb81",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/hooks/useCashOperators.ts": {
+    "mtime": 1782750050.7490487,
+    "ast_hash": "87c3a8bd9cc5fcd36e1ab3553d8cdd15",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/DenominationCounter.tsx": {
+    "mtime": 1782745539.810035,
+    "ast_hash": "883670c3a5584790666cb783b5fa2f53",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/OperadoresModal.tsx": {
+    "mtime": 1782750089.5301487,
+    "ast_hash": "c94d8a7ec5465f72f8c9bf1a883142ac",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/contable/PinGate.tsx": {
+    "mtime": 1782751113.4907727,
+    "ast_hash": "d2ba978f68b4334d192b7c227437338c",
+    "semantic_hash": ""
+  },
+  "supabase_cash_movement_breakdowns.sql": {
+    "mtime": 1782749016.3213701,
+    "ast_hash": "2c2927ebb299f56896327a3991e7c5ca",
+    "semantic_hash": ""
+  },
+  "supabase_cash_operators.sql": {
+    "mtime": 1782749908.4129844,
+    "ast_hash": "c4365ac703a4df2eacf780b1ade8e20d",
+    "semantic_hash": ""
+  },
+  "supabase_finance_concepts_horas.sql": {
+    "mtime": 1782752099.836669,
+    "ast_hash": "77107db9702c45c85f3cf95f2249c96f",
     "semantic_hash": ""
   }
 }

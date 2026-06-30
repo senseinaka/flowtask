@@ -22,6 +22,7 @@ import {
 } from '../../hooks/useEmail'
 import type { EmailMessage, EmailAccount, CreateEmailAccountInput, SendEmailInput, EmailListFilters } from '@shared/types'
 import type { LucideIcon } from 'lucide-react'
+import { sanitizeHtml } from '../../lib/sanitize'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -639,9 +640,14 @@ function EmailBody({ html }: { html: string }) {
     '</style>'
   ].join('')
 
-  const srcDoc = /<html[\s>]/i.test(html)
-    ? html.replace(/<\/head>/i, safeStyle + '</head>')
-    : `<!DOCTYPE html><html><head><meta charset="utf-8">${safeStyle}</head><body>${html}</body></html>`
+  // Saneo defensa-en-profundidad: aunque el iframe no permite scripts, se
+  // elimina <script>/on*/javascript: del HTML del email (no confiable) antes
+  // de inyectarlo en el srcDoc.
+  const isDoc = /<html[\s>]/i.test(html)
+  const clean = sanitizeHtml(html, { wholeDocument: isDoc })
+  const srcDoc = isDoc
+    ? clean.replace(/<\/head>/i, safeStyle + '</head>')
+    : `<!DOCTYPE html><html><head><meta charset="utf-8">${safeStyle}</head><body>${clean}</body></html>`
 
   return (
     <iframe

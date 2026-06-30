@@ -31,13 +31,15 @@ export async function createEmailAccount(data: CreateEmailAccountInput): Promise
   db.prepare(
     `INSERT INTO email_accounts
       (id, workspace_id, email, display_name, imap_host, imap_port, imap_secure,
+       imap_allow_invalid_cert,
        smtp_host, smtp_port, smtp_secure, username, password, is_active, last_uid_inbox,
        created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,0,?,?)`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,0,?,?)`
   ).run(
     id, WORKSPACE_ID,
     data.email, data.display_name ?? data.email,
     data.imap_host, data.imap_port ?? 993, data.imap_secure !== false ? 1 : 0,
+    data.imap_allow_invalid_cert === true ? 1 : 0,
     data.smtp_host, data.smtp_port ?? 465, data.smtp_secure !== false ? 1 : 0,
     data.username, data.password,
     now, now
@@ -58,6 +60,7 @@ export async function updateEmailAccount(
   if (data.imap_host !== undefined)    { sets.push('imap_host = ?');    vals.push(data.imap_host) }
   if (data.imap_port !== undefined)    { sets.push('imap_port = ?');    vals.push(data.imap_port) }
   if (data.imap_secure !== undefined)  { sets.push('imap_secure = ?');  vals.push(data.imap_secure ? 1 : 0) }
+  if (data.imap_allow_invalid_cert !== undefined) { sets.push('imap_allow_invalid_cert = ?'); vals.push(data.imap_allow_invalid_cert ? 1 : 0) }
   if (data.smtp_host !== undefined)    { sets.push('smtp_host = ?');    vals.push(data.smtp_host) }
   if (data.smtp_port !== undefined)    { sets.push('smtp_port = ?');    vals.push(data.smtp_port) }
   if (data.smtp_secure !== undefined)  { sets.push('smtp_secure = ?');  vals.push(data.smtp_secure ? 1 : 0) }

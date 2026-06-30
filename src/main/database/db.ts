@@ -27,6 +27,28 @@ export function getAttachmentsDir(): string {
   return dir
 }
 
+/**
+ * Resuelve de forma segura un `stored_name` de adjunto contra getAttachmentsDir(),
+ * neutralizando path traversal. El nombre de archivo suele venir sincronizado desde
+ * Supabase vía PowerSync (campos *_stored_name) y por tanto es controlable por
+ * cualquier usuario con permiso de escritura → NO confiable. Forzamos path.basename
+ * (descarta directorios, `..`, rutas absolutas y unidades como C:\) y verificamos
+ * contención dentro del sandbox de adjuntos. Usar SIEMPRE esto antes de fs.* /
+ * shell.openPath sobre un *_stored_name, en lugar de path.join(getAttachmentsDir(), x).
+ */
+export function resolveAttachmentPath(storedName: unknown): string {
+  if (!storedName || typeof storedName !== 'string') throw new Error('stored_name inválido')
+  const base = getAttachmentsDir()
+  const safe = path.basename(storedName)
+  if (!safe || safe === '.' || safe === '..') throw new Error('stored_name inválido')
+  const full = path.resolve(base, safe)
+  const rel = path.relative(base, full)
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error('ruta fuera del sandbox de adjuntos')
+  }
+  return full
+}
+
 /** Ruta absoluta del archivo .db en uso (sin abrirlo). Útil para restaurar backups. */
 export function getDbPath(): string {
   const userDataPath = app.getPath('userData')

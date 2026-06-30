@@ -43,17 +43,38 @@ function toEmbedUrl(url: string): string | null {
   return null
 }
 
+/**
+ * Sólo se permiten iframes de embed de YouTube/Vimeo. El atributo `src` del nodo
+ * puede provenir de una entrada sincronizada por otro usuario (no confiable);
+ * sin esta validación un `src="javascript:..."` u origen arbitrario podría
+ * inyectar un iframe hostil. Devuelve null si no es un embed confiable.
+ */
+function safeEmbedSrc(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'https:') return null
+    if (u.hostname === 'www.youtube.com' && u.pathname.startsWith('/embed/')) return u.toString()
+    if (u.hostname === 'player.vimeo.com' && u.pathname.startsWith('/video/')) return u.toString()
+    return null
+  } catch {
+    return null
+  }
+}
+
 function VideoEmbedView({ node }: NodeViewProps) {
-  const src = (node.attrs as { src: string }).src
+  const src = safeEmbedSrc((node.attrs as { src: string }).src)
   return (
     <NodeViewWrapper>
       <div contentEditable={false} style={{ position: 'relative', paddingBottom: '56.25%', height: 0, margin: '1rem 0', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface-sunken)' }}>
-        <iframe
-          src={src}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
+        {src && (
+          <iframe
+            src={src}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        )}
       </div>
     </NodeViewWrapper>
   )

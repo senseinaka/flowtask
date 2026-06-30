@@ -40,6 +40,24 @@ function inferCurrencyFromCountry(country: string): string {
   return EUR_COUNTRIES.has(country.toLowerCase().trim()) ? 'EUR' : 'USD'
 }
 
+/** Próximo correlativo por marca: máximo "#N" hallado en los títulos de esa marca + 1.
+ *  Compatible con las importaciones ya cargadas (parsea el #N del título; ignora el
+ *  sufijo de parte "-1/-2"). Considera una importación de la marca si coincide la
+ *  marca del proveedor (o su nombre) o el texto del título antes del "#". */
+function nextImportNumberForBrand(brand: string, imports: ComexImport[]): number {
+  const target = brand.trim().toLowerCase()
+  if (!target) return 1
+  let max = 0
+  for (const imp of imports) {
+    const supBrand   = (imp.supplier?.brand?.trim() || imp.supplier?.name?.trim() || '').toLowerCase()
+    const titleBrand = (imp.title ?? '').split('#')[0].trim().toLowerCase()
+    if (supBrand !== target && titleBrand !== target) continue
+    const m = (imp.title ?? '').match(/#\s*(\d+)/)
+    if (m) { const n = parseInt(m[1], 10); if (Number.isFinite(n) && n > max) max = n }
+  }
+  return max + 1
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getEta(imp: ComexImport): number | null {
@@ -721,6 +739,8 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
   })
   const [autoFilled, setAutoFilled]             = useState<Set<string>>(new Set())
   const [supplierCurrencies, setSupplierCurrencies] = useState<string[]>([])
+  const [parts, setParts]           = useState(false)
+  const [partsCount, setPartsCount] = useState(2)
 
   const setField = (k: keyof CreateComexImportInput, v: unknown, manual = false) => {
     setForm(prev => ({ ...prev, [k]: v }))
@@ -739,28 +759,42 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
     const defaultCurrency = prevCurrencies.length >= 1 ? prevCurrencies[0] : inferCurrencyFromCountry(supplier.country ?? '')
     setField('currency', defaultCurrency); filled.add('currency')
     setSupplierCurrencies(prevCurrencies.length > 1 ? prevCurrencies : [])
+    // Auto-título: marca + correlativo por marca (último #N + 1), compatible con lo ya cargado.
+    const brand = supplier.brand?.trim() || supplier.name?.trim() || ''
+    if (brand) {
+      const nextNum = nextImportNumberForBrand(brand, allImports)
+      setField('title', `${brand} #${nextNum}`); filled.add('title')
+    }
     setAutoFilled(filled)
   }, [suppliers, allImports])
 
   const set = (k: keyof CreateComexImportInput, v: unknown) => setField(k, v, true)
 
-  const dateToTs = (s: string) => (s ? dayjs(s).valueOf() : null)
-  const tsToDate = (n: number | null | undefined) => n ? dayjs(n).format('YYYY-MM-DD') : ''
+  const baseTitle = (form.title ?? '').trim()
+  const partTitles = useMemo(
+    () => (parts ? Array.from({ length: partsCount }, (_, i) => `${baseTitle}-${i + 1}`) : []),
+    [parts, partsCount, baseTitle]
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.title?.trim()) return
-    await create.mutateAsync({
-      title: form.title, supplier_id: form.supplier_id ?? null,
+    if (!baseTitle) return
+    const common = {
+      supplier_id: form.supplier_id ?? null,
       status: form.status ?? 'planning', incoterm: form.incoterm ?? '',
       origin_country: form.origin_country ?? '', currency: form.currency ?? 'USD',
-      estimated_value: form.estimated_value ?? null, actual_value: null,
-      order_date: form.order_date ?? null, payment_date: form.payment_date ?? null,
-      ship_date: form.ship_date ?? null, arrival_date: form.arrival_date ?? null,
+      estimated_value: null, actual_value: null,
+      order_date: null, payment_date: null,
+      ship_date: null, arrival_date: null,
       actual_ship_date: null, actual_arrival_date: null,
       tracking_number: form.tracking_number ?? '', customs_agent: form.customs_agent ?? '',
       drive_folder_id: null, notes: form.notes ?? ''
-    })
+    }
+    // Partes/splits: una importación por parte ("Marca #N-1", "-2", …).
+    const titles = parts && partsCount >= 2 ? partTitles : [baseTitle]
+    for (const title of titles) {
+      await create.mutateAsync({ ...common, title })
+    }
     onClose()
   }
 
@@ -772,28 +806,54 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Proveedor primero: al elegirlo se autogenera el título por marca */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Título *</label>
-            <input autoFocus value={form.title ?? ''} onChange={e => set('title', e.target.value)}
-              placeholder="ej. Edelrid #53 — Verano 2026"
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
+            <label className="block text-xs text-slate-400 mb-1">Proveedor</label>
+            <select autoFocus value={form.supplier_id ?? ''} onChange={e => handleSupplierChange(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+              <option value="">Seleccionar proveedor…</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.brand?.trim() ? `${s.brand} — ${s.name}` : s.name}</option>)}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Estado</label>
-              <select value={form.status} onChange={e => set('status', e.target.value as ImportStatus)}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
-                {ALL_STATUSES.map(s => <option key={s} value={s}>{IMPORT_STATUS_LABELS[s]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Proveedor</label>
-              <select value={form.supplier_id ?? ''} onChange={e => handleSupplierChange(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
-                <option value="">Sin proveedor</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">Título * {autoFilled.has('title') && <AutoBadge />}</label>
+            <input value={form.title ?? ''} onChange={e => set('title', e.target.value)}
+              placeholder="ej. Naturehike #152"
+              className={cn('w-full bg-slate-900 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500', autoFilled.has('title') ? 'border-violet-600/60' : 'border-slate-600')} />
+          </div>
+          {/* Partes / splits: una importación por parte */}
+          <div className="rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5">
+            <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer select-none">
+              <input type="checkbox" checked={parts} onChange={e => setParts(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-0" />
+              Llega en varias partes
+            </label>
+            {parts && (
+              <div className="mt-2.5 flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Cantidad de partes</span>
+                  <select value={partsCount} onChange={e => setPartsCount(Number(e.target.value))}
+                    className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500">
+                    {[2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                {baseTitle && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-500">Se crearán:</span>
+                    {partTitles.map(t => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-cyan-900/30 border border-cyan-700/40 text-cyan-300 font-medium">{t}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Estado</label>
+            <select value={form.status} onChange={e => set('status', e.target.value as ImportStatus)}
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+              {ALL_STATUSES.map(s => <option key={s} value={s}>{IMPORT_STATUS_LABELS[s]}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -828,25 +888,8 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
           </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Valor estimado</label>
-            <input type="number" min="0" step="0.01" value={form.estimated_value ?? ''}
-              onChange={e => set('estimated_value', e.target.value ? Number(e.target.value) : null)}
-              placeholder="0.00"
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Fecha de pedido</label>
-              <input type="date" value={tsToDate(form.order_date)} onChange={e => set('order_date', dateToTs(e.target.value))}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">ETA estimada</label>
-              <input type="date" value={tsToDate(form.arrival_date)} onChange={e => set('arrival_date', dateToTs(e.target.value))}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
-            </div>
-          </div>
+          {/* Valor estimado, Fecha de pedido y ETA estimada se quitaron del alta:
+              se cargan luego en el detalle de la importación. */}
           <div>
             <label className="block text-xs text-slate-400 mb-1">Notas</label>
             <textarea value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} rows={2}
@@ -855,9 +898,9 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-700 transition-colors">Cancelar</button>
-            <button type="submit" disabled={create.isPending || !form.title?.trim()}
+            <button type="submit" disabled={create.isPending || !baseTitle}
               className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors">
-              {create.isPending ? 'Creando...' : 'Crear importación'}
+              {create.isPending ? 'Creando…' : (parts && partsCount >= 2 ? `Crear ${partsCount} importaciones` : 'Crear importación')}
             </button>
           </div>
         </form>

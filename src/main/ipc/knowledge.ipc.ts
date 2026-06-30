@@ -37,6 +37,7 @@ import {
 } from '../services/knowledge-ai.service'
 import type { AITransformAction } from '../services/knowledge-ai.service'
 import { driveService } from '../services/drive.service'
+import { requireActorId } from '../services/auth.service'
 import type { KnowledgeListFilters } from '@shared/types'
 
 function getKnowledgeFilesDir(): string {
@@ -90,8 +91,8 @@ export function registerKnowledgeIpc(): void {
     getKnowledgeEntry(id)
   )
 
-  ipcMain.handle('knowledge:entries:create', async (_e, data: CreateKnowledgeEntryFields, userId: string) =>
-    createKnowledgeEntry(data, userId)
+  ipcMain.handle('knowledge:entries:create', async (_e, data: CreateKnowledgeEntryFields) =>
+    createKnowledgeEntry(data, await requireActorId())
   )
 
   ipcMain.handle('knowledge:entries:update', async (_e, id: string, data: UpdateKnowledgeEntryFields) =>
@@ -191,11 +192,11 @@ export function registerKnowledgeIpc(): void {
 
   // ── Topic-level AI analysis ───────────────────────────────────────────────
 
-  ipcMain.handle('knowledge:topic:analyze', async (_e, topic: string, userId: string) => {
+  ipcMain.handle('knowledge:topic:analyze', async (_e, topic: string) => {
     const entries = await listKnowledgeEntries({ topic })
     if (entries.length === 0) throw new Error('No hay entradas para analizar')
     const analysis = await analyzeTopicEntries(entries, topic)
-    return createKnowledgeGlobalSummary(topic, analysis, entries.length, userId)
+    return createKnowledgeGlobalSummary(topic, analysis, entries.length, await requireActorId())
   })
 
   ipcMain.handle('knowledge:topic:latestSummary', async (_e, topic: string) =>
@@ -208,14 +209,14 @@ export function registerKnowledgeIpc(): void {
     listKnowledgeGlobalSummaries()
   )
 
-  ipcMain.handle('knowledge:summaries:generate', async (_e, topic: string | null, userId: string) => {
+  ipcMain.handle('knowledge:summaries:generate', async (_e, topic: string | null) => {
     const effectiveTopic = topic ?? '__all__'
     const entries = await listKnowledgeEntries(
       effectiveTopic !== '__all__' ? { topic: effectiveTopic } : undefined
     )
     if (entries.length === 0) throw new Error('No hay entradas para resumir')
     const summary = await generateKnowledgeGlobalSummary(entries, effectiveTopic)
-    return createKnowledgeGlobalSummary(effectiveTopic, summary, entries.length, userId)
+    return createKnowledgeGlobalSummary(effectiveTopic, summary, entries.length, await requireActorId())
   })
 
   ipcMain.handle('knowledge:summaries:delete', async (_e, id: string) =>

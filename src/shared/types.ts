@@ -1197,6 +1197,8 @@ export interface ComexImport {
   _cant_pallets_customs?:     number | null
   _freight_operator_name?:    string | null
   _oficializacion_date?:      number | null   // fecha oficialización del despacho (del JOIN)
+  _despacho_amount?:          number | null   // valor declarado en aduana (fob_declared del JOIN)
+  _despacho_currency?:        string | null   // moneda del despacho (fob_currency del JOIN)
   _tributos_count?:           number
   _extras_count?:             number
   // ── PL - Packing List ────────────────────────────────────────────────────────
@@ -2564,6 +2566,7 @@ export interface EmailAccount {
   imap_host: string
   imap_port: number
   imap_secure: number
+  imap_allow_invalid_cert: number
   smtp_host: string
   smtp_port: number
   smtp_secure: number
@@ -2626,6 +2629,7 @@ export interface CreateEmailAccountInput {
   imap_host: string
   imap_port?: number
   imap_secure?: boolean
+  imap_allow_invalid_cert?: boolean
   smtp_host: string
   smtp_port?: number
   smtp_secure?: boolean

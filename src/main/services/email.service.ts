@@ -21,15 +21,19 @@ function ensureAttachmentsDir(): void {
 }
 
 // Opciones base compartidas — timeout nativo de imapflow (no Promise.race)
-// rejectUnauthorized:false permite certs autofirmados o mismatch de hostname
-// que son comunes en servidores de correo corporativos/hosting compartido
+// Seguro por defecto: imapflow valida certificado y hostname.
+// Para aceptar certs autofirmados/mismatch (hosting compartido) hay que
+// activar imap_allow_invalid_cert=1 en esa cuenta puntual.
 const IMAP_DEFAULTS = {
   logger: false,
   connectionTimeout: 12000,
   greetingTimeout: 8000,
-  socketTimeout: 15000,
-  tls: { rejectUnauthorized: false }
+  socketTimeout: 15000
 } as const
+
+function tlsOptions(allowInvalidCert: boolean): { rejectUnauthorized: boolean } | undefined {
+  return allowInvalidCert ? { rejectUnauthorized: false } : undefined
+}
 
 function makeClient(account: EmailAccount): ImapFlow {
   return new ImapFlow({
@@ -37,6 +41,7 @@ function makeClient(account: EmailAccount): ImapFlow {
     port: account.imap_port,
     secure: account.imap_secure === 1,
     auth: { user: account.username, pass: account.password },
+    tls: tlsOptions(account.imap_allow_invalid_cert === 1),
     ...IMAP_DEFAULTS
   })
 }
@@ -44,9 +49,10 @@ function makeClient(account: EmailAccount): ImapFlow {
 // ── Connection test ────────────────────────────────────────────────────────────
 
 export async function testImapConnection(
-  host: string, port: number, secure: boolean, user: string, pass: string
+  host: string, port: number, secure: boolean, user: string, pass: string,
+  allowInvalidCert = false
 ): Promise<{ ok: boolean; error?: string; folders?: string[] }> {
-  const client = new ImapFlow({ host, port, secure, auth: { user, pass }, ...IMAP_DEFAULTS })
+  const client = new ImapFlow({ host, port, secure, auth: { user, pass }, tls: tlsOptions(allowInvalidCert), ...IMAP_DEFAULTS })
   try {
     await client.connect()
     const list = await client.list()
@@ -59,9 +65,10 @@ export async function testImapConnection(
 }
 
 export async function testImapFetch(
-  host: string, port: number, secure: boolean, user: string, pass: string
+  host: string, port: number, secure: boolean, user: string, pass: string,
+  allowInvalidCert = false
 ): Promise<{ ok: boolean; error?: string; total?: number; subjects?: string[] }> {
-  const client = new ImapFlow({ host, port, secure, auth: { user, pass }, ...IMAP_DEFAULTS })
+  const client = new ImapFlow({ host, port, secure, auth: { user, pass }, tls: tlsOptions(allowInvalidCert), ...IMAP_DEFAULTS })
   try {
     await client.connect()
     const lock = await client.getMailboxLock('INBOX')

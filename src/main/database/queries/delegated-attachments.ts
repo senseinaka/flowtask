@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs'
-import { getDb, getAttachmentsDir } from '../db'
+import { getDb, resolveAttachmentPath } from '../db'
 import type { Attachment } from '@shared/types'
 
 export function listDelegatedAttachments(taskId: string): Attachment[] {
@@ -17,7 +17,7 @@ export function addDelegatedAttachment(taskId: string, sourcePath: string): Atta
   const originalName = path.basename(sourcePath)
   const ext = path.extname(originalName)
   const storedName = `d_${id}${ext}`
-  const destPath = path.join(getAttachmentsDir(), storedName)
+  const destPath = resolveAttachmentPath(storedName)
 
   fs.copyFileSync(sourcePath, destPath)
 
@@ -40,7 +40,7 @@ export function deleteDelegatedAttachment(id: string): void {
   const db = getDb()
   const row = getDelegatedAttachment(id)
   if (!row) return
-  const filePath = path.join(getAttachmentsDir(), row.stored_name)
+  const filePath = resolveAttachmentPath(row.stored_name)
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
   db.prepare('DELETE FROM delegated_attachments WHERE id = ?').run(id)
 }
@@ -48,7 +48,7 @@ export function deleteDelegatedAttachment(id: string): void {
 export function getDelegatedAttachmentPath(id: string): string | null {
   const row = getDelegatedAttachment(id)
   if (!row) return null
-  return path.join(getAttachmentsDir(), row.stored_name)
+  return resolveAttachmentPath(row.stored_name)
 }
 
 function getMimeType(ext: string): string {

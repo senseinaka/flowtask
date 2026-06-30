@@ -44,8 +44,8 @@ export function registerEmailIpc(): void {
   // ── Connection tests ─────────────────────────────────────────────────────────
   ipcMain.handle(
     'email:test:imap',
-    async (_e, host: string, port: number, secure: boolean, user: string, pass: string) =>
-      testImapConnection(host, port, secure, user, pass)
+    async (_e, host: string, port: number, secure: boolean, user: string, pass: string, allowInvalidCert = false) =>
+      testImapConnection(host, port, secure, user, pass, allowInvalidCert)
   )
   ipcMain.handle(
     'email:test:smtp',
@@ -54,8 +54,8 @@ export function registerEmailIpc(): void {
   )
   ipcMain.handle(
     'email:test:fetch',
-    async (_e, host: string, port: number, secure: boolean, user: string, pass: string) =>
-      testImapFetch(host, port, secure, user, pass)
+    async (_e, host: string, port: number, secure: boolean, user: string, pass: string, allowInvalidCert = false) =>
+      testImapFetch(host, port, secure, user, pass, allowInvalidCert)
   )
   ipcMain.handle(
     'email:test:send',

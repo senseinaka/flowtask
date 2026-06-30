@@ -1,47 +1,81 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// Fase 6.5 — Aplicación de permisos en IPC
+// Fase 6.5 — Aplicación de permisos en IPC  (endurecido: default-deny)
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// Guard genérico: en vez de tocar cada uno de los ~20 archivos de IPC,
-// se parchea `ipcMain.handle` una sola vez (al arrancar) para interceptar
-// los canales mapeados a un módulo del catálogo (`@shared/modules`) y
-// verificar el permiso del usuario logueado antes de ejecutar el handler
-// real. Canales no mapeados (auth, app, powersync, ai, chat, etc.) no se
-// tocan. El nivel requerido (read/write) se infiere del nombre de la acción.
+// Guard genérico: en vez de tocar cada uno de los ~30 archivos de IPC,
+// se parchea `ipcMain.handle` una sola vez (al arrancar). Política:
+//   1. Canales PÚBLICOS (auth, app, wallpaper, permissions) → sin guard
+//      (se necesitan antes del login o se auto-protegen internamente).
+//   2. Canales mapeados a un módulo/submódulo del catálogo (`@shared/modules`)
+//      → exigen sesión + permiso suficiente (read/write).
+//   3. Cualquier otro canal → exige al menos SESIÓN ACTIVA (default-deny:
+//      un canal nuevo nunca queda accesible sin autenticación por omisión).
+// El admin (Diego) tiene acceso total a todo.
 
 import { ipcMain } from 'electron'
 import { getSession } from './auth.service'
 import { listUserPermissions } from '../database/queries/permissions'
-import type { PermissionLevel } from '@shared/modules'
+import { ADMIN_USER_ID, type PermissionLevel } from '@shared/modules'
 
-const CHANNEL_MODULE_MAP: Record<string, string> = {
-  tasks: 'tasks',
-  projects: 'tasks',
-  attachments: 'tasks',
-  reminders: 'tasks',
-  questions: 'tasks',
-  delegated: 'team',
-  'delegated-reminders': 'team',
-  'delegated-attachments': 'team',
-  contacts: 'contacts',
-  messages: 'messages',
-  comex: 'comex',
-  expiry: 'expiry',
-  finance: 'finance',
-  companyFinance: 'company_finance',
-  rrhh: 'rrhh',
-  settings: 'settings'
+/** Canales que pueden ejecutarse sin sesión (login / arranque) o que se
+ *  auto-protegen en su propio handler (permissions:* usa requireAdmin). */
+const PUBLIC_CHANNELS = new Set(['auth', 'app', 'wallpaper', 'permissions'])
+
+type ChannelTarget = { moduleKey: string; submoduleKey?: string }
+
+const CHANNEL_MODULE_MAP: Record<string, ChannelTarget> = {
+  tasks: { moduleKey: 'tasks' },
+  projects: { moduleKey: 'tasks' },
+  attachments: { moduleKey: 'tasks' },
+  reminders: { moduleKey: 'tasks' },
+  questions: { moduleKey: 'tasks' },
+  delegated: { moduleKey: 'team' },
+  'delegated-reminders': { moduleKey: 'team' },
+  'delegated-attachments': { moduleKey: 'team' },
+  contacts: { moduleKey: 'contacts' },
+  agenda: { moduleKey: 'contacts' },
+  messages: { moduleKey: 'messages' },
+  comex: { moduleKey: 'comex' },
+  expiry: { moduleKey: 'expiry' },
+  finance: { moduleKey: 'finance' },
+  companyFinance: { moduleKey: 'company_finance' },
+  rrhh: { moduleKey: 'rrhh' },
+  settings: { moduleKey: 'settings' },
+  // —— Módulos sensibles que antes quedaban SIN guard (hallazgo Fix 6) ——
+  cajas: { moduleKey: 'contable', submoduleKey: 'cajas' },
+  mp: { moduleKey: 'contable', submoduleKey: 'mercadopago' },
+  services: { moduleKey: 'contable', submoduleKey: 'servicios' },
+  catalog: { moduleKey: 'contable', submoduleKey: 'servicios' },
+  recon: { moduleKey: 'contable', submoduleKey: 'recon' },
+  quotes: { moduleKey: 'quotes' },
+  knowledge: { moduleKey: 'knowledge' },
+  calendar: { moduleKey: 'calendar' }
 }
 
 // Acciones que solo leen datos — todo lo que no matchee se trata como 'write'.
 const READ_ACTION_RE = /^(list|get|export|is[A-Z]|status|categoryBreakdown|history|historial|ausentes|topConcepts|topIncreases|listByItem|listUpcoming)/
 
+// Lecturas con nombre propio que no encajan en la regex anterior (match EXACTO
+// del action completo, nunca por prefijo, para no marcar como read un write
+// homónimo como `companies:create`).
+const READ_EXACT_ACTIONS = new Set([
+  // cajas
+  'balances', 'cashboxes', 'categories', 'companies', 'lastCounts',
+  'daily:summary', 'charts:flowSeries', 'differences:pending',
+  // mercadopago
+  'config:default', 'config:get', 'transactions:stats',
+  // recon
+  'data:cupones', 'data:extracto', 'data:invoices', 'data:mlops', 'data:naveops',
+  // knowledge
+  'search', 'entries:topics', 'topic:latestSummary'
+])
+
 const LEVEL_RANK: Record<PermissionLevel, number> = { none: 0, read: 1, write: 2 }
 
-function levelForChannel(channel: string): { moduleKey: string; level: PermissionLevel } | null {
+function levelForChannel(channel: string): (ChannelTarget & { level: PermissionLevel }) | null {
   const segments = channel.split(':')
-  const moduleKey = CHANNEL_MODULE_MAP[segments[0]]
-  if (!moduleKey) return null
+  const target = CHANNEL_MODULE_MAP[segments[0]]
+  if (!target) return null
 
   // Varios módulos usan canales con forma `recurso:verbo` (p.ej. periodos:list,
   // nomina:colaboradores:list). La detección de lectura mira tanto el action
@@ -49,9 +83,10 @@ function levelForChannel(channel: string): { moduleKey: string; level: Permissio
   // 'write' operaciones que en realidad solo leen.
   const action = segments.slice(1).join(':')
   const verb = segments[segments.length - 1] ?? ''
-  const isRead = READ_ACTION_RE.test(action) || READ_ACTION_RE.test(verb)
+  const isRead =
+    READ_ACTION_RE.test(action) || READ_ACTION_RE.test(verb) || READ_EXACT_ACTIONS.has(action)
   const level: PermissionLevel = isRead ? 'read' : 'write'
-  return { moduleKey, level }
+  return { ...target, level }
 }
 
 let cache: { userId: string; rows: ReturnType<typeof listUserPermissions> } | null = null
@@ -61,47 +96,79 @@ export function invalidatePermissionsCache(): void {
   cache = null
 }
 
-function getUserModuleLevel(userId: string, moduleKey: string): PermissionLevel {
+function ensureCache(userId: string): void {
   if (!cache || cache.userId !== userId) {
     cache = { userId, rows: listUserPermissions(userId) }
   }
-  // Nivel efectivo del módulo = el más alto entre el permiso a nivel módulo
-  // (submodule_key = null) y el de cualquiera de sus submódulos. Refleja la
-  // lógica del renderer (`levelFor` en usePermissions): si un submódulo concede
-  // acceso, el módulo es accesible vía IPC. Sin esto, un usuario con acceso a
-  // RRHH solo por el submódulo `sueldos` quedaría bloqueado en el IPC.
+}
+
+/** Nivel efectivo de un MÓDULO completo = el más alto entre el permiso a nivel
+ *  módulo y el de cualquiera de sus submódulos. Para canales mapeados a módulo
+ *  (no a un submódulo puntual): si un submódulo concede acceso, el módulo es
+ *  accesible vía IPC (refleja `levelFor` del renderer). */
+function getUserModuleLevel(userId: string, moduleKey: string): PermissionLevel {
+  ensureCache(userId)
   let best: PermissionLevel = 'none'
-  for (const row of cache.rows) {
+  for (const row of cache!.rows) {
     if (row.module_key !== moduleKey) continue
     if (LEVEL_RANK[row.level] > LEVEL_RANK[best]) best = row.level
   }
   return best
 }
 
+/** Nivel de un SUBMÓDULO puntual: fila exacta del submódulo y, si no existe,
+ *  fallback al permiso a nivel módulo (submodule_key = null). Misma semántica
+ *  que `levelFor` del renderer — evita que tener acceso a un submódulo de
+ *  Contable conceda acceso a OTRO submódulo de Contable. */
+function levelForSubmodule(
+  userId: string,
+  moduleKey: string,
+  submoduleKey: string
+): PermissionLevel {
+  ensureCache(userId)
+  for (const row of cache!.rows) {
+    if (row.module_key === moduleKey && row.submodule_key === submoduleKey) return row.level
+  }
+  for (const row of cache!.rows) {
+    if (row.module_key === moduleKey && row.submodule_key == null) return row.level
+  }
+  return 'none'
+}
+
 /**
- * Parchea `ipcMain.handle` para que los canales mapeados en
- * `CHANNEL_MODULE_MAP` requieran sesión activa + permiso suficiente sobre
- * el módulo correspondiente. Debe llamarse antes de registrar el resto de
- * los handlers de IPC.
+ * Parchea `ipcMain.handle` para aplicar la política de permisos. Debe llamarse
+ * antes de registrar el resto de los handlers de IPC.
  */
 export function installIpcPermissionGuard(): void {
   const originalHandle = ipcMain.handle.bind(ipcMain)
 
   ipcMain.handle = ((channel: string, listener: Parameters<typeof ipcMain.handle>[1]) => {
+    const prefix = channel.split(':')[0]
+    if (PUBLIC_CHANNELS.has(prefix)) return originalHandle(channel, listener)
+
     const guard = levelForChannel(channel)
-    if (!guard) return originalHandle(channel, listener)
 
     return originalHandle(channel, async (event, ...args) => {
       const session = await getSession()
       if (!session) throw new Error('No autenticado')
 
-      const userLevel = getUserModuleLevel(session.userId, guard.moduleKey)
-      if (userLevel === 'none') {
-        throw new Error(`Sin acceso al módulo "${guard.moduleKey}"`)
+      // El admin (Diego) tiene acceso total a todos los módulos.
+      if (session.userId === ADMIN_USER_ID) return listener(event, ...args)
+
+      if (guard) {
+        const userLevel = guard.submoduleKey
+          ? levelForSubmodule(session.userId, guard.moduleKey, guard.submoduleKey)
+          : getUserModuleLevel(session.userId, guard.moduleKey)
+
+        if (userLevel === 'none') {
+          throw new Error(`Sin acceso al módulo "${guard.moduleKey}"`)
+        }
+        if (guard.level === 'write' && userLevel !== 'write') {
+          throw new Error(`Sin permiso de edición en "${guard.moduleKey}"`)
+        }
       }
-      if (guard.level === 'write' && userLevel !== 'write') {
-        throw new Error(`Sin permiso de edición en "${guard.moduleKey}"`)
-      }
+      // Canal no mapeado: con exigir sesión activa alcanza (default-deny para
+      // no autenticados). Los módulos sensibles ya están mapeados arriba.
 
       return listener(event, ...args)
     })

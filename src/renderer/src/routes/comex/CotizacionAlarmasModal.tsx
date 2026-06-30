@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X, Plus, Trash2, Bell, BellOff } from 'lucide-react'
+import { parseAmount } from '../../lib/parseAmount'
 import {
   useAlarmasCotizacion,
   useAddAlarmaCotizacion,
@@ -113,7 +114,12 @@ export default function CotizacionAlarmasModal({ onClose }: Props) {
   }
 
   async function handleAdd() {
-    const umbral = parseFloat(form.umbral.replace(',', '.'))
+    // En modo "valor" el umbral es un monto ARS → parseo robusto (formato argentino).
+    // En "porcentaje" el "." es decimal legítimo (3.5%), no separador de miles:
+    // ahí parseAmount("1.500") daría 1500, así que se mantiene el parseo decimal simple.
+    const umbral = form.tipo_umbral === 'valor'
+      ? parseAmount(form.umbral)
+      : parseFloat(form.umbral.replace(',', '.'))
     if (isNaN(umbral) || umbral <= 0) { setError('El umbral debe ser un número positivo'); return }
     setError(null)
     setAdding(true)

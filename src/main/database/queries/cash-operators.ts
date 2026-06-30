@@ -10,6 +10,19 @@ import type { CashOperator } from '@shared/types'
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 const HASH_LEN = 64
 
+// Anti-fuerza-bruta ONLINE: limita los reintentos de PIN por operador desde la
+// app. Tras MAX_ATTEMPTS fallos consecutivos se bloquea ese operador por
+// LOCKOUT_MS. Es defensa en profundidad para el camino por UI.
+//
+// NO mitiga la fuerza bruta OFFLINE: `pin_hash`/`pin_salt` viven en la tabla
+// `cash_operators`, que PowerSync replica entera a cada dispositivo. Quien tenga
+// la powersync.db local puede probar las 10 000 combinaciones de 4 dígitos sin
+// pasar por esta función. La mitigación real es NO sincronizar el hash (regla de
+// sync en Supabase) — ver sección de seguridad en CLAUDE.md.
+const MAX_ATTEMPTS = 5
+const LOCKOUT_MS = 60_000
+const attempts = new Map<string, { fails: number; lockedUntil: number }>()
+
 interface OperatorRow {
   id: string
   workspace_id: string
@@ -98,7 +111,15 @@ export async function deleteCashOperator(id: string): Promise<void> {
 
 // Verifica el PIN de un operador en tiempo constante. Devuelve false si el
 // operador no existe o no tiene PIN. Corre sólo en main (acá vive el hash).
+// Lanza Error si el operador está bloqueado por exceso de intentos.
 export async function verifyOperatorPin(id: string, pin: string): Promise<boolean> {
+  const now = Date.now()
+  const rec = attempts.get(id)
+  if (rec && rec.lockedUntil > now) {
+    const secs = Math.ceil((rec.lockedUntil - now) / 1000)
+    throw new Error(`Demasiados intentos fallidos. Probá de nuevo en ${secs} s.`)
+  }
+
   const rows = await getPowerSyncDb().getAll<OperatorRow>(
     'SELECT * FROM cash_operators WHERE id = ? AND workspace_id = ?',
     [id, WORKSPACE_ID]
@@ -108,6 +129,18 @@ export async function verifyOperatorPin(id: string, pin: string): Promise<boolea
 
   const candidate = Buffer.from(hashPin(pin, op.pin_salt), 'hex')
   const stored = Buffer.from(op.pin_hash, 'hex')
-  if (candidate.length !== stored.length) return false
-  return timingSafeEqual(candidate, stored)
+  const ok = candidate.length === stored.length && timingSafeEqual(candidate, stored)
+
+  if (ok) {
+    attempts.delete(id)
+    return true
+  }
+
+  // Fallo: cuenta el intento y bloquea si se superó el umbral.
+  const fails = (rec?.fails ?? 0) + 1
+  attempts.set(id, {
+    fails,
+    lockedUntil: fails >= MAX_ATTEMPTS ? now + LOCKOUT_MS : 0,
+  })
+  return false
 }

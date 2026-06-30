@@ -23,6 +23,7 @@ import ComexOperators from './routes/comex/ComexOperators'
 import ComexGestores from './routes/comex/ComexGestores'
 import ComexDespachantes from './routes/comex/ComexDespachantes'
 import ComexLogistics from './routes/comex/ComexLogistics'
+import ComexTracking from './routes/comex/ComexTracking'
 import ExpiryDashboard from './routes/expiry/ExpiryDashboard'
 import FinanceDashboard from './routes/finance/FinanceDashboard'
 import CompanyFinanceDashboard from './routes/company-finance/CompanyFinanceDashboard'
@@ -70,6 +71,7 @@ const router = createHashRouter([
       { path: 'comex', element: <ComexDashboard /> },
       { path: 'comex/imports', element: <ComexImports /> },
       { path: 'comex/imports/:id', element: <ComexImportDetail /> },
+      { path: 'comex/seguimiento', element: <ComexTracking /> },
       { path: 'comex/suppliers', element: <ComexSuppliers /> },
       { path: 'comex/suppliers/:id', element: <ComexSupplierDetail /> },
       { path: 'comex/plannings', element: <ComexPlannings /> },

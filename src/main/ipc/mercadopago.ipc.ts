@@ -30,6 +30,7 @@ import type {
   MpTransactionFilters,
   MpReportConfig,
 } from '@shared/types'
+import { requireActorId } from '../services/auth.service'
 
 export function registerMercadoPagoIpc(): void {
 
@@ -39,10 +40,9 @@ export function registerMercadoPagoIpc(): void {
 
   ipcMain.handle('mp:connections:create', async (
     _e,
-    input: CreateMpConnectionInput,
-    userId: string
+    input: CreateMpConnectionInput
   ) => {
-    const conn = await createConnection(input, userId)
+    const conn = await createConnection(input, await requireActorId())
     const testResult = await testConnection(conn.id)
     if (testResult.ok && testResult.user_id) {
       await updateConnectionStatus(conn.id, 'active', testResult.user_id)

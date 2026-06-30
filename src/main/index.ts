@@ -1,9 +1,13 @@
-// Node.js en Electron no usa el CA store del sistema. Configuramos un agente HTTPS
-// sin verificación TLS solo para googleapis (Drive, Calendar, Auth); las conexiones
-// a Supabase, IMAP y otras APIs mantienen la verificación estándar.
+// Node.js en Electron valida TLS por defecto contra los roots de Mozilla incluidos.
+// NO desactivar la verificación: hacerlo expone los tokens OAuth de Google (Drive,
+// Calendar) y los backups completos de la DB a un MITM en la red. Si una red
+// corporativa usa un proxy de inspección TLS con CA privada y las llamadas a Google
+// fallan por certificado, instalar esa CA en el trust store del sistema; sólo como
+// último recurso de diagnóstico exportar FLOWTASK_INSECURE_GOOGLE_TLS=1 (INSEGURO).
 import { google } from 'googleapis'
 import https from 'https'
-if (process.platform === 'win32') {
+if (process.platform === 'win32' && process.env.FLOWTASK_INSECURE_GOOGLE_TLS === '1') {
+  console.warn('[TLS] Verificación TLS de Google DESACTIVADA por FLOWTASK_INSECURE_GOOGLE_TLS=1 — inseguro, sólo diagnóstico')
   google.options({ agent: new https.Agent({ rejectUnauthorized: false }) })
 }
 
@@ -18,9 +22,10 @@ process.on('uncaughtException', (err) => {
   throw err
 })
 
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
-import { exec } from 'child_process'
+import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { execFile } from 'child_process'
 import { join } from 'path'
+import { safeOpenExternal } from './utils/safe-open'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { getDb } from './database/db'
 import { runMigrations } from './database/migrations'
@@ -99,7 +104,9 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Valida el esquema antes de abrir: la URL puede venir de contenido no confiable
+    // (p.ej. un enlace en el HTML de un email entrante vía allow-popups del iframe).
+    safeOpenExternal(details.url)
     return { action: 'deny' }
   })
 
@@ -117,6 +124,37 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.flowtask.app')
+
+  // Content-Security-Policy (defensa en profundidad contra XSS). Sólo en
+  // producción (file://): en dev rompería el HMR de Vite, que necesita
+  // 'unsafe-inline'/'unsafe-eval' y websockets al dev server.
+  //   • script-src 'self'  → bloquea scripts inline/inyectados (vector XSS).
+  //   • connect-src https/wss → Supabase REST + PowerSync (websocket).
+  //   • img-src https/data/blob → imágenes remotas de emails, avatares, Drive.
+  //   • frame-src → sólo embeds de YouTube/Vimeo (Knowledge).
+  if (!is.dev) {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "media-src 'self' https: blob:",
+      "connect-src 'self' https: wss: ws:",
+      "frame-src https://www.youtube.com https://player.vimeo.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ')
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [csp]
+        }
+      })
+    })
+  }
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -295,20 +333,26 @@ app.on('before-quit', (event) => {
         .catch(e => console.error('[Backup] DB error:', e))
     )
 
-    pending.push(new Promise<void>((resolve) => {
-      const date = new Date().toLocaleString('es-AR').replace(/[/:]/g, '-')
-      const cmd  = [
-        'cd /d "C:\\Projects\\flowtask"',
-        'git add .',
-        `git commit -m "auto-backup: ${date}" --allow-empty-message`,
-        'git push'
-      ].join(' && ')
-      exec(cmd, (err) => {
-        if (err) console.error('[Backup] Git error:', err.message)
-        else     console.log('[Backup] Código subido a GitHub')
-        resolve()
-      })
-    }))
+    // Backup del CÓDIGO FUENTE a GitHub: sólo en la máquina de desarrollo, nunca en
+    // instalaciones empacadas de usuarios finales. Usa execFile (sin shell, sin
+    // interpolar en una línea de cmd.exe) y `git add -u` (sólo archivos ya trackeados)
+    // para no publicar jamás un archivo nuevo no incluido en .gitignore al repo público.
+    if (!app.isPackaged) {
+      pending.push(new Promise<void>((resolve) => {
+        const date = new Date().toLocaleString('es-AR').replace(/[/:]/g, '-')
+        const repo = 'C:\\Projects\\flowtask'
+        execFile('git', ['-C', repo, 'add', '-u'], (e1) => {
+          if (e1) { console.error('[Backup] Git add error:', e1.message); return resolve() }
+          execFile('git', ['-C', repo, 'commit', '-m', `auto-backup: ${date}`, '--allow-empty-message'], () => {
+            execFile('git', ['-C', repo, 'push'], (e3) => {
+              if (e3) console.error('[Backup] Git push error:', e3.message)
+              else    console.log('[Backup] Código subido a GitHub')
+              resolve()
+            })
+          })
+        })
+      }))
+    }
   }
 
   Promise.allSettled(pending)

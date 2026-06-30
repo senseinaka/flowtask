@@ -2,7 +2,7 @@ import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
-import { getDb, getAttachmentsDir } from './db'
+import { getDb, resolveAttachmentPath } from './db'
 import { getSession } from '../services/auth.service'
 import { PowerSyncDatabase } from '@powersync/node'
 import {
@@ -2096,7 +2096,7 @@ async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void
 const LOGO_TABLES = ['comex_suppliers', 'comex_freight_operators', 'comex_gestores', 'comex_despachantes', 'comex_brands']
 
 function logoFileToDataUrl(storedName: string): string | null {
-  const fp = path.join(getAttachmentsDir(), storedName)
+  const fp = resolveAttachmentPath(storedName)
   if (!fs.existsSync(fp)) return null
   const ext = path.extname(storedName).slice(1).toLowerCase()
   const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`

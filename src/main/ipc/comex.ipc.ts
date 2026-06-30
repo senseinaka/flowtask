@@ -40,7 +40,7 @@ import type { GeneratePlanningAIReportInput } from '../services/planning-ai.serv
 import { writePlanningsExcel, writePlanningAIReportsExcel } from '../services/comex-planning-io.service'
 import { writeImportExcel, writeImportPdf, buildImportExportTitle, sanitizeFileName } from '../services/comex-import-export.service'
 import { driveService } from '../services/drive.service'
-import { getAttachmentsDir } from '../database/db'
+import { resolveAttachmentPath } from '../database/db'
 import type {
   ComexSupplier, ComexImport, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCostItem,
@@ -364,7 +364,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:documents:delete', async (_e, id: string) => {
     const doc = await getDocument(id)
     if (doc?.local_stored_name) {
-      const fp = path.join(getAttachmentsDir(), doc.local_stored_name)
+      const fp = resolveAttachmentPath(doc.local_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await deleteDocument(id)
@@ -388,7 +388,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:documents:open', async (_e, id: string) => {
     const doc = await getDocument(id)
     if (!doc?.local_stored_name) return
-    const fp = path.join(getAttachmentsDir(), doc.local_stored_name)
+    const fp = resolveAttachmentPath(doc.local_stored_name)
     if (fs.existsSync(fp)) shell.openPath(fp)
   })
 
@@ -397,7 +397,7 @@ export function registerComexIpc(): void {
     async (_e, docId: string, filePath: string, importId: string, folderId: string | null, importTitle: string) => {
       const ext         = path.extname(filePath)
       const storedName  = `cx_${randomUUID()}${ext}`
-      const destPath    = path.join(getAttachmentsDir(), storedName)
+      const destPath    = resolveAttachmentPath(storedName)
       fs.copyFileSync(filePath, destPath)
 
       const stats       = fs.statSync(destPath)
@@ -407,7 +407,7 @@ export function registerComexIpc(): void {
       // Remove old local file if exists
       const existing = await getDocument(docId)
       if (existing?.local_stored_name) {
-        const oldPath = path.join(getAttachmentsDir(), existing.local_stored_name)
+        const oldPath = resolveAttachmentPath(existing.local_stored_name)
         try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath) } catch { /* ignore */ }
       }
 
@@ -447,7 +447,7 @@ export function registerComexIpc(): void {
     async (_e, filePath: string, importId: string, folderId: string | null, importTitle: string) => {
       const ext         = path.extname(filePath)
       const storedName  = `cx_${randomUUID()}${ext}`
-      const destPath    = path.join(getAttachmentsDir(), storedName)
+      const destPath    = resolveAttachmentPath(storedName)
       fs.copyFileSync(filePath, destPath)
 
       const stats       = fs.statSync(destPath)
@@ -645,16 +645,16 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:logo:getDataUrl', (_e, storedName: string | null, logoData?: string | null) => {
     if (logoData) return logoData
     if (!storedName) return null
-    return fileToDataUrl(path.join(getAttachmentsDir(), storedName))
+    return fileToDataUrl(resolveAttachmentPath(storedName))
   })
 
   ipcMain.handle('comex:suppliers:uploadLogo', async (_e, supplierId: string, filePath: string) => {
     const ext = path.extname(filePath)
     const storedName = `logo_s_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
     const existing = await getSupplier(supplierId)
     if (existing?.logo_stored_name) {
-      const old = path.join(getAttachmentsDir(), existing.logo_stored_name)
+      const old = resolveAttachmentPath(existing.logo_stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
     fs.copyFileSync(filePath, dest)
@@ -665,7 +665,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:suppliers:deleteLogo', async (_e, supplierId: string) => {
     const existing = await getSupplier(supplierId)
     if (existing?.logo_stored_name) {
-      const fp = path.join(getAttachmentsDir(), existing.logo_stored_name)
+      const fp = resolveAttachmentPath(existing.logo_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await updateSupplier(supplierId, { logo_stored_name: null, logo_data: null })
@@ -674,10 +674,10 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:operators:uploadLogo', async (_e, operatorId: string, filePath: string) => {
     const ext = path.extname(filePath)
     const storedName = `logo_op_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
     const existing = await getFreightOperator(operatorId)
     if (existing?.logo_stored_name) {
-      const old = path.join(getAttachmentsDir(), existing.logo_stored_name)
+      const old = resolveAttachmentPath(existing.logo_stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
     fs.copyFileSync(filePath, dest)
@@ -688,7 +688,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:operators:deleteLogo', async (_e, operatorId: string) => {
     const existing = await getFreightOperator(operatorId)
     if (existing?.logo_stored_name) {
-      const fp = path.join(getAttachmentsDir(), existing.logo_stored_name)
+      const fp = resolveAttachmentPath(existing.logo_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await updateFreightOperator(operatorId, { logo_stored_name: null, logo_data: null })
@@ -728,7 +728,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:inal:certs:delete', async (_e, id: string) => {
     const cert = await getInalCert(id)
     if (cert?.local_stored_name) {
-      const fp = path.join(getAttachmentsDir(), cert.local_stored_name)
+      const fp = resolveAttachmentPath(cert.local_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await deleteInalCert(id)
@@ -744,7 +744,7 @@ export function registerComexIpc(): void {
   ) => {
     const ext = path.extname(filePath)
     const storedName = `inal_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
     fs.copyFileSync(filePath, dest)
 
     const stats = fs.statSync(dest)
@@ -821,11 +821,11 @@ export function registerComexIpc(): void {
     const ext          = path.extname(filePath)
     const originalName = path.basename(filePath)
     const storedName   = `proforma_${randomUUID()}${ext}`
-    const dest         = path.join(getAttachmentsDir(), storedName)
+    const dest         = resolveAttachmentPath(storedName)
 
     // Limpiar archivo local anterior
     if (pf.stored_name) {
-      const old = path.join(getAttachmentsDir(), pf.stored_name)
+      const old = resolveAttachmentPath(pf.stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
 
@@ -850,7 +850,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:proformas:syncDrive', async (_e, proformaId: string) => {
     const pf = await getProforma(proformaId)
     if (!pf?.stored_name || !pf.original_name) throw new Error('Proforma sin archivo local')
-    const dest = path.join(getAttachmentsDir(), pf.stored_name)
+    const dest = resolveAttachmentPath(pf.stored_name)
     if (!fs.existsSync(dest)) throw new Error('Archivo no encontrado en disco')
     const imp = await getImport(pf.import_id)
     if (!imp?.drive_folder_id) throw new Error('La importación no tiene carpeta Drive. Creala primero.')
@@ -870,7 +870,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:proformas:open', async (_e, proformaId: string) => {
     const pf = await getProforma(proformaId)
     if (!pf?.stored_name) throw new Error('Sin archivo adjunto')
-    shell.openPath(path.join(getAttachmentsDir(), pf.stored_name))
+    shell.openPath(resolveAttachmentPath(pf.stored_name))
   })
 
   // ── Extra costs ──────────────────────────────────────────────────────────
@@ -901,11 +901,11 @@ export function registerComexIpc(): void {
     const ext = path.extname(filePath)
     const originalName = path.basename(filePath)
     const storedName = `cost_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
 
     // Eliminar archivo local anterior si existe
     if (cost.stored_name) {
-      const old = path.join(getAttachmentsDir(), cost.stored_name)
+      const old = resolveAttachmentPath(cost.stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
 
@@ -935,7 +935,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:extra-costs:openFile', async (_e, costId: string) => {
     const cost = await getExtraCost(costId)
     if (!cost?.stored_name) throw new Error('Sin archivo adjunto')
-    shell.openPath(path.join(getAttachmentsDir(), cost.stored_name))
+    shell.openPath(resolveAttachmentPath(cost.stored_name))
   })
 
   // ── Despacho de aduana ────────────────────────────────────────────────────
@@ -958,11 +958,11 @@ export function registerComexIpc(): void {
     const ext = path.extname(filePath)
     const originalName = path.basename(filePath)
     const storedName = `despacho_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
 
     // Eliminar archivo local anterior si existe
     if (imp.despacho_stored_name) {
-      const old = path.join(getAttachmentsDir(), imp.despacho_stored_name)
+      const old = resolveAttachmentPath(imp.despacho_stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
 
@@ -1005,7 +1005,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:despacho:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.despacho_stored_name) throw new Error('Sin archivo de despacho')
-    const fp = path.join(getAttachmentsDir(), imp.despacho_stored_name)
+    const fp = resolveAttachmentPath(imp.despacho_stored_name)
     shell.openPath(fp)
   })
 
@@ -1013,7 +1013,7 @@ export function registerComexIpc(): void {
     const imp = await getImport(importId)
     if (!imp) return
     if (imp.despacho_stored_name) {
-      const fp = path.join(getAttachmentsDir(), imp.despacho_stored_name)
+      const fp = resolveAttachmentPath(imp.despacho_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await updateImport(importId, {
@@ -1047,10 +1047,10 @@ export function registerComexIpc(): void {
     const ext          = path.extname(filePath)
     const originalName = path.basename(filePath)
     const storedName   = `pl_${randomUUID()}${ext}`
-    const dest         = path.join(getAttachmentsDir(), storedName)
+    const dest         = resolveAttachmentPath(storedName)
 
     if (imp.pl_stored_name) {
-      const old = path.join(getAttachmentsDir(), imp.pl_stored_name)
+      const old = resolveAttachmentPath(imp.pl_stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
 
@@ -1085,14 +1085,14 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:pl:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.pl_stored_name) throw new Error('Sin archivo de Packing List')
-    shell.openPath(path.join(getAttachmentsDir(), imp.pl_stored_name))
+    shell.openPath(resolveAttachmentPath(imp.pl_stored_name))
   })
 
   ipcMain.handle('comex:pl:delete', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp) return
     if (imp.pl_stored_name) {
-      const fp = path.join(getAttachmentsDir(), imp.pl_stored_name)
+      const fp = resolveAttachmentPath(imp.pl_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await updateImport(importId, {
@@ -1139,7 +1139,7 @@ export function registerComexIpc(): void {
       const originalName = dropFileName ?? path.basename(localPath)
       const ext          = path.extname(originalName).toLowerCase()
       const storedName   = `plf_${randomUUID()}${ext}`
-      const dest         = path.join(getAttachmentsDir(), storedName)
+      const dest         = resolveAttachmentPath(storedName)
       fs.copyFileSync(localPath, dest)
 
       const existing  = await listImportPlFiles(importId)
@@ -1183,7 +1183,7 @@ export function registerComexIpc(): void {
     const record = await getImportPlFile(plFileId)
     if (!record) return
     if (record.stored_name) {
-      const fp = path.join(getAttachmentsDir(), record.stored_name)
+      const fp = resolveAttachmentPath(record.stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     if (record.drive_file_id) {
@@ -1196,7 +1196,7 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:pl-files:open', async (_e, plFileId: string) => {
     const record = await getImportPlFile(plFileId)
     if (!record?.stored_name) throw new Error('Sin archivo adjunto')
-    shell.openPath(path.join(getAttachmentsDir(), record.stored_name))
+    shell.openPath(resolveAttachmentPath(record.stored_name))
   })
 
   ipcMain.handle('comex:pl-files:updateExtracted', async (_e, plFileId: string, extractedJson: string) => {
@@ -1225,10 +1225,10 @@ export function registerComexIpc(): void {
     const ext = path.extname(filePath)
     const originalName = path.basename(filePath)
     const storedName = `bl_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
 
     if (imp.bl_stored_name) {
-      const old = path.join(getAttachmentsDir(), imp.bl_stored_name)
+      const old = resolveAttachmentPath(imp.bl_stored_name)
       try { if (fs.existsSync(old)) fs.unlinkSync(old) } catch { /* ignore */ }
     }
 
@@ -1263,14 +1263,14 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:bl:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.bl_stored_name) throw new Error('Sin archivo de BL')
-    shell.openPath(path.join(getAttachmentsDir(), imp.bl_stored_name))
+    shell.openPath(resolveAttachmentPath(imp.bl_stored_name))
   })
 
   ipcMain.handle('comex:bl:delete', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp) return
     if (imp.bl_stored_name) {
-      const fp = path.join(getAttachmentsDir(), imp.bl_stored_name)
+      const fp = resolveAttachmentPath(imp.bl_stored_name)
       try { if (fs.existsSync(fp)) fs.unlinkSync(fp) } catch { /* ignore */ }
     }
     await updateImport(importId, {
@@ -1299,8 +1299,8 @@ export function registerComexIpc(): void {
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_pl_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), stored)
-    if (imp.inal_pl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_pl_stored_name)) } catch { /* */ } }
+    const dest = resolveAttachmentPath(stored)
+    if (imp.inal_pl_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_pl_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
     await updateImport(importId, { inal_pl_stored_name: stored, inal_pl_original_name: orig, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
@@ -1318,13 +1318,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:inal:pl:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.inal_pl_stored_name) throw new Error('Sin archivo PL')
-    shell.openPath(path.join(getAttachmentsDir(), imp.inal_pl_stored_name))
+    shell.openPath(resolveAttachmentPath(imp.inal_pl_stored_name))
   })
 
   ipcMain.handle('comex:inal:pl:delete', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp) return
-    if (imp.inal_pl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_pl_stored_name)) } catch { /* */ } }
+    if (imp.inal_pl_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_pl_stored_name)) } catch { /* */ } }
     await updateImport(importId, { inal_pl_stored_name: null, inal_pl_original_name: null, inal_pl_drive_file_id: null, inal_pl_drive_status: 'none' })
     return await getImport(importId)
   })
@@ -1346,8 +1346,8 @@ export function registerComexIpc(): void {
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_xls_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), stored)
-    if (imp.inal_xls_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_xls_stored_name)) } catch { /* */ } }
+    const dest = resolveAttachmentPath(stored)
+    if (imp.inal_xls_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_xls_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
     await updateImport(importId, { inal_xls_stored_name: stored, inal_xls_original_name: orig, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
@@ -1365,13 +1365,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:inal:xls:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.inal_xls_stored_name) throw new Error('Sin archivo Xls')
-    shell.openPath(path.join(getAttachmentsDir(), imp.inal_xls_stored_name))
+    shell.openPath(resolveAttachmentPath(imp.inal_xls_stored_name))
   })
 
   ipcMain.handle('comex:inal:xls:delete', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp) return
-    if (imp.inal_xls_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_xls_stored_name)) } catch { /* */ } }
+    if (imp.inal_xls_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_xls_stored_name)) } catch { /* */ } }
     await updateImport(importId, { inal_xls_stored_name: null, inal_xls_original_name: null, inal_xls_drive_file_id: null, inal_xls_drive_status: 'none' })
     return await getImport(importId)
   })
@@ -1393,8 +1393,8 @@ export function registerComexIpc(): void {
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_factura_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), stored)
-    if (imp.inal_factura_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_factura_stored_name)) } catch { /* */ } }
+    const dest = resolveAttachmentPath(stored)
+    if (imp.inal_factura_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_factura_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
     await updateImport(importId, { inal_factura_stored_name: stored, inal_factura_original_name: orig, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
@@ -1412,13 +1412,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:inal:factura:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.inal_factura_stored_name) throw new Error('Sin archivo')
-    shell.openPath(path.join(getAttachmentsDir(), imp.inal_factura_stored_name))
+    shell.openPath(resolveAttachmentPath(imp.inal_factura_stored_name))
   })
 
   ipcMain.handle('comex:inal:factura:delete', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp) return
-    if (imp.inal_factura_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_factura_stored_name)) } catch { /* */ } }
+    if (imp.inal_factura_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_factura_stored_name)) } catch { /* */ } }
     await updateImport(importId, { inal_factura_stored_name: null, inal_factura_original_name: null, inal_factura_drive_file_id: null, inal_factura_drive_status: 'none' })
     return await getImport(importId)
   })
@@ -1440,8 +1440,8 @@ export function registerComexIpc(): void {
     if (!imp) throw new Error('Importación no encontrada')
     const ext = path.extname(filePath), orig = path.basename(filePath)
     const stored = `inal_bl_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), stored)
-    if (imp.inal_bl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_bl_stored_name)) } catch { /* */ } }
+    const dest = resolveAttachmentPath(stored)
+    if (imp.inal_bl_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_bl_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
     await updateImport(importId, { inal_bl_stored_name: stored, inal_bl_original_name: orig, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
     if (imp.drive_folder_id && driveService.isAuthenticated()) {
@@ -1459,13 +1459,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:inal:blcopy:open', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp?.inal_bl_stored_name) throw new Error('Sin archivo')
-    shell.openPath(path.join(getAttachmentsDir(), imp.inal_bl_stored_name))
+    shell.openPath(resolveAttachmentPath(imp.inal_bl_stored_name))
   })
 
   ipcMain.handle('comex:inal:blcopy:delete', async (_e, importId: string) => {
     const imp = await getImport(importId)
     if (!imp) return
-    if (imp.inal_bl_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), imp.inal_bl_stored_name)) } catch { /* */ } }
+    if (imp.inal_bl_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(imp.inal_bl_stored_name)) } catch { /* */ } }
     await updateImport(importId, { inal_bl_stored_name: null, inal_bl_original_name: null, inal_bl_drive_file_id: null, inal_bl_drive_status: 'none' })
     return await getImport(importId)
   })
@@ -1485,16 +1485,16 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:gestores:uploadLogo', async (_e, gestorId: string, filePath: string) => {
     const ext = path.extname(filePath)
     const storedName = `logo_gest_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
     const existing = await getGestor(gestorId)
-    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(existing.logo_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
     await updateGestor(gestorId, { logo_stored_name: storedName, logo_data: fileToDataUrl(dest) })
     return storedName
   })
   ipcMain.handle('comex:gestores:deleteLogo', async (_e, gestorId: string) => {
     const existing = await getGestor(gestorId)
-    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(existing.logo_stored_name)) } catch { /* */ } }
     await updateGestor(gestorId, { logo_stored_name: null, logo_data: null })
   })
 
@@ -1512,16 +1512,16 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:despachantes:uploadLogo', async (_e, despId: string, filePath: string) => {
     const ext = path.extname(filePath)
     const storedName = `logo_desp_${randomUUID()}${ext}`
-    const dest = path.join(getAttachmentsDir(), storedName)
+    const dest = resolveAttachmentPath(storedName)
     const existing = (await listDespachantes()).find(d => d.id === despId)
-    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(existing.logo_stored_name)) } catch { /* */ } }
     fs.copyFileSync(filePath, dest)
     await updateDespachante(despId, { logo_stored_name: storedName, logo_data: fileToDataUrl(dest) })
     return storedName
   })
   ipcMain.handle('comex:despachantes:deleteLogo', async (_e, despId: string) => {
     const existing = (await listDespachantes()).find(d => d.id === despId)
-    if (existing?.logo_stored_name) { try { fs.unlinkSync(path.join(getAttachmentsDir(), existing.logo_stored_name)) } catch { /* */ } }
+    if (existing?.logo_stored_name) { try { fs.unlinkSync(resolveAttachmentPath(existing.logo_stored_name)) } catch { /* */ } }
     await updateDespachante(despId, { logo_stored_name: null, logo_data: null })
   })
 

@@ -50,6 +50,7 @@ export const MODULES: ModuleDef[] = [
     submodules: [
       { key: 'dashboard', label: 'Dashboard', routes: ['/comex'] },
       { key: 'imports', label: 'Importaciones', routes: ['/comex/imports'] },
+      { key: 'tracking', label: 'Seguimiento Importaciones', routes: ['/comex/seguimiento'] },
       { key: 'suppliers', label: 'Proveedores', routes: ['/comex/suppliers'] },
       { key: 'brands', label: 'Marcas', routes: ['/comex/brands'] },
       { key: 'plannings', label: 'Programación Pedidos', routes: ['/comex/plannings'] },

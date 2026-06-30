@@ -1,5 +1,5 @@
 import { ipcMain, shell, app, BrowserWindow } from 'electron'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
@@ -11,9 +11,11 @@ function graphifyOut(): string {
 
 function runGraphify(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
+    // execFile NO invoca un shell: los args van como array, sin interpretación de
+    // metacaracteres (&, |, ^, %, >), eliminando de raíz la inyección de comandos
+    // aunque los strings (question/from/to/node) vengan del renderer.
     const cwd = app.getAppPath()
-    const escaped = args.map((a) => `"${a.replace(/"/g, '\\"')}"`).join(' ')
-    exec(`"${GRAPHIFY}" ${escaped}`, { cwd, timeout: 30000, encoding: 'utf-8' }, (err, stdout, stderr) => {
+    execFile(GRAPHIFY, args, { cwd, timeout: 30000, encoding: 'utf-8', windowsHide: true }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message))
       else resolve(stdout)
     })

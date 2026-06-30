@@ -17,6 +17,7 @@ import {
   KeyRound, Eye, EyeOff, ChevronDown, AlertOctagon, Receipt,
   Sparkles, ClipboardPaste, FilePlus2, CreditCard
 } from 'lucide-react'
+import { parseAmount } from '../../lib/parseAmount'
 import {
   useCompanyFinanceMovements, useUpcomingCompanyFinanceMovements, useCompanyFinanceMonthSummary,
   useCompanyFinanceMonthInsight, useSaveCompanyFinanceMonthNotes, useGenerateCompanyFinanceMonthAnalysis, useSaveCompanyFinanceMonthAnalysis,
@@ -553,7 +554,7 @@ function EditableAmount({ value, onSave }: { value: number | null; onSave: (v: n
     )
   }
   const commit = () => {
-    const num = draft.trim() === '' ? null : Number(draft.replace(',', '.'))
+    const num = draft.trim() === '' ? null : parseAmount(draft)
     onSave(Number.isFinite(num) || num === null ? num : null)
     setEditing(false)
   }
@@ -1242,7 +1243,7 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
   }, [autoFocus])
 
   useEffect(() => {
-    const num = Number(draft.replace(',', '.'))
+    const num = parseAmount(draft)
     if (!Number.isFinite(num)) return
     const timer = setTimeout(() => {
       if (num !== valueRef.current) onSaveRef.current(num)
@@ -1251,7 +1252,7 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
   }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const commit = () => {
-    const num = Number(draft.replace(',', '.'))
+    const num = parseAmount(draft)
     if (Number.isFinite(num) && num !== value) onSave(num)
     else setDraft(String(value))
   }
@@ -1322,7 +1323,7 @@ function MovementEntriesQuickList({ movementId, conceptName }: { movementId: str
   // no quedan cargas fantasma en $0 si el usuario se arrepiente.
   const [draftAmount, setDraftAmount] = useState('')
   const addRef = useRef<HTMLInputElement>(null)
-  const draftNum = Number(draftAmount.replace(',', '.'))
+  const draftNum = parseAmount(draftAmount)
 
   const commitAdd = () => {
     if (!Number.isFinite(draftNum) || draftNum <= 0) return
@@ -2898,7 +2899,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
         concept_id:       form.concept_id,
         month:            period.month,
         year:             period.year,
-        amount_estimated: Number(form.amount_estimated.replace(',', '.')) || 0,
+        amount_estimated: parseAmount(form.amount_estimated),
         payment_method:   form.payment_method,
         due_date:         form.due_date ? dayjs(form.due_date, 'YYYY-MM-DD').valueOf() : null,
         notes:            form.notes,
@@ -2908,7 +2909,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
         // ese cálculo con la "foto" vieja que tenía el formulario al abrirse —
         // por eso se omiten del todo: el update parcial deja esas columnas intactas.
         ...(tracksEntries ? {} : {
-          amount_actual: form.amount_actual.trim() === '' ? null : (Number(form.amount_actual.replace(',', '.')) || 0),
+          amount_actual: form.amount_actual.trim() === '' ? null : parseAmount(form.amount_actual),
           status:        form.status,
           payment_date:  form.payment_date ? dayjs(form.payment_date, 'YYYY-MM-DD').valueOf() : null,
         })
@@ -3104,7 +3105,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
   const resetDraft = () => setDraft({ amount: '', entry_date: todayStr, note: '' })
 
   const handleAdd = async () => {
-    const amount = Number(draft.amount.replace(',', '.'))
+    const amount = parseAmount(draft.amount)
     if (!amount || amount <= 0) return
     setBusy(true)
     try {
@@ -3131,7 +3132,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
   }
 
   const handleSaveEdit = async (id: string) => {
-    const amount = Number(editDraft.amount.replace(',', '.'))
+    const amount = parseAmount(editDraft.amount)
     if (!amount || amount <= 0) return
     setBusy(true)
     try {

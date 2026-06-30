@@ -1,8 +1,9 @@
-import { ipcMain, shell } from 'electron'
+import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import { driveService } from '../services/drive.service'
 import { whatsappService } from '../services/whatsapp.service'
 import { getDb } from '../database/db'
+import { safeOpenExternal } from '../utils/safe-open'
 
 export function registerSyncIpc(): void {
   ipcMain.handle('sync:trigger', () => driveService.syncNow())
@@ -37,7 +38,7 @@ export function registerSyncIpc(): void {
   ipcMain.handle('sync:disconnectDrive', () => driveService.disconnect())
 
   ipcMain.handle('shell:open', (_e, url: string) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    safeOpenExternal(url)
   })
 
   // ── Grupos de WhatsApp ─────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
 import {
   parseFlexxus, parseCuponesCSV, parseCuponesXLSX, parseML, parseNave, parseExtracto,
 } from '../services/recon-parsers.service'
+import { requireActorId } from '../services/auth.service'
 
 const DIALOG_FILTERS: Record<string, { name: string; extensions: string[] }[]> = {
   flexxus:       [{ name: 'Excel',       extensions: ['xlsx'] },             { name: 'Todos', extensions: ['*'] }],
@@ -51,13 +52,13 @@ export function registerReconIpc(): void {
 
   ipcMain.handle('recon:periods:get', (_e, id: string) => getReconPeriod(id))
 
-  ipcMain.handle('recon:periods:create', (_e, data: CreateReconPeriodInput, userId: string) =>
-    createReconPeriod(data, userId)
+  ipcMain.handle('recon:periods:create', async (_e, data: CreateReconPeriodInput) =>
+    createReconPeriod(data, await requireActorId())
   )
 
   ipcMain.handle('recon:periods:setStatus',
-    (_e, id: string, status: ReconPeriodStatus, closedBy?: string) =>
-      updateReconPeriodStatus(id, status, closedBy)
+    async (_e, id: string, status: ReconPeriodStatus) =>
+      updateReconPeriodStatus(id, status, await requireActorId())
   )
 
   ipcMain.handle('recon:periods:delete', (_e, id: string) => deleteReconPeriod(id))
@@ -69,7 +70,8 @@ export function registerReconIpc(): void {
   // ── Import principal (abre dialog → parsea → inserta) ────────────────────
 
   ipcMain.handle('recon:import',
-    async (e, periodId: string, source: ReconImportSource, importedBy: string, preFilePath?: string) => {
+    async (e, periodId: string, source: ReconImportSource, _importedBy: string, preFilePath?: string) => {
+      const importedBy = await requireActorId()
       let filePath: string
       let filename: string
 
@@ -157,7 +159,8 @@ export function registerReconIpc(): void {
   // ── Import desde buffer (drag & drop) ───────────────────────────────────
 
   ipcMain.handle('recon:import:buffer',
-    async (_e, periodId: string, source: ReconImportSource, importedBy: string, data: Uint8Array, filename: string) => {
+    async (_e, periodId: string, source: ReconImportSource, _importedBy: string, data: Uint8Array, filename: string) => {
+      const importedBy = await requireActorId()
       const ext     = filename.split('.').pop()?.toLowerCase() ?? 'tmp'
       const tmpPath = join(tmpdir(), `recon-${randomUUID()}.${ext}`)
       try {

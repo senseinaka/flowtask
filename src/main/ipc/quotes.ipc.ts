@@ -25,6 +25,7 @@ import type {
   AddQuoteActivityInput
 } from '@shared/types'
 import type { QuoteFilters } from '../database/queries/quotes'
+import { requireActorId } from '../services/auth.service'
 
 export function registerQuotesIpc(): void {
   // ── Companies ────────────────────────────────────────────────────────────────
@@ -62,11 +63,11 @@ export function registerQuotesIpc(): void {
   ipcMain.handle('quotes:get', async (_e, id: string) =>
     getQuote(id)
   )
-  ipcMain.handle('quotes:create', async (_e, data: CreateQuoteInput, userId: string) =>
-    createQuote(data, userId)
+  ipcMain.handle('quotes:create', async (_e, data: CreateQuoteInput) =>
+    createQuote(data, await requireActorId())
   )
-  ipcMain.handle('quotes:update', async (_e, id: string, data: UpdateQuoteInput, userId: string) =>
-    updateQuote(id, data, userId)
+  ipcMain.handle('quotes:update', async (_e, id: string, data: UpdateQuoteInput) =>
+    updateQuote(id, data, await requireActorId())
   )
   ipcMain.handle('quotes:delete', async (_e, id: string) =>
     deleteQuote(id)

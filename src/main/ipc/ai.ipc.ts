@@ -9,7 +9,7 @@ import {
 } from '../services/ai.service'
 import { DEFAULT_SYSTEM_PROMPTS, PROMPT_LABELS, PROMPT_DESCRIPTIONS } from '../services/ai.prompts'
 import { getDocument, getImport, getExtraCost, getProforma, getImportPlFile } from '../database/queries/comex'
-import { getAttachmentsDir } from '../database/db'
+import { resolveAttachmentPath } from '../database/db'
 import type { AIOperation, AIConfig, ClaudeModelId } from '@shared/types'
 
 // Ruta al archivo de prompts (solo funciona en dev mode con acceso al código fuente)
@@ -58,7 +58,7 @@ export function registerAIIpc(): void {
     const record = await getImport(importId)
     if (!record) throw new Error('Importación no encontrada')
     if (!record.despacho_stored_name) throw new Error('No hay despacho adjunto a esta importación. Subí el PDF primero.')
-    const filePath = path.join(getAttachmentsDir(), record.despacho_stored_name)
+    const filePath = resolveAttachmentPath(record.despacho_stored_name)
 
     // Capa 2: inyectar nombre del proveedor como ancla para el OCR del campo "Vendedor"
     const supplierName = record.supplier?.name?.trim() ?? ''
@@ -80,7 +80,7 @@ export function registerAIIpc(): void {
     const record = await getImport(importId)
     if (!record) throw new Error('Importación no encontrada')
     if (!record.bl_stored_name) throw new Error('No hay BL adjunto a esta importación. Subí el archivo primero.')
-    const filePath = path.join(getAttachmentsDir(), record.bl_stored_name)
+    const filePath = resolveAttachmentPath(record.bl_stored_name)
     return analyzeDocument({ filePath, operation: 'extract_bl' })
   })
 
@@ -89,7 +89,7 @@ export function registerAIIpc(): void {
     const record = await getImport(importId)
     if (!record) throw new Error('Importación no encontrada')
     if (!record.pl_stored_name) throw new Error('No hay Packing List adjunto a esta importación. Subí el archivo primero.')
-    const filePath = path.join(getAttachmentsDir(), record.pl_stored_name)
+    const filePath = resolveAttachmentPath(record.pl_stored_name)
     return analyzeDocument({ filePath, operation: 'extract_pl' })
   })
 
@@ -97,7 +97,7 @@ export function registerAIIpc(): void {
   ipcMain.handle('ai:analyzePlFile', async (_e, plFileId: string) => {
     const record = await getImportPlFile(plFileId)
     if (!record?.stored_name) throw new Error('No hay archivo adjunto a este PL')
-    const filePath = path.join(getAttachmentsDir(), record.stored_name)
+    const filePath = resolveAttachmentPath(record.stored_name)
     return analyzeDocument({ filePath, operation: 'extract_pl' })
   })
 
@@ -106,7 +106,7 @@ export function registerAIIpc(): void {
     const pf = await getProforma(proformaId)
     if (!pf) throw new Error('Proforma no encontrada')
     if (!pf.stored_name) throw new Error('No hay archivo adjunto a esta proforma. Subí el PDF primero.')
-    const filePath = path.join(getAttachmentsDir(), pf.stored_name)
+    const filePath = resolveAttachmentPath(pf.stored_name)
     return analyzeDocument({ filePath, operation: 'extract_proforma' })
   })
 
@@ -127,7 +127,7 @@ export function registerAIIpc(): void {
     const cost = await getExtraCost(costId)
     if (!cost) throw new Error('Registro de costo no encontrado')
     if (!cost.stored_name) throw new Error('No hay factura adjunta a este costo. Subí el PDF primero.')
-    const filePath   = path.join(getAttachmentsDir(), cost.stored_name)
+    const filePath   = resolveAttachmentPath(cost.stored_name)
     const operation  = CATEGORIA_OPERATIONS[cost.categoria] ?? 'extract_factura_local'
     const extraContext = CATEGORIA_CONTEXT[cost.categoria] ?? ''
     return analyzeDocument({ filePath, operation, extraContext })
@@ -141,7 +141,7 @@ export function registerAIIpc(): void {
     const doc = await getDocument(params.docId)
     if (!doc) throw new Error('Documento no encontrado')
     if (!doc.local_stored_name) throw new Error('El documento no tiene archivo local adjunto. Adjuntá el archivo primero.')
-    const filePath = path.join(getAttachmentsDir(), doc.local_stored_name)
+    const filePath = resolveAttachmentPath(doc.local_stored_name)
     const operation = params.operationOverride ?? docTypeToOperation(doc.type)
     return analyzeDocument({ filePath, operation })
   })

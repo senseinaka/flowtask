@@ -87,6 +87,18 @@ export async function getSession(): Promise<AuthSession | null> {
   return refreshSession()
 }
 
+/**
+ * Identidad del actor para auditoría/propiedad (created_by, closed_by, etc.).
+ * SIEMPRE se deriva de la sesión activa en el proceso main — nunca se confía en
+ * un userId enviado por el renderer, que es spoofable desde un renderer
+ * comprometido. Fail-closed: lanza si no hay sesión.
+ */
+export async function requireActorId(): Promise<string> {
+  const session = await getSession()
+  if (!session) throw new Error('No autenticado')
+  return session.userId
+}
+
 /** Si el refresh falla (token revocado/expirado), borra la sesión y devuelve null. */
 export async function refreshSession(): Promise<AuthSession | null> {
   const session = store.get<AuthSession | null>(KEY_SESSION, null)

@@ -1,7 +1,7 @@
 ﻿import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs'
-import { getDb, getAttachmentsDir } from '../db'
+import { getDb, resolveAttachmentPath } from '../db'
 import type { Attachment } from '@shared/types'
 
 export function listAttachments(taskId: string): Attachment[] {
@@ -17,7 +17,7 @@ export function addAttachment(taskId: string, sourcePath: string): Attachment {
   const originalName = path.basename(sourcePath)
   const ext = path.extname(originalName)
   const storedName = `${id}${ext}`
-  const destPath = path.join(getAttachmentsDir(), storedName)
+  const destPath = resolveAttachmentPath(storedName)
 
   fs.copyFileSync(sourcePath, destPath)
 
@@ -41,7 +41,7 @@ export function deleteAttachment(id: string): void {
   const row = getAttachment(id)
   if (!row) return
 
-  const filePath = path.join(getAttachmentsDir(), row.stored_name)
+  const filePath = resolveAttachmentPath(row.stored_name)
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
 
   db.prepare('DELETE FROM attachments WHERE id = ?').run(id)
@@ -50,7 +50,7 @@ export function deleteAttachment(id: string): void {
 export function getAttachmentPath(id: string): string | null {
   const row = getAttachment(id)
   if (!row) return null
-  return path.join(getAttachmentsDir(), row.stored_name)
+  return resolveAttachmentPath(row.stored_name)
 }
 
 export function exportAllAttachments(): Attachment[] {

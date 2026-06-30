@@ -79,6 +79,47 @@ npm run release
 
 ---
 
+## Entender el código rápido — graphify
+
+`graphify` es una herramienta CLI (Python, instalada con pipx) que genera un **grafo
+semántico del repo**: nodos = funciones/componentes/tablas/etc., aristas = quién llama o
+depende de quién. Sirve para entender flujos, dependencias e impacto en este codebase grande
+**sin leer todos los archivos**.
+
+- **Binario:** `C:\Users\Diego\.local\bin\graphify.exe` (NO está en el PATH de bash/PowerShell;
+  invocar siempre con la ruta completa).
+- **Salida:** carpeta `graphify-out/` en el repo → `graph.json` (el grafo), `graph.html`
+  (visor interactivo), `GRAPH_REPORT.md` (resumen). Hay backups con fecha dentro.
+
+**Cuándo usarlo:**
+- Antes de tocar algo desconocido: ver qué consume/produce una función o tabla.
+- Análisis de impacto: qué se rompe si cambio X (`affected`).
+- Trazar un flujo punta a punta (IPC → main → query → UI).
+
+**Comandos útiles** (siempre con ruta completa al `.exe`):
+```bash
+# Re-extraer el grafo después de cambiar código (NO usa LLM, es rápido)
+"C:\Users\Diego\.local\bin\graphify.exe" update C:/Projects/flowtask
+
+# Preguntar en lenguaje natural (BFS sobre graph.json)
+"C:\Users\Diego\.local\bin\graphify.exe" query "cómo se sincroniza finance_concepts"
+
+# Explicar un nodo en lenguaje llano
+"C:\Users\Diego\.local\bin\graphify.exe" explain "hydrateMovement"
+
+# Camino más corto entre dos nodos
+"C:\Users\Diego\.local\bin\graphify.exe" path "ComexImports" "useComexImports"
+
+# Qué depende de un nodo (impacto inverso)
+"C:\Users\Diego\.local\bin\graphify.exe" affected "powersync.ts"
+```
+
+**Regla práctica:** correr `update` después de cambios de código para refrescar el grafo
+antes de consultarlo. `graphify label` (renombra comunidades vía LLM) necesita API key y es
+opcional — no hace falta para navegar.
+
+---
+
 ## Arquitectura de bases de datos — LO MÁS IMPORTANTE
 
 El proyecto usa **dos bases de datos SQLite simultáneas**. Esta distinción es crítica y explica el 90% de los bugs no obvios.
@@ -975,6 +1016,131 @@ Movidos al módulo **Agenda** en junio 2026. Ver sección "Módulo Agenda → Co
 
 ---
 
+## Auditoría de seguridad — fixes aplicados (junio 2026)
+
+Revisión completa de código en busca de vulnerabilidades. Modelo de amenaza: Summit
+es una app Electron multi-dispositivo con usuarios internos de distinto privilegio.
+**Lo crítico:** PowerSync replica la base ENTERA a cada dispositivo → cualquier fila
+de una tabla sincronizada es legible por todo usuario/dispositivo, y los datos
+sincronizados (cargados por usuarios de menor privilegio) son **entrada no confiable**.
+Otras fuentes no confiables: HTML de mails entrantes, salidas del LLM, red (MITM).
+
+Base ya correcta (no se tocó): `sandbox: true`, `contextIsolation: true`,
+`nodeIntegration: false`.
+
+### 1. Permisos IPC: default-deny + identidad de actor por sesión
+
+**Problema:** el guard de permisos (`permissions.service.ts`, que monkey-patchea
+`ipcMain.handle`) sólo cubría algunos módulos; submódulos sensibles
+(cajas/mercadopago/servicios/recon) y módulos propios (quotes/knowledge/calendar)
+**no tenían guard** → cualquier sesión autenticada podía invocarlos sin chequeo de
+permiso. Además varios IPC de escritura confiaban en un `userId` enviado por el
+**renderer** como identidad del actor (spoofeable).
+
+**Fix:**
+- `permissions.service.ts` reescrito con modelo **default-deny**: `PUBLIC_CHANNELS`
+  (auth/app/wallpaper/permissions) pasan; el resto se mapea por `CHANNEL_MODULE_MAP`
+  a su módulo/submódulo y se exige nivel `none`/`read`/`write` según la acción
+  (heurística `READ_ACTION_RE` + set exacto `READ_EXACT_ACTIONS` para no confundir
+  `companies:create` con lectura). `ADMIN_USER_ID` (Diego) bypassa. `levelForSubmodule`
+  chequea fila exacta del submódulo y cae a nivel de módulo.
+- Identidad de actor server-side: `auth.service.ts` expone `requireActorId()` (deriva
+  el `userId` de la sesión real en main). Los IPC de escritura
+  (`quotes.ipc`, `recon.ipc`, `mercadopago.ipc`, `knowledge.ipc`) ahora usan
+  `await requireActorId()` en lugar del `userId` del renderer. El renderer puede
+  seguir mandando el arg (se ignora) — la autoridad es la sesión.
+
+### 2. XSS / renderizado de contenido no confiable
+
+**Problema:** varios `dangerouslySetInnerHTML` con HTML de origen no confiable (cuerpos
+de Knowledge, draft Comex, mails entrantes) sin sanitizar; iframes de embed de video y
+de mail sin restricción; sin Content-Security-Policy.
+
+**Fix:**
+- Helper único `src/renderer/src/lib/sanitize.ts` (`sanitizeHtml`, DOMPurify).
+  Aplicado en `KnowledgeEntryCard.tsx`, `ComexImportDetail.tsx` (draft) y
+  `EmailDashboard.tsx` (el iframe del mail mantiene `sandbox` SIN `allow-scripts`).
+- `KnowledgeRichTextEditor.tsx`: `safeEmbedSrc()` sólo permite iframes `https` de
+  `youtube.com/embed/` y `player.vimeo.com/video/`.
+- **CSP** en `index.ts` (`onHeadersReceived`, sólo en prod): `script-src 'self'`,
+  `object-src 'none'`, `frame-src` limitado a youtube/vimeo, etc. El `index.html` no
+  tiene scripts inline, así que `script-src 'self'` no rompe nada.
+
+### 3. Secretos en reposo: cifrado con `safeStorage`
+
+**Problema:** tokens de sesión, apikeys y el access token de Mercado Pago quedaban en
+**texto plano** en `userData` (archivos `.json`). El cifrado del token MP derivaba la
+clave por scrypt de `WORKSPACE_ID` — una **constante del repo PÚBLICO** + salt en el
+mismo disco = ofuscación, no cifrado.
+
+**Fix:**
+- `config-store.ts` reescrito: cifrado transparente con `safeStorage` de Electron
+  (DPAPI/Keychain/libsecret, protegido por la cuenta de SO). Prefijo `ENC1:`; migración
+  perezosa (lee texto plano viejo y re-escribe cifrado); si no hay keyring, cae a texto
+  plano (nunca rompe). Cubre de una a todos los consumidores (auth, whatsapp, finance-security, salt MP).
+- `mercadopago-crypto.service.ts`: `encryptToken` usa `safeStorage` (prefijo `ss:`);
+  se conserva el esquema legacy AES-GCM **sólo** para descifrar/migrar tokens viejos.
+
+### 4. PIN de operadores de caja (`cash_operators`)
+
+**Problema:** el hash+salt del PIN de 4 dígitos vive en la tabla sincronizada
+`cash_operators` → está en cada dispositivo → fuerza bruta **offline** de las 10 000
+combinaciones es trivial.
+
+**Fix (código, aplicado):** lockout anti-fuerza-bruta **online** en
+`verifyOperatorPin` (`cash-operators.ts`): tras 5 fallos consecutivos bloquea el
+operador 60 s (mapa en memoria); `PinGate.tsx` muestra el mensaje de bloqueo.
+
+**Residual (servidor, PENDIENTE):** el lockout NO frena la fuerza bruta offline porque
+el atacante ya tiene el hash. La mitigación real es **no sincronizar `pin_hash`/`pin_salt`**:
+cambiar la sync-rule en Supabase para excluir esas columnas (o verificar el PIN
+server-side vía RPC). Mientras tanto, tratar el PIN de operador como un identificador
+de bajo nivel de seguridad ("quién operó"), no como barrera fuerte.
+Nota: los PIN de Finanzas (`finance-security` / `company-finance-security`) viven en
+`ConfigStore` local (NO sincronizado) → no tienen este problema.
+
+### 5. Prompt-injection en el chat con tools de escritura
+
+**Problema:** `chat.service.ts` arma el system prompt embebiendo datos de negocio
+sincronizados (títulos, proveedores, **notas**, tracking…) — editables por otros
+usuarios/dispositivos — junto a tools de **escritura de libre elección**
+(`tool_choice: auto`: crear/actualizar tareas, cambiar estado de importación, delegar,
+notas). Un atacante podía escribir "ignorá lo anterior y …" en una nota/título e inducir
+acciones.
+
+**Fix:**
+- Todo el bloque de datos de negocio se encierra entre `<datos_negocio>…</datos_negocio>`
+  y el prompt instruye tratarlo **siempre como datos, nunca como órdenes**; sólo se
+  ejecutan tools por pedidos directos de Diego en el chat. Antes de embeber se quitan los
+  delimitadores del propio texto (`stripDelimiters`) para evitar breakout.
+- `add_import_note` pasó a modo **APPEND** (agrega con fecha, no reemplaza) → una nota
+  inducida no puede borrar las notas previas.
+- (Relacionado) WhatsApp `questions.service.ts`: se eliminó el fallback `pending[0]`; el
+  `ref_code` es **obligatorio siempre** para aplicar una acción (autentica que el
+  remitente recibió esa pregunta puntual; el `from` de Evolution es manipulable).
+
+Los otros caminos LLM (`ai.service`, `knowledge-ai`, `proactive`, `planning-ai`) usan
+`tool_choice` **forzado a una sola tool** de extracción/recomendación con salida
+estructurada — no mutan datos de otros usuarios por inyección. **Residual menor:** la
+extracción de mails (`ai.service.ts`) procesa HTML no confiable; una inyección sólo
+degrada los campos extraídos (revisados por humano), no escala privilegios.
+
+### Residuales que requieren infraestructura (no código)
+
+- **Firma de código (code-signing):** los instaladores no están firmados → SmartScreen
+  y riesgo de tampering del binario auto-actualizado. Requiere certificado + cambios en
+  el pipeline de build/`electron-updater`. PENDIENTE (infra).
+- **Sacar `pin_hash`/`pin_salt` del sync** (ver punto 4) — sync-rule en Supabase.
+
+### Verificación
+
+`tsc -p tsconfig.node.json` = 20 errores (idéntico al baseline pre-existente) y
+`tsc -p tsconfig.web.json` = 141 (idéntico). Ningún error nuevo referencia los archivos/
+símbolos tocados. El build real es esbuild transpile-only; estos errores tsc son
+pre-existentes y se usan sólo como gate "sin regresiones de tipo".
+
+---
+
 ## Bugs corregidos — revisión de código (junio 2026)
 
 ### Seguridad: TLS global deshabilitado
@@ -1093,6 +1259,24 @@ ALTER TABLE comex_suppliers ADD COLUMN IF NOT EXISTS purchase_frequency_days INT
 **Problema:** El renderer hacía `Array.from(new Uint8Array(buf))` antes de enviar por IPC, creando un array de millones de enteros para PDFs de > ~5MB. La serialización JSON podía bloquear el hilo main o crashear.
 
 **Fix:** El renderer ahora envía el `ArrayBuffer` directamente (structured clone nativo de Electron). Tipos actualizados en `useComex.ts`, `preload/index.ts` y `comex.ipc.ts`.
+
+### Comex → Importaciones: rediseño del alta + vista "Seguimiento Importaciones" (junio 2026)
+
+**Modal "Nueva importación" (`ComexImports.tsx` → `CreateImportModal`):**
+- **Proveedor es ahora el primer campo** (antes era Título). Al elegirlo se autogenera el **Título = `Marca #N`**, donde `N` es el correlativo **por marca** (último `#N` + 1). El usuario puede editar el título a mano (badge "auto" se apaga al editar).
+- Correlativo: `nextImportNumberForBrand(brand, imports)` (a nivel módulo). Parsea `/#\s*(\d+)/` de los títulos cuya **marca del proveedor** (`supplier.brand || supplier.name`) **o** el texto del título antes del `#` coincide con la marca; toma el `MAX + 1`. **Derivado en el cliente, sin cambio de schema** → compatible con las importaciones ya cargadas (ej. "Edelrid #53 — Verano 2026" → 53). El sufijo de parte `-1/-2` se ignora en el parseo.
+- **Partes / splits:** checkbox "Llega en varias partes" + cantidad (2–6). Crea **una importación por parte** con títulos `Marca #N-1`, `-2`, … (ej. "Naturehike #152-1/-2/-3"). `handleSubmit` itera `create.mutateAsync` por cada título. Preview de los títulos a crear en el modal.
+- **Campos quitados del alta:** Valor estimado, Fecha de pedido (`order_date`) y ETA estimada (`arrival_date`) → ahora se cargan en el detalle. Se envían `null` en el alta.
+
+**Nuevo menú "Seguimiento Importaciones":**
+- Submódulo de permisos `tracking` en `src/shared/modules.ts` (`/comex/seguimiento`). Item en `Sidebar.tsx` (`comexSubItems`, icono `PackageSearch`, label "Seguimiento Imp.", `subKey: 'tracking'`). Ruta en `main.tsx` → `ComexTracking.tsx`.
+- La vista **agrupa importaciones por marca** (`supplier.brand || supplier.name || 'Sin marca'`) con 4 columnas: **Importación** (link al detalle) · **N° despacho** · **Monto despacho** · **Fecha oficialización**. Subtotal de despachos por moneda en el header de cada marca. Buscador (marca/título/despacho) + filtro "Solo despachadas".
+
+**Backend (`queries/comex.ts`):** `IMPORT_SELECT` ahora incluye `c.fob_declared AS _despacho_amount` y `c.fob_currency AS _despacho_currency` (del JOIN con `comex_import_customs`); `hydrateImport` los hidrata. **"Monto despacho" = `fob_declared` (valor declarado en aduana)**. Tipo: `_despacho_amount?` / `_despacho_currency?` en `ComexImport` (`shared/types.ts`).
+
+**Sin DDL ni cambios de sync-rule** — lee columnas ya existentes/sincronizadas (`fob_declared`, `fob_currency`). **Requiere reiniciar `npm run dev`** porque cambió `comex.ts` (main-process); el modal/menú/ruta entran por HMR.
+
+**tsc:** web 141 / node 20 (= baselines, sin errores nuevos). El `TS2345` en `ComexImports.tsx` es el error **preexistente** del `handleSubmit` reubicado: `CreateComexImportInput = Omit<ComexImport, …>` exige ~80 campos que el alta nunca envió (`createImport` los rellena con defaults).
 
 ---
 
@@ -1462,13 +1646,15 @@ Cortex es el módulo de Summit que expone el grafo de dependencias del código f
 - Descripción de nodos (`graphify explain`)
 - Visualización interactiva animada del grafo completo
 
-### Stats del grafo (regenerado 27/06/2026)
+### Stats del grafo (regenerado 29/06/2026)
 
 | Métrica | Valor |
 |---------|-------|
-| Nodos | 3 436 |
-| Aristas | 7 344 |
-| Comunidades | 130 |
+| Nodos | 3 700 |
+| Aristas | 7 924 |
+| Comunidades | 144 (todas nombradas) |
+
+Las 144 comunidades tienen nombres semánticos (no placeholders "Community N"). Los nombres viven en `graphify-out/.graphify_labels.json` (mapa `cid → nombre`). `graphify cluster-only <proyecto> --no-label` regenera `graph.json`/`graph.html`/`GRAPH_REPORT.md` leyendo ese archivo **sin** llamar a ningún LLM; sólo `graphify label` invoca al modelo (requiere API key y consume cuota).
 
 ### Archivos
 

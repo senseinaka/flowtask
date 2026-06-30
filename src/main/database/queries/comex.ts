@@ -145,6 +145,8 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
   if (row._cant_pallets_customs != null) imp._cant_pallets_customs = row._cant_pallets_customs as number
   if (row._freight_operator_name)     imp._freight_operator_name = row._freight_operator_name as string
   if (row._oficializacion_date != null) imp._oficializacion_date = row._oficializacion_date as number
+  if (row._despacho_amount   != null) imp._despacho_amount   = row._despacho_amount   as number
+  if (row._despacho_currency)         imp._despacho_currency = row._despacho_currency as string
   if (row._tributos_count != null)    imp._tributos_count = row._tributos_count as number
   if (row._extras_count   != null)    imp._extras_count   = row._extras_count   as number
   // Logo del proveedor
@@ -173,6 +175,8 @@ const IMPORT_SELECT = `
     c.cant_bultos     AS _cant_bultos,
     c.cant_pallets         AS _cant_pallets_customs,
     c.oficializacion_date  AS _oficializacion_date,
+    c.fob_declared         AS _despacho_amount,
+    c.fob_currency         AS _despacho_currency,
     fo.name                AS _freight_operator_name,
     (SELECT COUNT(*) FROM comex_import_tributos   WHERE import_id = i.id) AS _tributos_count,
     (SELECT COUNT(*) FROM comex_import_extra_costs WHERE import_id = i.id AND importe > 0) AS _extras_count
@@ -1540,14 +1544,27 @@ export function addAlarmaCotizacion(input: CreateAlarmaCotizacionInput): ComexAl
   return getDb().prepare(`SELECT * FROM comex_alarmas_cotizacion WHERE id = ?`).get(id) as ComexAlarmaCotizacion
 }
 
+// Whitelist fija de columnas actualizables. Los nombres de columna del SET deben
+// provenir SÓLO de este literal, nunca de Object.keys(changes): el objeto `changes`
+// llega del renderer vía IPC y, si sus keys fluyeran al texto SQL, permitirían
+// inyección (escribir columnas arbitrarias o filtrar otras tablas vía subqueries).
+const ALARMA_COTIZACION_COLUMNS = [
+  'moneda', 'tipo_cotizacion', 'tipo_umbral', 'umbral', 'direccion',
+  'activa', 'whatsapp_numero', 'cooldown_horas', 'ultima_alerta_at'
+] as const
+
 export function updateAlarmaCotizacion(id: string, changes: Partial<Omit<ComexAlarmaCotizacion, 'id' | 'created_at'>>): void {
-  const fields = Object.keys(changes)
-    .filter(k => k !== 'id' && k !== 'created_at')
-    .map(k => `${k} = ?`)
-    .join(', ')
-  if (!fields) return
-  getDb().prepare(`UPDATE comex_alarmas_cotizacion SET ${fields} WHERE id = ?`)
-    .run(...Object.values(changes), id)
+  const sets: string[] = []
+  const vals: unknown[] = []
+  for (const col of ALARMA_COTIZACION_COLUMNS) {
+    if (col in changes) {
+      sets.push(`${col} = ?`)
+      vals.push((changes as Record<string, unknown>)[col])
+    }
+  }
+  if (!sets.length) return
+  vals.push(id)
+  getDb().prepare(`UPDATE comex_alarmas_cotizacion SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
 }
 
 export function deleteAlarmaCotizacion(id: string): void {
