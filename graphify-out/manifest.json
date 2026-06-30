@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782843990.852038,
-    "ast_hash": "deae5072ba6d9d4f44778f5608277658",
+    "mtime": 1782844804.3600893,
+    "ast_hash": "d982e22ce06f562b7ebdba398a47d213",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
@@ -560,8 +560,8 @@
     "semantic_hash": "51422174c1c6b3cac35c0ecca6d8329b"
   },
   "src/renderer/src/hooks/useComex.ts": {
-    "mtime": 1782841946.448462,
-    "ast_hash": "1b265449872e220ccaf62e61cccbf4c0",
+    "mtime": 1782844771.7598474,
+    "ast_hash": "6353b2848243ad5af00211b5c1ec44cb",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCompanyFinance.ts": {

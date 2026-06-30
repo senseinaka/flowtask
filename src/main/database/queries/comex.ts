@@ -271,6 +271,7 @@ export async function deleteImport(id: string): Promise<void> {
   await db.execute('DELETE FROM comex_import_customs WHERE import_id = ?', [id])
   await db.execute('DELETE FROM comex_import_costs WHERE import_id = ?', [id])
   await db.execute('DELETE FROM comex_inal_certs WHERE import_id = ?', [id])
+  await db.execute('DELETE FROM comex_inal_veps WHERE import_id = ?', [id])
   await db.execute('DELETE FROM comex_import_tributos WHERE import_id = ?', [id])
   await db.execute('DELETE FROM comex_import_extra_costs WHERE import_id = ?', [id])
   await db.execute('DELETE FROM comex_proformas WHERE import_id = ?', [id])

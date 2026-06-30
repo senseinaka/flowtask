@@ -801,7 +801,7 @@ export async function analyzeDocument(params: {
 }): Promise<AIAnalysisResult> {
   const { filePath, operation, extraContext = '', pages } = params
   const config = getAIConfig()
-  const model = config.models[operation] as ClaudeModelId
+  const model = (config.models[operation] ?? DEFAULT_MODELS[operation]) as ClaudeModelId
 
   const fileBlocks = await fileToContentBlocks(filePath, { pages })
 
@@ -1277,8 +1277,9 @@ comercial con precisión. Si un campo no aparece claramente, devolvé null.`
     tools   = [TOOL_FACTURA]
     toolName = 'extraer_factura'
   } else {
-    // extract_general → respuesta en texto libre
-    systemPrompt = `Sos un asistente experto en documentos de comercio exterior argentino.
+    // extract_general, extract_vep_anmat, y otras → respuesta en texto libre
+    systemPrompt = DEFAULT_SYSTEM_PROMPTS[operation]
+      ?? `Sos un asistente experto en documentos de comercio exterior argentino.
 Analizá el documento y respondé de forma clara y estructurada en español.`
     userPrompt = extraContext || 'Analizá este documento, identificá su tipo y resumí la información más relevante.'
     tools   = []

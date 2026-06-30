@@ -8068,6 +8068,8 @@ function InalSection({
         // Persist the folder ID returned so subsequent files land in the same folder
         if (result.vepFolderId) folderId = result.vepFolderId
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al subir el VEP')
     } finally {
       setVepUploading(false)
       setVepUploadProgress(null)

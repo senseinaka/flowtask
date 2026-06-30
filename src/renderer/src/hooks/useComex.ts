@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   CreateComexImportInput, CreateComexSupplierInput,
   CreateComexDocumentInput,
-  ComexImport, ComexSupplier, ComexCostItem, ComexDocument, ComexInalCert,
+  ComexImport, ComexSupplier, ComexCostItem, ComexDocument, ComexInalCert, ComexInalVep,
   UpsertComexCustomsInput, CreateComexCostInput,
   ComexSupplierContact, CreateComexSupplierContactInput,
   ComexSupplierBankAccount, CreateComexSupplierBankAccountInput,
@@ -928,8 +928,12 @@ export function useUploadInalVep(importId: string) {
     }: {
       filePath: string; importFolderId: string | null; vepFolderId: string | null
     }) => window.api.comex.inal.veps.upload(filePath, importId, importFolderId, vepFolderId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['comex-inal-veps', importId] })
+    onSuccess: (data) => {
+      qc.setQueryData<ComexInalVep[]>(['comex-inal-veps', importId], (old = []) => {
+        const idx = old.findIndex(v => v.id === data.vep.id)
+        if (idx >= 0) { const next = [...old]; next[idx] = data.vep; return next }
+        return [...old, data.vep]
+      })
     }
   })
 }
