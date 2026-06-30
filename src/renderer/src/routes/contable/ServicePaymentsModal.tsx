@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import { X, Loader2, Receipt, Trash2, ExternalLink, CalendarClock } from 'lucide-react'
+import { parseAmount } from '../../lib/parseAmount'
 import {
   useServicePayments, useRegisterServicePayment, useDeleteServicePayment,
 } from '../../hooks/useAccountingServices'
@@ -41,7 +42,7 @@ export default function ServicePaymentsModal({ service, canWrite, onClose }: {
     await register.mutateAsync({
       service_id: service.id,
       payment_date: paymentDate,
-      amount: parseNum(amountStr),
+      amount: parseAmount(amountStr),
       currency,
       period_from: periodFrom,
       period_to: periodTo,
@@ -153,14 +154,6 @@ export default function ServicePaymentsModal({ service, canWrite, onClose }: {
       </div>
     </div>
   )
-}
-
-function parseNum(v: string): number {
-  if (!v) return 0
-  const s = v.trim()
-  // Con coma → formato AR (punto miles, coma decimal). Sin coma → el punto es decimal.
-  if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.')) || 0
-  return Number(s) || 0
 }
 
 const inp = 'w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm outline-none focus:border-emerald-500'

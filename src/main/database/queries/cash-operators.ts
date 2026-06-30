@@ -1,24 +1,25 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
+import { readEnvLocal } from '../powersync'
+import { getSession } from '../../services/auth.service'
 import type { CashOperator } from '@shared/types'
 
 // Operadores de caja: lista propia (nombre + PIN 4 dígitos), independiente del
 // login. El PIN identifica quién opera una caja y autoriza acciones sensibles.
-// El hash/salt viven en la tabla sincronizada; el PIN en claro nunca sale del
-// modal. La verificación corre acá (main), nunca en el renderer.
+//
+// Arquitectura de seguridad:
+//   - pin_hash y pin_salt viven SOLO en Supabase, nunca en powersync.db local.
+//   - Los campos sincronizados (name, active, etc.) van por PowerSync como siempre.
+//   - La verificación llama a la función RPC `get_operator_pin_material` de Supabase
+//     y hace la comparación scrypt en main (requiere conexión — cajas siempre online).
+//   - La sync-rule del servidor excluye pin_hash/pin_salt de la bajada a clientes.
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 const HASH_LEN = 64
 
-// Anti-fuerza-bruta ONLINE: limita los reintentos de PIN por operador desde la
-// app. Tras MAX_ATTEMPTS fallos consecutivos se bloquea ese operador por
-// LOCKOUT_MS. Es defensa en profundidad para el camino por UI.
-//
-// NO mitiga la fuerza bruta OFFLINE: `pin_hash`/`pin_salt` viven en la tabla
-// `cash_operators`, que PowerSync replica entera a cada dispositivo. Quien tenga
-// la powersync.db local puede probar las 10 000 combinaciones de 4 dígitos sin
-// pasar por esta función. La mitigación real es NO sincronizar el hash (regla de
-// sync en Supabase) — ver sección de seguridad en CLAUDE.md.
+// Anti-fuerza-bruta en memoria: tras MAX_ATTEMPTS fallos consecutivos bloquea
+// ese operador por LOCKOUT_MS. No mitiga ataques directos a Supabase (que tiene
+// su propio rate-limit), solo el camino por UI.
 const MAX_ATTEMPTS = 5
 const LOCKOUT_MS = 60_000
 const attempts = new Map<string, { fails: number; lockedUntil: number }>()
@@ -27,8 +28,6 @@ interface OperatorRow {
   id: string
   workspace_id: string
   name: string
-  pin_hash: string
-  pin_salt: string
   active: number
   created_at: string
   updated_at: string
@@ -38,8 +37,8 @@ function hashPin(pin: string, saltHex: string): string {
   return scryptSync(pin, Buffer.from(saltHex, 'hex'), HASH_LEN).toString('hex')
 }
 
-// Nunca expone pin_hash/pin_salt al renderer: sólo si tiene PIN configurado.
-function toOperator(r: OperatorRow): CashOperator {
+// Nunca expone pin_hash/pin_salt al renderer.
+function toOperator(r: OperatorRow & { pin_hash?: string }): CashOperator {
   return {
     id: r.id,
     workspace_id: r.workspace_id,
@@ -51,12 +50,56 @@ function toOperator(r: OperatorRow): CashOperator {
   }
 }
 
+async function supabaseHeaders(): Promise<Record<string, string>> {
+  const env = readEnvLocal()
+  const session = await getSession()
+  return {
+    apikey: env.SUPABASE_ANON_KEY ?? '',
+    Authorization: `Bearer ${session?.accessToken ?? env.SUPABASE_ANON_KEY ?? ''}`,
+    'Content-Type': 'application/json',
+  }
+}
+
+// Escribe pin_hash/pin_salt directamente en Supabase (fuera de la cola ps_crud).
+// Se llama después del INSERT en powersync.db para que la fila ya exista en Supabase.
+async function patchPinInSupabase(id: string, hash: string, salt: string): Promise<void> {
+  const env = readEnvLocal()
+  const headers = await supabaseHeaders()
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/cash_operators?id=eq.${id}&workspace_id=eq.${WORKSPACE_ID}`,
+    { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ pin_hash: hash, pin_salt: salt }) }
+  )
+  if (!res.ok && res.status !== 404) {
+    const body = await res.text()
+    throw new Error(`Error al guardar PIN en Supabase: ${body}`)
+  }
+}
+
 export async function listCashOperators(): Promise<CashOperator[]> {
+  // has_pin se calcula leyendo el campo desde Supabase (no está en local).
+  // Para la lista general se devuelve has_pin=false si no hay conexión.
   const rows = await getPowerSyncDb().getAll<OperatorRow>(
     'SELECT * FROM cash_operators WHERE workspace_id = ? AND active = 1 ORDER BY name ASC',
     [WORKSPACE_ID]
   )
-  return rows.map(toOperator)
+
+  // Enrich has_pin from Supabase if online
+  try {
+    const env = readEnvLocal()
+    const headers = await supabaseHeaders()
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cash_operators?workspace_id=eq.${WORKSPACE_ID}&active=eq.1&select=id,pin_hash`,
+      { headers }
+    )
+    if (res.ok) {
+      const remote: Array<{ id: string; pin_hash: string | null }> = await res.json()
+      const pinMap = new Map(remote.map(r => [r.id, r.pin_hash]))
+      return rows.map(r => toOperator({ ...r, pin_hash: pinMap.get(r.id) ?? undefined }))
+    }
+  } catch {
+    // Sin red: has_pin=false para todos (no bloquea la lista)
+  }
+  return rows.map(r => toOperator(r))
 }
 
 export async function createCashOperator(input: { name: string; pin: string }): Promise<CashOperator> {
@@ -69,14 +112,18 @@ export async function createCashOperator(input: { name: string; pin: string }): 
   const hash = hashPin(input.pin, salt)
   const now = new Date().toISOString()
 
+  // 1. Insertar campos no-sensibles en powersync.db (se sincronizarán).
   await getPowerSyncDb().execute(
-    'INSERT INTO cash_operators (id, workspace_id, name, pin_hash, pin_salt, active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
-    [id, WORKSPACE_ID, name, hash, salt, 1, now, now]
+    'INSERT INTO cash_operators (id, workspace_id, name, active, created_at, updated_at) VALUES (?,?,?,?,?,?)',
+    [id, WORKSPACE_ID, name, 1, now, now]
   )
+
+  // 2. Escribir pin_hash/pin_salt directo en Supabase (nunca pasa por sync).
+  await patchPinInSupabase(id, hash, salt)
+
   return { id, workspace_id: WORKSPACE_ID, name, active: 1, has_pin: true, created_at: now, updated_at: now }
 }
 
-// Edita nombre y/o PIN. Si `pin` viene vacío/undefined no se toca el PIN existente.
 export async function updateCashOperator(input: { id: string; name?: string; pin?: string }): Promise<void> {
   const now = new Date().toISOString()
   const sets: string[] = ['updated_at = ?']
@@ -88,18 +135,18 @@ export async function updateCashOperator(input: { id: string; name?: string; pin
     sets.push('name = ?')
     params.push(name)
   }
-  if (input.pin !== undefined && input.pin !== '') {
-    if (!/^\d{4}$/.test(input.pin)) throw new Error('El PIN debe tener 4 dígitos')
-    const salt = randomBytes(16).toString('hex')
-    sets.push('pin_hash = ?', 'pin_salt = ?')
-    params.push(hashPin(input.pin, salt), salt)
-  }
 
   params.push(input.id, WORKSPACE_ID)
   await getPowerSyncDb().execute(
     `UPDATE cash_operators SET ${sets.join(', ')} WHERE id = ? AND workspace_id = ?`,
     params
   )
+
+  if (input.pin !== undefined && input.pin !== '') {
+    if (!/^\d{4}$/.test(input.pin)) throw new Error('El PIN debe tener 4 dígitos')
+    const salt = randomBytes(16).toString('hex')
+    await patchPinInSupabase(input.id, hashPin(input.pin, salt), salt)
+  }
 }
 
 export async function deleteCashOperator(id: string): Promise<void> {
@@ -109,8 +156,8 @@ export async function deleteCashOperator(id: string): Promise<void> {
   )
 }
 
-// Verifica el PIN de un operador en tiempo constante. Devuelve false si el
-// operador no existe o no tiene PIN. Corre sólo en main (acá vive el hash).
+// Verifica el PIN de un operador. Requiere conexión: lee pin_hash/pin_salt desde
+// Supabase vía RPC (nunca se almacenan en powersync.db local).
 // Lanza Error si el operador está bloqueado por exceso de intentos.
 export async function verifyOperatorPin(id: string, pin: string): Promise<boolean> {
   const now = Date.now()
@@ -120,15 +167,30 @@ export async function verifyOperatorPin(id: string, pin: string): Promise<boolea
     throw new Error(`Demasiados intentos fallidos. Probá de nuevo en ${secs} s.`)
   }
 
-  const rows = await getPowerSyncDb().getAll<OperatorRow>(
-    'SELECT * FROM cash_operators WHERE id = ? AND workspace_id = ?',
-    [id, WORKSPACE_ID]
-  )
-  const op = rows[0]
-  if (!op || !op.pin_hash || !op.pin_salt) return false
+  const env = readEnvLocal()
+  const headers = await supabaseHeaders()
 
-  const candidate = Buffer.from(hashPin(pin, op.pin_salt), 'hex')
-  const stored = Buffer.from(op.pin_hash, 'hex')
+  let pinHash: string | null = null
+  let pinSalt: string | null = null
+
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/get_operator_pin_material`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_workspace_id: WORKSPACE_ID, p_operator_id: id }),
+    })
+    if (!res.ok) throw new Error(`RPC error ${res.status}`)
+    const rows: Array<{ pin_hash: string; pin_salt: string }> = await res.json()
+    pinHash = rows[0]?.pin_hash ?? null
+    pinSalt = rows[0]?.pin_salt ?? null
+  } catch (e) {
+    throw new Error(`No se pudo verificar el PIN: sin conexión o RPC no disponible. (${(e as Error).message})`)
+  }
+
+  if (!pinHash || !pinSalt) return false
+
+  const candidate = Buffer.from(hashPin(pin, pinSalt), 'hex')
+  const stored = Buffer.from(pinHash, 'hex')
   const ok = candidate.length === stored.length && timingSafeEqual(candidate, stored)
 
   if (ok) {
@@ -136,7 +198,6 @@ export async function verifyOperatorPin(id: string, pin: string): Promise<boolea
     return true
   }
 
-  // Fallo: cuenta el intento y bloquea si se superó el umbral.
   const fails = (rec?.fails ?? 0) + 1
   attempts.set(id, {
     fails,

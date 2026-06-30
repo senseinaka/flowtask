@@ -37,6 +37,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import type { SyncStatus } from '@shared/types'
 import { cn } from '../ui/utils'
 import SyncStatusBadge from './SyncStatusBadge'
+import { useConfirm } from '../../store/confirm.store'
 
 // ── Workspace definitions ─────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ function GroupLabel({ label, color }: { label: string; color: string }) {
 
 export default function Sidebar() {
   const { data: projects } = useProjects()
+  const confirm = useConfirm()
   const { filters, setFilter } = useUIStore()
   const { canRead } = usePermissions()
   const location = useLocation()
@@ -374,9 +376,7 @@ export default function Sidebar() {
 
         <button
           onClick={() => {
-            if (confirm('¿Salir de Summit? Se va a cerrar la aplicación por completo.')) {
-              window.api.app.quit()
-            }
+            confirm({ message: '¿Salir de Summit? Se va a cerrar la aplicación por completo.' }).then(ok => { if (ok) window.api.app.quit() })
           }}
           title="Salir"
           className="w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] text-slate-500 hover:text-red-400 hover:bg-red-900/30 transition-all duration-100"

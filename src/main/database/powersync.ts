@@ -1367,8 +1367,12 @@ const cash_movement_breakdowns = new Table(
   { indexes: { workspace: ['workspace_id'], movement: ['movement_id'] } }
 )
 
+// pin_hash y pin_salt se excluyen del schema cliente: se almacenan y verifican
+// directamente en Supabase (vía REST/RPC), nunca en powersync.db local.
+// La sync-rule del servidor también los excluye (SELECT id, workspace_id, name,
+// active, created_at, updated_at FROM cash_operators WHERE workspace_id = '...')
 const cash_operators = new Table(
-  { workspace_id: column.text, name: column.text, pin_hash: column.text, pin_salt: column.text, active: column.integer, created_at: column.text, updated_at: column.text },
+  { workspace_id: column.text, name: column.text, active: column.integer, created_at: column.text, updated_at: column.text },
   { indexes: { workspace: ['workspace_id'] } }
 )
 

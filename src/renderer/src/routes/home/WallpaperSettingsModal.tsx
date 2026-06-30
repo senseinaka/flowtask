@@ -28,11 +28,11 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   return (
     <button
       onClick={() => onChange(!value)}
-      className="relative flex-shrink-0 w-10 h-5 rounded-full transition-colors"
+      className="relative flex-shrink-0 w-10 h-5 rounded-full transition-colors overflow-hidden"
       style={{ background: value ? '#10b981' : '#475569' }}
     >
       <span
-        className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+        className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
         style={{ transform: value ? 'translateX(22px)' : 'translateX(2px)' }}
       />
     </button>

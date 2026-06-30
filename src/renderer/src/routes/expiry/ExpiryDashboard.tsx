@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import {
@@ -1744,10 +1745,12 @@ export default function ExpiryDashboard() {
 
   const deleteItem = useDeleteExpiryItem()
 
-  const handleDelete = async (item: ExpiryItem) => {
-    if (!confirm(`¿Eliminar "${item.title}"?`)) return
-    await deleteItem.mutateAsync(item.id)
-  }
+  const { deleteWithUndo, pendingIds } = useUndoableDelete(
+    (id: string) => deleteItem.mutateAsync(id),
+    { message: 'Vencimiento eliminado' }
+  )
+
+  const handleDelete = (item: ExpiryItem) => deleteWithUndo(item.id)
 
   if (isLoading) {
     return (
@@ -1839,7 +1842,7 @@ export default function ExpiryDashboard() {
         {/* Vista activa */}
         {view === 'timeline' ? (
           <ExpiryTimeline
-            items={displayItems}
+            items={displayItems.filter(i => !pendingIds.has(i.id))}
             onEdit={item => setFormItem(item)}
             onRenew={item => setRenewItem(item)}
             onDelete={handleDelete}
@@ -1847,7 +1850,7 @@ export default function ExpiryDashboard() {
           />
         ) : (
           <ExpiryList
-            items={displayItems}
+            items={displayItems.filter(i => !pendingIds.has(i.id))}
             categories={categories}
             onEdit={item => setFormItem(item)}
             onRenew={item => setRenewItem(item)}

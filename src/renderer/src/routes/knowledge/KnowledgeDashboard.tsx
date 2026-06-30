@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
+import { useConfirm } from '../../store/confirm.store'
 import {
   Brain, Plus, Search, X, Loader2, Settings, Download,
   Zap, FileText, Trash2, Tag, Filter, CheckSquare
@@ -78,6 +80,11 @@ export default function KnowledgeDashboard() {
   const [bulkMoveTarget, setBulkMoveTarget] = useState('')
   const del    = useDeleteKnowledgeEntry()
   const update = useUpdateKnowledgeEntry()
+  const confirm = useConfirm()
+  const { deleteWithUndo, pendingIds } = useUndoableDelete(
+    (id: string) => del.mutateAsync(id),
+    { message: 'Entrada eliminada' }
+  )
 
   const { data: documentSubEntries = [] } = useKnowledgeSubEntries(documentEntry?.id ?? null)
 
@@ -115,6 +122,8 @@ export default function KnowledgeDashboard() {
     ? rankedSearchResults
     : dossierEntries
 
+  const visibleEntries = displayEntries.filter(e => !pendingIds.has(e.id))
+
   const sourceByName = useMemo(() => {
     const m: Record<string, KnowledgeSource> = {}
     for (const s of sources) m[s.name] = s
@@ -126,7 +135,7 @@ export default function KnowledgeDashboard() {
   const openEditEntry   = (e: KnowledgeEntry) => { setEditingEntry(e); setAddingToThread(null); setEditorOpen(true) }
   const openAddToThread = (parent: KnowledgeEntry) => { setEditingEntry(null); setAddingToThread(parent); setEditorOpen(true) }
   const closeEditor     = () => { setEditorOpen(false); setEditingEntry(null); setAddingToThread(null) }
-  const handleDelete    = (id: string) => { if (confirm('¿Eliminar esta entrada?')) del.mutate(id) }
+  const handleDelete    = (id: string) => deleteWithUndo(id)
 
   function toggleSelectEntry(id: string) {
     setSelectedIds(prev => {
@@ -143,7 +152,7 @@ export default function KnowledgeDashboard() {
   }
 
   async function handleBulkDelete() {
-    if (!confirm(`¿Eliminar ${selectedIds.size} entrada${selectedIds.size !== 1 ? 's' : ''}?`)) return
+    if (!await confirm({ message: `¿Eliminar ${selectedIds.size} entrada${selectedIds.size !== 1 ? 's' : ''}?`, danger: true })) return
     for (const id of [...selectedIds]) await del.mutateAsync(id)
     clearSelection()
   }
@@ -382,7 +391,7 @@ export default function KnowledgeDashboard() {
             <div className="flex items-center justify-center h-32">
               <Loader2 size={22} className="animate-spin text-teal-400"/>
             </div>
-          ) : displayEntries.length === 0 ? (
+          ) : visibleEntries.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-slate-500">
               <Brain size={38} className="mb-3 text-slate-800"/>
               <p className="text-sm">
@@ -401,7 +410,7 @@ export default function KnowledgeDashboard() {
               )}
             </div>
           ) : (
-            displayEntries.map(e => (
+            visibleEntries.map(e => (
               <KnowledgeEntryCard
                 key={e.id}
                 entry={e}

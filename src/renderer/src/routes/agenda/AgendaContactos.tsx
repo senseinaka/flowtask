@@ -11,6 +11,7 @@ import {
   useAgendaGrupos, useContactGrupos, useAddGrupoMember, useRemoveGrupoMember
 } from '../../hooks/useContacts'
 import { cn } from '../../components/ui/utils'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,10 @@ function SectionLabel({ icon: Icon, label }: { icon: LucideIcon; label: string }
 function DetailPanel({ contact, onDeleted }: { contact: Contact; onDeleted: () => void }) {
   const update      = useUpdateContact()
   const deleteC     = useDeleteContact()
+  const { deleteWithUndo } = useUndoableDelete(
+    (id: string) => deleteC.mutateAsync(id),
+    { message: 'Contacto eliminado' }
+  )
   const { data: grupos = [] }        = useAgendaGrupos()
   const { data: contactGrupos = [] } = useContactGrupos(contact.id)
 
@@ -301,9 +306,8 @@ function DetailPanel({ contact, onDeleted }: { contact: Contact; onDeleted: () =
   }
 
   function handleDelete() {
-    if (!confirm(`¿Eliminar a ${contact.name}?`)) return
-    deleteC.mutate(contact.id)
     onDeleted()
+    deleteWithUndo(contact.id)
   }
 
   const firstPhone = phones[0]?.numero

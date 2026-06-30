@@ -16,6 +16,7 @@ import {
 } from '../../hooks/useRrhh'
 import { useQuery } from '@tanstack/react-query'
 import { useRrhhEmpresa } from './RrhhEmpresaContext'
+import { useConfirm } from '../../store/confirm.store'
 import type { RrhhSueldoConColaborador } from '@shared/types'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -280,6 +281,7 @@ export default function PeriodoDetail() {
   const { data: sueldos = [], isLoading: loadingSueldos } = useSueldos(id ?? null)
   const confirmar = useConfirmarPeriodo()
   const deletePeriodo = useDeletePeriodo()
+  const confirm = useConfirm()
   const exportXls = useExportXls()
 
   const { data: ausentes = [] } = useQuery({
@@ -410,7 +412,7 @@ export default function PeriodoDetail() {
               Confirmar
             </button>
           )}
-          <button onClick={() => { if (confirm('¿Eliminar este período?')) deletePeriodo.mutate(periodo.id, { onSuccess: () => navigate(`/rrhh/sueldos/${empresa}`) }) }}
+          <button onClick={async () => { if (await confirm({ message: '¿Eliminar este período?', danger: true })) deletePeriodo.mutate(periodo.id, { onSuccess: () => navigate(`/rrhh/sueldos/${empresa}`) }) }}
             className="text-xs text-slate-600 hover:text-red-400 px-2 py-1.5 rounded transition-colors">
             Eliminar
           </button>

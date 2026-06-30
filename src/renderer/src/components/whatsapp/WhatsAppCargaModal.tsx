@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from '../../store/toast.store'
 import {
   MessageCircle, X, Send, Search, Star, Loader2,
   RefreshCw, Check, Edit2, RotateCcw, Users, Trash2
@@ -183,7 +184,7 @@ export default function WhatsAppCargaModal({
     try {
       const ok = await window.api.whatsapp.sendToGroup(selectedJid, message)
       if (ok) setStep('sent')
-      else alert('Error al enviar. Verificá que WhatsApp esté conectado.')
+      else toast.error('Error al enviar. Verificá que WhatsApp esté conectado.')
     } finally { setSending(false) }
   }
 

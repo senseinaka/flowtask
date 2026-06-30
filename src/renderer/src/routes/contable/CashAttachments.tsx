@@ -5,7 +5,8 @@ import {
   useAddCashAttachment,
   useDeleteCashAttachment,
 } from '../../hooks/useCajas'
-import type { CashAttachment, CashAttachmentOwnerType } from '@shared/types'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
+import type { CashAttachmentOwnerType } from '@shared/types'
 
 function fmtSize(bytes: number): string {
   if (!bytes) return ''
@@ -31,11 +32,13 @@ export default function CashAttachments({
   const addMut = useAddCashAttachment()
   const delMut = useDeleteCashAttachment()
 
+  const { deleteWithUndo, pendingIds } = useUndoableDelete(
+    (id: string) => delMut.mutateAsync({ id, ownerType, ownerId }),
+    { message: 'Comprobante eliminado' }
+  )
+
   const handleAdd = () => addMut.mutate({ ownerType, ownerId })
-  const handleDelete = (att: CashAttachment) => {
-    if (!window.confirm(`¿Eliminar el comprobante "${att.original_name}"?`)) return
-    delMut.mutate({ id: att.id, ownerType, ownerId })
-  }
+  const visibleItems = items.filter(att => !pendingIds.has(att.id))
 
   return (
     <div className="space-y-2">
@@ -46,11 +49,11 @@ export default function CashAttachments({
           </span>
         )}
 
-        {!isLoading && items.length === 0 && (
+        {!isLoading && visibleItems.length === 0 && (
           <span className="text-[11px] text-slate-600">Sin comprobantes</span>
         )}
 
-        {items.map(att => {
+        {visibleItems.map(att => {
           const Icon = iconFor(att.mime_type)
           return (
             <span
@@ -69,8 +72,7 @@ export default function CashAttachments({
                 )}
               </button>
               <button
-                onClick={() => handleDelete(att)}
-                disabled={delMut.isPending}
+                onClick={() => deleteWithUndo(att.id)}
                 title="Eliminar comprobante"
                 className="shrink-0 text-slate-600 hover:text-red-400 transition-colors p-0.5"
               >

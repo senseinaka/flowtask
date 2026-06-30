@@ -8,6 +8,7 @@ import KnowledgeRichTextEditor from './KnowledgeRichTextEditor'
 import KnowledgeAIPanel from './KnowledgeAIPanel'
 import KnowledgeAttachmentStrip from './KnowledgeAttachmentStrip'
 import { parseTags } from './KnowledgeHelpers'
+import { useConfirm } from '../../store/confirm.store'
 import type { KnowledgeEntry, KnowledgeSource } from '@shared/types'
 
 interface Props {
@@ -41,6 +42,7 @@ const metaSelect: React.CSSProperties = {
 export default function KnowledgeEntryEditor({
   entry, defaultTopic, userId, sources, existingTopics, parentId, quoteId, onClose, onSaved
 }: Props) {
+  const confirm = useConfirm()
   const [savedId, setSavedId]     = useState<string | null>(entry?.id ?? null)
   const [title, setTitle]         = useState(entry?.title ?? '')
   const [topic, setTopic]         = useState(entry?.topic ?? defaultTopic)
@@ -98,10 +100,10 @@ export default function KnowledgeEntryEditor({
     onClose()
   }
 
-  const handleDiscard = () => {
+  const handleDiscard = async () => {
     if (timer.current) clearTimeout(timer.current)
     if (!entry && savedId) {
-      if (!confirm('¿Descartar la entrada sin guardar?')) return
+      if (!await confirm({ message: '¿Descartar la entrada sin guardar?', danger: true })) return
       del.mutate(savedId)
     }
     onClose()

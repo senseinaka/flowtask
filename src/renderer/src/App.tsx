@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { MessageCircleQuestion, X, Bot, Loader2, ShieldOff } from 'lucide-react'
+import { Bot, Loader2, ShieldOff } from 'lucide-react'
 import Sidebar from './components/layout/Sidebar'
 import TaskFormModal from './components/tasks/TaskFormModal'
 import TaskDetail from './components/tasks/TaskDetail'
@@ -11,15 +11,9 @@ import Login from './routes/Login'
 import { useUIStore } from './store/ui.store'
 import { usePermissions } from './hooks/usePermissions'
 import type { AuthSession } from '@shared/types'
-
-interface Toast {
-  id: number
-  taskTitle: string
-  answer: string
-  actionTaken: string | null
-}
-
-let toastCounter = 0
+import ToastContainer from './components/feedback/ToastContainer'
+import ConfirmDialog from './components/feedback/ConfirmDialog'
+import { toast } from './store/toast.store'
 
 export default function App() {
   const location = useLocation()
@@ -100,31 +94,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [expandedDelegatedTaskId, closeExpandedDelegatedTask])
   const queryClient = useQueryClient()
-  const [toasts,      setToasts]      = useState<Toast[]>([])
   const [chatOpen,    setChatOpen]    = useState(false)
   const [alertCount,  setAlertCount]  = useState(0)
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
 
   useEffect(() => {
     window.api.on('question:answered', (data) => {
       const d = data as { taskTitle: string; answer: string; actionTaken: string | null; taskId: string; questionId: string }
-      const id = ++toastCounter
-
-      setToasts((prev) => [...prev, { id, taskTitle: d.taskTitle, answer: d.answer, actionTaken: d.actionTaken }])
-
-      // Auto-dismiss after 6 seconds
-      setTimeout(() => dismissToast(id), 6000)
-
-      // Invalidate relevant queries so UI updates in real time
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })          // lista + kanban
-      queryClient.invalidateQueries({ queryKey: ['task', d.taskId] }) // panel de detalle (TaskDetail)
+      const msg = [d.taskTitle, `"${d.answer}"`, d.actionTaken].filter(Boolean).join('\n')
+      toast.show({ variant: 'success', title: 'Respuesta recibida', message: msg, duration: 6000 })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['task', d.taskId] })
       queryClient.invalidateQueries({ queryKey: ['task-questions', d.taskId] })
     })
     return () => window.api.off('question:answered')
-  }, [queryClient, dismissToast])
+  }, [queryClient])
 
   // Badge de alertas proactivas en el botón flotante
   useEffect(() => {
@@ -218,40 +201,8 @@ export default function App() {
         )}
       </button>
 
-      {/* Toast notifications for incoming WhatsApp answers */}
-      {toasts.length > 0 && (
-        <div className="fixed bottom-5 left-5 z-50 flex flex-col gap-2 max-w-sm">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              className="bg-slate-800 border border-emerald-700/60 rounded-xl shadow-2xl px-4 py-3 flex items-start gap-3"
-              style={{ animation: 'slideInRight 0.2s ease-out' }}
-            >
-              <div className="w-8 h-8 rounded-full bg-emerald-900/50 flex items-center justify-center flex-shrink-0">
-                <MessageCircleQuestion size={15} className="text-emerald-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-white">Respuesta recibida</p>
-                {toast.taskTitle && (
-                  <p className="text-xs text-slate-400 truncate">{toast.taskTitle}</p>
-                )}
-                <p className="text-xs text-emerald-300 mt-0.5">
-                  &ldquo;{toast.answer}&rdquo;
-                </p>
-                {toast.actionTaken && (
-                  <p className="text-xs text-indigo-400">{toast.actionTaken}</p>
-                )}
-              </div>
-              <button
-                onClick={() => dismissToast(toast.id)}
-                className="text-slate-500 hover:text-slate-300 flex-shrink-0"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <ToastContainer />
+      <ConfirmDialog />
     </div>
   )
 }

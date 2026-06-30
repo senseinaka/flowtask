@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Bot, X, Send, Trash2, Loader2, Sparkles, Wrench, BellRing, AlertTriangle, Info } from 'lucide-react'
 import { cn } from '../ui/utils'
 import type { AIChatMessage } from '@shared/types'
+import { useConfirm } from '../../store/confirm.store'
 
 // ── Tipos de alerta proactiva ─────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ interface Props {
 
 export default function ChatPanel({ isOpen, onClose }: Props) {
   const qc = useQueryClient()
+  const confirm = useConfirm()
   const [messages,      setMessages]      = useState<(AIChatMessage & { streaming?: boolean })[]>([])
   const [input,         setInput]         = useState('')
   const [sending,       setSending]       = useState(false)
@@ -185,7 +187,7 @@ export default function ChatPanel({ isOpen, onClose }: Props) {
   }
 
   const handleClear = async () => {
-    if (!confirm('¿Borrar el historial de esta conversación?')) return
+    if (!await confirm({ message: '¿Borrar el historial de esta conversación?', danger: true })) return
     await window.api.chat.clear()
     setMessages([])
     setStats(null)

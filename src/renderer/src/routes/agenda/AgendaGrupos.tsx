@@ -6,6 +6,7 @@ import {
   useGrupoMembers, useAddGrupoMember, useRemoveGrupoMember, useContacts
 } from '../../hooks/useContacts'
 import { cn } from '../../components/ui/utils'
+import { useConfirm } from '../../store/confirm.store'
 
 // ── Color picker ──────────────────────────────────────────────────────────────
 
@@ -182,9 +183,10 @@ function GrupoDetail({ grupo, onDeleted, onEdit }: {
   const deleteGrupo   = useDeleteGrupo()
   const removeMember  = useRemoveGrupoMember()
   const { data: members = [], isLoading } = useGrupoMembers(grupo.id)
+  const confirm = useConfirm()
 
-  function handleDelete() {
-    if (!confirm(`¿Eliminar el grupo "${grupo.nombre}"? Los contactos no se eliminarán.`)) return
+  async function handleDelete() {
+    if (!await confirm({ message: `¿Eliminar el grupo "${grupo.nombre}"? Los contactos no se eliminarán.`, danger: true })) return
     deleteGrupo.mutate(grupo.id)
     onDeleted()
   }

@@ -178,7 +178,7 @@ Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules e
 - `rrhh_colaboradores`, `rrhh_periodos`, `rrhh_sueldos`, `rrhh_nomina_config`, `rrhh_listas`
 - `mercadopago_connections`, `mercadopago_report_jobs`, `mercadopago_report_files`, `mercadopago_transactions`
 - `accounting_services`, `accounting_service_payments`, `service_catalog`
-- `cash_companies`, `cashboxes`, `cashbox_permissions`, `cash_categories`, `cash_movements`, `cash_movement_amounts`, `cash_movement_breakdowns`, `cash_operators`, `cash_counts`, `cash_count_details`, `cash_differences`, `cash_audit_logs`, `cash_attachments` (Cajas Internas; `cash_movement_breakdowns` y `cash_operators` con DDL pendiente — desglose de billetes y operadores con PIN)
+- `cash_companies`, `cashboxes`, `cashbox_permissions`, `cash_categories`, `cash_movements`, `cash_movement_amounts`, `cash_movement_breakdowns`, `cash_operators`, `cash_counts`, `cash_count_details`, `cash_differences`, `cash_audit_logs`, `cash_attachments` (Cajas Internas — todas las DDL aplicadas). **Seguridad `cash_operators`:** `pin_hash`/`pin_salt` NO se sincronizan al cliente (excluidos del schema PowerSync local y de la sync-rule del servidor). La verificación de PIN corre vía RPC `get_operator_pin_material` en Supabase — aplicar `supabase_operators_pin_security.sql` y actualizar la sync-rule en el dashboard de PowerSync.
 
 **Si un dato de negocio desaparece al reiniciar:** el problema está en las sync-rules (workspace_id incorrecto, tabla faltante) o en el schema de Supabase (columna faltante). No mover a `flowtask.db`.
 

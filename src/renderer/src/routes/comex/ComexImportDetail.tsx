@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { toast } from '../../store/toast.store'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -1309,7 +1310,7 @@ function DocumentsSection({
       const result = await analyzeDoc.mutateAsync({ docId: doc.id })
       setAiResult({ doc, result })
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al analizar el documento')
+      toast.error(err instanceof Error ? err.message : 'Error al analizar el documento')
     } finally {
       setAnalyzingId(null)
     }
@@ -1718,7 +1719,7 @@ function ProformaSection({ imp }: { imp: ComexImport }) {
       const result = await analyzeAI.mutateAsync(pfId)
       const d = result.structured as ExtractedProforma
       if (d) setAiResult({ proformaId: pfId, data: d })
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Error al analizar') }
     finally { setAnalyzingId(null) }
   }
 
@@ -1768,7 +1769,7 @@ function ProformaSection({ imp }: { imp: ComexImport }) {
       setApplySuccess(msg)
       setTimeout(() => setApplySuccess(null), 4000)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al aplicar')
+      toast.error(err instanceof Error ? err.message : 'Error al aplicar')
     } finally { setApplying(false) }
   }
 
@@ -1950,7 +1951,7 @@ function ProformaSection({ imp }: { imp: ComexImport }) {
                           await window.api.comex.proformas.syncDrive(pf.id)
                           qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id] })
                         } catch (err) {
-                          alert(`Error Drive: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+                          toast.error(`Error Drive: ${err instanceof Error ? err.message : 'Error desconocido'}`)
                         }
                       }}
                       className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors flex-shrink-0"
@@ -1966,7 +1967,7 @@ function ProformaSection({ imp }: { imp: ComexImport }) {
                           await window.api.comex.proformas.syncDrive(pf.id)
                           qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id] })
                         } catch (err) {
-                          alert(`Error Drive: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+                          toast.error(`Error Drive: ${err instanceof Error ? err.message : 'Error desconocido'}`)
                         }
                       }}
                       className="flex items-center gap-1 text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0"
@@ -2190,7 +2191,7 @@ function FacturasComercialSection({ imp, proformasData }: { imp: ComexImport; pr
           setAiResult({ proformaId: pfId, data: d })
         }
       }
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Error al analizar') }
     finally { setAnalyzingId(null) }
   }
 
@@ -2237,7 +2238,7 @@ function FacturasComercialSection({ imp, proformasData }: { imp: ComexImport; pr
       setApplySuccess(msg)
       setTimeout(() => setApplySuccess(null), 4000)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al aplicar')
+      toast.error(err instanceof Error ? err.message : 'Error al aplicar')
     } finally { setApplying(false) }
   }
 
@@ -2395,7 +2396,7 @@ function FacturasComercialSection({ imp, proformasData }: { imp: ComexImport; pr
                   {pf.drive_status === 'synced'    && <span className="text-emerald-500 flex-shrink-0">☁ Drive</span>}
                   {pf.drive_status === 'uploading' && <Loader2 size={10} className="animate-spin text-blue-400" />}
                   {pf.drive_status === 'error'     && (
-                    <button onClick={async () => { try { await window.api.comex.proformas.syncDrive(pf.id); qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'factura'] }) } catch (err) { alert(`Error Drive: ${err instanceof Error ? err.message : ''}`) } }}
+                    <button onClick={async () => { try { await window.api.comex.proformas.syncDrive(pf.id); qc.invalidateQueries({ queryKey: ['comex-proformas', imp.id, 'factura'] }) } catch (err) { toast.error(`Error Drive: ${err instanceof Error ? err.message : 'Error Drive'}`) } }}
                       className="flex items-center gap-1 text-amber-400 hover:text-amber-300 flex-shrink-0">
                       <AlertCircle size={10} /> Error Drive — Reintentar
                     </button>
@@ -2826,7 +2827,7 @@ function ExtraCostRow({
       const d = result.structured as import('@shared/types').ExtractedFacturaLocal
       if (d) setFacturaResult(d)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al analizar')
+      toast.error(err instanceof Error ? err.message : 'Error al analizar')
     } finally {
       setAnalyzingAI(false)
     }
@@ -3150,7 +3151,7 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
       const result = await analyzeInv.mutateAsync(cost.id)
       const d = result.structured as import('@shared/types').ExtractedFacturaLocal
       if (d) setAiResult(d)
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Error al analizar') }
     finally { setAnalyzing(false) }
   }
 
@@ -3263,7 +3264,7 @@ function FixedCostSection({ cost, importId }: { cost: ComexImportExtraCost; impo
           qc.invalidateQueries({ queryKey: ['comex-import', importId] })
         } catch (err) {
           console.error('[Despachante apply] ✗ update FAILED:', err)
-          alert(`Error al guardar: ${err instanceof Error ? err.message : String(err)}`)
+          toast.error(`Error al guardar: ${err instanceof Error ? err.message : String(err)}`)
           return
         }
       }
@@ -4195,14 +4196,14 @@ function TributosSection({ imp }: { imp: ComexImport }) {
 
   const handleImportFromAI = async () => {
     if (!imp.despacho_stored_name) {
-      alert('Primero subí el PDF del despacho en la sección "Despacho de Aduana".')
+      toast.error('Primero subí el PDF del despacho en la sección "Despacho de Aduana".')
       return
     }
     setLoadingAI(true)
     try {
       const result = await analyzeDespacho.mutateAsync({ importId: imp.id, page: 1 })
       const d = result.structured as import('@shared/types').ExtractedDespacho
-      if (!d?.tributos?.length) { alert('No se encontraron tributos en el despacho.'); return }
+      if (!d?.tributos?.length) { toast.error('No se encontraron tributos en el despacho.'); return }
       await upsertTributos.mutateAsync({
         importId: imp.id,
         tributos: d.tributos.map((t, i) => ({
@@ -4219,7 +4220,7 @@ function TributosSection({ imp }: { imp: ComexImport }) {
         await window.api.comex.customs.upsert(imp.id, { dolar_aduana: d.cotizacion_dolar })
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al analizar')
+      toast.error(err instanceof Error ? err.message : 'Error al analizar')
     } finally {
       setLoadingAI(false)
     }
@@ -4472,7 +4473,7 @@ function PLFileCard({
       const result = await analyzePlFile.mutateAsync(file.id)
       const d = result.structured as import('@shared/types').ExtractedPL
       if (d) setAiResult(d)
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Error al analizar') }
     finally { setAnalyzing(false) }
   }
 
@@ -4657,7 +4658,7 @@ function PLSection({
       })
       if (files) { setPlFiles(files); invalidateParentQuery() }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al subir')
+      toast.error(err instanceof Error ? err.message : 'Error al subir')
     } finally {
       setUploading(false)
     }
@@ -4876,7 +4877,7 @@ function BLSection({
       const result = await analyzeBL.mutateAsync(importId)
       const d = result.structured as import('@shared/types').ExtractedBL
       if (d) setAiResult(d)
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error al analizar') }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Error al analizar') }
     finally { setAnalyzing(false) }
   }
 
@@ -5215,7 +5216,7 @@ function DespachoSection({ imp }: { imp: ComexImport }) {
       setAiResult(result)
       if (page === 1 && resultHasFewFields(result)) setSuggestPage2(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al analizar')
+      toast.error(err instanceof Error ? err.message : 'Error al analizar')
     }
   }
 

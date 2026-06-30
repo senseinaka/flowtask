@@ -2,12 +2,18 @@ import { useState } from 'react'
 import { Pencil, Trash2, Plus, X } from 'lucide-react'
 import { useKnowledgeSources, useCreateKnowledgeSource, useUpdateKnowledgeSource, useDeleteKnowledgeSource } from '../../hooks/useKnowledge'
 import { AVAILABLE_ICONS, SourceIcon } from './KnowledgeHelpers'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
 
 export default function KnowledgeSourcesModal({ onClose }: { onClose: () => void }) {
   const { data: sources = [] } = useKnowledgeSources()
   const createSrc = useCreateKnowledgeSource()
   const updateSrc = useUpdateKnowledgeSource()
   const deleteSrc = useDeleteKnowledgeSource()
+
+  const { deleteWithUndo, pendingIds } = useUndoableDelete(
+    (id: string) => deleteSrc.mutateAsync(id),
+    { message: 'Fuente eliminada' }
+  )
 
   const [newName, setNewName]     = useState('')
   const [newIcon, setNewIcon]     = useState('Tag')
@@ -30,7 +36,7 @@ export default function KnowledgeSourcesModal({ onClose }: { onClose: () => void
         </div>
 
         <div className="overflow-y-auto flex-1">
-          {sources.map(src => (
+          {sources.filter(s => !pendingIds.has(s.id)).map(src => (
             <div key={src.id} className="flex items-center gap-3 px-5 py-3 border-b border-slate-800">
               <span style={{ color: src.color }}><SourceIcon name={src.icon} size={15}/></span>
               {editingId === src.id ? (
@@ -44,7 +50,7 @@ export default function KnowledgeSourcesModal({ onClose }: { onClose: () => void
               )}
               <button onClick={() => setEditingId(src.id === editingId ? null : src.id)}
                 className="text-slate-600 hover:text-slate-400 p-1 transition-colors"><Pencil size={12}/></button>
-              <button onClick={() => { if (confirm(`¿Eliminar fuente "${src.name}"?`)) deleteSrc.mutate(src.id) }}
+              <button onClick={() => deleteWithUndo(src.id)}
                 className="text-slate-600 hover:text-red-400 p-1 transition-colors"><Trash2 size={12}/></button>
             </div>
           ))}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X, Loader2, ShieldCheck, Save, Settings } from 'lucide-react'
+import { parseAmount } from '../../lib/parseAmount'
 import { useCreateService, useUpdateService } from '../../hooks/useAccountingServices'
 import type { AccountingService, CreateAccountingServiceInput } from '@shared/types'
 import { STATUS_OPTIONS, FREQUENCY_OPTIONS, CURRENCY_OPTIONS } from './services.constants'
@@ -54,8 +55,8 @@ export default function ServiceFormModal({ service, onClose }: {
     }
     const payload: CreateAccountingServiceInput = {
       ...form,
-      amount: parseNum(amountStr),
-      insured_amount: parseNum(insuredStr),
+      amount: parseAmount(amountStr),
+      insured_amount: parseAmount(insuredStr),
     }
     try {
       if (service) await update.mutateAsync({ id: service.id, patch: payload })
@@ -245,13 +246,6 @@ export default function ServiceFormModal({ service, onClose }: {
       )}
     </div>
   )
-}
-
-function parseNum(v: string): number {
-  if (!v) return 0
-  const s = v.trim()
-  if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.')) || 0
-  return Number(s) || 0
 }
 
 // ─── UI helpers ─────────────────────────────────────────────────────────────────

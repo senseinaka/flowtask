@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { toast } from '../../store/toast.store'
 import {
   Mail, RefreshCw, Star, Paperclip, Send, Inbox,
   Plus, Settings, Search, Trash2, Reply, ReplyAll, Forward,
@@ -261,7 +262,7 @@ function ComposeModal({
     }
     const r = await send.mutateAsync(input)
     if (r.ok) onClose()
-    else alert('Error al enviar: ' + r.error)
+    else toast.error('Error al enviar: ' + r.error)
   }
 
   return (

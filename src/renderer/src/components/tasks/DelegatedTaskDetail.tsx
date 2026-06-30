@@ -12,6 +12,7 @@ import { useDelegatedTasks, useUpdateDelegatedTask, useDeleteDelegatedTask } fro
 import { useDelegatedReminders, useCreateDelegatedReminder, useDeleteDelegatedReminder } from '../../hooks/useDelegatedReminders'
 import { useDelegatedAttachments, useAddDelegatedAttachment, useDeleteDelegatedAttachment } from '../../hooks/useDelegatedAttachments'
 import { ActivityTimeline } from './ActivityTimeline'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
 import QuestionPanel from './QuestionPanel'
 import DatePicker from '../ui/DatePicker'
 import { cn, formatDate, formatDateTime, formatBytes, isOverdue } from '../ui/utils'
@@ -124,15 +125,19 @@ export default function DelegatedTaskDetail({ modal = false, onClose }: Delegate
 
   const handleClose = onClose ?? (() => setSelectedDelegatedTask(null))
 
+  const { deleteWithUndo: deleteTaskWithUndo } = useUndoableDelete(
+    (id: string) => deleteTask.mutateAsync(id),
+    { message: 'Tarea eliminada' }
+  )
+
   if (!task) return null
 
   const overdue = isOverdue(task.due_date) && task.status !== 'done' && task.status !== 'cancelled'
   const contacts: Contact[] = task.contact ? [task.contact] : []
 
-  const handleDelete = async () => {
-    if (!confirm(`¿Eliminar "${task.title}"?`)) return
-    await deleteTask.mutateAsync(task.id)
+  const handleDelete = () => {
     handleClose()
+    deleteTaskWithUndo(task.id)
   }
 
   const handleStatus = (s: DelegatedStatus) =>

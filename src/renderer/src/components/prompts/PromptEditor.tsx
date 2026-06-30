@@ -4,6 +4,7 @@ import {
   AlertTriangle, ChevronRight, FileText
 } from 'lucide-react'
 import { cn } from '../ui/utils'
+import { useConfirm } from '../../store/confirm.store'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ function fmtDate(ts: number | null): string {
 // ── PromptEditor ──────────────────────────────────────────────────────────────
 
 export default function PromptEditor() {
+  const confirm = useConfirm()
   const [operations,   setOperations]   = useState<PromptEntry[]>([])
   const [selected,     setSelected]     = useState<string | null>(null)
   const [detail,       setDetail]       = useState<PromptDetail | null>(null)
@@ -71,7 +73,7 @@ export default function PromptEditor() {
 
   // ── Seleccionar operación ─────────────────────────────────────────────────
   const selectOperation = async (op: string) => {
-    if (isDirty && !confirm('Hay cambios sin guardar. ¿Descartarlos?')) return
+    if (isDirty && !await confirm({ message: 'Hay cambios sin guardar. ¿Descartarlos?' })) return
     setSelected(op)
     setIsDirty(false)
     setTestResult(null)
@@ -106,7 +108,7 @@ export default function PromptEditor() {
   // ── Resetear al default ───────────────────────────────────────────────────
   const handleReset = async () => {
     if (!selected || !detail) return
-    if (!confirm('¿Volver al prompt original del código? Se perderá el override guardado.')) return
+    if (!await confirm({ message: '¿Volver al prompt original del código? Se perderá el override guardado.', danger: true })) return
     await window.api.ai.prompts.reset(selected)
     await loadList()
     const d = await window.api.ai.prompts.get(selected)
@@ -135,7 +137,7 @@ export default function PromptEditor() {
   // ── Escribir al código ────────────────────────────────────────────────────
   const handleWriteToCode = async () => {
     if (!selected || !isDevMode) return
-    if (!confirm(`¿Escribir este prompt directamente en ai.prompts.ts?\n\nEsto modifica el código fuente. Vite recargará la app automáticamente.`)) return
+    if (!await confirm({ message: `¿Escribir este prompt directamente en ai.prompts.ts?\n\nEsto modifica el código fuente. Vite recargará la app automáticamente.`, danger: true })) return
     setWriting(true)
     try {
       const res = await window.api.ai.prompts.writeToCode(selected, draft)

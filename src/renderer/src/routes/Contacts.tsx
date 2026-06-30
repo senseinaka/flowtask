@@ -13,6 +13,7 @@ import { useDelegatedTasks, useCreateDelegatedTask, useUpdateDelegatedTask, useD
 import DatePicker from '../components/ui/DatePicker'
 import { cn, formatDate, isOverdue } from '../components/ui/utils'
 import dayjs from 'dayjs'
+import { useConfirm } from '../store/confirm.store'
 
 const TYPE_TABS: { value: ContactType | 'all'; label: string }[] = [
   { value: 'all', label: 'Todos' },
@@ -87,8 +88,10 @@ export default function Contacts() {
     }
   }
 
+  const confirm = useConfirm()
+
   const handleDelete = async () => {
-    if (!selected || !confirm(`¿Eliminar a ${selected.name}? Se eliminarán también sus tareas asignadas.`)) return
+    if (!selected || !await confirm({ message: `¿Eliminar a ${selected.name}? Se eliminarán también sus tareas asignadas.`, danger: true })) return
     await window.api.contacts.delete(selected.id)
     deleteContact.mutate(selected.id)
     setSelected(null)

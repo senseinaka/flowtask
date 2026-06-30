@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
 import { createPortal } from 'react-dom'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
@@ -18,6 +19,7 @@ import {
   Sparkles, ClipboardPaste, FilePlus2, CreditCard
 } from 'lucide-react'
 import { parseAmount } from '../../lib/parseAmount'
+import { useConfirm } from '../../store/confirm.store'
 import {
   useFinanceMovements, useUpcomingFinanceMovements, useFinanceMonthSummary,
   useFinanceMonthInsight, useSaveFinanceMonthNotes, useGenerateFinanceMonthAnalysis, useSaveFinanceMonthAnalysis,
@@ -563,7 +565,8 @@ function EditableAmount({ value, onSave }: { value: number | null; onSave: (v: n
   return (
     <input
       autoFocus
-      type="number"
+      type="text"
+      inputMode="decimal"
       value={draft}
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
@@ -1265,7 +1268,8 @@ function EntryAmountInput({ value, autoFocus, onSave }: { value: number; autoFoc
   return (
     <input
       ref={ref}
-      type="number"
+      type="text"
+      inputMode="decimal"
       value={draft}
       onChange={e => setDraft(e.target.value)}
       onFocus={() => { isFocused.current = true }}
@@ -1314,9 +1318,14 @@ function MovementEntriesQuickList({ movementId, conceptName, hourlyRate = 0, via
   const update = useUpdateMovementEntry()
   const remove = useRemoveMovementEntry()
 
+  const { deleteWithUndo, pendingIds } = useUndoableDelete(
+    (id: string) => remove.mutateAsync({ id, movementId }),
+    { message: 'Carga eliminada' }
+  )
+
   const sorted = useMemo(
-    () => [...entries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at)),
-    [entries]
+    () => [...entries].filter(e => !pendingIds.has(e.id)).sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at)),
+    [entries, pendingIds]
   )
   const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
 
@@ -1387,10 +1396,7 @@ function MovementEntriesQuickList({ movementId, conceptName, hourlyRate = 0, via
             onSave={v => update.mutate({ id: e.id, movementId, data: { note: v } })}
           />
           <button
-            onClick={() => {
-              if (!confirm(`¿Eliminar "${conceptName} ${i + 1}" de ${formatCurrency(e.amount)}?`)) return
-              remove.mutate({ id: e.id, movementId })
-            }}
+            onClick={() => deleteWithUndo(e.id)}
             className="p-1 rounded-md text-slate-600 hover:text-red-400 hover:bg-slate-700/50 transition-colors shrink-0"
             title="Eliminar"
           >
@@ -2144,7 +2150,8 @@ function QuickFillMode({
                         <td className="px-3 py-1.5">
                           <input
                             ref={el => { amountRefs.current[c.id] = el }}
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             value={draft.amount}
                             onChange={e => setDraft(c.id, { amount: e.target.value })}
                             onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); focusNext(c.id) } }}
@@ -2398,7 +2405,8 @@ function QuickAddMovement({
             <label className="text-[11px] text-slate-500 w-12 flex-shrink-0">Monto</label>
             <input
               ref={amountRef}
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={amount}
               onChange={e => setAmount(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') handleClose() }}
@@ -3080,7 +3088,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Monto estimado</label>
-              <input type="number" value={form.amount_estimated} onChange={e => upd('amount_estimated', e.target.value)} className={inputCls} />
+              <input type="text" inputMode="decimal" value={form.amount_estimated} onChange={e => upd('amount_estimated', e.target.value)} className={inputCls} />
             </div>
             {tracksEntries ? (
               <div>
@@ -3094,7 +3102,7 @@ function MovementForm({ movement, concepts, period, onClose }: {
             ) : (
               <div>
                 <label className={labelCls}>Monto real (si ya lo conocés)</label>
-                <input type="number" value={form.amount_actual} onChange={e => upd('amount_actual', e.target.value)} placeholder="—" className={inputCls} />
+                <input type="text" inputMode="decimal" value={form.amount_actual} onChange={e => upd('amount_actual', e.target.value)} placeholder="—" className={inputCls} />
               </div>
             )}
           </div>
@@ -3199,6 +3207,11 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
   const update = useUpdateMovementEntry()
   const remove = useRemoveMovementEntry()
 
+  const { deleteWithUndo, pendingIds } = useUndoableDelete(
+    (id: string) => remove.mutateAsync({ id, movementId }),
+    { message: 'Carga eliminada' }
+  )
+
   const todayStr = dayjs().format('YYYY-MM-DD')
   const [draft, setDraft] = useState({ amount: '', entry_date: todayStr, note: '' })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -3206,21 +3219,22 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
   const [busy, setBusy] = useState(false)
   const amountRef = useRef<HTMLInputElement>(null)
 
-  const total = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries])
+  const visibleEntries = entries.filter(e => !pendingIds.has(e.id))
+  const total = useMemo(() => visibleEntries.reduce((sum, e) => sum + e.amount, 0), [visibleEntries])
 
   const sorted = useMemo(
-    () => [...entries].sort((a, b) => (b.entry_date ?? 0) - (a.entry_date ?? 0) || b.created_at - a.created_at),
-    [entries]
+    () => [...visibleEntries].sort((a, b) => (b.entry_date ?? 0) - (a.entry_date ?? 0) || b.created_at - a.created_at),
+    [visibleEntries]
   )
 
   // Numera las cargas en orden cronológico ("Carga Nafta 1" = la más antigua),
   // independientemente del orden de visualización (más reciente primero).
   const entryNumbers = useMemo(() => {
-    const chrono = [...entries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at))
+    const chrono = [...visibleEntries].sort((a, b) => (a.entry_date ?? a.created_at) - (b.entry_date ?? b.created_at))
     const map = new Map<string, number>()
     chrono.forEach((e, i) => map.set(e.id, i + 1))
     return map
-  }, [entries])
+  }, [visibleEntries])
 
   const resetDraft = () => setDraft({ amount: '', entry_date: todayStr, note: '' })
 
@@ -3270,10 +3284,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
     }
   }
 
-  const handleRemove = async (e: FinanceMovementEntry) => {
-    if (!confirm(`¿Eliminar esta carga de ${formatCurrency(e.amount)}? El total del movimiento se recalcula solo.`)) return
-    await remove.mutateAsync({ id: e.id, movementId })
-  }
+  const handleRemove = (e: FinanceMovementEntry) => deleteWithUndo(e.id)
 
   return (
     <div className="rounded-xl border border-purple-800/30 bg-purple-950/10 p-3.5 space-y-3">
@@ -3281,7 +3292,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
         <div className="flex items-center gap-2">
           <Receipt size={14} className="text-purple-400" />
           <h3 className="text-xs font-semibold text-slate-200">Registro de cargas</h3>
-          <span className="text-[10px] text-slate-500">({entries.length} {entries.length === 1 ? 'carga' : 'cargas'})</span>
+          <span className="text-[10px] text-slate-500">({visibleEntries.length} {visibleEntries.length === 1 ? 'carga' : 'cargas'})</span>
         </div>
         <span className="text-xs font-semibold text-purple-300">{formatCurrency(total)}</span>
       </div>
@@ -3294,7 +3305,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
                 <div className="space-y-2">
                   <div className="grid grid-cols-3 gap-2">
                     <input
-                      type="number" autoFocus value={editDraft.amount}
+                      type="text" inputMode="decimal" autoFocus value={editDraft.amount}
                       onChange={ev => setEditDraft(d => ({ ...d, amount: ev.target.value }))}
                       className={cn(inputCls, 'py-1.5 text-xs')} placeholder="Monto"
                     />
@@ -3351,7 +3362,7 @@ function MovementEntriesLedger({ movementId, entries, conceptName }: {
       <div className="grid grid-cols-3 gap-2 pt-1">
         <input
           ref={amountRef}
-          type="number" value={draft.amount}
+          type="text" inputMode="decimal" value={draft.amount}
           onChange={e => setDraft(d => ({ ...d, amount: e.target.value }))}
           onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
           className={cn(inputCls, 'py-1.5 text-xs')} placeholder="Monto de la carga"
@@ -4097,9 +4108,9 @@ function ImportManager({
                             <div>
                               <label className={labelCls}>Monto</label>
                               <input
-                                type="number" step="0.01"
+                                type="text" inputMode="decimal"
                                 value={row.amount ?? ''}
-                                onChange={e => updateRow(idx, { amount: e.target.value === '' ? null : Number(e.target.value) })}
+                                onChange={e => updateRow(idx, { amount: e.target.value === '' ? null : parseAmount(e.target.value) })}
                                 className={cn(inputCls, 'text-xs py-1.5', row.amount === null && 'border-amber-600/50')}
                               />
                             </div>
@@ -4233,6 +4244,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
   const create = useCreateFinanceConcept()
   const update = useUpdateFinanceConcept()
   const remove = useDeleteFinanceConcept()
+  const confirm = useConfirm()
 
   const [showNew, setShowNew] = useState(false)
   const [draft, setDraft] = useState<CreateFinanceConceptInput>({
@@ -4299,7 +4311,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
     update.mutate({ id: c.id, data: { is_active: c.is_active ? 0 : 1 } })
 
   const handleDelete = async (c: FinanceConcept) => {
-    if (!confirm(`¿Eliminar el concepto "${c.name}"? También se eliminarán sus movimientos cargados.`)) return
+    if (!await confirm({ message: `¿Eliminar el concepto "${c.name}"? También se eliminarán sus movimientos cargados.`, danger: true })) return
     await remove.mutateAsync(c.id)
   }
 
@@ -4355,7 +4367,7 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                 </div>
                 <div>
                   <label className={labelCls}>Monto habitual</label>
-                  <input type="number" value={draft.default_amount} onChange={e => setDraft(d => ({ ...d, default_amount: Number(e.target.value) || 0 }))} className={inputCls} />
+                  <input type="text" inputMode="decimal" value={draft.default_amount || ''} onChange={e => setDraft(d => ({ ...d, default_amount: parseAmount(e.target.value) || 0 }))} className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -4429,11 +4441,11 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Valor hora (jornal)</label>
-                    <input type="number" value={draft.hourly_rate ?? 0} onChange={e => setDraft(d => ({ ...d, hourly_rate: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                    <input type="text" inputMode="decimal" value={draft.hourly_rate || ''} onChange={e => setDraft(d => ({ ...d, hourly_rate: parseAmount(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
                   </div>
                   <div>
                     <label className={labelCls}>Viático por jornada</label>
-                    <input type="number" value={draft.viatic_amount ?? 0} onChange={e => setDraft(d => ({ ...d, viatic_amount: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                    <input type="text" inputMode="decimal" value={draft.viatic_amount || ''} onChange={e => setDraft(d => ({ ...d, viatic_amount: parseAmount(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500">Dejá en 0 si este concepto no se paga por horas. Si cargás un valor, al registrar una carga vas a poder tipear las horas y el monto se calcula solo (horas × valor + viático).</p>
@@ -4484,9 +4496,10 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                     <div>
                       <label className={labelCls}>Monto habitual</label>
                       <input
-                        type="number"
-                        value={editDraft.default_amount}
-                        onChange={e => setEditDraft(d => d && ({ ...d, default_amount: Number(e.target.value) || 0 }))}
+                        type="text"
+                        inputMode="decimal"
+                        value={editDraft.default_amount || ''}
+                        onChange={e => setEditDraft(d => d && ({ ...d, default_amount: parseAmount(e.target.value) || 0 }))}
                         className={inputCls}
                       />
                     </div>
@@ -4554,11 +4567,11 @@ function ConceptsManager({ onClose }: { onClose: () => void }) {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={labelCls}>Valor hora (jornal)</label>
-                        <input type="number" value={editDraft.hourly_rate ?? 0} onChange={e => setEditDraft(d => d && ({ ...d, hourly_rate: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                        <input type="text" inputMode="decimal" value={editDraft.hourly_rate || ''} onChange={e => setEditDraft(d => d && ({ ...d, hourly_rate: parseAmount(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
                       </div>
                       <div>
                         <label className={labelCls}>Viático por jornada</label>
-                        <input type="number" value={editDraft.viatic_amount ?? 0} onChange={e => setEditDraft(d => d && ({ ...d, viatic_amount: Number(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
+                        <input type="text" inputMode="decimal" value={editDraft.viatic_amount || ''} onChange={e => setEditDraft(d => d && ({ ...d, viatic_amount: parseAmount(e.target.value) || 0 }))} className={inputCls} placeholder="0" />
                       </div>
                     </div>
                     <p className="text-[10px] text-slate-500">Dejá en 0 si este concepto no se paga por horas. Si cargás un valor, al registrar una carga vas a poder tipear las horas y el monto se calcula solo.</p>
@@ -4670,6 +4683,7 @@ function CategoriesManager({ onClose }: { onClose: () => void }) {
   const create = useCreateFinanceCategory()
   const update = useUpdateFinanceCategory()
   const remove = useDeleteFinanceCategory()
+  const confirm = useConfirm()
 
   const [showNew, setShowNew] = useState(false)
   const [draft, setDraft] = useState<CreateFinanceCategoryInput>({ name: '', icon: '🏷️', color: '#6366f1' })
@@ -4701,7 +4715,7 @@ function CategoriesManager({ onClose }: { onClose: () => void }) {
         `(de cualquier mes y año), de forma permanente e irreversible.\n\n` +
         `¿Seguro que querés continuar?`
       : `¿Eliminar la categoría "${cat.name}"? Esta acción no se puede deshacer.`
-    if (!confirm(warning)) return
+    if (!await confirm({ message: warning, danger: true })) return
     await remove.mutateAsync(cat.id)
   }
 
@@ -4838,6 +4852,7 @@ function PaymentMethodsManager({ onClose }: { onClose: () => void }) {
   const create = useCreateFinancePaymentMethod()
   const update = useUpdateFinancePaymentMethod()
   const remove = useDeleteFinancePaymentMethod()
+  const confirm = useConfirm()
 
   const [showNew, setShowNew] = useState(false)
   const [draft, setDraft] = useState<CreateFinancePaymentMethodInput>({ name: '', icon: '💳', color: '#64748b' })
@@ -4873,7 +4888,7 @@ function PaymentMethodsManager({ onClose }: { onClose: () => void }) {
         `no se va a poder mostrar con su nombre ni elegir desde la lista.\n\n` +
         `¿Seguro que querés continuar?`
       : `¿Eliminar el método de pago "${method.name}"? Esta acción no se puede deshacer.`
-    if (!confirm(warning)) return
+    if (!await confirm({ message: warning, danger: true })) return
     await remove.mutateAsync(method.id)
   }
 
@@ -5572,6 +5587,7 @@ function HistoryView({ history, isLoading, range, onRangeChange, onSelectMonth, 
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
 export default function FinanceDashboard() {
+  const confirm = useConfirm()
   const [period, setPeriod] = useState(() => {
     const d = new Date()
     return { month: d.getMonth() + 1, year: d.getFullYear() }
@@ -5715,7 +5731,7 @@ export default function FinanceDashboard() {
   }
 
   const handleDelete = async (m: FinanceMovement) => {
-    if (!confirm(`¿Eliminar el movimiento "${m.concept?.name ?? ''}" de ${getMonthLabel(m.month, m.year)}?`)) return
+    if (!await confirm({ message: `¿Eliminar el movimiento "${m.concept?.name ?? ''}" de ${getMonthLabel(m.month, m.year)}?`, danger: true })) return
     await deleteMov.mutateAsync(m.id)
   }
 

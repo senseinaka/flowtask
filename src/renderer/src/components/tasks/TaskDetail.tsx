@@ -16,6 +16,7 @@ import { useAttachments, useAddAttachment, useDeleteAttachment } from '../../hoo
 import { useReminders, useCreateReminder, useDeleteReminder } from '../../hooks/useReminders'
 import { useTasks } from '../../hooks/useTasks'
 import { useContacts } from '../../hooks/useContacts'
+import { useUndoableDelete } from '../../hooks/useUndoableDelete'
 import PriorityBadge from './PriorityBadge'
 import StatusBadge from './StatusBadge'
 import DatePicker from '../ui/DatePicker'
@@ -59,11 +60,16 @@ export default function TaskDetail({ modal = false, onClose }: TaskDetailProps) 
   const [reminderMsg, setReminderMsg] = useState('')
   const [showContactPicker, setShowContactPicker] = useState(false)
 
+  const { deleteWithUndo: deleteTaskWithUndo } = useUndoableDelete(
+    (id: string) => deleteTask.mutateAsync(id),
+    { message: 'Tarea eliminada' }
+  )
+
   if (!selectedTaskId || !task) return null
 
-  const handleDelete = async () => {
-    if (!confirm(`¿Eliminar "${task.title}"?`)) return
-    await deleteTask.mutateAsync(task.id)
+  const handleDelete = () => {
+    handleClose()
+    deleteTaskWithUndo(task.id)
   }
 
   const handleStatusChange = (status: TaskStatus) => {

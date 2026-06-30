@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from '../../store/toast.store'
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { Node as TiptapNode, mergeAttributes } from '@tiptap/core'
@@ -222,7 +223,7 @@ const SLASH_COMMANDS: SlashCmd[] = [
     const url = prompt('URL de YouTube o Vimeo:')
     if (!url) return
     const embedUrl = toEmbedUrl(url)
-    if (!embedUrl) { alert('URL no reconocida. Usá youtube.com o vimeo.com.'); return }
+    if (!embedUrl) { toast.error('URL no reconocida. Usá youtube.com o vimeo.com.'); return }
     e.chain().focus().insertContent({ type: 'videoEmbed', attrs: { src: embedUrl } }).run()
   }},
 ]
