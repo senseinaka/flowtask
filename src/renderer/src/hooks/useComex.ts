@@ -917,11 +917,6 @@ export function useInalVeps(importId: string | null) {
     queryKey: ['comex-inal-veps', importId],
     queryFn: () => window.api.comex.inal.veps.list(importId!),
     enabled: !!importId,
-    refetchInterval: (query) => {
-      const data = query.state.data
-      if (Array.isArray(data) && data.some((v: import('@shared/types').ComexInalVep) => v.ai_status === 'processing')) return 2000
-      return false
-    }
   })
 }
 

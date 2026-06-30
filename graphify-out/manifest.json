@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782842174.553296,
-    "ast_hash": "9ad6906c1726372c63af1e101d73637c",
+    "mtime": 1782843990.852038,
+    "ast_hash": "deae5072ba6d9d4f44778f5608277658",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "src/preload/index.ts": {
-    "mtime": 1782841936.634652,
-    "ast_hash": "7606a5f5ce8b9a22da4d6a73c1fdd933",
+    "mtime": 1782844000.4053464,
+    "ast_hash": "e9b8b1190806561be9d039a92949fab6",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -740,8 +740,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782842080.1358085,
-    "ast_hash": "7a5ecb1bcf8062e748a271895f78d6f2",
+    "mtime": 1782844057.030453,
+    "ast_hash": "616a09d2be0c835601799afc2c25c470",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {

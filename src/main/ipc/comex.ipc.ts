@@ -181,6 +181,27 @@ async function _renameDriveFolder(proformaId: string): Promise<void> {
   } catch { /* non-critical */ }
 }
 
+function parseVepImporte(raw: string): number | null {
+  // Strip everything except digits, commas and periods
+  const s = raw.trim().replace(/[^0-9.,]/g, '')
+  if (!s) return null
+  // "100.888,33" — Argentine: period = thousands, comma = decimal
+  if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(s)) {
+    return parseFloat(s.replace(/\./g, '').replace(',', '.'))
+  }
+  // "100,888.33" — US: comma = thousands, period = decimal
+  if (/^\d{1,3}(,\d{3})+\.\d{1,2}$/.test(s)) {
+    return parseFloat(s.replace(/,/g, ''))
+  }
+  // "100888,33" — only comma as decimal
+  if (/^\d+,\d{1,2}$/.test(s)) {
+    return parseFloat(s.replace(',', '.'))
+  }
+  // "100888.33" or bare integer
+  const n = parseFloat(s)
+  return isNaN(n) || n <= 0 ? null : n
+}
+
 export function registerComexIpc(): void {
   // ── Suppliers ────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:suppliers:list',   ()          => listSuppliers())
@@ -847,20 +868,22 @@ export function registerComexIpc(): void {
       console.error('[INAL VEP] Drive upload error:', err)
     }
 
-    // AI extraction — fire and forget
-    analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' })
-      .then(result => {
-        const raw = result.content.trim().replace(',', '.')
-        const importe = parseFloat(raw)
-        if (!isNaN(importe) && importe > 0) {
-          updateInalVep(vep.id, { importe_total: importe, ai_status: 'done' }).catch(console.error)
-        } else {
-          updateInalVep(vep.id, { ai_status: 'error' }).catch(console.error)
-        }
-      })
-      .catch(() => {
-        updateInalVep(vep.id, { ai_status: 'error' }).catch(console.error)
-      })
+    // AI extraction — await inline so the result comes back with the upload response
+    let importeTotal: number | null = null
+    let aiStatus: 'done' | 'error' = 'error'
+    try {
+      const result = await analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' })
+      const parsed = parseVepImporte(result.content)
+      if (parsed !== null) {
+        importeTotal = parsed
+        aiStatus = 'done'
+      }
+    } catch (err) {
+      console.error('[INAL VEP] AI extraction error:', err)
+    }
+    const aiUpdate: Parameters<typeof updateInalVep>[1] = { ai_status: aiStatus }
+    if (importeTotal !== null) aiUpdate.importe_total = importeTotal
+    await updateInalVep(vep.id, aiUpdate)
 
     const fresh = await getInalVep(vep.id) ?? vep
     return { vep: fresh, vepFolderId: resolvedVepFolderId }
