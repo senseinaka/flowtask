@@ -8044,23 +8044,48 @@ function InalSection({
   const { data: veps = [] } = useInalVeps(showVeps ? imp.id : null)
   const uploadVep = useUploadInalVep(imp.id)
   const deleteVep = useDeleteInalVep(imp.id)
-  const [uploadingVep, setUploadingVep] = useState(false)
+
+  const [vepUploading, setVepUploading] = useState(false)
+  const [vepUploadProgress, setVepUploadProgress] = useState<{ current: number; total: number } | null>(null)
+  const [isDragOverVep, setIsDragOverVep] = useState(false)
+  const dragCounterVep = useRef(0)
 
   const vepTotal = veps.reduce((s, v) => s + (v.importe_total ?? 0), 0)
 
-  const handleSelectVep = async () => {
-    const filePath = await window.api.comex.inal.veps.selectFile()
-    if (!filePath) return
-    setUploadingVep(true)
+  const uploadVepFiles = async (filePaths: string[]) => {
+    if (!filePaths.length) return
+    setVepUploading(true)
+    setVepUploadProgress({ current: 0, total: filePaths.length })
+    let folderId = imp.inal_lc_cert_folder_id ?? null
     try {
-      await uploadVep.mutateAsync({
-        filePath,
-        importFolderId: imp.drive_folder_id ?? null,
-        vepFolderId: imp.inal_lc_cert_folder_id ?? null
-      })
+      for (let i = 0; i < filePaths.length; i++) {
+        setVepUploadProgress({ current: i + 1, total: filePaths.length })
+        const result = await uploadVep.mutateAsync({
+          filePath: filePaths[i],
+          importFolderId: imp.drive_folder_id ?? null,
+          vepFolderId: folderId
+        })
+        // Persist the folder ID returned so subsequent files land in the same folder
+        if (result.vepFolderId) folderId = result.vepFolderId
+      }
     } finally {
-      setUploadingVep(false)
+      setVepUploading(false)
+      setVepUploadProgress(null)
     }
+  }
+
+  const handleSelectVeps = async () => {
+    const filePaths = await window.api.comex.inal.veps.selectFiles()
+    await uploadVepFiles(filePaths)
+  }
+
+  const handleDropVep = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dragCounterVep.current = 0
+    setIsDragOverVep(false)
+    const files = Array.from(e.dataTransfer.files)
+    const paths = files.map(f => window.api.getPathForFile(f)).filter(Boolean) as string[]
+    await uploadVepFiles(paths)
   }
 
   // Effective ETA: last non-null in ETA4 → ETA3 → ETA2 → ETA1 → ETD
@@ -8470,18 +8495,51 @@ function InalSection({
                 )}
               </div>
 
-              <button
-                onClick={handleSelectVep}
-                disabled={uploadingVep}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-violet-500 text-xs text-slate-400 hover:text-violet-300 transition-colors disabled:opacity-50"
-              >
-                {uploadingVep ? (
-                  <><Loader2 size={12} className="animate-spin" /> Subiendo...</>
-                ) : (
-                  <><Plus size={12} /> Agregar comprobante VEP</>
+              {/* Drop zone */}
+              <div
+                onDragEnter={(e) => { e.preventDefault(); dragCounterVep.current++; setIsDragOverVep(true) }}
+                onDragOver={(e) => e.preventDefault()}
+                onDragLeave={() => { dragCounterVep.current--; if (dragCounterVep.current === 0) setIsDragOverVep(false) }}
+                onDrop={handleDropVep}
+                onClick={!vepUploading ? handleSelectVeps : undefined}
+                className={cn(
+                  'border-2 border-dashed rounded-lg px-4 py-5 flex flex-col items-center gap-1.5 transition-colors',
+                  vepUploading
+                    ? 'border-violet-600/50 bg-violet-900/10 cursor-default'
+                    : isDragOverVep
+                      ? 'border-violet-500 bg-violet-900/20 cursor-copy'
+                      : 'border-slate-600 hover:border-violet-500 hover:bg-violet-900/10 cursor-pointer'
                 )}
-              </button>
+              >
+                {vepUploading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-violet-400" />
+                    <p className="text-xs text-violet-300 font-medium">
+                      {vepUploadProgress
+                        ? `Subiendo ${vepUploadProgress.current} de ${vepUploadProgress.total}...`
+                        : 'Subiendo...'}
+                    </p>
+                  </>
+                ) : isDragOverVep ? (
+                  <>
+                    <Upload size={16} className="text-violet-400" />
+                    <p className="text-xs text-violet-300 font-medium">Soltar para subir</p>
+                  </>
+                ) : (
+                  <>
+                    <Receipt size={16} className="text-slate-500" />
+                    <p className="text-xs text-slate-400">
+                      Arrastrá uno o varios comprobantes VEP
+                    </p>
+                    <p className="text-[10px] text-slate-600">o hacé click para seleccionar</p>
+                    {imp.drive_folder_id && (
+                      <p className="text-[10px] text-slate-600 mt-0.5">Se subirán a la carpeta "VEP ANMAT" en Drive</p>
+                    )}
+                  </>
+                )}
+              </div>
 
+              {/* Lista de VEPs */}
               {veps.length > 0 && (
                 <div className="space-y-1">
                   {veps.map((vep: import('@shared/types').ComexInalVep) => (

@@ -793,17 +793,17 @@ export function registerComexIpc(): void {
   // ── INAL VEPs ─────────────────────────────────────────────────────────────
   ipcMain.handle('comex:inal:veps:list', (_e, importId: string) => listInalVeps(importId))
 
-  ipcMain.handle('comex:inal:veps:selectFile', async () => {
+  ipcMain.handle('comex:inal:veps:selectFiles', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win!, {
-      title: 'Seleccionar comprobante VEP ANMAT',
+      title: 'Seleccionar comprobantes VEP ANMAT',
       filters: [
         { name: 'PDF / Imagen', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
         { name: 'Todos', extensions: ['*'] }
       ],
-      properties: ['openFile']
+      properties: ['openFile', 'multiSelections']
     })
-    return result.canceled ? null : result.filePaths[0]
+    return result.canceled ? [] : result.filePaths
   })
 
   ipcMain.handle('comex:inal:veps:upload', async (

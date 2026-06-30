@@ -35,13 +35,13 @@
     "semantic_hash": ""
   },
   "src/main/database/migrations.ts": {
-    "mtime": 1782594824.3253186,
-    "ast_hash": "a4f6e2464cb9604f3b214e14d094d467",
+    "mtime": 1782841783.5492046,
+    "ast_hash": "5679ce73c3bee3a9c2f98fa2797e9b1a",
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782818271.0822709,
-    "ast_hash": "aea4b6eb3fe69778947d161b979ce050",
+    "mtime": 1782841804.419672,
+    "ast_hash": "3974b7407a173627845e7dfc480a4ced",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782778914.7126508,
-    "ast_hash": "47af35cb9c64695d799d834e4ecfaa28",
+    "mtime": 1782841852.654052,
+    "ast_hash": "060b3644344b762fd0af3c14e6332e76",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782778765.0121346,
-    "ast_hash": "4ac33d7bff252bc206bf5913189e91be",
+    "mtime": 1782842174.553296,
+    "ast_hash": "9ad6906c1726372c63af1e101d73637c",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
@@ -300,9 +300,9 @@
     "semantic_hash": "39494b9396cf38fd6336c9fee6b4d91b"
   },
   "src/main/services/ai.prompts.ts": {
-    "mtime": 1780515582.5417466,
-    "ast_hash": "4eab527d2ff216fe4a94b5fd6c8570be",
-    "semantic_hash": "4eab527d2ff216fe4a94b5fd6c8570be"
+    "mtime": 1782841827.1048875,
+    "ast_hash": "c3ee709ce6d3823f14969594ba196b22",
+    "semantic_hash": ""
   },
   "src/main/services/ai.service.ts": {
     "mtime": 1781135478.6671216,
@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "src/preload/index.ts": {
-    "mtime": 1782750011.9166086,
-    "ast_hash": "de255c0987e4f53691eb3019fc35ad92",
+    "mtime": 1782841936.634652,
+    "ast_hash": "7606a5f5ce8b9a22da4d6a73c1fdd933",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782792882.566479,
-    "ast_hash": "68bc452d2359c6a23a4f593b369f889c",
+    "mtime": 1782820970.2381434,
+    "ast_hash": "8cdb93dfba3b11c88ada52dc9077d8d0",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -560,8 +560,8 @@
     "semantic_hash": "51422174c1c6b3cac35c0ecca6d8329b"
   },
   "src/renderer/src/hooks/useComex.ts": {
-    "mtime": 1782570847.9675949,
-    "ast_hash": "48721e4772cc0e61ae001d80ed153aad",
+    "mtime": 1782841946.448462,
+    "ast_hash": "1b265449872e220ccaf62e61cccbf4c0",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCompanyFinance.ts": {
@@ -740,8 +740,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782793257.7716653,
-    "ast_hash": "6da7639629c0c36069dee0261eb21e9c",
+    "mtime": 1782842080.1358085,
+    "ast_hash": "7a5ecb1bcf8062e748a271895f78d6f2",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
@@ -810,8 +810,8 @@
     "semantic_hash": "1ecede1174ddc180485804ea51f4266d"
   },
   "src/renderer/src/routes/company-finance/CompanyFinanceDashboard.tsx": {
-    "mtime": 1782817952.6184182,
-    "ast_hash": "3b5de4e90320c35e8826363cc494c11b",
+    "mtime": 1782832542.9114525,
+    "ast_hash": "37a68527fd2c9a730dde97c792f6d4dd",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/ReconDashboard.tsx": {
@@ -850,8 +850,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/finance/FinanceDashboard.tsx": {
-    "mtime": 1782817878.8889065,
-    "ast_hash": "2985ed47b3cd90ae4e725f140597fea8",
+    "mtime": 1782832502.973417,
+    "ast_hash": "19ad12b3447e5e1e82ba4386afd00087",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/knowledge/KnowledgeDashboard.tsx": {
@@ -885,8 +885,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782779121.7308946,
-    "ast_hash": "f7f103992a63cfa74f43d3772b771edd",
+    "mtime": 1782841772.5837982,
+    "ast_hash": "718ed45cc9aa133ae41cc9baa8b2fabf",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -1270,8 +1270,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/home/HomeScreen.tsx": {
-    "mtime": 1782820535.471564,
-    "ast_hash": "2d450d6e5a081a24ac46410e4f1882cd",
+    "mtime": 1782821178.0712876,
+    "ast_hash": "f4bb1b621c56f75feb46667fe9fbf802",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/home/WallpaperSettingsModal.tsx": {
@@ -1507,6 +1507,11 @@
   "supabase_operators_pin_security.sql": {
     "mtime": 1782818325.8962104,
     "ast_hash": "c2445679eabc25814fd30babb9d538e9",
+    "semantic_hash": ""
+  },
+  "supabase_comex_inal_veps.sql": {
+    "mtime": 1782842472.6215653,
+    "ast_hash": "e5908fd91974924169d74825edf5ff2d",
     "semantic_hash": ""
   }
 }
