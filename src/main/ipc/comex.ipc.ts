@@ -202,6 +202,40 @@ function parseVepImporte(raw: string): number | null {
   return isNaN(n) || n <= 0 ? null : n
 }
 
+/** Promesa con timeout: si `p` no resuelve en `ms`, rechaza con un error claro.
+ *  Evita que un cuelgue de red (Drive/IA) deje el VEP en 'processing' para siempre. */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}: timeout tras ${ms}ms`)), ms)
+    )
+  ])
+}
+
+/** Resuelve (o crea una sola vez) la subcarpeta "VEP ANMAT" en Drive.
+ *  Deduplica con un cache de promesas por import: aunque entren varios uploads
+ *  casi a la vez, la carpeta se crea una única vez. */
+const vepFolderInFlight = new Map<string, Promise<string | null>>()
+async function resolveVepDriveFolder(importId: string, importFolderId: string | null): Promise<string | null> {
+  if (!importFolderId) return null
+  const imp = await getImport(importId)
+  if (imp?.inal_lc_cert_folder_id) return imp.inal_lc_cert_folder_id
+  let pending = vepFolderInFlight.get(importId)
+  if (!pending) {
+    pending = (async () => {
+      const id = await withTimeout(
+        driveService.createSubfolder('VEP ANMAT', importFolderId), 30_000, 'Drive crear carpeta'
+      )
+      await updateImport(importId, { inal_lc_cert_folder_id: id })
+      return id
+    })()
+    vepFolderInFlight.set(importId, pending)
+    void pending.catch(() => {}).finally(() => vepFolderInFlight.delete(importId))
+  }
+  return pending
+}
+
 export function registerComexIpc(): void {
   // ── Suppliers ────────────────────────────────────────────────────────────────
   ipcMain.handle('comex:suppliers:list',   ()          => listSuppliers())
@@ -849,34 +883,45 @@ export function registerComexIpc(): void {
       mime_type: mimeType
     })
 
-    // Drive upload
-    let resolvedVepFolderId = vepFolderId
-    try {
-      if (driveService.isAuthenticated()) {
-        if (!resolvedVepFolderId && importFolderId) {
-          resolvedVepFolderId = await driveService.createSubfolder('VEP ANMAT', importFolderId)
-          await updateImport(importId, { inal_lc_cert_folder_id: resolvedVepFolderId })
-        }
-        if (resolvedVepFolderId) {
-          await updateInalVep(vep.id, { drive_status: 'uploading' })
-          const driveFileId = await driveService.uploadFileToFolder(dest, resolvedVepFolderId, originalName, mimeType)
-          await updateInalVep(vep.id, { drive_file_id: driveFileId, drive_status: 'synced' })
-        }
-      }
-    } catch (err) {
-      await updateInalVep(vep.id, { drive_status: 'error' })
-      console.error('[INAL VEP] Drive upload error:', err)
-    }
-
-    // AI extraction EN BACKGROUND — el handler retorna ya (el VEP aparece
-    // al instante con ai_status='processing'); cuando la IA termina, el
-    // resultado se empuja al renderer vía 'comex:inal:veps:updated'.
+    // TODO el trabajo de red (Drive + IA) corre EN BACKGROUND. El handler
+    // retorna ya con el VEP en 'processing', así aparece al instante en la
+    // lista y el spinner de subida dura milisegundos. Cada cambio de estado
+    // se empuja al renderer vía 'comex:inal:veps:updated'. Con timeouts: si
+    // Drive o la IA se cuelgan, el VEP queda en 'error' visible, nunca girando.
     const sender = e.sender
+    const pushFresh = async (): Promise<void> => {
+      const fresh = await getInalVep(vep.id)
+      if (fresh && !sender.isDestroyed()) sender.send('comex:inal:veps:updated', fresh)
+    }
     void (async () => {
+      // ── Drive ──
+      try {
+        if (driveService.isAuthenticated()) {
+          const folderId = await resolveVepDriveFolder(importId, importFolderId)
+          if (folderId) {
+            await updateInalVep(vep.id, { drive_status: 'uploading' })
+            await pushFresh()
+            const driveFileId = await withTimeout(
+              driveService.uploadFileToFolder(dest, folderId, originalName, mimeType),
+              60_000, 'Drive subir archivo'
+            )
+            await updateInalVep(vep.id, { drive_file_id: driveFileId, drive_status: 'synced' })
+            await pushFresh()
+          }
+        }
+      } catch (err) {
+        await updateInalVep(vep.id, { drive_status: 'error' })
+        await pushFresh()
+        console.error('[INAL VEP] Drive upload error:', err)
+      }
+      // ── IA ──
       let importeTotal: number | null = null
       let aiStatus: 'done' | 'error' = 'error'
       try {
-        const result = await analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' })
+        const result = await withTimeout(
+          analyzeDocument({ filePath: dest, operation: 'extract_vep_anmat' }),
+          90_000, 'Extracción IA'
+        )
         const parsed = parseVepImporte(result.content)
         if (parsed !== null) {
           importeTotal = parsed
@@ -888,15 +933,11 @@ export function registerComexIpc(): void {
       const aiUpdate: Parameters<typeof updateInalVep>[1] = { ai_status: aiStatus }
       if (importeTotal !== null) aiUpdate.importe_total = importeTotal
       await updateInalVep(vep.id, aiUpdate)
-      const updated = await getInalVep(vep.id)
-      if (updated && !sender.isDestroyed()) {
-        sender.send('comex:inal:veps:updated', updated)
-      }
+      await pushFresh()
     })()
 
-    // VEP ya visible: Drive resuelto, ai_status sigue 'processing'
-    const fresh = await getInalVep(vep.id) ?? vep
-    return { vep: fresh, vepFolderId: resolvedVepFolderId }
+    // Retorna inmediato — VEP en 'processing', visible al instante
+    return { vep, vepFolderId }
   })
 
   ipcMain.handle('comex:inal:veps:delete', async (_e, vepId: string) => {
