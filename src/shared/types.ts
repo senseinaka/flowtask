@@ -494,13 +494,12 @@ export function normalizeLegacyStatus(status: string): ImportStatus {
 // son dos campos independientes: una operación puede tener la carga armada Y
 // el forwarder sin cotizar todavía, o al revés — ver isReadyToShip() más abajo.
 
-export type CargoStatus = 'en_armado' | 'carga_armada' | 'esperando_embarque'
+export type CargoStatus = 'en_armado' | 'carga_armada'
 export type ForwarderStatus = 'sin_cotizar' | 'cotizacion_pedida' | 'cotizacion_recibida' | 'forwarder_seleccionado'
 
 export const CARGO_STATUS_LABELS: Record<CargoStatus, string> = {
-  en_armado:          'Carga en armado',
-  carga_armada:       'Carga armada',
-  esperando_embarque: 'Esperando embarque'
+  en_armado:    'Carga en armado',
+  carga_armada: 'Carga armada'
 }
 
 export const FORWARDER_STATUS_LABELS: Record<ForwarderStatus, string> = {
@@ -521,12 +520,11 @@ export function deriveLegacyCargoStatus(
   cargaArmadaDate: number | null,
   esperandoEmbarcarDate: number | null
 ): CargoStatus {
-  if (esperandoEmbarcarDate) return 'esperando_embarque'
-  if (cargaArmadaDate) return 'carga_armada'
-  if (status === 'carga_armada' || status === 'esperando_embarcar') return status === 'carga_armada' ? 'carga_armada' : 'esperando_embarque'
+  if (cargaArmadaDate || esperandoEmbarcarDate) return 'carga_armada'
+  if (status === 'carga_armada' || status === 'esperando_embarcar') return 'carga_armada'
   // Si el status ya avanzó más allá de la preparación, la carga tuvo que haber estado lista.
   const past: string[] = ['shipped', 'transit', 'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered']
-  if (past.includes(status)) return 'esperando_embarque'
+  if (past.includes(status)) return 'carga_armada'
   return 'en_armado'
 }
 
@@ -549,7 +547,7 @@ export function isReadyToShip(imp: {
   payment_terms: string | null
   payment_date: number | null
 }): boolean {
-  const cargoReady = imp.cargo_status === 'carga_armada' || imp.cargo_status === 'esperando_embarque'
+  const cargoReady = imp.cargo_status === 'carga_armada'
   const forwarderReady = imp.forwarder_status === 'forwarder_seleccionado'
   const paymentReady = imp.payment_terms !== 'anticipado' || imp.payment_date != null
   return cargoReady && forwarderReady && paymentReady

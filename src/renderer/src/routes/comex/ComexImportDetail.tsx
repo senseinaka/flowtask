@@ -7127,7 +7127,7 @@ export default function ComexImportDetail() {
           <EditableDate label="ETD — Fecha salida estimada" value={imp.ship_date}    onSave={(v) => upd({ ship_date: v })} />
         </div>
 
-        {/* Row 4b: Fechas del depósito del proveedor */}
+        {/* Row 4b: Fecha del depósito del proveedor */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <EditableDate
@@ -7136,14 +7136,6 @@ export default function ComexImportDetail() {
               onSave={(v) => upd({ carga_armada_date: v, ...(v ? { cargo_status: 'carga_armada' as CargoStatus } : {}) })}
             />
             <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza Estado de carga a "Carga armada"</p>
-          </div>
-          <div>
-            <EditableDate
-              label="En terminal / Esperando embarque"
-              value={imp.esperando_embarcar_date}
-              onSave={(v) => upd({ esperando_embarcar_date: v, ...(v ? { cargo_status: 'esperando_embarque' as CargoStatus } : {}) })}
-            />
-            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza Estado de carga a "Esperando embarque"</p>
           </div>
         </div>
 

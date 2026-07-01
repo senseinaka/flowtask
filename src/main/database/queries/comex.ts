@@ -224,8 +224,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
        estimated_value, actual_value, order_date, payment_date, ship_date,
        arrival_date, eta_2, eta_3, eta_4,
        actual_ship_date, actual_arrival_date, tracking_number,
-       customs_agent, drive_folder_id, notes, created_at, updated_at, workspace_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       customs_agent, drive_folder_id, notes, cargo_status, forwarder_status,
+       created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, input.title, input.supplier_id ?? null,
     input.status ?? 'planning', input.incoterm ?? 'FOB',
@@ -236,7 +237,14 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
     input.eta_2 ?? null, input.eta_3 ?? null, input.eta_4 ?? null,
     input.actual_ship_date ?? null, input.actual_arrival_date ?? null,
     input.tracking_number ?? '', input.customs_agent ?? '',
-    input.drive_folder_id ?? null, input.notes ?? '', now, now, WORKSPACE_ID
+    input.drive_folder_id ?? null, input.notes ?? '',
+    // Valores iniciales explícitos: sin esto, cargo_status/forwarder_status quedan
+    // NULL hasta el primer click y se re-derivan en cada lectura a partir de
+    // `status`/fechas (deriveLegacyCargoStatus/deriveLegacyForwarderStatus) — esa
+    // derivación reacciona a cambios de OTROS campos (ej. el dropdown "Estado"),
+    // lo que hacía parecer que elegir un valor en una rama modificaba la otra.
+    'en_armado', 'sin_cotizar',
+    now, now, WORKSPACE_ID
   ])
   return (await getImport(id))!
 }

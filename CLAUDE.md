@@ -781,6 +781,8 @@ Saga al sumar las 10 tablas `cash_*` (Cajas Internas). Varias causas **independi
 
    **Recurrencia (jul 2026):** volvió a aparecer, esta vez como `malformed database schema (ps_data__comex_inal_veps__workspace) - no such table: main.ps_data__comex_inal_veps` — una vista local rota de una sola tabla (`comex_inal_veps`) **rompe TODAS las lecturas de `powersync.db`**, no solo esa tabla (SQLite necesita cargar el schema completo antes de correr cualquier query; confirmado porque hasta `projects:list`, sin relación con VEPs, fallaba con el mismo error). Diagnóstico posible incluso con la corrupción activa porque el error es reproducible con una lectura read-only trivial (`SELECT 1 FROM sqlite_master`) — si ESO falla, es corrupción de schema, no un problema de conexión. Recuperación: mismo procedimiento (borrar `powersync.db`, reiniciar, dejar reconstruir). Al recrearse trajo la migración legacy de vuelta (606 filas a `ps_crud`, ver punto 3) y destapó un caso nuevo: `SKIP PUT tasks/... -> 403/42501 "new row violates row-level security policy for table sync_conflicts"` — un trigger de conflicto en `tasks` intenta loguear a `sync_conflicts` y ese insert no tiene policy/GRANT para `authenticated`. Se saltea solo (no traba la cola) pero esa fila puntual no sube hasta que se arregle el RLS de `sync_conflicts` — pendiente, no urgente.
 
+   **Recurrencia #2 (jul 2026) — causa raíz identificada:** esta vez el síntoma fue distinto, `PRAGMA integrity_check` devolvía directamente `database disk image is malformed` (corrupción física de páginas, no de una vista) en vez del error de "malformed database schema" de arriba. Ocurrió inmediatamente después de matar el árbol de Electron con `taskkill /T /F` para forzar un reinicio en caliente (picking up cambios de main process) — muy probablemente lo mató en medio de un checkpoint del WAL de `powersync.db`. **Lección: `taskkill /F` sobre el proceso mientras PowerSync puede estar escribiendo es en sí mismo un vector de corrupción**, no solo una casualidad de timing. Recuperación: igual que siempre (matar todo, borrar `powersync.db`, sin `-wal`/`-shm` — no existían en este caso, ya estaban checkpointeados en el archivo principal corrupto —, `npm run dev`, dejar drenar `ps_crud`). Nota aparte: `rm` sobre el archivo no siempre se refleja al instante en un `ls` inmediatamente posterior en este entorno (Windows + Git Bash) — confirmar con `stat` antes de asumir que falló.
+
 ### Fix: VEP ANMAT con spinner infinito + 22 tablas Comex con escritura descartada en silencio (resuelto — junio 2026)
 
 **Síntoma:** al subir un comprobante VEP, la UI quedaba girando indefinidamente sin error visible. Tras descartar proceso colgado (sí era un factor real, pero secundario — ver más abajo), la causa de fondo apareció solo en la consola de `npm run dev`: `[PowerSync] SKIP PUT comex_inal_veps/... -> 403/42501. "new row violates row-level security policy"`.
@@ -914,7 +916,7 @@ secuencia falsa (una operación no podía tener progreso de carga Y de forwarder
 mismo tiempo, porque `status` solo puede valer una cosa). Se separó en dos campos
 independientes:
 
-- `cargo_status: CargoStatus | null` — `'en_armado' | 'carga_armada' | 'esperando_embarque'`
+- `cargo_status: CargoStatus | null` — `'en_armado' | 'carga_armada'` (se sacó `'esperando_embarque'` como estado propio — jul 2026)
 - `forwarder_status: ForwarderStatus | null` — `'sin_cotizar' | 'cotizacion_pedida' | 'cotizacion_recibida' | 'forwarder_seleccionado'`
 
 Ambos son columnas PowerSync nuevas en `comex_imports` (no requirieron migración de
@@ -938,8 +940,8 @@ por separado (`upd({ cargo_status: s })` / `upd({ forwarder_status: s })`).
 
 ### Auto-transición real (no solo visual)
 
-Cuando ambas ramas llegan a su estado final (`cargo_status` ∈ {`carga_armada`,
-`esperando_embarque`} **y** `forwarder_status === 'forwarder_seleccionado'`, y el pago
+Cuando ambas ramas llegan a su estado final (`cargo_status === 'carga_armada'`
+**y** `forwarder_status === 'forwarder_seleccionado'`, y el pago
 está resuelto si `payment_terms === 'anticipado'`), el `useEffect` de auto-transición
 (~línea 6727 de `ComexImportDetail.tsx`) mueve `status` de `preparacion_embarque` a
 `listo_para_embarcar` automáticamente — es un valor real guardado, no un overlay
@@ -962,6 +964,22 @@ Para agregar un estado nuevo a alguna de las dos ramas: agregar el valor a
 `CargoStatus`/`ForwarderStatus` + su label en `CARGO_STATUS_LABELS`/
 `FORWARDER_STATUS_LABELS` (`shared/types.ts`) — `CARGO_STEPS`/`FORWARDER_STEPS` en
 `ComexImportDetail.tsx` se derivan con `Object.keys(...)`, no hace falta tocarlos.
+
+### Fix: las ramas parecían no ser independientes (resuelto — jul 2026)
+
+Reporte: "al elegir algunos campos, cambian otros" en el popover de carga/forwarder.
+Causa real: `createImport()` no seteaba `cargo_status`/`forwarder_status` en el INSERT,
+así que en TODA importación nueva ambas columnas quedaban `NULL` hasta el primer click.
+Con `NULL`, `hydrateImport()` cae en `deriveLegacyCargoStatus()` /
+`deriveLegacyForwarderStatus()` **en cada lectura**, que derivan un valor a partir de
+`status` (y fechas) — no de un valor propio guardado. Si el campo nunca fue tocado y
+`status` cambiaba por otro motivo (el dropdown "Estado", una auto-transición, etc.), el
+valor derivado podía saltar sin que el usuario hubiera tocado esa rama, dando la
+sensación de que "elegir una cosa cambiaba otra". Fix: `createImport()` ahora inserta
+`cargo_status='en_armado'`, `forwarder_status='sin_cotizar'` explícitos desde el alta —
+a partir de ahí ambos campos son siempre reales, nunca se re-derivan. La derivación
+legacy queda solo como red de contención para filas creadas antes de este fix (se
+autocura la primera vez que se toca cada rama desde el popover).
 
 ---
 
