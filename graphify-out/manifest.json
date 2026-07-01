@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782931990.3638422,
-    "ast_hash": "cedd617f73e2ca659ee74201ec83925f",
+    "mtime": 1782946862.1013656,
+    "ast_hash": "71eab1509168c30c941f15cde9387a6e",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782944797.3174784,
-    "ast_hash": "8a48786ced086fa57666149ec4535787",
+    "mtime": 1782946459.129905,
+    "ast_hash": "6c34ffb60e7d97d5daac96c59493a497",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782944906.2448444,
-    "ast_hash": "5f9202bcd77f849c0d6297a01937c7e7",
+    "mtime": 1782946528.8204136,
+    "ast_hash": "2a05e273355e8adf541716a1a4a81c18",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {

@@ -978,7 +978,7 @@ Para agregar un estado nuevo a alguna de las dos ramas: agregar el valor a
 `FORWARDER_STATUS_LABELS` (`shared/types.ts`) — `CARGO_STEPS`/`FORWARDER_STEPS` en
 `ComexImportDetail.tsx` se derivan con `Object.keys(...)`, no hace falta tocarlos.
 
-### Fix: las ramas parecían no ser independientes (resuelto de verdad — jul 2026, tercer intento)
+### Fix: las ramas parecían no ser independientes (resuelto de verdad — jul 2026, cuarto intento)
 
 Reporte: "al elegir algunos campos, cambian otros" en el popover de carga/forwarder —
 confirmado real (no percepción), reproducible en cualquiera de las 15 importaciones
@@ -1016,25 +1016,55 @@ línea). El agente de la hipótesis de "condición de carrera" fue el que dio co
 real, y la probó cargando la extensión nativa de PowerSync (`powersync_x64.dll`) contra
 una copia de la DB real para confirmar el mecanismo exacto del `UPDATE` en cascada.
 
-**Fix real (esta vez sí):**
+**Intento #3 (arregló el mecanismo, pero no la persistencia real):**
 1. Se sacó por completo la escritura de `hydrateImport()` — vuelve a ser una función de
    lectura pura, deriva un valor de respaldo SOLO para mostrar, nunca escribe nada. Una
    función de lectura no debe tener side-effects de escritura — esa es la regla que se
    violó en el intento #2.
-2. El backfill real vive ahora en `backfillComexCargoForwarderStatus()`
+2. El backfill se movió a `backfillComexCargoForwarderStatus()`
    (`src/main/database/powersync.ts`), una migración explícita y única que corre en la
    secuencia de conexión (junto a `migrateLegacyComexImportsData`, etc.), no como
-   side-effect de un GET cualquiera. Es idempotente por el propio `WHERE cargo_status IS
-   NULL OR forwarder_status IS NULL` — en runs posteriores, si ya no hay filas que
-   cumplan esa condición, no hace nada.
-3. `createImport()` sigue con los defaults explícitos del intento #1 (correcto, se
-   mantiene) — las importaciones nuevas nunca dependen de ninguna derivación.
+   side-effect de un GET cualquiera. Idempotente por `WHERE cargo_status IS NULL OR
+   forwarder_status IS NULL`.
+3. `createImport()` se dejó con los defaults explícitos del intento #1.
 
-**Moraleja para la próxima vez que algo similar pase:** una función de lectura
-(`hydrateImport`, `getX`, `listX`) NUNCA debe escribir en la base como side-effect,
-por más "inofensivo" o "autocurativo" que parezca — si hace falta persistir un valor
-derivado de datos legacy, que sea una migración explícita, en un momento controlado
-(conexión/login), nunca lazy dentro del hot path de lectura.
+Este intento arregló el problema estructural (write-en-read), pero **el bug seguía
+reproduciéndose** — con el agravante de que ahora ni siquiera el backfill explícito
+persistía: el `UPDATE` reportaba éxito, una lectura inmediata en la MISMA conexión
+mostraba el valor correcto recién escrito... pero una lectura externa (otra conexión,
+incluso después de cerrar la app *gracefully* con checkpoint y backup completos) seguía
+viendo `NULL`. Es decir, el valor nunca llegaba a persistir de verdad en el archivo,
+ni con la conexión propia de la app.
+
+**Causa raíz real, la de siempre en este proyecto — DDL faltante en Supabase:**
+`cargo_status`/`forwarder_status` se agregaron al schema LOCAL de PowerSync
+(`powersync.ts`, `Table()`) pero **nunca se corrió el `ALTER TABLE` correspondiente en
+Supabase**. Mecanismo exacto: la escritura local sube a `ps_crud`, se intenta subir a
+Supabase, la tabla no tiene esas columnas → PGRST204 ("columna no existe") → el
+connector las descarta en silencio y sube el resto (mismo patrón ya documentado para
+`payment_notes`, columna que **también** le falta a `comex_imports` — señal de que esta
+tabla viene arrastrando desincronización de schema hace un tiempo). El upload "exitoso"
+(con el campo baneado) limpia la entrada de `ps_crud` — y en la sincronización
+siguiente, el servidor devuelve su versión de la fila, que nunca tuvo esas columnas,
+pisando el valor local. Todo esto pasa lo bastante rápido como para que ni un cierre
+"gracefully" de la app alcance a ganarle.
+
+Fix: `supabase_comex_cargo_forwarder_status.sql` — `ALTER TABLE comex_imports ADD
+COLUMN IF NOT EXISTS cargo_status text, ADD COLUMN IF NOT EXISTS forwarder_status
+text;`. **Pendiente de que el usuario lo corra en Supabase > SQL Editor** — sin esto,
+ningún intento de fix en el código de la app puede funcionar, sin importar qué tan bien
+esté escrito.
+
+**Moraleja para la próxima vez que algo similar pase — dos lecciones, no una:**
+1. Una función de lectura (`hydrateImport`, `getX`, `listX`) NUNCA debe escribir en la
+   base como side-effect, por más "inofensivo" o "autocurativo" que parezca.
+2. **Antes de gastar horas debuggeando "por qué no persiste", verificar primero que la
+   columna exista en Supabase.** Si algo se escribe bien localmente, se lee bien dentro
+   de la misma conexión, pero desaparece en cualquier lectura externa o tras un reinicio
+   — sospechar SIEMPRE de un DDL faltante en el servidor antes que de una condición de
+   carrera o un bug del ORM/SDK local. El checklist ya existente ("Reglas al crear una
+   tabla sincronizada nueva") aplica igual de fuerte a *agregar una columna* a una tabla
+   que ya existe — no es solo para tablas nuevas.
 
 ---
 

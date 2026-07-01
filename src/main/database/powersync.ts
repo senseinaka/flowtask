@@ -2323,11 +2323,7 @@ async function backfillComexCargoForwarderStatus(psDb: PowerSyncDatabase): Promi
       vals.push(deriveLegacyForwarderStatus(row.status))
     }
     vals.push(row.id)
-    const result = await psDb.execute(`UPDATE comex_imports SET ${sets.join(', ')} WHERE id = ?`, vals)
-    const check = await psDb.getOptional<{ cargo_status: string | null; forwarder_status: string | null }>(
-      'SELECT cargo_status, forwarder_status FROM comex_imports WHERE id = ?', [row.id]
-    )
-    console.log(`[PowerSync] Backfill ${row.id}: rowsAffected=${result.rowsAffected} → verificación inmediata:`, check)
+    await psDb.execute(`UPDATE comex_imports SET ${sets.join(', ')} WHERE id = ?`, vals)
   }
   console.log(`[PowerSync] Backfill cargo_status/forwarder_status: ${rows.length} filas`)
 }

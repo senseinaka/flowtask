@@ -602,13 +602,11 @@ function PreparacionEmbarqueNode({ imp, mainDone, mainActive, idx, onUpdateCargo
   const forwarderStatus = imp.forwarder_status ?? 'sin_cotizar'
   const cargoIdx        = CARGO_STEPS.indexOf(cargoStatus)
   const forwarderIdx    = FORWARDER_STEPS.indexOf(forwarderStatus)
-  const cargoBranchDone     = cargoIdx >= CARGO_STEPS.length - 1
-  const forwarderBranchDone = forwarderIdx >= FORWARDER_STEPS.length - 1
 
   return (
     <div
       ref={containerRef}
-      className="relative z-10 flex flex-col items-center flex-1 gap-1"
+      className="relative z-10 flex flex-col items-center flex-1 min-w-0 gap-1"
     >
       {/* Botón principal — toggle del panel */}
       <button
@@ -642,38 +640,22 @@ function PreparacionEmbarqueNode({ imp, mainDone, mainActive, idx, onUpdateCargo
           )}
         </div>
 
-        {/* Label fijo — el detalle de cada rama vive en el popover */}
-        <div className="flex flex-col items-center gap-0">
-          {['Preparación', 'embarque'].map((line, i) => (
-            <span
-              key={i}
-              className={cn(
-                'text-[8px] leading-tight text-center transition-colors',
-                mainActive ? 'font-bold' : mainDone ? '' : 'text-slate-600 group-hover:text-slate-400'
-              )}
-              style={mainActive || mainDone ? { color: mainColor } : {}}
-            >
-              {line}
-            </span>
-          ))}
-        </div>
-
-        {/* Puntos de rama — avance de carga y forwarder de un vistazo */}
-        <div className="flex items-center gap-1">
+        {/* Estado real de cada rama — una línea entera por rama, sin partir palabras.
+            Absolute para que el ancho del texto no empuje el layout del timeline: el
+            texto puede pisar el espacio libre de los nodos vecinos, hay margen de sobra. */}
+        <div className="relative w-full" style={{ height: '22px' }}>
           <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{
-              backgroundColor: cargoBranchDone ? CARGO_COLOR : CARGO_COLOR + '33',
-              border: `1px solid ${CARGO_COLOR}`
-            }}
-          />
+            className="absolute left-1/2 top-0 -translate-x-1/2 text-[8px] font-medium leading-tight whitespace-nowrap"
+            style={{ color: CARGO_COLOR }}
+          >
+            {CARGO_STATUS_LABELS[cargoStatus]}
+          </span>
           <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{
-              backgroundColor: forwarderBranchDone ? FORWARDER_COLOR : FORWARDER_COLOR + '33',
-              border: `1px solid ${FORWARDER_COLOR}`
-            }}
-          />
+            className="absolute left-1/2 top-[11px] -translate-x-1/2 text-[8px] font-medium leading-tight whitespace-nowrap"
+            style={{ color: FORWARDER_COLOR }}
+          >
+            {FORWARDER_STATUS_LABELS[forwarderStatus]}
+          </span>
         </div>
 
         <ChevronDown
