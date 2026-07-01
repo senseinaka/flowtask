@@ -97,6 +97,9 @@ import {
 import type { AIAnalysisResult, ExtractedDespacho, ExtractedFactura } from '@shared/types'
 
 const ALL_STATUSES = Object.keys(IMPORT_STATUS_LABELS) as ImportStatus[]
+// 'listo_para_embarcar' es un estado derivado (carga armada + forwarder seleccionado,
+// ver isReadyToShip) — nunca se elige a mano, solo lo setea el auto-avance.
+const MANUALLY_SELECTABLE_STATUSES = ALL_STATUSES.filter((s) => s !== 'listo_para_embarcar')
 const CURRENCIES = ['USD', 'EUR', 'CNY', 'GBP', 'JPY']   // for quotes/payments
 const IMPORT_CURRENCIES = ['USD', 'EUR']                  // for import's own currency
 
@@ -6920,7 +6923,7 @@ export default function ComexImportDetail() {
               <ChevronDown size={12} />
             </button>
             <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 hidden group-hover:block min-w-[180px]">
-              {ALL_STATUSES.map((s) => (
+              {MANUALLY_SELECTABLE_STATUSES.map((s) => (
                 <button
                   key={s}
                   onClick={() => upd({ status: s })}
@@ -7032,7 +7035,7 @@ export default function ComexImportDetail() {
           <EditableSelect
             label="Estado"
             value={imp.status as ImportStatus}
-            options={ALL_STATUSES.map((s) => ({ value: s, label: IMPORT_STATUS_LABELS[s] }))}
+            options={MANUALLY_SELECTABLE_STATUSES.map((s) => ({ value: s, label: IMPORT_STATUS_LABELS[s] }))}
             onChange={(v) => upd({ status: v })}
           />
           <EditableSelect

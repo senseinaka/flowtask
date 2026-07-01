@@ -947,6 +947,17 @@ está resuelto si `payment_terms === 'anticipado'`), el `useEffect` de auto-tran
 `listo_para_embarcar` automáticamente — es un valor real guardado, no un overlay
 calculado. La condición vive en `isReadyToShip()` (`shared/types.ts`).
 
+**`'listo_para_embarcar'` NO es seleccionable a mano.** Es un estado derivado por
+diseño (spec original: "operation_ready_to_ship... como función derivada, no
+seteada manualmente") — si se deja en las listas de opciones del dropdown "Cambiar
+estado" o del `EditableSelect` "Estado", un click manual puede dejar la operación
+en "Listo para embarcar" sin que las dos ramas estén realmente completas (bug real
+detectado jul 2026). Fix: `MANUALLY_SELECTABLE_STATUSES` (`ComexImportDetail.tsx`,
+justo después de `ALL_STATUSES`) filtra ese valor antes de armar las opciones de
+ambos selectores — `ALL_STATUSES` sigue existiendo sin filtrar solo para labels/
+colores genéricos (`IMPORT_STATUS_LABELS[s]`, etc.), nunca para poblar un `<select>`
+de estado.
+
 ### Compatibilidad con operaciones existentes
 
 `ImportStatus` eliminó los 6 valores legacy (`production`, `carga_armada`,
