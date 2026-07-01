@@ -779,6 +779,8 @@ Saga al sumar las 10 tablas `cash_*` (Cajas Internas). Varias causas **independi
 
 4. **`CORRUPT_INDEX` en la transición de iteración de sync-rules.** Al redeployar las sync-rules, PowerSync pasa de una iteración a la siguiente (ej. `11#global` → `12#global`) y reconstruye su estado interno; apareció `powersync_control: internal SQLite call returned CORRUPT_INDEX`. **Lección dura: NUNCA manipular `powersync.db` con Python** (ni `.backup()`, ni consolidar `-wal`/`-shm`). El SQLite de Python es de otra versión que la nativa de PowerSync y **corrompe los índices** que PowerSync espera. Para inspección, abrir SIEMPRE read-only (`mode=ro&immutable=1`); para escribir/recuperar, que lo haga la app. Recuperación: borrar `powersync.db` (+`-wal`/`-shm`) y dejar que la app lo reconstruya desde Supabase (con `ps_crud` ya drenado).
 
+   **Recurrencia (jul 2026):** volvió a aparecer, esta vez como `malformed database schema (ps_data__comex_inal_veps__workspace) - no such table: main.ps_data__comex_inal_veps` — una vista local rota de una sola tabla (`comex_inal_veps`) **rompe TODAS las lecturas de `powersync.db`**, no solo esa tabla (SQLite necesita cargar el schema completo antes de correr cualquier query; confirmado porque hasta `projects:list`, sin relación con VEPs, fallaba con el mismo error). Diagnóstico posible incluso con la corrupción activa porque el error es reproducible con una lectura read-only trivial (`SELECT 1 FROM sqlite_master`) — si ESO falla, es corrupción de schema, no un problema de conexión. Recuperación: mismo procedimiento (borrar `powersync.db`, reiniciar, dejar reconstruir). Al recrearse trajo la migración legacy de vuelta (606 filas a `ps_crud`, ver punto 3) y destapó un caso nuevo: `SKIP PUT tasks/... -> 403/42501 "new row violates row-level security policy for table sync_conflicts"` — un trigger de conflicto en `tasks` intenta loguear a `sync_conflicts` y ese insert no tiene policy/GRANT para `authenticated`. Se saltea solo (no traba la cola) pero esa fila puntual no sube hasta que se arregle el RLS de `sync_conflicts` — pendiente, no urgente.
+
 ### Fix: VEP ANMAT con spinner infinito + 22 tablas Comex con escritura descartada en silencio (resuelto — junio 2026)
 
 **Síntoma:** al subir un comprobante VEP, la UI quedaba girando indefinidamente sin error visible. Tras descartar proceso colgado (sí era un factor real, pero secundario — ver más abajo), la causa de fondo apareció solo en la consola de `npm run dev`: `[PowerSync] SKIP PUT comex_inal_veps/... -> 403/42501. "new row violates row-level security policy"`.
@@ -1762,6 +1764,31 @@ cuando exista la vista web de Etapa 3, y además se ve mejor si la ventana de El
 
 **Pendiente en Supabase:** correr `supabase_maintenance_tables.sql` (crea las 6 tablas + seed de categorías/ubicaciones)
 y agregar las 6 líneas de sync-rules en el dashboard de PowerSync (están al final del archivo .sql).
+
+### Round 2 de UX (junio 2026) — sin cambios de schema
+
+Pedido del usuario tras probar Etapa 1: miniaturas reales (hasta entonces solo se veía un ícono genérico),
+soporte de video, quién reporta la tarea, administrador de categorías/ubicaciones, modal de tarea más grande,
+y salida con guardado inteligente en el detalle. Los 6 puntos se resolvieron **sin ninguna migración de
+Supabase** — todo con JOINs, columnas hidratadas en la query, y una convención de nombres de archivo:
+
+- **Miniaturas + video:** `drive.service.ts` tiene `downloadFileBuffer()`; IPC nuevo
+  `maintenance:photos:getDataUrl(driveFileId, originalName)` cachea a disco en
+  `%APPDATA%/flowtask/maintenance-media/` (mismo patrón que `rrhh-fotos`) y devuelve un data URL. No hay
+  columna de "tipo" — se infiere si es video por extensión con `isMaintenanceVideoFile()` (`shared/types.ts`).
+  Límite de 100MB por archivo (`MAX_ATTACHMENT_BYTES` en `maintenance.ipc.ts`) para no colgar el data URL.
+- **Reportante:** `TASK_SELECT_BASE` en `queries/maintenance.ts` hace `LEFT JOIN user_profiles` y expone
+  `created_by_name` — el dato (`created_by`) ya se guardaba desde Etapa 1, solo faltaba mostrarlo.
+- **Catálogos:** pantalla nueva `MaintenanceCatalogs.tsx` (ruta `/mantenimiento/catalogos`, accesible desde
+  el Sidebar y desde un ícono en el Dashboard) usando el CRUD de categorías/ubicaciones que ya existía desde
+  Etapa 1 (solo faltaba la UI). Los 10 estados se muestran ahí como referencia, **no editables** — tienen
+  lógica de negocio atada (`closed_at`, colores, etc.); convertirlos en catálogo libre queda fuera de alcance.
+- **Detalle de tarea:** pasó de página de ancho completo a modal flotante real (mismo patrón visual que
+  `MaintenanceTaskFormModal`), con click-afuera/Escape/flecha-atrás todos ruteados a un único
+  `handleAttemptClose()` que autoguarda nota o avance pendiente antes de salir, y una barra inferior con
+  "Guardar cambios y salir" / "Salir" según haya cambios sin confirmar.
+- Construido con 4 agentes en paralelo (Card, FormModal, Detail, Catálogos) sobre un contrato ya fijado a
+  mano (tipos + IPC + hooks), mismo patrón que la Etapa 1 original.
 
 ---
 

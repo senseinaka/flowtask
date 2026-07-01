@@ -563,6 +563,9 @@ export default function Sidebar() {
               {canRead('maintenance') && (
                 <PanelLink to="/mantenimiento" icon={Wrench} label="Dashboard" end color="#818cf8" onClick={close} />
               )}
+              {canRead('maintenance') && (
+                <PanelLink to="/mantenimiento/catalogos" icon={Settings} label="Catálogos" color="#818cf8" onClick={close} />
+              )}
               <GroupLabel label="NAKA" color="#818cf8" />
               {canRead('maintenance') && (
                 <PanelLink to="/mantenimiento/naka" icon={Wrench} label="Tareas Naka" color="#818cf8" onClick={close} />

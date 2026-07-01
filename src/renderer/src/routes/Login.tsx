@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Loader2, LogIn, Mail } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Loader2, LogIn, Mail, Lock } from 'lucide-react'
 import type { AuthSession } from '@shared/types'
 import { Input, Button, Card } from '../components/ui'
 
@@ -12,6 +12,11 @@ export default function Login({ onSuccess }: LoginProps) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    window.api.app.getVersion().then(setVersion).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -67,8 +72,13 @@ export default function Login({ onSuccess }: LoginProps) {
                 <rect x="29" y="11" width="8" height="29" rx="2.5" fill="#2bd0ef" />
               </svg>
             </span>
-            <h1 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-strong)' }}>
+            <h1 style={{ margin: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-strong)' }}>
               Summit
+              {version && (
+                <span style={{ fontSize: 'var(--text-11)', fontWeight: 500, color: 'var(--text-muted)' }}>
+                  v{version}
+                </span>
+              )}
             </h1>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
               Iniciá sesión para continuar
@@ -92,6 +102,7 @@ export default function Login({ onSuccess }: LoginProps) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
+            icon={Lock}
             required
           />
 
@@ -123,8 +134,16 @@ export default function Login({ onSuccess }: LoginProps) {
           </Button>
 
           <p style={{ margin: 0, textAlign: 'center', fontSize: 'var(--text-11)', color: 'var(--text-ghost)' }}>
-            Naka Outdoors · sistema operativo interno
+            Naka Group - Matrix · sistema operativo interno
           </p>
+
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 14, marginTop: 4, borderTop: '1px solid var(--border)' }}>
+            <img
+              src="/branding/Logo_Naka_lateral.png"
+              alt="Naka Outdoors"
+              style={{ height: 18, opacity: 0.55, filter: 'grayscale(1)' }}
+            />
+          </div>
         </Card>
       </form>
     </div>

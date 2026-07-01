@@ -285,6 +285,22 @@ class DriveService {
     return res.data.id!
   }
 
+  /**
+   * Descarga el contenido de un archivo de Drive a memoria. Usado para servir
+   * miniaturas/preview de fotos y videos de Mantenimiento (el caller cachea a disco).
+   */
+  async downloadFileBuffer(fileId: string): Promise<Buffer> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+    const res = await drive.files.get(
+      { fileId, alt: 'media' },
+      { responseType: 'arraybuffer' }
+    )
+    return Buffer.from(res.data as ArrayBuffer)
+  }
+
   async getOrCreateKnowledgeFolder(): Promise<string> {
     const cached = store.get('knowledgeFolderId', '') as string
     if (cached) return cached

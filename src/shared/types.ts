@@ -4086,6 +4086,14 @@ export const MAINTENANCE_PHOTO_PHASE_LABELS: Record<MaintenancePhotoPhase, strin
   despues: 'Después',
 }
 
+export const MAINTENANCE_VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.m4v', '.avi']
+
+/** Distingue foto vs. video por extensión — no hay columna de tipo, se infiere del nombre. */
+export function isMaintenanceVideoFile(nameOrPath: string): boolean {
+  const ext = nameOrPath.slice(nameOrPath.lastIndexOf('.')).toLowerCase()
+  return MAINTENANCE_VIDEO_EXTENSIONS.includes(ext)
+}
+
 /** Catálogo compartido entre Naka y EV (23 rubros del spec). Gestionable, mismo patrón que RrhhLista. */
 export interface MaintenanceCategory {
   id: string
@@ -4142,6 +4150,8 @@ export interface MaintenanceTask {
   photos_count?: number
   notes_count?: number
   updates_count?: number
+  created_by_name?: string | null           // display_name de user_profiles, resuelto por JOIN
+  main_photo_original_name?: string | null  // nombre del archivo de portada, para saber si es foto o video
 }
 
 export interface CreateMaintenanceTaskInput {

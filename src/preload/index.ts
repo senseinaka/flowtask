@@ -159,6 +159,8 @@ const api = {
         ipcRenderer.invoke('maintenance:photos:upload', taskId, localPath, phase, isMain),
       delete:   (id: string): Promise<void> => ipcRenderer.invoke('maintenance:photos:delete', id),
       openFile: (driveFileId: string): Promise<void> => ipcRenderer.invoke('maintenance:photos:openFile', driveFileId),
+      getDataUrl: (driveFileId: string, originalName: string): Promise<string | null> =>
+        ipcRenderer.invoke('maintenance:photos:getDataUrl', driveFileId, originalName),
     },
   },
 

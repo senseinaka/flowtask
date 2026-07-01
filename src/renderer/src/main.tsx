@@ -51,6 +51,7 @@ import MaintenanceDashboard from './routes/maintenance/MaintenanceDashboard'
 import MaintenanceEmpresaLayout from './routes/maintenance/MaintenanceEmpresaContext'
 import MaintenanceTasksList from './routes/maintenance/MaintenanceTasksList'
 import MaintenanceTaskDetail from './routes/maintenance/MaintenanceTaskDetail'
+import MaintenanceCatalogs from './routes/maintenance/MaintenanceCatalogs'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -121,6 +122,7 @@ const router = createHashRouter([
           { path: ':id', element: <MaintenanceTaskDetail /> }
         ]
       },
+      { path: 'mantenimiento/catalogos', element: <MaintenanceCatalogs /> },
       { path: 'rrhh/nomina', element: <Navigate to="/rrhh/nomina/naka" replace /> },
       {
         path: 'rrhh/nomina/:empresa',
