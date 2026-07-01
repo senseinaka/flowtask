@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Cloud, CloudOff, RefreshCw, AlertTriangle, Copy, Check, RotateCcw } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 
-function formatLastSync(timestamp: number | null): string {
+export function formatLastSync(timestamp: number | null): string {
   if (!timestamp) return 'nunca'
   const diffMs = Date.now() - timestamp
   const diffMin = Math.floor(diffMs / 60000)

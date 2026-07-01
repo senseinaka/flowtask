@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw, DollarSign, Banknote, PackageSearch, Wrench, UserX
+  RefreshCw, DollarSign, Banknote, PackageSearch, Wrench, UserX, Activity
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
@@ -37,7 +37,7 @@ import { useUIStore } from '../../store/ui.store'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { SyncStatus } from '@shared/types'
 import { cn } from '../ui/utils'
-import SyncStatusBadge from './SyncStatusBadge'
+import SyncStatusBadge, { formatLastSync } from './SyncStatusBadge'
 import { useConfirm } from '../../store/confirm.store'
 
 // ── Workspace definitions ─────────────────────────────────────────────────────
@@ -187,6 +187,7 @@ export default function Sidebar() {
   const isAdmin = session?.userId === ADMIN_USER_ID
 
   const [openPanel, setOpenPanel] = useState<WorkspaceKey | null>(null)
+  const [syncPanelOpen, setSyncPanelOpen] = useState(false)
   const [version, setVersion] = useState('')
 
   const comexSubItems: {
@@ -217,27 +218,18 @@ export default function Sidebar() {
   const syncMutation = useMutation({ mutationFn: () => window.api.sync.trigger() })
 
   const psStatus = usePowerSyncStatus()
-  const [psReconnecting, setPsReconnecting] = useState(false)
-  const psConnected    = (psStatus?.connected ?? false) && !psStatus?.hasError
   const psHasError     = (psStatus?.connected ?? false) && (psStatus?.hasError ?? false)
   const psDisconnected = !!psStatus && !psStatus.connected && !psStatus.connecting && !psStatus.configError
+  const psSyncing      = (psStatus?.uploading || psStatus?.downloading || psStatus?.connecting) ?? false
 
-  async function handlePsReconnect() {
-    if (psReconnecting || (!psDisconnected && !psHasError)) return
-    setPsReconnecting(true)
-    try {
-      await window.api.powersync.reconnect()
-    } catch {
-      // el listener powersync:status actualizará el estado
-    } finally {
-      setTimeout(() => setPsReconnecting(false), 4000)
-    }
-  }
-
-  // Auto-limpiar spinner si PowerSync reconectó antes del timeout
-  useEffect(() => {
-    if (psConnected && psReconnecting) setPsReconnecting(false)
-  }, [psConnected])
+  // Estado agregado de sync — un solo semáforo para PowerSync + Drive, visible sin
+  // tener que abrir el panel de Configuración (antes SyncStatusBadge vivía solo ahí).
+  // La reconexión de PowerSync la maneja el propio SyncStatusBadge dentro del popover.
+  const driveOk = syncStatus?.isAuthenticated ?? false
+  const syncSeverity: 'ok' | 'warn' | 'err' =
+    psHasError                                                 ? 'err'
+    : (psDisconnected || !!psStatus?.configError || !driveOk)  ? 'warn'
+    : 'ok'
 
   useEffect(() => {
     window.api.app.getVersion().then(setVersion).catch(() => {})
@@ -246,6 +238,7 @@ export default function Sidebar() {
   // Close on navigation
   useEffect(() => {
     setOpenPanel(null)
+    setSyncPanelOpen(false)
   }, [location.pathname])
 
   // Close on click outside the aside
@@ -260,6 +253,23 @@ export default function Sidebar() {
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [openPanel])
 
+  // Popover de estado de sync — mismo patrón de cierre, estado propio porque no es un workspace
+  useEffect(() => {
+    if (!syncPanelOpen) return
+    function onMouseDown(e: MouseEvent) {
+      if (asideRef.current && !asideRef.current.contains(e.target as Node)) {
+        setSyncPanelOpen(false)
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') setSyncPanelOpen(false) }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [syncPanelOpen])
+
   const activeWorkspace =
     WORKSPACES.find((w) =>
       w.paths.some(
@@ -268,11 +278,17 @@ export default function Sidebar() {
     )?.key ?? null
 
   function toggle(key: WorkspaceKey) {
+    setSyncPanelOpen(false)
     setOpenPanel((prev) => (prev === key ? null : key))
   }
 
   function close() {
     setOpenPanel(null)
+  }
+
+  function toggleSyncPanel() {
+    setOpenPanel(null)
+    setSyncPanelOpen((p) => !p)
   }
 
   return (
@@ -333,70 +349,78 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Bottom: PowerSync + Drive + logout */}
+      {/* Bottom: Estado de sync (PowerSync + Drive) + logout */}
       <div className="flex flex-col items-center gap-1 py-3 border-t border-slate-700">
 
-        {/* PowerSync status — siempre visible; clickeable para reconectar si está desconectado o con error */}
-        <button
-          onClick={handlePsReconnect}
-          disabled={psConnected || psReconnecting}
-          title={
-            psReconnecting   ? 'Reconectando...'
-            : psConnected    ? 'Sync conectado'
-            : psHasError     ? 'Error de sync — click para reconectar'
-            : psDisconnected ? 'Sin conexión — click para reconectar'
-            : 'Sync'
-          }
-          className={cn(
-            'relative w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100',
-            psReconnecting
-              ? 'text-indigo-400 cursor-default'
-              : psConnected
-                ? 'text-slate-400 cursor-default'
-                : (psDisconnected || psHasError)
-                  ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-900/25 cursor-pointer'
-                  : 'text-slate-600 cursor-default'
-          )}
-        >
-          {psReconnecting
-            ? <RefreshCw size={15} className="animate-spin" />
-            : <Database size={15} />
-          }
-          {/* dot indicador */}
-          <span
+        {/* Estado agregado — un solo ícono, siempre visible, sin abrir nada */}
+        <div className="relative w-full">
+          <button
+            onClick={toggleSyncPanel}
+            title={
+              syncSeverity === 'err'  ? 'Hay un error de sincronización — click para ver detalle'
+              : syncSeverity === 'warn' ? 'Sincronización con avisos — click para ver detalle'
+              : 'Todo sincronizado'
+            }
             className={cn(
-              'absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full',
-              psReconnecting    ? 'bg-indigo-400'
-              : psConnected     ? 'bg-emerald-400'
-              : psHasError      ? 'bg-amber-400'
-              : psDisconnected  ? 'bg-amber-400'
-              : 'bg-slate-600'
+              'relative w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100',
+              syncPanelOpen
+                ? 'text-slate-200 bg-slate-700'
+                : syncSeverity === 'err'
+                  ? 'text-red-400 hover:text-red-300 hover:bg-red-900/25'
+                  : syncSeverity === 'warn'
+                    ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-900/25'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
             )}
-          />
-          <span className="text-[8px] leading-none font-medium tracking-wide">Sync</span>
-        </button>
+          >
+            {psSyncing
+              ? <RefreshCw size={15} className="animate-spin" />
+              : <Activity size={15} />
+            }
+            <span
+              className={cn(
+                'absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full',
+                psSyncing              ? 'bg-indigo-400'
+                : syncSeverity === 'err'  ? 'bg-red-400'
+                : syncSeverity === 'warn' ? 'bg-amber-400'
+                : 'bg-emerald-400'
+              )}
+            />
+            <span className="text-[8px] leading-none font-medium tracking-wide">Estado</span>
+          </button>
 
-        {/* Google Drive */}
-        <button
-          onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending || !syncStatus?.isAuthenticated}
-          title={syncStatus?.isAuthenticated ? 'Sincronizar Google Drive' : 'Drive no conectado'}
-          className={cn(
-            'relative w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] transition-all duration-100',
-            syncStatus?.isAuthenticated
-              ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-              : 'text-slate-600 cursor-not-allowed'
+          {/* Popover de detalle — PowerSync + Drive, mismo contenido que antes vivía escondido en Configuración */}
+          {syncPanelOpen && (
+            <div
+              className="absolute left-full bottom-0 ml-2 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-xl p-3 space-y-2"
+              style={{ width: 260, boxShadow: '4px 0 20px rgba(0,0,0,.45)' }}
+            >
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold px-0.5">
+                Estado de sincronización
+              </p>
+
+              <SyncStatusBadge />
+
+              {/* Google Drive */}
+              <div
+                onClick={() => syncStatus?.isAuthenticated && !syncMutation.isPending && syncMutation.mutate()}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-950 border border-slate-700 select-none',
+                  syncStatus?.isAuthenticated ? 'text-emerald-400 cursor-pointer' : 'text-amber-400 cursor-default'
+                )}
+              >
+                {syncMutation.isPending
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Cloud size={14} />
+                }
+                <span className="flex-1 truncate">
+                  {syncStatus?.isAuthenticated
+                    ? `Drive · ${formatLastSync(syncStatus.lastSync)}`
+                    : 'Drive no conectado'}
+                </span>
+              </div>
+            </div>
           )}
-        >
-          {syncMutation.isPending
-            ? <Loader2 size={15} className="animate-spin" />
-            : <Cloud size={15} />
-          }
-          {syncStatus?.isAuthenticated && (
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          )}
-          <span className="text-[8px] leading-none font-medium tracking-wide">Drive</span>
-        </button>
+        </div>
 
         <button
           onClick={async () => {
@@ -615,10 +639,6 @@ export default function Sidebar() {
               {canRead('cortex') && (
                 <PanelLink to="/cortex" icon={Network} label="Cortex" color="#a78bfa" onClick={close} />
               )}
-              <div className="border-t border-slate-700 mt-3 mb-2" />
-              <div className="px-1">
-                <SyncStatusBadge />
-              </div>
             </div>
           )}
 

@@ -113,15 +113,28 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
   // existen en ImportStatus: se remapean a 'preparacion_embarque' al leer.
   imp.status = normalizeLegacyStatus(row.status as string)
   // Filas creadas antes de que existieran cargo_status/forwarder_status: derivar
-  // un valor de respaldo para mostrar (nunca se escribe acá — el primer cambio
-  // real desde el popover ya guarda el campo de verdad).
+  // un valor de respaldo Y GRABARLO (fire-and-forget). Si solo se derivara para
+  // mostrar sin persistir, cada lectura recalculaba en base a `status`, y como
+  // `status` puede cambiar por otros motivos, la rama nunca tocada por el usuario
+  // "se movía sola" — no eran independientes en la práctica. Grabando en la
+  // primera lectura, el campo queda real y estable de ahí en adelante.
+  const backfill: { cargo_status?: string; forwarder_status?: string } = {}
   if (!imp.cargo_status) {
     imp.cargo_status = deriveLegacyCargoStatus(
       row.status as string, row.carga_armada_date as number | null, row.esperando_embarcar_date as number | null
     )
+    backfill.cargo_status = imp.cargo_status
   }
   if (!imp.forwarder_status) {
     imp.forwarder_status = deriveLegacyForwarderStatus(row.status as string)
+    backfill.forwarder_status = imp.forwarder_status
+  }
+  if (Object.keys(backfill).length > 0 && row.id) {
+    const id = row.id as string
+    const sets = Object.keys(backfill).map((k) => `${k} = ?`).join(', ')
+    const vals = [...Object.values(backfill), id]
+    getPowerSyncDb().execute(`UPDATE comex_imports SET ${sets} WHERE id = ?`, vals)
+      .catch((err) => console.error('[Comex] backfill cargo_status/forwarder_status:', err))
   }
   if (row._supplier_id) {
     imp.supplier = {

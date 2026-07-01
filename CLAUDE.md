@@ -765,7 +765,7 @@ Cuatro causas distintas, todas en `powersync.ts` salvo la #4:
 
 **Diagnóstico de la cola sin abrir la app:** leer `%APPDATA%\flowtask\flowtask\powersync.db` read-only con **Python** sqlite3 (`sqlite3.connect("file:...?mode=ro&immutable=1", uri=True)`) — `better-sqlite3` falla por ABI de Electron (NODE_MODULE_VERSION). `SELECT COUNT(*) FROM ps_crud` = 0 → no hay bloqueo de upload, el problema es solo de conexión.
 
-**Badge + reconexión:** `SyncStatusBadge` muestra el error real (no "[object Object]"), es expandible y tiene botón "Reconectar" cuando está desconectado; el Sidebar tiene indicador "Sync" persistente (dot verde/ámbar) que también reconecta al click.
+**Badge + reconexión:** `SyncStatusBadge` muestra el error real (no "[object Object]"), es expandible y tiene botón "Reconectar" cuando está desconectado. Desde jul 2026 vive dentro del popover del indicador "Estado" del Sidebar (ver sección "Indicador de sync agregado" más abajo) en vez de solo dentro del panel de Configuración.
 
 ### Fix: tablas PowerSync nuevas no sincronizaban — grants, sync-rules y recreación de powersync.db (resuelto — junio 2026)
 
@@ -782,6 +782,8 @@ Saga al sumar las 10 tablas `cash_*` (Cajas Internas). Varias causas **independi
    **Recurrencia (jul 2026):** volvió a aparecer, esta vez como `malformed database schema (ps_data__comex_inal_veps__workspace) - no such table: main.ps_data__comex_inal_veps` — una vista local rota de una sola tabla (`comex_inal_veps`) **rompe TODAS las lecturas de `powersync.db`**, no solo esa tabla (SQLite necesita cargar el schema completo antes de correr cualquier query; confirmado porque hasta `projects:list`, sin relación con VEPs, fallaba con el mismo error). Diagnóstico posible incluso con la corrupción activa porque el error es reproducible con una lectura read-only trivial (`SELECT 1 FROM sqlite_master`) — si ESO falla, es corrupción de schema, no un problema de conexión. Recuperación: mismo procedimiento (borrar `powersync.db`, reiniciar, dejar reconstruir). Al recrearse trajo la migración legacy de vuelta (606 filas a `ps_crud`, ver punto 3) y destapó un caso nuevo: `SKIP PUT tasks/... -> 403/42501 "new row violates row-level security policy for table sync_conflicts"` — un trigger de conflicto en `tasks` intenta loguear a `sync_conflicts` y ese insert no tiene policy/GRANT para `authenticated`. Se saltea solo (no traba la cola) pero esa fila puntual no sube hasta que se arregle el RLS de `sync_conflicts` — pendiente, no urgente.
 
    **Recurrencia #2 (jul 2026) — causa raíz identificada:** esta vez el síntoma fue distinto, `PRAGMA integrity_check` devolvía directamente `database disk image is malformed` (corrupción física de páginas, no de una vista) en vez del error de "malformed database schema" de arriba. Ocurrió inmediatamente después de matar el árbol de Electron con `taskkill /T /F` para forzar un reinicio en caliente (picking up cambios de main process) — muy probablemente lo mató en medio de un checkpoint del WAL de `powersync.db`. **Lección: `taskkill /F` sobre el proceso mientras PowerSync puede estar escribiendo es en sí mismo un vector de corrupción**, no solo una casualidad de timing. Recuperación: igual que siempre (matar todo, borrar `powersync.db`, sin `-wal`/`-shm` — no existían en este caso, ya estaban checkpointeados en el archivo principal corrupto —, `npm run dev`, dejar drenar `ps_crud`). Nota aparte: `rm` sobre el archivo no siempre se refleja al instante en un `ls` inmediatamente posterior en este entorno (Windows + Git Bash) — confirmar con `stat` antes de asumir que falló.
+
+   **Recurrencia #3 (jul 2026) — esta vez SIN reinicio de por medio.** Apareció con la app corriendo normal, sin ningún `taskkill` previo — descarta la hipótesis de la recurrencia #2 como causa única. Sospecha fuerte: **Avast** (antivirus instalado en la máquina) escaneando/bloqueando el archivo mientras PowerSync escribe el WAL — patrón conocido en Windows con SQLite en modo WAL. Evidencia indirecta: al borrar el archivo tras matar los procesos, `Remove-Item` no lo soltó en el primer intento (`Test-Path` seguía dando `True` un segundo después) y recién se pudo borrar en un segundo intento — consistente con algo tomando un handle breve justo después de que el proceso muere. **Pendiente de acción del usuario** (no lo puede hacer el asistente): agregar una exclusión en Avast sobre `C:\Users\<usuario>\AppData\Roaming\flowtask\` para descartar esta causa. Si la corrupción vuelve a aparecer con la exclusión puesta, buscar la causa en otro lado (disco, versión de `@powersync/node`, etc.) — recién ahí valdría la pena investigar más a fondo en vez de seguir re-parchando.
 
 ### Fix: VEP ANMAT con spinner infinito + 22 tablas Comex con escritura descartada en silencio (resuelto — junio 2026)
 
@@ -978,19 +980,30 @@ Para agregar un estado nuevo a alguna de las dos ramas: agregar el valor a
 
 ### Fix: las ramas parecían no ser independientes (resuelto — jul 2026)
 
-Reporte: "al elegir algunos campos, cambian otros" en el popover de carga/forwarder.
-Causa real: `createImport()` no seteaba `cargo_status`/`forwarder_status` en el INSERT,
-así que en TODA importación nueva ambas columnas quedaban `NULL` hasta el primer click.
-Con `NULL`, `hydrateImport()` cae en `deriveLegacyCargoStatus()` /
-`deriveLegacyForwarderStatus()` **en cada lectura**, que derivan un valor a partir de
+Reporte: "al elegir algunos campos, cambian otros" en el popover de carga/forwarder —
+confirmado real (no percepción), reproducible en cualquiera de las 15 importaciones
+existentes en la base en el momento del reporte.
+
+**Causa raíz:** `createImport()` no seteaba `cargo_status`/`forwarder_status` en el
+INSERT, así que en TODA importación (nueva o vieja) ambas columnas quedaban `NULL`
+hasta el primer click. Con `NULL`, `hydrateImport()` caía en `deriveLegacyCargoStatus()`
+/ `deriveLegacyForwarderStatus()` **en cada lectura**, que derivan un valor a partir de
 `status` (y fechas) — no de un valor propio guardado. Si el campo nunca fue tocado y
 `status` cambiaba por otro motivo (el dropdown "Estado", una auto-transición, etc.), el
 valor derivado podía saltar sin que el usuario hubiera tocado esa rama, dando la
-sensación de que "elegir una cosa cambiaba otra". Fix: `createImport()` ahora inserta
-`cargo_status='en_armado'`, `forwarder_status='sin_cotizar'` explícitos desde el alta —
-a partir de ahí ambos campos son siempre reales, nunca se re-derivan. La derivación
-legacy queda solo como red de contención para filas creadas antes de este fix (se
-autocura la primera vez que se toca cada rama desde el popover).
+sensación de que "elegir una cosa cambiaba otra". Confirmado con una query directa a
+`powersync.db`: las 15 filas de `comex_imports` tenían `cargo_status`/`forwarder_status`
+en `NULL` — ninguna había sido "curada" nunca, porque el primer fix (solo `createImport`)
+no alcanzaba a las que ya existían.
+
+**Fix completo (dos partes):**
+1. `createImport()` inserta `cargo_status='en_armado'`, `forwarder_status='sin_cotizar'`
+   explícitos desde el alta — las importaciones nuevas nunca dependen de la derivación.
+2. `hydrateImport()` (`queries/comex.ts`) ahora **graba** el valor derivado la primera
+   vez que lo calcula (`UPDATE` fire-and-forget, no bloquea la lectura), en vez de solo
+   devolverlo para mostrar. Así el campo queda real y estable desde la primera lectura
+   de cada fila vieja, sin necesidad de que el usuario toque esa rama a mano ni de correr
+   una migración aparte — se autocura solo la primera vez que se abre cada importación.
 
 ---
 
@@ -1857,6 +1870,43 @@ Supabase** — todo con JOINs, columnas hidratadas en la query, y una convenció
   "Guardar cambios y salir" / "Salir" según haya cambios sin confirmar.
 - Construido con 4 agentes en paralelo (Card, FormModal, Detail, Catálogos) sobre un contrato ya fijado a
   mano (tipos + IPC + hooks), mismo patrón que la Etapa 1 original.
+
+---
+
+## Indicador de sync agregado (jul 2026)
+
+Antes había 3 lugares con estado de sync desconectados entre sí: dos íconos fijos en el
+Sidebar ("Sync" = PowerSync, "Drive" = Google Drive) con solo un dot de color, y el
+`SyncStatusBadge` completo (label + tiempo + error expandible + reconectar) escondido
+dentro del panel flotante de "Configuración" — había que abrir ese panel para ver el
+detalle de un error.
+
+Se consolidó en **un solo ícono "Estado"** (`Sidebar.tsx`, ícono `Activity`) siempre
+visible en el riel fijo, con severidad agregada:
+
+```
+psHasError                                    → 'err'  (rojo)
+psDisconnected || configError || !driveOk     → 'warn' (ámbar)
+resto                                         → 'ok'   (verde)
+```
+
+Un click abre un popover anclado (`syncPanelOpen`, mismo patrón de cierre por
+click-afuera/Escape que los nodos compuestos de Comex) con el detalle real: adentro
+vive el `SyncStatusBadge` de siempre (PowerSync — label, tiempo, error expandible,
+reconectar) más una fila de Google Drive (`formatLastSync`, ahora exportado desde
+`SyncStatusBadge.tsx` para reusar el mismo formateo de fecha). El `SyncStatusBadge`
+que antes vivía duplicado dentro del panel de "Configuración" se sacó de ahí — ya no
+hace falta abrir ese panel para verlo.
+
+La reconexión de PowerSync la sigue manejando el propio `SyncStatusBadge` (estado
+interno `reconnecting`) — se eliminó el `psReconnecting`/`handlePsReconnect` que vivía
+duplicado a nivel Sidebar porque quedó muerto tras la consolidación.
+
+**Pendiente natural (no incluido):** Email (IMAP) tiene un error persistente conocido
+(`SELF_SIGNED_CERT_IN_CHAIN`) que solo se ve en la consola de `npm run dev`, sin ningún
+estado expuesto a IPC/UI todavía. Sumarlo al mismo indicador requiere plomería nueva
+(IPC + hook) que no existe hoy — evaluar si vale la pena antes de otro incidente
+silencioso como el de VEP/22-tablas.
 
 ---
 
