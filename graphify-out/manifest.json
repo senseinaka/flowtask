@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782870358.6395397,
-    "ast_hash": "4d3a7ef186e70531105951560ca703c9",
+    "mtime": 1782909556.4072802,
+    "ast_hash": "13726a476e58bec320aea30621b9b4f3",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -115,9 +115,9 @@
     "semantic_hash": "4bc8d3784fbc41fffb67f415e040db3b"
   },
   "src/main/database/queries/permissions.ts": {
-    "mtime": 1781979013.5251915,
-    "ast_hash": "1c5ced1dc7f3fbf2142279f8a5d9b743",
-    "semantic_hash": "1c5ced1dc7f3fbf2142279f8a5d9b743"
+    "mtime": 1782909572.104161,
+    "ast_hash": "9f1e0a7d4a0da0b796485df4dfa57776",
+    "semantic_hash": ""
   },
   "src/main/database/queries/projects.ts": {
     "mtime": 1781184972.22039,
@@ -250,9 +250,9 @@
     "semantic_hash": "34603052f224e4da70c80c2234e3ecb1"
   },
   "src/main/ipc/permissions.ipc.ts": {
-    "mtime": 1781979026.1824293,
-    "ast_hash": "361b27734dfad4d9604c0d1e822558c6",
-    "semantic_hash": "361b27734dfad4d9604c0d1e822558c6"
+    "mtime": 1782909581.090355,
+    "ast_hash": "5467d8a88c01c78f7daedaa8c851752e",
+    "semantic_hash": ""
   },
   "src/main/ipc/powersync.ipc.ts": {
     "mtime": 1782506447.707505,
@@ -310,8 +310,8 @@
     "semantic_hash": ""
   },
   "src/main/services/auth.service.ts": {
-    "mtime": 1782779974.3470669,
-    "ast_hash": "2ff31679cbbf2b41963ed33a488724cc",
+    "mtime": 1782909604.8843694,
+    "ast_hash": "a9787955f7e5e0f9f686b68264e3d9c0",
     "semantic_hash": ""
   },
   "src/main/services/bna.service.ts": {
@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "src/preload/index.ts": {
-    "mtime": 1782905990.0087373,
-    "ast_hash": "fdb915d7aba8c79e5f15070d5b4ef81b",
+    "mtime": 1782909595.698361,
+    "ast_hash": "ba3517334f52731cb4fd1c565f257d7c",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782906337.4641883,
-    "ast_hash": "846204ed99e76724c2336bb1fbd3ff65",
+    "mtime": 1782910562.8515024,
+    "ast_hash": "fdb8bed218500db0d46dca771e805714",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -480,9 +480,9 @@
     "semantic_hash": "8f4ef756e387007b16ba44d714ace0f5"
   },
   "src/renderer/src/components/settings/PermissionsAdmin.tsx": {
-    "mtime": 1781979645.121505,
-    "ast_hash": "cdd17eafa2dce118e00cfa3a06b6feb7",
-    "semantic_hash": "cdd17eafa2dce118e00cfa3a06b6feb7"
+    "mtime": 1782909675.150562,
+    "ast_hash": "58ad70611dae14963dad10f974eb9744",
+    "semantic_hash": ""
   },
   "src/renderer/src/components/tasks/ActivityTimeline.tsx": {
     "mtime": 1782855676.0979338,
@@ -660,8 +660,8 @@
     "semantic_hash": "14253e9689dd98fc6d809b1d102ec2f7"
   },
   "src/renderer/src/main.tsx": {
-    "mtime": 1782906326.1408496,
-    "ast_hash": "457d9cc878f86a34599b249e5316bf6d",
+    "mtime": 1782910494.2115166,
+    "ast_hash": "ab717ce0fe2d7d646c5963c535e82c86",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/Calendar.tsx": {
@@ -680,8 +680,8 @@
     "semantic_hash": "e89d00a5142600d3757232d0258fd994"
   },
   "src/renderer/src/routes/Login.tsx": {
-    "mtime": 1782909221.001132,
-    "ast_hash": "0812b9fd9e5facbc53e0126b30aaf33e",
+    "mtime": 1782909625.2313437,
+    "ast_hash": "38c2c15dfc8a9d3e96111b4b70fc4271",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/Messages.tsx": {
@@ -690,8 +690,8 @@
     "semantic_hash": "6f6f65d8b14fc9ee6416f4575adff0cf"
   },
   "src/renderer/src/routes/Settings.tsx": {
-    "mtime": 1782093545.4285617,
-    "ast_hash": "ea10e9e8de1481663b90eb574a0e4fed",
+    "mtime": 1782910523.435506,
+    "ast_hash": "1e6690742c9c61c63369ba6dc880c307",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/TaskList.tsx": {
@@ -880,8 +880,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782905931.245314,
-    "ast_hash": "e3f4a26496fcfd663fc6266d219f35f0",
+    "mtime": 1782909545.9031842,
+    "ast_hash": "1d031d4426ca6e5bd72ac2ccefea114b",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782908699.5872972,
-    "ast_hash": "784aa7a5283007d55877c34ff6374e84",
+    "mtime": 1782909757.5561843,
+    "ast_hash": "85088432c33d35f5e033d98520c87716",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1642,6 +1642,11 @@
   "src/renderer/public/branding/Logo_Naka_lateral.png": {
     "mtime": 1782909129.82725,
     "ast_hash": "1bf5af0129cc4df0b040f2be1f8a6906",
+    "semantic_hash": ""
+  },
+  "supabase_username_login.sql": {
+    "mtime": 1782909530.2971933,
+    "ast_hash": "953a0d1b6b59c04041b62feecd73f900",
     "semantic_hash": ""
   }
 }

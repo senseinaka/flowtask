@@ -3166,6 +3166,13 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
         )
       `)
     }
+  },
+  {
+    version: 103,
+    up(db: Database.Database) {
+      // Login con nombre de usuario (además de email) — ver supabase_username_login.sql
+      try { db.exec(`ALTER TABLE user_profiles ADD COLUMN username TEXT`) } catch { /* ya existe */ }
+    }
   }
 ]
 

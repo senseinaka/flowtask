@@ -483,7 +483,7 @@ export default function Settings() {
   const credentialsReady = clientId.trim() && clientSecret.trim()
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 max-w-2xl">
+    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
       <h1 className="text-xl font-bold">Configuración</h1>
 
       {/* Tabs */}
@@ -564,6 +564,7 @@ export default function Settings() {
 
       {activeTab === 'sync' && (
       <>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
       {/* Google Drive */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">
         <div className="flex items-center gap-2">
@@ -1185,12 +1186,14 @@ export default function Settings() {
           )}
         </div>
       </section>
+      </div>
 
       </>
       )}
 
       {activeTab === 'ia' && (
       <>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
       {/* IA / Claude */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5">
         <div className="flex items-center gap-2">
@@ -1316,6 +1319,7 @@ export default function Settings() {
           <PromptEditor />
         </div>
       </section>
+      </div>
 
       </>
       )}

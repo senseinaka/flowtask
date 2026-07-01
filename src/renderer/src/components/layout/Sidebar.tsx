@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw, DollarSign, Banknote, PackageSearch, Wrench
+  Database, RefreshCw, DollarSign, Banknote, PackageSearch, Wrench, UserX
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
@@ -34,7 +34,7 @@ function ContainerShipIcon({ size = 15 }: { size?: number }) {
 import { usePermissions } from '../../hooks/usePermissions'
 import { ADMIN_USER_ID } from '@shared/modules'
 import { useUIStore } from '../../store/ui.store'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { SyncStatus } from '@shared/types'
 import { cn } from '../ui/utils'
 import SyncStatusBadge from './SyncStatusBadge'
@@ -174,6 +174,7 @@ function GroupLabel({ label, color }: { label: string; color: string }) {
 export default function Sidebar() {
   const { data: projects } = useProjects()
   const confirm = useConfirm()
+  const queryClient = useQueryClient()
   const { filters, setFilter } = useUIStore()
   const { canRead } = usePermissions()
   const location = useLocation()
@@ -395,6 +396,20 @@ export default function Sidebar() {
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
           )}
           <span className="text-[8px] leading-none font-medium tracking-wide">Drive</span>
+        </button>
+
+        <button
+          onClick={async () => {
+            const ok = await confirm({ message: '¿Cerrar sesión? Vas a volver a la pantalla de inicio de sesión.' })
+            if (!ok) return
+            await window.api.auth.logout()
+            queryClient.clear()
+          }}
+          title="Cerrar sesión"
+          className="w-full rounded-xl flex flex-col items-center justify-center gap-[3px] py-[7px] text-slate-500 hover:text-amber-400 hover:bg-amber-900/30 transition-all duration-100"
+        >
+          <UserX size={15} />
+          <span className="text-[8px] leading-none font-medium tracking-wide">Cerrar sesión</span>
         </button>
 
         <button

@@ -36,16 +36,16 @@ function saveSession(data: SupabaseTokenResponse): AuthSession {
     expiresAt: Math.floor(Date.now() / 1000) + data.expires_in
   }
   store.set(KEY_SESSION, session)
-  try {
-    const namePart = data.user.email.split('@')[0]
-    upsertUserProfile({
-      id: data.user.id,
-      email: data.user.email,
-      display_name: namePart
-    })
-  } catch {
+  const namePart = data.user.email.split('@')[0]
+  // Fire-and-forget: upsertUserProfile es async (dual-write flowtask.db + Supabase)
+  // y no debe bloquear ni fallar el login si algo sale mal (ver su propio try/catch interno).
+  upsertUserProfile({
+    id: data.user.id,
+    email: data.user.email,
+    display_name: namePart
+  }).catch(() => {
     // La tabla puede no existir todavía si la migración v81 aún no corrió
-  }
+  })
   return session
 }
 

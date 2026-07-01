@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MODULES, ADMIN_USER_ID, type PermissionLevel } from '@shared/modules'
 import type { UserProfile } from '@shared/types'
 import { cn } from '../ui/utils'
+import { toast } from '../../store/toast.store'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -102,7 +103,9 @@ function PermissionsAdminInner() {
       qc.invalidateQueries({ queryKey: ['permissions', 'all'] })
       setSelectedId(null)
       setConfirmDelete(false)
-    }
+      toast.success('Usuario eliminado')
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo eliminar el usuario')
   })
 
   const isLoading = loadingPerms || loadingProfiles
@@ -400,31 +403,42 @@ function UserHeader({
       qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })
       setEditing(false)
       onRefresh()
-    }
+      toast.success('Perfil actualizado')
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo guardar el perfil')
   })
 
   if (editing) {
     return (
-      <div className="space-y-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nombre completo"
-          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-          autoFocus
-        />
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="email@empresa.com"
-          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-        />
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Nombre de usuario (opcional, para loguearse sin email)"
-          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-        />
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Nombre</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nombre completo"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+            autoFocus
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="email@empresa.com"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Nombre de usuario (opcional)</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Para loguearse sin escribir el email"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => save.mutate()}
@@ -498,7 +512,9 @@ function CreateProfileInline({ userId, onCreated }: { userId: string; onCreated:
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })
       onCreated()
-    }
+      toast.success('Perfil creado')
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo crear el perfil')
   })
 
   return (
@@ -509,27 +525,36 @@ function CreateProfileInline({ userId, onCreated }: { userId: string; onCreated:
           Este usuario no tiene perfil. Asignale un nombre para identificarlo.
         </p>
       </div>
-      <div className="flex gap-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nombre completo"
-          onKeyDown={(e) => e.key === 'Enter' && name.trim() && save.mutate()}
-          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
-          autoFocus
-        />
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email (opcional)"
-          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
-        />
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Usuario (opcional)"
-          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
-        />
+      <div className="flex gap-2 items-end">
+        <div className="flex-1 space-y-1">
+          <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Nombre</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nombre completo"
+            onKeyDown={(e) => e.key === 'Enter' && name.trim() && save.mutate()}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+            autoFocus
+          />
+        </div>
+        <div className="flex-1 space-y-1">
+          <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Opcional"
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+        <div className="flex-1 space-y-1">
+          <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Usuario</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Opcional"
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
         <button
           onClick={() => save.mutate()}
           disabled={!name.trim() || save.isPending}
@@ -566,7 +591,7 @@ function NewUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       }
       return id
     },
-    onSuccess: (id) => onCreated(id),
+    onSuccess: (id) => { toast.success('Usuario creado'); onCreated(id) },
     onError: (e: Error) => setError(e.message)
   })
 
