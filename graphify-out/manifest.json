@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782932317.9129333,
-    "ast_hash": "f383c6bad61379174b0ebd12845bc461",
+    "mtime": 1782935573.508155,
+    "ast_hash": "eda96a0d454baf5c3f16158ad0a90d01",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -735,8 +735,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782932631.7234023,
-    "ast_hash": "408accdaf83d723bf8727f2445653661",
+    "mtime": 1782935652.929968,
+    "ast_hash": "b0c42e9d5fa2ab6966f7d96f9c3adc61",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
@@ -880,8 +880,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782931923.7632596,
-    "ast_hash": "44af628bcc74bf366488c008c1728495",
+    "mtime": 1782935630.8501723,
+    "ast_hash": "e70ac51cceecb09ad2a9e01fa2c8c0ae",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782932914.1555111,
-    "ast_hash": "393c78dc026dc07afbbd683a24ea6a33",
+    "mtime": 1782936459.1825266,
+    "ast_hash": "fa2093ad02f5d82513dfb395faeb7873",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
