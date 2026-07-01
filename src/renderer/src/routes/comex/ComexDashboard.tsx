@@ -24,13 +24,13 @@ const PIPELINE_PHASES: Array<{
     key: 'pedido',
     label: 'Pedido',
     color: '#60a5fa',
-    statuses: ['planning', 'ordered', 'paid', 'production'],
+    statuses: ['planning', 'ordered', 'paid'],
   },
   {
     key: 'pre_embarque',
     label: 'Pre-embarque',
     color: '#f97316',
-    statuses: ['carga_armada', 'esperando_embarcar', 'forwarder', 'cotizacion_pedida', 'forwarder_seleccionado'],
+    statuses: ['preparacion_embarque', 'listo_para_embarcar'],
   },
   {
     key: 'transito',

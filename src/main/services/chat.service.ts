@@ -119,7 +119,8 @@ function fDate(ts: number | string | null | undefined): string {
 
 const STATUS_LABELS: Record<string, string> = {
   planning: 'Planificación', ordered: 'Pedido realizado', paid: 'Pagado',
-  production: 'En producción', shipped: 'Embarcado', transit: 'En tránsito',
+  preparacion_embarque: 'Preparación para embarque', listo_para_embarcar: 'Listo para embarcar',
+  shipped: 'Embarcado', transit: 'En tránsito',
   arrived: 'Llegó al país', customs: 'En aduana', delivered: 'Entregado',
 }
 
@@ -196,7 +197,7 @@ const CHAT_TOOLS: Anthropic.Tool[] = [
         import_title: { type: 'string', description: 'Parte del nombre de la importación (búsqueda flexible)' },
         status: {
           type: 'string',
-          enum: ['planning', 'ordered', 'paid', 'production', 'shipped', 'transit', 'customs', 'delivered'],
+          enum: ['planning', 'ordered', 'paid', 'preparacion_embarque', 'shipped', 'transit', 'customs', 'delivered'],
           description: 'Nuevo estado de la importación',
         },
       },

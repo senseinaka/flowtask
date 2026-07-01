@@ -55,7 +55,12 @@ import {
   FREIGHT_QUOTE_STATUS_LABELS,
   FREIGHT_QUOTE_STATUS_COLORS,
   CARGO_TYPE_LABELS,
-  INCOTERMS
+  INCOTERMS,
+  CARGO_STATUS_LABELS,
+  FORWARDER_STATUS_LABELS,
+  CARGO_COLOR,
+  FORWARDER_COLOR,
+  isReadyToShip
 } from '@shared/types'
 import type {
   ImportStatus, DocumentType, DocumentStatus, DriveDocStatus,
@@ -63,7 +68,8 @@ import type {
   InalLCStatus,
   ComexFreightOperator, CargoType, ComexLogisticsQuote, ComexQuoteFile, ComexCustoms,
   ComexImportPlFile,
-  UpsertComexCustomsInput
+  UpsertComexCustomsInput,
+  CargoStatus, ForwarderStatus
 } from '@shared/types'
 import { cn, formatBytes } from '../../components/ui/utils'
 import { sanitizeHtml } from '../../lib/sanitize'
@@ -495,28 +501,18 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
 
 // ── Import Timeline ───────────────────────────────────────────────────────────
 
-// Sub-estados del nodo "Proveedor" (production) — viven dentro del nodo 4
-const PROVEEDOR_SUB_STEPS: ImportStatus[] = ['production', 'carga_armada', 'esperando_embarcar']
-
-// Sub-estados del nodo "Forwarder" — viven dentro del nodo 5
-const FORWARDER_SUB_STEPS: ImportStatus[] = ['forwarder', 'cotizacion_pedida', 'forwarder_seleccionado']
-
-// Mapea cualquier status (incluyendo sub-estados) al paso principal de la línea
-function toMainStep(status: ImportStatus): ImportStatus {
-  if (status === 'carga_armada' || status === 'esperando_embarcar') return 'production'
-  if (status === 'cotizacion_pedida' || status === 'forwarder_seleccionado') return 'forwarder'
-  return status
-}
+const CARGO_STEPS = Object.keys(CARGO_STATUS_LABELS) as CargoStatus[]
+const FORWARDER_STEPS = Object.keys(FORWARDER_STATUS_LABELS) as ForwarderStatus[]
 
 // Construye el array de pasos posicionando 'paid' dinámicamente según payment_terms y payment_due_date
 function buildTimelineSteps(imp: ComexImport): ImportStatus[] {
   const base: ImportStatus[] = [
-    'planning', 'ordered', 'production', 'forwarder', 'shipped', 'transit',
+    'planning', 'ordered', 'preparacion_embarque', 'listo_para_embarcar', 'shipped', 'transit',
     'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered'
   ]
 
   if (!imp.payment_terms || imp.payment_terms === 'anticipado') {
-    // Posición fija entre 'ordered' y 'production' (comportamiento original)
+    // Posición fija entre 'ordered' y 'preparacion_embarque' (comportamiento original)
     base.splice(2, 0, 'paid')
     return base
   }
@@ -542,46 +538,45 @@ function buildTimelineSteps(imp: ComexImport): ImportStatus[] {
   return base
 }
 
-// Índice en el array de pasos considerando sub-estados
 function getMainStepIdx(status: ImportStatus, steps: ImportStatus[]): number {
-  return steps.indexOf(toMainStep(status))
+  return steps.indexOf(status)
 }
 
-// Fecha asociada a cada paso (incluyendo sub-estados del proveedor)
+// Fecha asociada a cada paso principal
 function getStepDate(step: ImportStatus, imp: ComexImport): { ts: number | null; isEstimate?: boolean } {
   switch (step) {
-    case 'planning':            return { ts: imp.created_at }
-    case 'ordered':             return { ts: imp.order_date }
-    case 'paid':                return { ts: imp.payment_date }
-    case 'production':             return { ts: null }
-    case 'carga_armada':           return { ts: imp.carga_armada_date }
-    case 'esperando_embarcar':     return { ts: imp.esperando_embarcar_date }
-    case 'forwarder':              return { ts: null }
-    case 'cotizacion_pedida':      return { ts: null }
-    case 'forwarder_seleccionado': return { ts: null }
-    case 'shipped':             return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
-    case 'transit':             return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
-    case 'arrived':             return { ts: imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date), isEstimate: !imp.aviso_arribo_date }
-    case 'customs':             return { ts: imp.traslado_deposito_date }
-    case 'oficializado':        return { ts: imp.oficializacion_import_date }
-    case 'carga_deposito':      return { ts: imp.carga_deposito_date }
-    case 'delivered':           return { ts: imp.actual_arrival_date }
-    default:                    return { ts: null }
+    case 'planning':             return { ts: imp.created_at }
+    case 'ordered':              return { ts: imp.order_date }
+    case 'paid':                 return { ts: imp.payment_date }
+    case 'preparacion_embarque': return { ts: null }
+    case 'listo_para_embarcar':  return { ts: null }
+    case 'shipped':              return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
+    case 'transit':              return { ts: imp.actual_ship_date ?? imp.ship_date, isEstimate: !imp.actual_ship_date }
+    case 'arrived':              return { ts: imp.aviso_arribo_date ?? (imp.eta_4 ?? imp.eta_3 ?? imp.eta_2 ?? imp.arrival_date), isEstimate: !imp.aviso_arribo_date }
+    case 'customs':              return { ts: imp.traslado_deposito_date }
+    case 'oficializado':         return { ts: imp.oficializacion_import_date }
+    case 'carga_deposito':       return { ts: imp.carga_deposito_date }
+    case 'delivered':            return { ts: imp.actual_arrival_date }
+    default:                     return { ts: null }
   }
 }
 
-// ── Nodo especial para la etapa "Proveedor" (sub-pasos inline) ────────────────
-function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActive }: {
-  currentStatus: ImportStatus
-  onChangeStatus: (s: ImportStatus) => void
+// ── Nodo compuesto: "Preparación para embarque" (dos ramas paralelas) ─────────
+// Estado de carga y gestión de forwarder avanzan de forma independiente — no hay
+// dependencia entre ambas ramas. Cuando ambas llegan a su estado final (y el pago
+// está resuelto si corresponde), la operación pasa sola a 'listo_para_embarcar'
+// (ver el useEffect de auto-transición más abajo en este archivo).
+function PreparacionEmbarqueNode({ imp, mainDone, mainActive, idx, onUpdateCargo, onUpdateForwarder }: {
   imp: ComexImport
   mainDone: boolean
   mainActive: boolean
+  idx: number
+  onUpdateCargo: (s: CargoStatus) => void
+  onUpdateForwarder: (s: ForwarderStatus) => void
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Cerrar al hacer click fuera del nodo
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
@@ -591,7 +586,6 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Cerrar con Escape
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
@@ -599,25 +593,14 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
     return () => document.removeEventListener('keydown', handler)
   }, [open])
 
-  // Sub-estado activo dentro del proveedor
-  const activeSubIdx = PROVEEDOR_SUB_STEPS.indexOf(currentStatus)
-  const effectiveSubIdx = activeSubIdx >= 0 ? activeSubIdx : (mainDone ? PROVEEDOR_SUB_STEPS.length - 1 : -1)
+  const mainColor = IMPORT_STATUS_COLORS.preparacion_embarque
 
-  const mainColor = '#f59e0b' // amber — color del grupo proveedor
-
-  const subLabels: Record<string, string> = {
-    production:         'En producción',
-    carga_armada:       'Carga armada',
-    esperando_embarcar: 'Esp. embarque',
-  }
-
-  // Label dinámico según el sub-estado activo del proveedor
-  const mainLabelLines: Record<string, string[]> = {
-    production:         ['En', 'producción'],
-    carga_armada:       ['Carga', 'armada'],
-    esperando_embarcar: ['Esp.', 'embarque'],
-  }
-  const labelLines = mainLabelLines[currentStatus] ?? ['En', 'depósito']
+  const cargoStatus     = imp.cargo_status ?? 'en_armado'
+  const forwarderStatus = imp.forwarder_status ?? 'sin_cotizar'
+  const cargoIdx        = CARGO_STEPS.indexOf(cargoStatus)
+  const forwarderIdx    = FORWARDER_STEPS.indexOf(forwarderStatus)
+  const cargoBranchDone     = cargoIdx >= CARGO_STEPS.length - 1
+  const forwarderBranchDone = forwarderIdx >= FORWARDER_STEPS.length - 1
 
   return (
     <div
@@ -627,7 +610,7 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
       {/* Botón principal — toggle del panel */}
       <button
         onClick={() => setOpen(o => !o)}
-        title="Ver sub-estados del proveedor"
+        title="Ver estado de carga y forwarder"
         className="flex flex-col items-center gap-1 w-full group"
       >
         <div
@@ -635,7 +618,7 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
             'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
             mainActive ? 'shadow-md scale-110' :
             mainDone   ? 'opacity-90' :
-            open       ? 'border-amber-500/70 bg-amber-500/10' :
+            open       ? 'border-indigo-500/70 bg-indigo-500/10' :
             'border-slate-600 bg-slate-800 group-hover:border-slate-500'
           )}
           style={mainDone || mainActive ? {
@@ -651,14 +634,14 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
               className="text-[9px] font-bold"
               style={mainActive ? { color: mainColor } : { color: '#475569' }}
             >
-              4
+              {idx + 1}
             </span>
           )}
         </div>
 
-        {/* Label dinámico según sub-estado */}
+        {/* Label fijo — el detalle de cada rama vive en el popover */}
         <div className="flex flex-col items-center gap-0">
-          {labelLines.map((line, i) => (
+          {['Preparación', 'embarque'].map((line, i) => (
             <span
               key={i}
               className={cn(
@@ -672,20 +655,24 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
           ))}
         </div>
 
-        {/* Fecha del sub-estado activo */}
-        {(() => {
-          const subStatus = PROVEEDOR_SUB_STEPS.includes(currentStatus) ? currentStatus : null
-          const { ts } = subStatus ? getStepDate(subStatus, imp) : { ts: null }
-          return ts ? (
-            <span className="text-[7px] font-mono leading-none" style={{ color: mainColor + 'bb' }}>
-              {dayjs(ts).format('DD/MM/YY')}
-            </span>
-          ) : (
-            <span className="text-[7px] text-slate-700">—</span>
-          )
-        })()}
+        {/* Puntos de rama — avance de carga y forwarder de un vistazo */}
+        <div className="flex items-center gap-1">
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{
+              backgroundColor: cargoBranchDone ? CARGO_COLOR : CARGO_COLOR + '33',
+              border: `1px solid ${CARGO_COLOR}`
+            }}
+          />
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{
+              backgroundColor: forwarderBranchDone ? FORWARDER_COLOR : FORWARDER_COLOR + '33',
+              border: `1px solid ${FORWARDER_COLOR}`
+            }}
+          />
+        </div>
 
-        {/* Indicador de expandible — pequeño chevron debajo del label */}
         <ChevronDown
           size={8}
           className="transition-transform duration-200"
@@ -696,292 +683,124 @@ function ProveedorNode({ currentStatus, onChangeStatus, imp, mainDone, mainActiv
         />
       </button>
 
-      {/* Panel de sub-pasos — solo visible cuando open */}
+      {/* Panel de dos columnas — Estado de carga | Forwarder (ramas paralelas, sin dependencia) */}
       <div
         className={cn(
           'absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-20',
-          'bg-slate-900 border border-amber-900/50 rounded-lg shadow-xl shadow-black/50',
+          'bg-slate-900 border border-indigo-900/50 rounded-lg shadow-xl shadow-black/50',
           'transition-all duration-150 origin-top',
           open ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
         )}
-        style={{ width: '160px' }}
+        style={{ width: '300px' }}
       >
         {/* Flecha apuntando hacia arriba */}
-        <div
-          className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-1.5 overflow-hidden"
-        >
-          <div className="w-3 h-3 bg-slate-900 border-l border-t border-amber-900/50 rotate-45 translate-y-1/2 mx-auto" />
+        <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-1.5 overflow-hidden">
+          <div className="w-3 h-3 bg-slate-900 border-l border-t border-indigo-900/50 rotate-45 translate-y-1/2 mx-auto" />
         </div>
 
-        <div className="px-2.5 py-2 space-y-1">
-          {PROVEEDOR_SUB_STEPS.map((sub, subIdx) => {
-            const subDone   = effectiveSubIdx > subIdx || (mainDone && effectiveSubIdx < 0)
-            const subActive = currentStatus === sub
-            const subFuture = effectiveSubIdx < subIdx && !mainDone
-            const subColor  = IMPORT_STATUS_COLORS[sub]
-            const { ts } = getStepDate(sub, imp)
-            const dateStr = ts ? dayjs(ts).format('DD/MM/YY') : null
+        <div className="grid grid-cols-2 gap-3 px-2.5 py-2.5">
+          {/* Columna: Estado de carga */}
+          <div>
+            <p className="text-[8px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: CARGO_COLOR }}>
+              Estado de carga
+            </p>
+            <div className="space-y-1">
+              {CARGO_STEPS.map((s, i) => {
+                const done   = cargoIdx > i
+                const active = cargoStatus === s
 
-            return (
-              <button
-                key={sub}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onChangeStatus(sub)
-                  setOpen(false)
-                }}
-                className="w-full flex items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
-              >
-                {/* Mini círculo */}
-                <div
-                  className={cn(
-                    'w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
-                    subDone   ? '' :
-                    subActive ? 'border-2 scale-110' :
-                    'border border-slate-600'
-                  )}
-                  style={subDone || subActive ? {
-                    borderColor: subColor,
-                    backgroundColor: subDone ? subColor + '44' : subColor + '22',
-                    boxShadow: subActive ? `0 0 6px ${subColor}66` : undefined
-                  } : {}}
-                >
-                  {subDone && !subActive && <Check size={7} style={{ color: subColor }} />}
-                </div>
-
-                {/* Texto + fecha */}
-                <div className="flex flex-col items-start min-w-0">
-                  <span
-                    className={cn(
-                      'text-[9px] leading-tight truncate transition-colors',
-                      subActive ? 'font-bold' : subFuture ? 'text-slate-600' : ''
-                    )}
-                    style={subDone || subActive ? { color: subColor } : {}}
+                return (
+                  <button
+                    key={s}
+                    onClick={(e) => { e.stopPropagation(); onUpdateCargo(s) }}
+                    className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
                   >
-                    {subLabels[sub]}
-                  </span>
-                  {dateStr ? (
-                    <span className="text-[8px] font-mono leading-none" style={{ color: subColor + 'aa' }}>
-                      {dateStr}
+                    <div
+                      className={cn(
+                        'w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
+                        done   ? '' :
+                        active ? 'border-2 scale-110' :
+                        'border border-slate-600'
+                      )}
+                      style={done || active ? {
+                        borderColor: CARGO_COLOR,
+                        backgroundColor: done ? CARGO_COLOR + '44' : CARGO_COLOR + '22',
+                        boxShadow: active ? `0 0 6px ${CARGO_COLOR}66` : undefined
+                      } : {}}
+                    >
+                      {done && !active && <Check size={7} style={{ color: CARGO_COLOR }} />}
+                    </div>
+                    <span
+                      className={cn('text-[9px] leading-tight text-left', active ? 'font-bold' : '')}
+                      style={done || active ? { color: CARGO_COLOR } : { color: '#94a3b8' }}
+                    >
+                      {CARGO_STATUS_LABELS[s]}
                     </span>
-                  ) : (
-                    <span className="text-[8px] text-slate-700 leading-none">—</span>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Nodo especial para la etapa "Forwarder" (sub-pasos inline) ───────────────
-function ForwarderNode({ currentStatus, onChangeStatus, mainDone, mainActive }: {
-  currentStatus: ImportStatus
-  onChangeStatus: (s: ImportStatus) => void
-  mainDone: boolean
-  mainActive: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open])
-
-  const activeSubIdx = FORWARDER_SUB_STEPS.indexOf(currentStatus)
-  const effectiveSubIdx = activeSubIdx >= 0 ? activeSubIdx : (mainDone ? FORWARDER_SUB_STEPS.length - 1 : -1)
-
-  const mainColor = '#38bdf8' // sky — color del grupo forwarder
-
-  const subLabels: Record<string, string> = {
-    forwarder:              'Forwarder sin cotizar',
-    cotizacion_pedida:      'Forwarder cot. pedida',
-    forwarder_seleccionado: 'Forwarder seleccionado',
-  }
-
-  const mainLabelLines: Record<string, string[]> = {
-    forwarder:              ['Sin', 'cotizar'],
-    cotizacion_pedida:      ['Cot.', 'pedida'],
-    forwarder_seleccionado: ['Fwd.', 'selec.'],
-  }
-  const labelLines = mainLabelLines[currentStatus] ?? ['Sin', 'cotizar']
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative z-10 flex flex-col items-center flex-1 gap-1"
-    >
-      <button
-        onClick={() => setOpen(o => !o)}
-        title="Ver sub-estados del forwarder"
-        className="flex flex-col items-center gap-1 w-full group"
-      >
-        <div
-          className={cn(
-            'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
-            mainActive ? 'shadow-md scale-110' :
-            mainDone   ? 'opacity-90' :
-            open       ? 'border-sky-500/70 bg-sky-500/10' :
-            'border-slate-600 bg-slate-800 group-hover:border-slate-500'
-          )}
-          style={mainDone || mainActive ? {
-            borderColor: mainColor,
-            backgroundColor: mainDone ? mainColor + '33' : mainColor + '22',
-            boxShadow: mainActive || open ? `0 0 10px ${mainColor}55` : undefined
-          } : {}}
-        >
-          {mainDone && !mainActive ? (
-            <Check size={12} style={{ color: mainColor }} />
-          ) : (
-            <span
-              className="text-[9px] font-bold"
-              style={mainActive ? { color: mainColor } : { color: '#475569' }}
-            >
-              5
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center gap-0">
-          {labelLines.map((line, i) => (
-            <span
-              key={i}
-              className={cn(
-                'text-[8px] leading-tight text-center transition-colors',
-                mainActive ? 'font-bold' : mainDone ? '' : 'text-slate-600 group-hover:text-slate-400'
-              )}
-              style={mainActive || mainDone ? { color: mainColor } : {}}
-            >
-              {line}
-            </span>
-          ))}
-        </div>
-
-        <span className="text-[7px] text-slate-700">—</span>
-
-        <ChevronDown
-          size={8}
-          className="transition-transform duration-200"
-          style={{
-            color: mainDone || mainActive ? mainColor + '99' : '#475569',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)'
-          }}
-        />
-      </button>
-
-      <div
-        className={cn(
-          'absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-20',
-          'bg-slate-900 border border-sky-900/50 rounded-lg shadow-xl shadow-black/50',
-          'transition-all duration-150 origin-top',
-          open ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
-        )}
-        style={{ width: '170px' }}
-      >
-        <div
-          className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-1.5 overflow-hidden"
-        >
-          <div className="w-3 h-3 bg-slate-900 border-l border-t border-sky-900/50 rotate-45 translate-y-1/2 mx-auto" />
-        </div>
-
-        <div className="px-2.5 py-2 space-y-1">
-          {/* "Sin cotizar" — estado inicial no seleccionable */}
-          <div className="flex items-center gap-2 px-1 py-0.5 cursor-default">
-            <div
-              className="w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center"
-              style={effectiveSubIdx === 0 || (effectiveSubIdx < 0 && mainActive && currentStatus === 'forwarder') ? {
-                borderWidth: '2px', borderStyle: 'solid',
-                borderColor: IMPORT_STATUS_COLORS.forwarder,
-                backgroundColor: IMPORT_STATUS_COLORS.forwarder + '22',
-                boxShadow: `0 0 6px ${IMPORT_STATUS_COLORS.forwarder}66`
-              } : effectiveSubIdx > 0 || mainDone ? {
-                borderWidth: '1px', borderStyle: 'solid',
-                borderColor: IMPORT_STATUS_COLORS.forwarder,
-                backgroundColor: IMPORT_STATUS_COLORS.forwarder + '44'
-              } : { borderWidth: '1px', borderStyle: 'solid', borderColor: '#475569' }}
-            >
-              {(effectiveSubIdx > 0 || mainDone) && !mainActive && (
-                <Check size={7} style={{ color: IMPORT_STATUS_COLORS.forwarder }} />
-              )}
-            </div>
-            <div className="flex flex-col items-start">
-              <span className="text-[9px] leading-tight text-slate-500" style={currentStatus === 'forwarder' ? { color: IMPORT_STATUS_COLORS.forwarder, fontWeight: 'bold' } : {}}>
-                {subLabels.forwarder}
-              </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
-          {/* Sub-estados seleccionables */}
-          {(['cotizacion_pedida', 'forwarder_seleccionado'] as ImportStatus[]).map((sub, i) => {
-            const subIdx    = i + 1
-            const subDone   = effectiveSubIdx > subIdx || mainDone
-            const subActive = currentStatus === sub
-            const subFuture = effectiveSubIdx < subIdx && !mainDone
-            const subColor  = IMPORT_STATUS_COLORS[sub]
+          {/* Columna: Gestión de forwarder */}
+          <div>
+            <p className="text-[8px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: FORWARDER_COLOR }}>
+              Forwarder
+            </p>
+            <div className="space-y-1">
+              {FORWARDER_STEPS.map((s, i) => {
+                const done   = forwarderIdx > i
+                const active = forwarderStatus === s
 
-            return (
-              <button
-                key={sub}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onChangeStatus(sub)
-                  setOpen(false)
-                }}
-                className="w-full flex items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
-              >
-                <div
-                  className={cn(
-                    'w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
-                    subDone   ? '' :
-                    subActive ? 'border-2 scale-110' :
-                    'border border-slate-600'
-                  )}
-                  style={subDone || subActive ? {
-                    borderColor: subColor,
-                    backgroundColor: subDone ? subColor + '44' : subColor + '22',
-                    boxShadow: subActive ? `0 0 6px ${subColor}66` : undefined
-                  } : {}}
-                >
-                  {subDone && !subActive && <Check size={7} style={{ color: subColor }} />}
-                </div>
-                <div className="flex flex-col items-start min-w-0">
-                  <span
-                    className={cn(
-                      'text-[9px] leading-tight truncate transition-colors',
-                      subActive ? 'font-bold' : subFuture ? 'text-slate-600' : ''
-                    )}
-                    style={subDone || subActive ? { color: subColor } : {}}
+                return (
+                  <button
+                    key={s}
+                    onClick={(e) => { e.stopPropagation(); onUpdateForwarder(s) }}
+                    className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-800 transition-colors"
                   >
-                    {subLabels[sub]}
-                  </span>
-                </div>
-              </button>
-            )
-          })}
+                    <div
+                      className={cn(
+                        'w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
+                        done   ? '' :
+                        active ? 'border-2 scale-110' :
+                        'border border-slate-600'
+                      )}
+                      style={done || active ? {
+                        borderColor: FORWARDER_COLOR,
+                        backgroundColor: done ? FORWARDER_COLOR + '44' : FORWARDER_COLOR + '22',
+                        boxShadow: active ? `0 0 6px ${FORWARDER_COLOR}66` : undefined
+                      } : {}}
+                    >
+                      {done && !active && <Check size={7} style={{ color: FORWARDER_COLOR }} />}
+                    </div>
+                    <span
+                      className={cn('text-[9px] leading-tight text-left', active ? 'font-bold' : '')}
+                      style={done || active ? { color: FORWARDER_COLOR } : { color: '#94a3b8' }}
+                    >
+                      {FORWARDER_STATUS_LABELS[s]}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
+
+        {imp.status === 'preparacion_embarque' && !isReadyToShip(imp) && (
+          <p className="px-2.5 pb-2 text-[8px] text-slate-500 leading-snug">
+            Al llegar a Carga armada + Forwarder seleccionado (y el pago resuelto, si aplica), pasa sola a "Listo para embarcar".
+          </p>
+        )}
       </div>
     </div>
   )
 }
 
-function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
+function ImportTimeline({ currentStatus, onChangeStatus, onUpdateCargoStatus, onUpdateForwarderStatus, imp }: {
   currentStatus: ImportStatus
   onChangeStatus: (s: ImportStatus) => void
+  onUpdateCargoStatus: (s: CargoStatus) => void
+  onUpdateForwarderStatus: (s: ForwarderStatus) => void
   imp: ComexImport
 }) {
   const steps = buildTimelineSteps(imp)
@@ -1009,33 +828,19 @@ function ImportTimeline({ currentStatus, onChangeStatus, imp }: {
         {/* Pasos */}
         <div className="relative flex">
           {steps.map((step, idx) => {
-            // El nodo "production" se renderiza como nodo compuesto de proveedor
-            if (step === 'production') {
+            // El nodo "preparacion_embarque" se renderiza como nodo compuesto (carga + forwarder)
+            if (step === 'preparacion_embarque') {
               const mainDone   = currentMainIdx > idx
               const mainActive = currentMainIdx === idx
               return (
-                <ProveedorNode
+                <PreparacionEmbarqueNode
                   key={step}
-                  currentStatus={currentStatus}
-                  onChangeStatus={onChangeStatus}
                   imp={imp}
                   mainDone={mainDone}
                   mainActive={mainActive}
-                />
-              )
-            }
-
-            // El nodo "forwarder" se renderiza como nodo compuesto de forwarder
-            if (step === 'forwarder') {
-              const mainDone   = currentMainIdx > idx
-              const mainActive = currentMainIdx === idx
-              return (
-                <ForwarderNode
-                  key={step}
-                  currentStatus={currentStatus}
-                  onChangeStatus={onChangeStatus}
-                  mainDone={mainDone}
-                  mainActive={mainActive}
+                  idx={idx}
+                  onUpdateCargo={onUpdateCargoStatus}
+                  onUpdateForwarder={onUpdateForwarderStatus}
                 />
               )
             }
@@ -6923,6 +6728,12 @@ export default function ComexImportDetail() {
     if (!imp) return   // imp puede ser null mientras carga
     const now    = Date.now()
     const status = imp.status as ImportStatus
+    // preparacion_embarque → listo_para_embarcar cuando ambas ramas (carga + forwarder)
+    // llegan a su estado final y el pago está resuelto (si corresponde). Ver isReadyToShip().
+    if (status === 'preparacion_embarque' && isReadyToShip(imp)) {
+      update.mutate({ id: imp.id, data: { status: 'listo_para_embarcar' } })
+      return
+    }
     // transit → arrived cuando llega el aviso de arribo
     if (status === 'transit' && imp.aviso_arribo_date && imp.aviso_arribo_date <= now) {
       update.mutate({ id: imp.id, data: { status: 'arrived' } })
@@ -6947,7 +6758,7 @@ export default function ComexImportDetail() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imp?.id, imp?.status, imp?.aviso_arribo_date, imp?.traslado_deposito_date, imp?.carga_deposito_date, imp?.carga_deposito_time])
+  }, [imp?.id, imp?.status, imp?.cargo_status, imp?.forwarder_status, imp?.payment_terms, imp?.payment_date, imp?.aviso_arribo_date, imp?.traslado_deposito_date, imp?.carga_deposito_date, imp?.carga_deposito_time])
 
   if (isLoading) {
     return <div className="flex-1 flex items-center justify-center text-slate-500">Cargando...</div>
@@ -7152,6 +6963,8 @@ export default function ComexImportDetail() {
       <ImportTimeline
         currentStatus={imp.status as ImportStatus}
         onChangeStatus={(s) => upd({ status: s })}
+        onUpdateCargoStatus={(s) => upd({ cargo_status: s })}
+        onUpdateForwarderStatus={(s) => upd({ forwarder_status: s })}
         imp={imp}
       />
 
@@ -7320,17 +7133,17 @@ export default function ComexImportDetail() {
             <EditableDate
               label="Carga armada en depósito"
               value={imp.carga_armada_date}
-              onSave={(v) => upd({ carga_armada_date: v, ...(v ? { status: 'carga_armada' as ImportStatus } : {}) })}
+              onSave={(v) => upd({ carga_armada_date: v, ...(v ? { cargo_status: 'carga_armada' as CargoStatus } : {}) })}
             />
-            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza a "Carga armada"</p>
+            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza Estado de carga a "Carga armada"</p>
           </div>
           <div>
             <EditableDate
               label="En terminal / Esperando embarque"
               value={imp.esperando_embarcar_date}
-              onSave={(v) => upd({ esperando_embarcar_date: v, ...(v ? { status: 'esperando_embarcar' as ImportStatus } : {}) })}
+              onSave={(v) => upd({ esperando_embarcar_date: v, ...(v ? { cargo_status: 'esperando_embarque' as CargoStatus } : {}) })}
             />
-            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza a "Esp. embarque"</p>
+            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza Estado de carga a "Esperando embarque"</p>
           </div>
         </div>
 

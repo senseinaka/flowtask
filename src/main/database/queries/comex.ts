@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
 import { getDb } from '../db'
+import { deriveLegacyCargoStatus, deriveLegacyForwarderStatus, normalizeLegacyStatus } from '@shared/types'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
@@ -108,6 +109,20 @@ export async function deleteSupplier(id: string): Promise<void> {
 
 function hydrateImport(row: Record<string, unknown>): ComexImport {
   const imp = row as unknown as ComexImport
+  // Filas viejas con status en el enum legacy (production/forwarder/etc.) ya no
+  // existen en ImportStatus: se remapean a 'preparacion_embarque' al leer.
+  imp.status = normalizeLegacyStatus(row.status as string)
+  // Filas creadas antes de que existieran cargo_status/forwarder_status: derivar
+  // un valor de respaldo para mostrar (nunca se escribe acá — el primer cambio
+  // real desde el popover ya guarda el campo de verdad).
+  if (!imp.cargo_status) {
+    imp.cargo_status = deriveLegacyCargoStatus(
+      row.status as string, row.carga_armada_date as number | null, row.esperando_embarcar_date as number | null
+    )
+  }
+  if (!imp.forwarder_status) {
+    imp.forwarder_status = deriveLegacyForwarderStatus(row.status as string)
+  }
   if (row._supplier_id) {
     imp.supplier = {
       id: row._supplier_id as string,
@@ -238,6 +253,7 @@ export async function updateImport(id: string, data: Partial<ComexImport>): Prom
     'tc_eur_ars', 'cost_pct', 'proformas_folder_id', 'facturas_folder_id',
     'despacho_folder_id','despacho_stored_name','despacho_original_name',
     'despacho_drive_file_id','despacho_drive_status',
+    'cargo_status','forwarder_status',
     'carga_armada_date','esperando_embarcar_date',
     'aviso_arribo_date','traslado_deposito_date','oficializacion_import_date',
     'carga_deposito_date','carga_deposito_time',

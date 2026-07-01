@@ -475,9 +475,85 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 // ─── Comex (Comercio Exterior) ────────────────────────────────────────────────
 
 export type ImportStatus =
-  | 'planning' | 'ordered' | 'paid' | 'production' | 'carga_armada' | 'esperando_embarcar'
-  | 'forwarder' | 'cotizacion_pedida' | 'forwarder_seleccionado'
+  | 'planning' | 'ordered' | 'paid' | 'preparacion_embarque' | 'listo_para_embarcar'
   | 'shipped'  | 'transit' | 'arrived' | 'customs' | 'oficializado' | 'carga_deposito' | 'delivered'
+
+/** Valores viejos de `status` (pre jul-2026), de cuando carga y forwarder eran
+ *  sub-pasos de UN solo campo secuencial en vez de dos ramas paralelas. Ya no
+ *  se escriben, pero pueden seguir en filas viejas — normalizeLegacyStatus()
+ *  los mapea a 'preparacion_embarque' para no romper el timeline. */
+type LegacyImportStatus = 'production' | 'carga_armada' | 'esperando_embarcar' | 'forwarder' | 'cotizacion_pedida' | 'forwarder_seleccionado'
+
+export function normalizeLegacyStatus(status: string): ImportStatus {
+  const legacy: LegacyImportStatus[] = ['production', 'carga_armada', 'esperando_embarcar', 'forwarder', 'cotizacion_pedida', 'forwarder_seleccionado']
+  return (legacy as string[]).includes(status) ? 'preparacion_embarque' : (status as ImportStatus)
+}
+
+// ── Carga y Forwarder — ramas paralelas de "Preparación para embarque" ───────
+// Antes eran sub-pasos de `status` (secuencial, no podían avanzar juntos). Ahora
+// son dos campos independientes: una operación puede tener la carga armada Y
+// el forwarder sin cotizar todavía, o al revés — ver isReadyToShip() más abajo.
+
+export type CargoStatus = 'en_armado' | 'carga_armada' | 'esperando_embarque'
+export type ForwarderStatus = 'sin_cotizar' | 'cotizacion_pedida' | 'cotizacion_recibida' | 'forwarder_seleccionado'
+
+export const CARGO_STATUS_LABELS: Record<CargoStatus, string> = {
+  en_armado:          'Carga en armado',
+  carga_armada:       'Carga armada',
+  esperando_embarque: 'Esperando embarque'
+}
+
+export const FORWARDER_STATUS_LABELS: Record<ForwarderStatus, string> = {
+  sin_cotizar:            'Forwarder sin cotizar',
+  cotizacion_pedida:      'Cotización pedida',
+  cotizacion_recibida:    'Cotización recibida',
+  forwarder_seleccionado: 'Forwarder seleccionado'
+}
+
+export const CARGO_COLOR = '#f59e0b'      // amber — misma familia que antes (production)
+export const FORWARDER_COLOR = '#38bdf8'  // sky — misma familia que antes (forwarder)
+
+/** Deriva un cargo_status de respaldo para filas viejas (creadas antes de que
+ *  existiera esta columna) a partir de las fechas y del status legacy — nunca
+ *  escribe nada, es solo para mostrar algo razonable hasta el primer edit. */
+export function deriveLegacyCargoStatus(
+  status: string,
+  cargaArmadaDate: number | null,
+  esperandoEmbarcarDate: number | null
+): CargoStatus {
+  if (esperandoEmbarcarDate) return 'esperando_embarque'
+  if (cargaArmadaDate) return 'carga_armada'
+  if (status === 'carga_armada' || status === 'esperando_embarcar') return status === 'carga_armada' ? 'carga_armada' : 'esperando_embarque'
+  // Si el status ya avanzó más allá de la preparación, la carga tuvo que haber estado lista.
+  const past: string[] = ['shipped', 'transit', 'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered']
+  if (past.includes(status)) return 'esperando_embarque'
+  return 'en_armado'
+}
+
+export function deriveLegacyForwarderStatus(status: string): ForwarderStatus {
+  if (status === 'cotizacion_pedida') return 'cotizacion_pedida'
+  if (status === 'forwarder_seleccionado') return 'forwarder_seleccionado'
+  const past: string[] = ['shipped', 'transit', 'arrived', 'customs', 'oficializado', 'carga_deposito', 'delivered']
+  if (past.includes(status)) return 'forwarder_seleccionado'
+  return 'sin_cotizar'
+}
+
+/** true cuando la carga está como mínimo armada, el forwarder está
+ *  seleccionado, y el pago está resuelto (si el proveedor lo requiere
+ *  anticipado — si no, el pago no bloquea). Se calcula siempre, nunca se
+ *  guarda — el auto-avance de `status` a 'listo_para_embarcar' vive en
+ *  ComexImportDetail.tsx, junto con las otras auto-transiciones por fecha. */
+export function isReadyToShip(imp: {
+  cargo_status: CargoStatus | null
+  forwarder_status: ForwarderStatus | null
+  payment_terms: string | null
+  payment_date: number | null
+}): boolean {
+  const cargoReady = imp.cargo_status === 'carga_armada' || imp.cargo_status === 'esperando_embarque'
+  const forwarderReady = imp.forwarder_status === 'forwarder_seleccionado'
+  const paymentReady = imp.payment_terms !== 'anticipado' || imp.payment_date != null
+  return cargoReady && forwarderReady && paymentReady
+}
 
 export type DocumentType =
   | 'invoice' | 'packing_list' | 'bill_of_lading' | 'certificate_of_origin'
@@ -495,12 +571,8 @@ export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
   planning:              'Planificación',
   ordered:               'Pedido enviado',
   paid:                  'Pago realizado',
-  production:            'En producción',
-  carga_armada:          'Carga armada',
-  esperando_embarcar:    'Esperando embarcar',
-  forwarder:             'Forwarder sin cotizar',
-  cotizacion_pedida:     'Forwarder cotización pedida',
-  forwarder_seleccionado:'Forwarder seleccionado',
+  preparacion_embarque:  'Preparación para embarque',
+  listo_para_embarcar:   'Listo para embarcar',
   shipped:               'Embarcado',
   transit:      'En tránsito',
   arrived:      'Arribado',
@@ -514,12 +586,8 @@ export const IMPORT_STATUS_COLORS: Record<ImportStatus, string> = {
   planning:              '#94a3b8',  // slate
   ordered:               '#60a5fa',  // blue
   paid:                  '#34d399',  // emerald
-  production:            '#f59e0b',  // amber
-  carga_armada:          '#fb923c',  // orange — misma familia proveedor
-  esperando_embarcar:    '#f97316',  // orange oscuro — misma familia proveedor
-  forwarder:             '#38bdf8',  // sky — grupo forwarder
-  cotizacion_pedida:     '#0ea5e9',  // sky oscuro
-  forwarder_seleccionado:'#0284c7',  // sky más oscuro
+  preparacion_embarque:  '#6366f1',  // indigo — nodo compuesto (carga=ámbar + forwarder=sky por dentro)
+  listo_para_embarcar:   '#b45309',  // amber oscuro — checkpoint intermedio
   shipped:               '#6366f1',  // indigo
   transit:      '#8b5cf6',  // violet
   arrived:      '#06b6d4',  // cyan
@@ -1230,9 +1298,12 @@ export interface ComexImport {
   // ── Campos operativos (forwarder, despachante, BL) ──────────────────────────
   freight_operator_id:    string | null   // FK a comex_freight_operators
   gestor_id:              string | null   // FK a comex_gestores
+  // ── Preparación para embarque: ramas paralelas de carga y forwarder ────────
+  cargo_status:      CargoStatus | null
+  forwarder_status:  ForwarderStatus | null
   // ── Fechas de llegada y proceso final ────────────────────────────────────
-  carga_armada_date:          number | null   // → sub-estado proveedor: carga armada
-  esperando_embarcar_date:    number | null   // → sub-estado proveedor: en terminal
+  carga_armada_date:          number | null   // → sub-estado de carga: carga armada
+  esperando_embarcar_date:    number | null   // → sub-estado de carga: esperando embarque
   aviso_arribo_date:          number | null   // → auto-avanza a 'arrived'
   traslado_deposito_date:     number | null   // → auto-avanza a 'customs'
   oficializacion_import_date: number | null   // → sugiere 'oficializado'

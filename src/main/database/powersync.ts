@@ -606,6 +606,8 @@ const comex_imports = new Table(
     pl_drive_file_id: column.text,
     pl_drive_status: column.text,
     pl_extracted_json: column.text,
+    cargo_status: column.text,
+    forwarder_status: column.text,
     carga_armada_date: column.integer,
     esperando_embarcar_date: column.integer,
     docs_to_despachante: column.integer,

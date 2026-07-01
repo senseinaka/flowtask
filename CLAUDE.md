@@ -904,25 +904,64 @@ comex_documents → comex_import_items → comex_imports
 
 ---
 
-## Patrón: nodos compuestos en el timeline de importación
+## Patrón: nodo compuesto "Preparación para embarque" (ramas paralelas — jul 2026)
 
-El timeline de comex (`ComexImportDetail.tsx`) tiene dos tipos de nodos:
-- **Nodo simple:** botón que llama `onChangeStatus(step)` directamente.
-- **Nodo compuesto:** abre un panel con sub-estados (expandible, click-outside + Escape para cerrar).
+### Por qué se rediseñó
 
-Nodos compuestos existentes:
-- `ProveedorNode` (paso 4, color amber `#f59e0b`): sub-estados `production → carga_armada → esperando_embarcar`
-- `ForwarderNode` (paso 5, color sky `#38bdf8`): sub-estados `forwarder → cotizacion_pedida → forwarder_seleccionado`. El primer sub-estado ("Forwarder sin cotizar") es el estado inicial automático, no aparece como botón seleccionable en el panel.
+Hasta jul 2026 el timeline de comex codificaba el "estado de carga" y la "gestión de
+forwarder" como sub-estados del mismo campo `ImportStatus`, lo que implicaba una
+secuencia falsa (una operación no podía tener progreso de carga Y de forwarder al
+mismo tiempo, porque `status` solo puede valer una cosa). Se separó en dos campos
+independientes:
 
-Para agregar un nuevo nodo compuesto:
-1. Agregar los nuevos valores a `ImportStatus` en `types.ts` + sus labels y colores.
-2. Agregar el paso principal a `TIMELINE_STEPS` (entre los pasos correctos).
-3. Agregar `NUEVO_SUB_STEPS` con los sub-estados.
-4. Actualizar `toMainStep()` para que los sub-estados mapeen al paso principal.
-5. Actualizar `getStepDate()` para los nuevos estados (puede devolver `{ ts: null }` si no hay fecha específica).
-6. Crear el componente `NuevoNode` copiando `ProveedorNode` o `ForwarderNode` como template.
-7. Agregar el `if (step === 'nuevo')` en el `.map()` de `ImportTimeline`.
-8. **No requiere migración de DB** — `status` es TEXT sin CHECK constraint en SQLite ni en Supabase.
+- `cargo_status: CargoStatus | null` — `'en_armado' | 'carga_armada' | 'esperando_embarque'`
+- `forwarder_status: ForwarderStatus | null` — `'sin_cotizar' | 'cotizacion_pedida' | 'cotizacion_recibida' | 'forwarder_seleccionado'`
+
+Ambos son columnas PowerSync nuevas en `comex_imports` (no requirieron migración de
+Supabase/RLS — la tabla ya tenía policy `FOR ALL` + `GRANT`, solo se agregaron
+columnas additivas al `Table()` de `powersync.ts`).
+
+`ImportStatus` (el campo principal, secuencial de verdad) quedó simplificado:
+`planning → ordered → (paid) → preparacion_embarque → listo_para_embarcar → shipped → transit → arrived → customs → oficializado → carga_deposito → delivered`.
+
+### Nodo compuesto único (reemplaza a `ProveedorNode` + `ForwarderNode`)
+
+`PreparacionEmbarqueNode` (en `ComexImportDetail.tsx`) es el paso `preparacion_embarque`
+del timeline: un único botón (color indigo `#6366f1`, con dos puntitos de color amber/sky
+debajo indicando el avance de cada rama) que abre un panel de **dos columnas
+independientes** — Estado de carga (amber `#f59e0b`) y Forwarder (sky `#38bdf8`) — sin
+implicar dependencia entre ambas. Cada columna llama `onUpdateCargo`/`onUpdateForwarder`
+por separado (`upd({ cargo_status: s })` / `upd({ forwarder_status: s })`).
+
+`'listo_para_embarcar'` es un paso normal (no compuesto) en el `.map()` de
+`ImportTimeline` — se renderiza como cualquier nodo simple.
+
+### Auto-transición real (no solo visual)
+
+Cuando ambas ramas llegan a su estado final (`cargo_status` ∈ {`carga_armada`,
+`esperando_embarque`} **y** `forwarder_status === 'forwarder_seleccionado'`, y el pago
+está resuelto si `payment_terms === 'anticipado'`), el `useEffect` de auto-transición
+(~línea 6727 de `ComexImportDetail.tsx`) mueve `status` de `preparacion_embarque` a
+`listo_para_embarcar` automáticamente — es un valor real guardado, no un overlay
+calculado. La condición vive en `isReadyToShip()` (`shared/types.ts`).
+
+### Compatibilidad con operaciones existentes
+
+`ImportStatus` eliminó los 6 valores legacy (`production`, `carga_armada`,
+`esperando_embarcar`, `forwarder`, `cotizacion_pedida`, `forwarder_seleccionado`) que
+antes vivían mezclados en `status`. Para no romper filas viejas:
+- `normalizeLegacyStatus()` remapea esos 6 valores a `'preparacion_embarque'` — se
+  aplica en `hydrateImport()` (`queries/comex.ts`) **al leer**, nunca se reescribe la DB.
+- `deriveLegacyCargoStatus()` / `deriveLegacyForwarderStatus()` derivan un valor de
+  respaldo para `cargo_status`/`forwarder_status` en filas donde esas columnas nuevas
+  están vacías, a partir del `status` legacy y las fechas existentes
+  (`carga_armada_date`, `esperando_embarcar_date`). También solo en lectura — el
+  primer cambio real desde el popover graba el campo de verdad.
+
+Para agregar un estado nuevo a alguna de las dos ramas: agregar el valor a
+`CargoStatus`/`ForwarderStatus` + su label en `CARGO_STATUS_LABELS`/
+`FORWARDER_STATUS_LABELS` (`shared/types.ts`) — `CARGO_STEPS`/`FORWARDER_STEPS` en
+`ComexImportDetail.tsx` se derivan con `Object.keys(...)`, no hace falta tocarlos.
 
 ---
 

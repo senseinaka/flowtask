@@ -164,7 +164,7 @@ function DocChecklist({ imp }: { imp: ComexImport }) {
     { label: 'Costos',   state: imp.cost_pct != null ? 'ok' : 'missing' },
   ]
 
-  const isEarly   = ['planning','ordered','paid','production'].includes(imp.status)
+  const isEarly   = ['planning','ordered','paid','preparacion_embarque'].includes(imp.status)
   const isShipped = ['shipped','transit','customs','delivered'].includes(imp.status)
 
   const visible = docs.filter(d => {

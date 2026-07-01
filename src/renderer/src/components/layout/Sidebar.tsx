@@ -428,7 +428,7 @@ export default function Sidebar() {
       {openPanel && (
         <div
           className="absolute top-0 left-full h-full z-50 bg-slate-800 border-r border-slate-600 overflow-y-auto"
-          style={{ width: 148, boxShadow: '4px 0 20px rgba(0,0,0,.45)' }}
+          style={{ width: 220, boxShadow: '4px 0 20px rgba(0,0,0,.45)' }}
         >
 
           {openPanel === 'trabajo' && (
