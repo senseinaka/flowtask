@@ -47,6 +47,10 @@ import RrhhEmpresaLayout from './routes/rrhh/RrhhEmpresaContext'
 import AgendaContactos from './routes/agenda/AgendaContactos'
 import AgendaGrupos from './routes/agenda/AgendaGrupos'
 import CajasDashboard from './routes/contable/CajasDashboard'
+import MaintenanceDashboard from './routes/maintenance/MaintenanceDashboard'
+import MaintenanceEmpresaLayout from './routes/maintenance/MaintenanceEmpresaContext'
+import MaintenanceTasksList from './routes/maintenance/MaintenanceTasksList'
+import MaintenanceTaskDetail from './routes/maintenance/MaintenanceTaskDetail'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -108,6 +112,15 @@ const router = createHashRouter([
       },
       { path: 'agenda/contactos', element: <AgendaContactos /> },
       { path: 'agenda/grupos',    element: <AgendaGrupos /> },
+      { path: 'mantenimiento', element: <MaintenanceDashboard /> },
+      {
+        path: 'mantenimiento/:empresa',
+        element: <MaintenanceEmpresaLayout />,
+        children: [
+          { index: true, element: <MaintenanceTasksList /> },
+          { path: ':id', element: <MaintenanceTaskDetail /> }
+        ]
+      },
       { path: 'rrhh/nomina', element: <Navigate to="/rrhh/nomina/naka" replace /> },
       {
         path: 'rrhh/nomina/:empresa',

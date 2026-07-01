@@ -19,6 +19,7 @@ export const PROMPT_LABELS: Partial<Record<AIOperation, string>> = {
   extract_factura_deposito:'Facturas de depósito fiscal',
   extract_factura_local:   'Facturas locales (despachante, etc.)',
   extract_vep_anmat:       'VEP ANMAT - Libre Circulación',
+  extract_baja_laboral:    'Constancia de baja laboral (RRHH)',
   extract_general:         'Análisis general de documentos',
 }
 
@@ -393,6 +394,13 @@ REGLAS CRÍTICAS:
 8. Si un campo no está claramente visible: devolvé null — no inventes.`
 // <PROMPT_END:extract_factura_local>
 
+// <PROMPT_START:extract_baja_laboral>
+const PROMPT_EXTRACT_BAJA_LABORAL = `Sos un experto en documentación laboral argentina.
+Analizá esta constancia de baja de un trabajador (ej: "Constancia del Trabajador - Baja" de ARCA/AFIP)
+y extraé la fecha de cese (formato DD-MM-AAAA) y el motivo/situación de baja tal cual figuran en el
+documento, sin interpretar ni resumir.`
+// <PROMPT_END:extract_baja_laboral>
+
 // <PROMPT_START:extract_general>
 const PROMPT_EXTRACT_GENERAL = `Sos un asistente experto en documentos de comercio exterior argentino.
 Analizá el documento y respondé de forma clara y estructurada en español.`
@@ -416,5 +424,6 @@ export const DEFAULT_SYSTEM_PROMPTS: Partial<Record<AIOperation, string>> = {
   extract_factura_deposito:PROMPT_EXTRACT_FACTURA_DEPOSITO,
   extract_factura_local:   PROMPT_EXTRACT_FACTURA_LOCAL,
   extract_vep_anmat:       PROMPT_EXTRACT_VEP_ANMAT,
+  extract_baja_laboral:    PROMPT_EXTRACT_BAJA_LABORAL,
   extract_general:         PROMPT_EXTRACT_GENERAL,
 }

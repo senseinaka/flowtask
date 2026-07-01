@@ -31,6 +31,8 @@ import { getDb } from './database/db'
 import { runMigrations } from './database/migrations'
 import { connectPowerSync, registerSyncListeners } from './database/powersync'
 import { registerTaskIpc } from './ipc/tasks.ipc'
+import { registerTeamTaskIpc } from './ipc/team-tasks.ipc'
+import { registerMaintenanceIpc } from './ipc/maintenance.ipc'
 import { registerProjectIpc } from './ipc/projects.ipc'
 import { registerAttachmentIpc } from './ipc/attachments.ipc'
 import { registerReminderIpc } from './ipc/reminders.ipc'
@@ -178,6 +180,8 @@ app.whenReady().then(() => {
 
   // Register IPC
   registerTaskIpc()
+  registerTeamTaskIpc()
+  registerMaintenanceIpc()
   registerProjectIpc()
   registerAttachmentIpc()
   registerReminderIpc()

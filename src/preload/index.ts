@@ -7,7 +7,10 @@ import type {
   ComexCotizacion, ComexMoneda, BcraRateEntry, BcraCotizacionHoy,
   ComexAlarmaCotizacion, CreateAlarmaCotizacionInput,
   BackupStatus, LocalBackupStatus, LocalBackupEntry, RestoreResult,
-  Task, Project, Attachment, Reminder, Contact, CreateContactInput,
+  Task, TeamTask, CreateTeamTaskInput, Project, Attachment, Reminder, Contact, CreateContactInput,
+  MaintenanceCategory, MaintenanceLocation, MaintenanceTask, MaintenanceTaskFilters, MaintenanceCompany,
+  CreateMaintenanceTaskInput, MaintenanceTaskUpdate, CreateMaintenanceUpdateInput,
+  MaintenanceTaskNote, MaintenanceTaskPhoto, MaintenancePhotoPhase,
   AgendaGrupo, CreateAgendaGrupoInput,
   DelegatedTask, CreateDelegatedTaskInput,
   MessageTemplate, ScheduledMessage, CreateScheduledMessageInput,
@@ -59,7 +62,7 @@ import type {
   RrhhColaborador, RrhhPeriodo, RrhhSueldo, RrhhEmpresa,
   RrhhSueldoConColaborador, RrhhPeriodoConStats, RrhhHistorialEntry,
   RrhhSmartAlert, SavePayrollResult, SaveVacacionesResult, SaveSacResult,
-  RrhhColaboradorConStats, RrhhNominaConfig,
+  RrhhColaboradorConStats, RrhhNominaConfig, ExtractedBajaLaboral,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
   RrhhLista, RrhhListaTipo, UpsertListaInput,
   ImportParseResult, LegajoDecision, ConfirmImportInput,
@@ -95,6 +98,68 @@ const api = {
       ipcRenderer.invoke('tasks:removeDependency', taskId, dependsOnId),
     statusLog: (taskId: string, taskType: TaskType): Promise<TaskStatusLogEntry[]> =>
       ipcRenderer.invoke('tasks:statusLog', taskId, taskType)
+  },
+  teamTasks: {
+    list: (filters?: TaskFilters): Promise<TeamTask[]> =>
+      ipcRenderer.invoke('team-tasks:list', filters),
+    get: (id: string): Promise<TeamTask | null> =>
+      ipcRenderer.invoke('team-tasks:get', id),
+    create: (data: CreateTeamTaskInput): Promise<TeamTask> =>
+      ipcRenderer.invoke('team-tasks:create', data),
+    update: (id: string, data: Partial<TeamTask>): Promise<TeamTask | null> =>
+      ipcRenderer.invoke('team-tasks:update', id, data),
+    delete: (id: string): Promise<void> =>
+      ipcRenderer.invoke('team-tasks:delete', id),
+    getDependencies: (taskId: string): Promise<TeamTask[]> =>
+      ipcRenderer.invoke('team-tasks:getDependencies', taskId),
+    addDependency: (taskId: string, dependsOnId: string): Promise<void> =>
+      ipcRenderer.invoke('team-tasks:addDependency', taskId, dependsOnId),
+    removeDependency: (taskId: string, dependsOnId: string): Promise<void> =>
+      ipcRenderer.invoke('team-tasks:removeDependency', taskId, dependsOnId),
+    statusLog: (taskId: string): Promise<TaskStatusLogEntry[]> =>
+      ipcRenderer.invoke('team-tasks:statusLog', taskId)
+  },
+
+  maintenance: {
+    categories: {
+      list:   (soloActivas?: boolean): Promise<MaintenanceCategory[]> => ipcRenderer.invoke('maintenance:categories:list', soloActivas),
+      upsert: (data: { id?: string; nombre: string; orden?: number; activo?: number }): Promise<MaintenanceCategory> =>
+        ipcRenderer.invoke('maintenance:categories:upsert', data),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('maintenance:categories:delete', id),
+    },
+    locations: {
+      list:   (company: MaintenanceCompany, soloActivas?: boolean): Promise<MaintenanceLocation[]> =>
+        ipcRenderer.invoke('maintenance:locations:list', company, soloActivas),
+      upsert: (data: { id?: string; company: MaintenanceCompany; nombre: string; orden?: number; activo?: number }): Promise<MaintenanceLocation> =>
+        ipcRenderer.invoke('maintenance:locations:upsert', data),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('maintenance:locations:delete', id),
+    },
+    tasks: {
+      list:   (filters?: MaintenanceTaskFilters): Promise<MaintenanceTask[]> => ipcRenderer.invoke('maintenance:tasks:list', filters),
+      get:    (id: string): Promise<MaintenanceTask | null> => ipcRenderer.invoke('maintenance:tasks:get', id),
+      create: (input: CreateMaintenanceTaskInput): Promise<MaintenanceTask> => ipcRenderer.invoke('maintenance:tasks:create', input),
+      update: (id: string, data: Partial<MaintenanceTask>): Promise<MaintenanceTask | null> => ipcRenderer.invoke('maintenance:tasks:update', id, data),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('maintenance:tasks:delete', id),
+      changeStatus: (id: string, newStatus: MaintenanceTask['status'], comment?: string | null): Promise<MaintenanceTask | null> =>
+        ipcRenderer.invoke('maintenance:tasks:changeStatus', id, newStatus, comment),
+    },
+    updates: {
+      list: (taskId: string): Promise<MaintenanceTaskUpdate[]> => ipcRenderer.invoke('maintenance:updates:list', taskId),
+      add:  (input: CreateMaintenanceUpdateInput): Promise<MaintenanceTaskUpdate> => ipcRenderer.invoke('maintenance:updates:add', input),
+    },
+    notes: {
+      list:   (taskId: string): Promise<MaintenanceTaskNote[]> => ipcRenderer.invoke('maintenance:notes:list', taskId),
+      add:    (taskId: string, text: string): Promise<MaintenanceTaskNote> => ipcRenderer.invoke('maintenance:notes:add', taskId, text),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('maintenance:notes:delete', id),
+    },
+    photos: {
+      selectFiles: (): Promise<string[]> => ipcRenderer.invoke('maintenance:photos:selectFiles'),
+      list:   (taskId: string): Promise<MaintenanceTaskPhoto[]> => ipcRenderer.invoke('maintenance:photos:list', taskId),
+      upload: (taskId: string, localPath: string, phase: MaintenancePhotoPhase | null, isMain: boolean): Promise<MaintenanceTaskPhoto> =>
+        ipcRenderer.invoke('maintenance:photos:upload', taskId, localPath, phase, isMain),
+      delete:   (id: string): Promise<void> => ipcRenderer.invoke('maintenance:photos:delete', id),
+      openFile: (driveFileId: string): Promise<void> => ipcRenderer.invoke('maintenance:photos:openFile', driveFileId),
+    },
   },
 
   projects: {
@@ -1211,6 +1276,10 @@ const api = {
         uploadFoto:     (id: string, localPath: string): Promise<string>                           => ipcRenderer.invoke('rrhh:nomina:colaboradores:uploadFoto', id, localPath),
         uploadCv:       (id: string, localPath: string): Promise<string>                           => ipcRenderer.invoke('rrhh:nomina:colaboradores:uploadCv', id, localPath),
         getFotoDataUrl: (id: string): Promise<string | null>                                       => ipcRenderer.invoke('rrhh:nomina:colaboradores:getFotoDataUrl', id),
+        selectBajaFile: (): Promise<string | null>                                                 => ipcRenderer.invoke('rrhh:nomina:colaboradores:selectBajaFile'),
+        extraerBaja:    (filePath: string): Promise<ExtractedBajaLaboral>                          => ipcRenderer.invoke('rrhh:nomina:colaboradores:extraerBaja', filePath),
+        baja:           (id: string, data: { fecha_egreso: string; motivo_egreso: string | null; filePath?: string | null }): Promise<{ success: true; driveError?: string }> =>
+          ipcRenderer.invoke('rrhh:nomina:colaboradores:baja', id, data),
       },
       config: {
         get:    (empresa: RrhhEmpresa): Promise<RrhhNominaConfig | null>                           => ipcRenderer.invoke('rrhh:nomina:config:get', empresa),

@@ -5,7 +5,8 @@ import { Bot, Loader2, ShieldOff } from 'lucide-react'
 import Sidebar from './components/layout/Sidebar'
 import TaskFormModal from './components/tasks/TaskFormModal'
 import TaskDetail from './components/tasks/TaskDetail'
-import DelegatedTaskDetail from './components/tasks/DelegatedTaskDetail'
+import TeamTaskFormModal from './components/tasks/TeamTaskFormModal'
+import TeamTaskDetail from './components/tasks/TeamTaskDetail'
 import ChatPanel from './components/chat/ChatPanel'
 import Login from './routes/Login'
 import { useUIStore } from './store/ui.store'
@@ -22,7 +23,8 @@ export default function App() {
   const {
     isTaskFormOpen,
     expandedTaskId, closeExpandedTask,
-    expandedDelegatedTaskId, closeExpandedDelegatedTask,
+    isTeamTaskFormOpen,
+    expandedTeamTaskId, closeExpandedTeamTask,
     setSelectedTask
   } = useUIStore()
 
@@ -86,13 +88,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [expandedTaskId, closeExpandedTask])
 
-  // Close delegated expanded modal with ESC
+  // Close team task expanded modal with ESC
   useEffect(() => {
-    if (!expandedDelegatedTaskId) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeExpandedDelegatedTask() }
+    if (!expandedTeamTaskId) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeExpandedTeamTask() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [expandedDelegatedTaskId, closeExpandedDelegatedTask])
+  }, [expandedTeamTaskId, closeExpandedTeamTask])
   const queryClient = useQueryClient()
   const [chatOpen,    setChatOpen]    = useState(false)
   const [alertCount,  setAlertCount]  = useState(0)
@@ -143,6 +145,7 @@ export default function App() {
         </main>
       </div>
       {isTaskFormOpen && <TaskFormModal />}
+      {isTeamTaskFormOpen && <TeamTaskFormModal />}
 
       {/* Task detail modal — personal tasks, opens on double-click or ⤢ button */}
       {expandedTaskId && (
@@ -165,11 +168,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Delegated task detail modal — opens on double-click or ⤢ button */}
-      {expandedDelegatedTaskId && (
+      {/* Team task detail modal — opens on double-click or ⤢ button */}
+      {expandedTeamTaskId && (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          onClick={closeExpandedDelegatedTask}
+          onClick={closeExpandedTeamTask}
           style={{ animation: 'fadeIn 0.15s ease-out' }}
         >
           <div
@@ -181,7 +184,7 @@ export default function App() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <DelegatedTaskDetail modal onClose={closeExpandedDelegatedTask} />
+            <TeamTaskDetail modal onClose={closeExpandedTeamTask} />
           </div>
         </div>
       )}

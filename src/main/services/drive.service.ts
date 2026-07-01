@@ -365,6 +365,33 @@ class DriveService {
     return this.getOrCreateFolder(drive, folderName, sueldosId)
   }
 
+  /**
+   * Summit Mantenimiento / {Naka|EV} / {Año} / {Mes} / {carpeta de la tarea}
+   * Mismo patrón anidado que getOrCreateRrhhSueldosMesFolder, un nivel más profundo
+   * (agrega año explícito, RRHH solo usa MM-YYYY en un solo nivel).
+   */
+  async getOrCreateMaintenanceTaskFolder(company: 'naka' | 'ev', year: string, month: string, taskFolderName: string): Promise<string> {
+    if (!this.isAuthenticated()) throw new Error('No autenticado con Google Drive')
+    const oauth2Client = this.getOAuth2Client()
+    oauth2Client.setCredentials(store.get('tokens') as object)
+    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+
+    const root = await this.getMaintenanceRootFolder(drive)
+    const companyLabel = company === 'naka' ? 'Naka' : 'EV'
+    const companyId = await this.getOrCreateFolder(drive, companyLabel, root)
+    const yearId = await this.getOrCreateFolder(drive, year, companyId)
+    const monthId = await this.getOrCreateFolder(drive, month, yearId)
+    return this.getOrCreateFolder(drive, taskFolderName, monthId)
+  }
+
+  private async getMaintenanceRootFolder(drive: ReturnType<typeof google.drive>): Promise<string> {
+    const cached = store.get('maintenanceRootFolderId', '') as string
+    if (cached) return cached
+    const id = await this.getOrCreateFolder(drive, 'Summit Mantenimiento')
+    store.set('maintenanceRootFolderId', id)
+    return id
+  }
+
   private async getRrhhRootFolder(drive: ReturnType<typeof google.drive>): Promise<string> {
     const cached = store.get('rrhhRootFolderId', '') as string
     if (cached) return cached

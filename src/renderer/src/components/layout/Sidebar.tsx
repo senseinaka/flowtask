@@ -6,7 +6,7 @@ import {
   ShieldCheck, Briefcase, LayoutDashboard, Clock, Wallet,
   CalendarClock, LogOut, CalendarDays, FileText, Mail,
   ArrowLeftRight, Brain, Network, Cloud, BookUser, CreditCard, Repeat, Home,
-  Database, RefreshCw, DollarSign, Banknote, PackageSearch
+  Database, RefreshCw, DollarSign, Banknote, PackageSearch, Wrench
 } from 'lucide-react'
 import { usePowerSyncStatus } from '../../hooks/usePowerSyncStatus'
 import type { LucideIcon } from 'lucide-react'
@@ -41,7 +41,7 @@ import { useConfirm } from '../../store/confirm.store'
 
 // ── Workspace definitions ─────────────────────────────────────────────────────
 
-type WorkspaceKey = 'trabajo' | 'empresa' | 'comex' | 'finanzas' | 'agenda' | 'rrhh' | 'sistema'
+type WorkspaceKey = 'trabajo' | 'empresa' | 'comex' | 'finanzas' | 'agenda' | 'rrhh' | 'mantenimiento' | 'sistema'
 
 const WORKSPACES: Array<{
   key: WorkspaceKey
@@ -53,7 +53,7 @@ const WORKSPACES: Array<{
 }> = [
   {
     key: 'trabajo',
-    label: 'Trabajo',
+    label: 'Tareas',
     Icon: LayoutList,
     color: '#818cf8',
     activeBg: 'rgba(129,140,248,.18)',
@@ -98,6 +98,14 @@ const WORKSPACES: Array<{
     color: '#f472b6',
     activeBg: 'rgba(244,114,182,.12)',
     paths: ['/rrhh'],
+  },
+  {
+    key: 'mantenimiento',
+    label: 'Mantenimiento',
+    Icon: Wrench,
+    color: '#818cf8',
+    activeBg: 'rgba(129,140,248,.15)',
+    paths: ['/mantenimiento'],
   },
   {
     key: 'sistema',
@@ -403,7 +411,7 @@ export default function Sidebar() {
 
           {openPanel === 'trabajo' && (
             <div className="p-2 space-y-0.5">
-              <GroupLabel label="Trabajo" color="#818cf8" />
+              <GroupLabel label="Tareas personales" color="#818cf8" />
               {canRead('tasks') && (
                 <>
                   <PanelLink to="/tasks"   icon={LayoutList} label="Lista — Tareas"  end   color="#818cf8" onClick={close} />
@@ -412,7 +420,7 @@ export default function Sidebar() {
               )}
               {canRead('team') && (
                 <>
-                  <GroupLabel label="Equipo" color="#818cf8" />
+                  <GroupLabel label="Tareas Equipo" color="#818cf8" />
                   <PanelLink to="/team"        icon={Users}    label="Lista — Equipo"  end   color="#818cf8" onClick={close} />
                   <PanelLink to="/team/kanban" icon={Columns3} label="Kanban — Equipo"       color="#818cf8" onClick={close} />
                 </>
@@ -545,6 +553,23 @@ export default function Sidebar() {
               )}
               {canRead('rrhh', 'sueldos') && (
                 <PanelLink to="/rrhh/nomina/ev" icon={BookUser} label="Nómina EV" color="#f472b6" onClick={close} />
+              )}
+            </div>
+          )}
+
+          {openPanel === 'mantenimiento' && (
+            <div className="p-2 space-y-0.5">
+              <GroupLabel label="Mantenimiento" color="#818cf8" />
+              {canRead('maintenance') && (
+                <PanelLink to="/mantenimiento" icon={Wrench} label="Dashboard" end color="#818cf8" onClick={close} />
+              )}
+              <GroupLabel label="NAKA" color="#818cf8" />
+              {canRead('maintenance') && (
+                <PanelLink to="/mantenimiento/naka" icon={Wrench} label="Tareas Naka" color="#818cf8" onClick={close} />
+              )}
+              <GroupLabel label="Estación Vertical" color="#818cf8" />
+              {canRead('maintenance') && (
+                <PanelLink to="/mantenimiento/ev" icon={Wrench} label="Tareas EV" color="#818cf8" onClick={close} />
               )}
             </div>
           )}

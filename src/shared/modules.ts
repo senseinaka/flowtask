@@ -35,7 +35,7 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: 'team',
-    label: 'Tareas asignadas',
+    label: 'Tareas Equipo',
     routes: ['/team', '/team/kanban']
   },
   {
@@ -123,6 +123,11 @@ export const MODULES: ModuleDef[] = [
     submodules: [
       { key: 'sueldos', label: 'Sueldos', routes: ['/rrhh/sueldos'] }
     ]
+  },
+  {
+    key: 'maintenance',
+    label: 'Mantenimiento',
+    routes: ['/mantenimiento']
   }
 ]
 

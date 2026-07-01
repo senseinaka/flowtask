@@ -10,13 +10,14 @@ import {
 } from 'recharts'
 import {
   useHistorialColaborador, useAsignarLegajo, useCrearDriveColaborador,
-  useDeleteColaborador, useHardDeleteColaborador, useNominaColaboradores,
+  useHardDeleteColaborador, useNominaColaboradores,
   useUploadColaboradorFoto, useUploadColaboradorCv, useFotoDataUrl,
   useUpsertColaborador, useRrhhListas,
 } from '../../hooks/useRrhh'
 import type { RrhhColaboradorConStats, UpsertColaboradorInput } from '@shared/types'
 import { useRrhhEmpresa } from './RrhhEmpresaContext'
 import ColaboradorFormDrawer from './ColaboradorFormDrawer'
+import BajaColaboradorModal from './BajaColaboradorModal'
 
 type Tab = 'resumen' | 'personal' | 'laboral' | 'sueldos' | 'drive'
 
@@ -204,6 +205,7 @@ export default function ColaboradorProfile() {
   const [tab, setTab] = useState<Tab>('resumen')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [bajaOpen, setBajaOpen] = useState(false)
 
   const { data: colaboradores = [] } = useNominaColaboradores()
   const colaborador = colaboradores.find(c => c.id === id) as RrhhColaboradorConStats | undefined
@@ -211,7 +213,6 @@ export default function ColaboradorProfile() {
   const { data: historial = [], isLoading: histLoading } = useHistorialColaborador(id ?? null)
   const asignarLegajo  = useAsignarLegajo()
   const crearDrive     = useCrearDriveColaborador()
-  const softDelete     = useDeleteColaborador()
   const hardDelete     = useHardDeleteColaborador()
 
   if (!id) return null
@@ -257,6 +258,9 @@ export default function ColaboradorProfile() {
             {colaborador.cuil && <span>{colaborador.cuil}</span>}
             {(colaborador.puesto || colaborador.tarea_habitual) &&
               <span>{colaborador.puesto || colaborador.tarea_habitual}</span>}
+            {colaborador.fecha_egreso && (
+              <span className="text-amber-400">Baja: {colaborador.fecha_egreso}</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -315,13 +319,19 @@ export default function ColaboradorProfile() {
         <DeleteDialog
           nombre={colaborador.nombre}
           onClose={() => setDeleteOpen(false)}
-          pending={softDelete.isPending || hardDelete.isPending}
-          onBaja={() => softDelete.mutate(colaborador.id, {
-            onSuccess: () => { setDeleteOpen(false); navigate(`/rrhh/nomina/${empresa}`) }
-          })}
+          pending={hardDelete.isPending}
+          onBaja={() => { setDeleteOpen(false); setBajaOpen(true) }}
           onEliminar={() => hardDelete.mutate(colaborador.id, {
             onSuccess: () => navigate(`/rrhh/nomina/${empresa}`)
           })}
+        />
+      )}
+
+      {bajaOpen && (
+        <BajaColaboradorModal
+          colaborador={colaborador}
+          onClose={() => setBajaOpen(false)}
+          onSuccess={() => { setBajaOpen(false); navigate(`/rrhh/nomina/${empresa}`) }}
         />
       )}
 
@@ -372,6 +382,16 @@ function TabResumen({ colaborador, chartData, histLoading }: {
             <div className="text-xs text-slate-500 mt-0.5">Legajo {colaborador.legajo}</div>}
         </div>
       </div>
+
+      {colaborador.fecha_egreso && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+          <div className="text-xs text-amber-400 mb-1">Baja</div>
+          <div className="text-base font-semibold text-slate-200">{colaborador.fecha_egreso}</div>
+          {colaborador.motivo_egreso && (
+            <div className="text-xs text-slate-400 mt-0.5">{colaborador.motivo_egreso}</div>
+          )}
+        </div>
+      )}
 
       {histLoading
         ? <div className="flex items-center gap-2 text-slate-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Cargando historial...</div>
@@ -752,6 +772,12 @@ function TabLaboral({ c, onAsignarLegajo, asignandoLegajo, onDeleteClick }: {
           </dd>
         </div>
         <ViewField label="F. ingreso"        value={c.fecha_ingreso} />
+        {c.fecha_egreso && <ViewField label="F. baja" value={c.fecha_egreso} />}
+        {c.motivo_egreso && (
+          <div className="col-span-2">
+            <ViewField label="Motivo de baja" value={c.motivo_egreso} />
+          </div>
+        )}
         <ViewField label="Tarea habitual"     value={c.tarea_habitual} />
         <ViewField label="Sector"             value={c.sector} />
         <ViewField label="Puesto"             value={c.puesto} />
@@ -1024,6 +1050,23 @@ function TabDrive({ c, onCrearCarpeta, creando }: {
         }
         {uploadCv.isError && <p className="text-xs text-red-400">{uploadCv.error.message}</p>}
       </div>
+
+      {/* Constancia de baja */}
+      {c.fecha_egreso && (
+        <div className="bg-slate-800 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <FileText className="w-4 h-4 text-amber-400" /> Constancia de baja
+          </div>
+          {c.baja_drive_file_id ? (
+            <button onClick={() => window.api.rrhh.drive.openFile(c.baja_drive_file_id!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs">
+              <ExternalLink className="w-3.5 h-3.5" /> Ver en Drive
+            </button>
+          ) : (
+            <p className="text-xs text-slate-500">No se subió constancia al dar la baja.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -28,6 +28,26 @@ export interface Task {
   blockedBy?: Task[]
 }
 
+/** "Tareas Equipo" — mirror exacto de Task, tabla PowerSync separada (team_tasks). */
+export interface TeamTask {
+  id: string
+  project_id: string | null
+  title: string
+  description: string
+  status: TaskStatus
+  priority: Priority
+  due_date: number | null
+  due_time: string | null
+  completed_at: number | null
+  created_at: number
+  updated_at: number
+  synced_at: number | null
+  drive_file_id: string | null
+  project?: Project
+  dependencies?: TeamTask[]
+  blockedBy?: TeamTask[]
+}
+
 export interface Attachment {
   id: string
   task_id: string
@@ -60,6 +80,16 @@ export interface TaskFilters {
 }
 
 export interface CreateTaskInput {
+  title: string
+  description?: string
+  priority?: Priority
+  status?: TaskStatus
+  due_date?: number | null
+  due_time?: string | null
+  project_id?: string | null
+}
+
+export interface CreateTeamTaskInput {
   title: string
   description?: string
   priority?: Priority
@@ -315,7 +345,7 @@ export const QUESTION_TEMPLATES: Array<{
 
 // ─── Task Status Log ──────────────────────────────────────────────────────────
 
-export type TaskType = 'personal' | 'delegated'
+export type TaskType = 'personal' | 'delegated' | 'team'
 
 export interface TaskStatusLogEntry {
   id: string
@@ -860,6 +890,7 @@ export const AI_OPERATIONS = [
   'extract_factura_deposito',
   'extract_proforma',
   'extract_vep_anmat',
+  'extract_baja_laboral',
   'extract_general',
   'dashboard_chat',
 ] as const
@@ -875,6 +906,7 @@ export const AI_OPERATION_LABELS: Record<AIOperation, string> = {
   extract_factura_deposito:'Extraer factura de depósito fiscal',
   extract_proforma:        'Extraer proforma / cotización',
   extract_vep_anmat:       'Extraer importe VEP ANMAT',
+  extract_baja_laboral:    'Extraer constancia de baja laboral',
   extract_general:         'Analizar documento (general)',
   dashboard_chat:          'Chat del dashboard',
 }
@@ -889,6 +921,7 @@ export const AI_OPERATION_DEFAULT_MODELS: Record<AIOperation, ClaudeModelId> = {
   extract_factura_deposito:'claude-haiku-4-5',
   extract_proforma:        'claude-haiku-4-5',
   extract_vep_anmat:       'claude-haiku-4-5',
+  extract_baja_laboral:    'claude-haiku-4-5',
   extract_general:         'claude-haiku-4-5',
   dashboard_chat:          'claude-sonnet-4-5',
 }
@@ -989,6 +1022,12 @@ export interface ExtractedFactura {
   freight:        number | null
   total:          number | null
   payment_terms:  string | null
+}
+
+/** Extraído de una constancia de baja laboral (ARCA/AFIP u otro formato). */
+export interface ExtractedBajaLaboral {
+  fecha_cese: string | null   // DD-MM-AAAA, mismo formato que fecha_ingreso en RrhhColaborador
+  motivo:     string | null   // texto tal cual figura en "Situación de baja"
 }
 
 // Resultado genérico de análisis
@@ -3178,6 +3217,7 @@ export interface RrhhColaborador {
   legajo_estado: string | null        // 'completo'|'incompleto'|'pendiente'
   foto_drive_file_id: string | null
   cv_drive_file_id: string | null
+  baja_drive_file_id: string | null
   dias_home_office: string | null    // CSV: "lunes,martes,jueves"
   contacto_emergencia_1_nombre: string | null
   contacto_emergencia_1_celular: string | null
@@ -3955,4 +3995,222 @@ export interface CashAttachment {
   drive_file_id: string
   created_by: string
   created_at: string
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Mantenimiento (Naka / Estación Vertical) — junio 2026
+// Etapa 1: tareas, categorías, ubicaciones, fotos, notas, historial básico.
+// Etapa 2 (no implementado aún): maintenance_task_audios, maintenance_materials,
+// maintenance_budgets — el shape de MaintenanceTask ya incluye las columnas de
+// costo/fecha que esas etapas van a usar, para no tener que migrar de nuevo.
+// ═════════════════════════════════════════════════════════════════════════
+
+export type MaintenanceCompany = 'naka' | 'ev'
+
+export const MAINTENANCE_COMPANIES: MaintenanceCompany[] = ['naka', 'ev']
+
+export const MAINTENANCE_COMPANY_LABEL: Record<MaintenanceCompany, string> = {
+  naka: 'NAKA',
+  ev: 'Estación Vertical',
+}
+
+export type MaintenanceStatus =
+  | 'reportada'
+  | 'en_revision'
+  | 'esperando_presupuesto'
+  | 'aprobada'
+  | 'programada'
+  | 'en_ejecucion'
+  | 'pausada'
+  | 'terminada_pendiente_revision'
+  | 'cerrada'
+  | 'cancelada'
+
+export const MAINTENANCE_STATUSES: MaintenanceStatus[] = [
+  'reportada', 'en_revision', 'esperando_presupuesto', 'aprobada', 'programada',
+  'en_ejecucion', 'pausada', 'terminada_pendiente_revision', 'cerrada', 'cancelada'
+]
+
+export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
+  reportada: 'Reportada',
+  en_revision: 'En revisión',
+  esperando_presupuesto: 'Esperando presupuesto',
+  aprobada: 'Aprobada',
+  programada: 'Programada',
+  en_ejecucion: 'En ejecución',
+  pausada: 'Pausada',
+  terminada_pendiente_revision: 'Terminada (a revisar)',
+  cerrada: 'Cerrada',
+  cancelada: 'Cancelada',
+}
+
+// Colores de badge — Tailwind bg/text pairs, mismo patrón que ESTADO_COLORS de RRHH
+export const MAINTENANCE_STATUS_COLORS: Record<MaintenanceStatus, string> = {
+  reportada: 'bg-slate-500/20 text-slate-300',
+  en_revision: 'bg-sky-500/20 text-sky-300',
+  esperando_presupuesto: 'bg-amber-500/20 text-amber-300',
+  aprobada: 'bg-teal-500/20 text-teal-300',
+  programada: 'bg-indigo-500/20 text-indigo-300',
+  en_ejecucion: 'bg-blue-500/20 text-blue-300',
+  pausada: 'bg-orange-500/20 text-orange-300',
+  terminada_pendiente_revision: 'bg-lime-500/20 text-lime-300',
+  cerrada: 'bg-emerald-500/20 text-emerald-300',
+  cancelada: 'bg-red-500/20 text-red-400 line-through',
+}
+
+export type MaintenancePriority = 'urgente' | 'alta' | 'media' | 'baja' | 'preventiva'
+
+export const MAINTENANCE_PRIORITIES: MaintenancePriority[] = ['urgente', 'alta', 'media', 'baja', 'preventiva']
+
+export const MAINTENANCE_PRIORITY_LABELS: Record<MaintenancePriority, string> = {
+  urgente: 'Urgente',
+  alta: 'Alta',
+  media: 'Media',
+  baja: 'Baja',
+  preventiva: 'Preventiva',
+}
+
+export const MAINTENANCE_PRIORITY_COLORS: Record<MaintenancePriority, string> = {
+  urgente: '#ef4444',
+  alta: '#f97316',
+  media: '#eab308',
+  baja: '#64748b',
+  preventiva: '#38bdf8',
+}
+
+export type MaintenancePhotoPhase = 'antes' | 'durante' | 'despues'
+
+export const MAINTENANCE_PHOTO_PHASE_LABELS: Record<MaintenancePhotoPhase, string> = {
+  antes: 'Antes',
+  durante: 'Durante',
+  despues: 'Después',
+}
+
+/** Catálogo compartido entre Naka y EV (23 rubros del spec). Gestionable, mismo patrón que RrhhLista. */
+export interface MaintenanceCategory {
+  id: string
+  workspace_id: string
+  nombre: string
+  orden: number
+  activo: number
+  created_at: number
+  updated_at: number
+}
+
+/** Catálogo por empresa — Naka y EV tienen listas de ubicaciones distintas. */
+export interface MaintenanceLocation {
+  id: string
+  workspace_id: string
+  company: MaintenanceCompany
+  nombre: string
+  orden: number
+  activo: number
+  created_at: number
+  updated_at: number
+}
+
+export interface MaintenanceTask {
+  id: string
+  workspace_id: string
+  company: MaintenanceCompany
+  title: string
+  description: string
+  category_id: string | null
+  location_id: string | null
+  location_detail: string | null      // texto libre: "pared fondo derecha, detrás de estantería"
+  priority: MaintenancePriority
+  status: MaintenanceStatus
+  created_by: string | null           // user_id (Supabase Auth)
+  assigned_to: string | null          // user_id interno — catálogo de responsables llega en Etapa 2
+  external_provider: string | null    // texto libre del proveedor externo, si aplica
+  estimated_cost: number | null
+  approved_cost: number | null
+  real_cost: number | null
+  currency: string | null             // 'ARS' | 'USD' | ... — libre, como Comex
+  scheduled_review_date: number | null      // timestamp
+  scheduled_execution_date: number | null   // timestamp
+  due_date: number | null                   // timestamp
+  closed_at: number | null                  // timestamp
+  closed_by: string | null            // user_id
+  main_photo_drive_file_id: string | null
+  is_deleted: number
+  created_at: number
+  updated_at: number
+  // Hidratado en queries, no columnas propias:
+  category?: MaintenanceCategory
+  location?: MaintenanceLocation
+  photos_count?: number
+  notes_count?: number
+  updates_count?: number
+}
+
+export interface CreateMaintenanceTaskInput {
+  company: MaintenanceCompany
+  title: string
+  description?: string
+  category_id?: string | null
+  location_id?: string | null
+  location_detail?: string | null
+  priority?: MaintenancePriority
+  status?: MaintenanceStatus
+  assigned_to?: string | null
+  external_provider?: string | null
+  estimated_cost?: number | null
+  due_date?: number | null
+  scheduled_review_date?: number | null
+  scheduled_execution_date?: number | null
+}
+
+export interface MaintenanceTaskFilters {
+  company?: MaintenanceCompany
+  status?: MaintenanceStatus[]
+  priority?: MaintenancePriority[]
+  category_id?: string
+  location_id?: string
+  search?: string
+  overdue_only?: boolean
+}
+
+export interface MaintenanceTaskPhoto {
+  id: string
+  task_id: string
+  workspace_id: string
+  drive_file_id: string
+  original_name: string
+  phase: MaintenancePhotoPhase | null
+  is_main: number
+  created_by: string | null
+  created_at: number
+}
+
+export interface MaintenanceTaskNote {
+  id: string
+  task_id: string
+  workspace_id: string
+  author_id: string | null
+  text: string
+  created_at: number
+}
+
+/** Historial de avances — se auto-genera uno en cada cambio de estado, y puede
+ *  agregarse manualmente uno "libre" (mismo estado, solo comentario/próxima acción). */
+export interface MaintenanceTaskUpdate {
+  id: string
+  task_id: string
+  workspace_id: string
+  user_id: string | null
+  previous_status: MaintenanceStatus | null
+  new_status: MaintenanceStatus
+  comment: string | null
+  next_action_date: number | null
+  cost_added: number | null
+  created_at: number
+}
+
+export interface CreateMaintenanceUpdateInput {
+  task_id: string
+  new_status: MaintenanceStatus
+  comment?: string | null
+  next_action_date?: number | null
+  cost_added?: number | null
 }

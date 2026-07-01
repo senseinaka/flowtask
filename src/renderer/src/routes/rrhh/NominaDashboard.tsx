@@ -5,7 +5,7 @@ import {
   ChevronRight, Hash, Settings2, Upload
 } from 'lucide-react'
 import {
-  useNominaColaboradores, useExportNominaXls, useDeleteColaborador, useGenerarDesdeUltimo
+  useNominaColaboradores, useExportNominaXls, useGenerarDesdeUltimo
 } from '../../hooks/useRrhh'
 import { useRrhhEmpresa } from './RrhhEmpresaContext'
 import { RRHH_EMPRESA_LABEL } from '@shared/types'
@@ -14,6 +14,7 @@ import ColaboradorFormDrawer from './ColaboradorFormDrawer'
 import GenerarNominaModal from './GenerarNominaModal'
 import RrhhListasAdmin from './RrhhListasAdmin'
 import ImportarNominaModal from './ImportarNominaModal'
+import BajaColaboradorModal from './BajaColaboradorModal'
 
 const ESTADO_COLORS: Record<string, string> = {
   activo:     'bg-emerald-500/20 text-emerald-300',
@@ -52,7 +53,6 @@ export default function NominaDashboard() {
   const empresa = useRrhhEmpresa()
   const { data: colaboradores = [], isLoading } = useNominaColaboradores()
   const exportXls = useExportNominaXls()
-  const deleteCol = useDeleteColaborador()
   const generarMutation = useGenerarDesdeUltimo()
 
   const [search, setSearch] = useState('')
@@ -62,6 +62,7 @@ export default function NominaDashboard() {
   const [generarOpen, setGenerarOpen] = useState(false)
   const [listasAdminOpen, setListasAdminOpen] = useState(false)
   const [importarOpen, setImportarOpen] = useState(false)
+  const [bajaTarget, setBajaTarget] = useState<RrhhColaboradorConStats | null>(null)
 
   const filtered = useMemo(() => {
     let list = colaboradores
@@ -230,6 +231,7 @@ export default function NominaDashboard() {
                 <th className="px-4 py-2 font-medium text-right">Último neto</th>
                 <th className="px-4 py-2 font-medium text-center">Períodos</th>
                 <th className="px-4 py-2 w-8" />
+                <th className="px-4 py-2 w-8" />
               </tr>
             </thead>
             <tbody>
@@ -269,6 +271,17 @@ export default function NominaDashboard() {
                     <span className="text-slate-400 font-mono text-xs">{c.total_periodos}</span>
                   </td>
                   <td className="px-4 py-2.5">
+                    {(c.estado_laboral ?? 'activo') !== 'inactivo' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setBajaTarget(c) }}
+                        className="p-1 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                        title="Dar de baja"
+                      >
+                        <UserX className="w-4 h-4" />
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
                     <ChevronRight className="w-4 h-4 text-slate-600" />
                   </td>
                 </tr>
@@ -299,6 +312,14 @@ export default function NominaDashboard() {
       {/* Importar nómina */}
       {importarOpen && (
         <ImportarNominaModal onClose={() => setImportarOpen(false)} />
+      )}
+
+      {bajaTarget && (
+        <BajaColaboradorModal
+          colaborador={bajaTarget}
+          onClose={() => setBajaTarget(null)}
+          onSuccess={() => setBajaTarget(null)}
+        />
       )}
     </div>
   )

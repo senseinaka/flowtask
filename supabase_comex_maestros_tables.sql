@@ -5,6 +5,13 @@
 --
 -- Cómo correr: pegar todo este archivo en el SQL Editor de Supabase
 -- (Database > SQL Editor > New query) y ejecutar.
+--
+-- ⚠️ NO COPIAR EL PATRÓN RLS DE ESTE ARCHIVO PARA TABLAS NUEVAS. Es anterior
+-- al fix de junio 2026: solo tiene policy de SELECT para `authenticated`, sin
+-- escritura — los writes del cliente se descartaban en silencio (403/42501).
+-- Ya corregido para estas 10 tablas vía supabase_comex_rls_fix.sql. Para
+-- tablas nuevas usar supabase_table_template.sql. Ver CLAUDE.md → "Bugs
+-- conocidos" → "Fix: VEP ANMAT con spinner infinito + 22 tablas Comex...".
 set role pg_database_owner;
 
 -- ════════════════════════════════════════════════════════════════════════

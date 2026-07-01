@@ -58,6 +58,134 @@ const task_dependencies = new Table(
   { indexes: { workspace: ['workspace_id'] } }
 )
 
+// ── "Tareas Equipo" — mirror exacto de tasks/task_dependencies (jun 2026) ──
+const team_tasks = new Table(
+  {
+    project_id: column.text,
+    title: column.text,
+    description: column.text,
+    status: column.text,
+    priority: column.integer,
+    due_date: column.integer,
+    due_time: column.text,
+    completed_at: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    synced_at: column.integer,
+    drive_file_id: column.text,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], status: ['status'] } }
+)
+
+const team_task_dependencies = new Table(
+  {
+    task_id: column.text,
+    depends_on_id: column.text,
+    created_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+// ── Mantenimiento (Naka / Estación Vertical) — Etapa 1 (jun 2026) ──────────
+
+const maintenance_categories = new Table(
+  {
+    nombre: column.text,
+    orden: column.integer,
+    activo: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const maintenance_locations = new Table(
+  {
+    company: column.text,
+    nombre: column.text,
+    orden: column.integer,
+    activo: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], company: ['company'] } }
+)
+
+const maintenance_tasks = new Table(
+  {
+    company: column.text,
+    title: column.text,
+    description: column.text,
+    category_id: column.text,
+    location_id: column.text,
+    location_detail: column.text,
+    priority: column.text,
+    status: column.text,
+    created_by: column.text,
+    assigned_to: column.text,
+    external_provider: column.text,
+    estimated_cost: column.real,
+    approved_cost: column.real,
+    real_cost: column.real,
+    currency: column.text,
+    scheduled_review_date: column.integer,
+    scheduled_execution_date: column.integer,
+    due_date: column.integer,
+    closed_at: column.integer,
+    closed_by: column.text,
+    main_photo_drive_file_id: column.text,
+    is_deleted: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], company: ['company'], status: ['status'] } }
+)
+
+const maintenance_task_photos = new Table(
+  {
+    task_id: column.text,
+    drive_file_id: column.text,
+    original_name: column.text,
+    phase: column.text,
+    is_main: column.integer,
+    created_by: column.text,
+    created_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], task: ['task_id'] } }
+)
+
+const maintenance_task_notes = new Table(
+  {
+    task_id: column.text,
+    author_id: column.text,
+    text: column.text,
+    created_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], task: ['task_id'] } }
+)
+
+const maintenance_task_updates = new Table(
+  {
+    task_id: column.text,
+    user_id: column.text,
+    previous_status: column.text,
+    new_status: column.text,
+    comment: column.text,
+    next_action_date: column.integer,
+    cost_added: column.real,
+    created_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], task: ['task_id'] } }
+)
+
 const user_permissions = new Table(
   {
     user_id: column.text,
@@ -1035,6 +1163,7 @@ const rrhh_colaboradores = new Table(
     legajo_estado:           column.text,
     foto_drive_file_id:      column.text,
     cv_drive_file_id:        column.text,
+    baja_drive_file_id:      column.text,
     dias_home_office:        column.text,
     contacto_emergencia_1_nombre:  column.text,
     contacto_emergencia_1_celular: column.text,
@@ -1445,6 +1574,14 @@ export const AppSchema = new Schema({
   projects,
   tasks,
   task_dependencies,
+  team_tasks,
+  team_task_dependencies,
+  maintenance_categories,
+  maintenance_locations,
+  maintenance_tasks,
+  maintenance_task_photos,
+  maintenance_task_notes,
+  maintenance_task_updates,
   user_permissions,
   finance_accounts,
   finance_categories,
@@ -2402,7 +2539,9 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
       },
       onError: (err) => console.error('[PowerSync] Error en listener de cambios:', err)
     },
-    { tables: ['projects', 'tasks', 'task_dependencies', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
+    { tables: ['projects', 'tasks', 'task_dependencies', 'team_tasks', 'team_task_dependencies',
+        'maintenance_categories', 'maintenance_locations', 'maintenance_tasks',
+        'maintenance_task_photos', 'maintenance_task_notes', 'maintenance_task_updates', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
         'cash_companies', 'cashboxes', 'cashbox_permissions', 'cash_categories',
         'cash_movements', 'cash_movement_amounts', 'cash_movement_breakdowns', 'cash_operators', 'cash_counts', 'cash_count_details',
         'cash_differences', 'cash_audit_logs', 'cash_attachments'], throttleMs: 1000 }

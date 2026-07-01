@@ -11,7 +11,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 ### Módulos actuales
 
 - **Comex (Comercio Exterior):** gestión completa de importaciones de Naka Outdoors. Seguimiento de embarques, documentos para despachante y personal, presupuestos logísticos de operadores de flete, pagos, costos, arancel, proformas, planificación de pedidos con IA, y **cotizaciones USD/EUR** propias vs. la Divisa Venta del BCRA (`/comex/cotizaciones`).
-- **Tareas / Kanban:** sistema de gestión de tareas con tablero kanban, dependencias, recordatorios y delegación.
+- **Tareas / Kanban:** sistema de gestión de tareas con tablero kanban, dependencias, recordatorios y delegación a contactos. Tiene dos instancias idénticas en funcionamiento: "Tareas personales" (`tasks`) y "Tareas Equipo" (`team_tasks`) — ver "Módulo Tareas Equipo" más abajo.
 - **Agenda / Calendario:** integración con Google Calendar. Sistema para programar envíos de mensajes por WhatsApp con recordatorios automáticos.
 - **Agenda / Contactos:** agenda completa de contactos. Multi-teléfono, multi-email, empresa, cargo, etiquetas, favoritos, grupos y notas. Rutas `/agenda/contactos` (detalle) y `/agenda/grupos` (gestión de grupos). Tabla `contacts` en `flowtask.db` — local, no sincroniza. Grupos en `agenda_grupos` y `agenda_grupo_miembros` (local).
 - **Presupuestos / CRM:** generación de presupuestos y seguimiento comercial tipo CRM.
@@ -28,6 +28,7 @@ Summit es el sistema operativo central de **Naka Outdoors** y de su CEO, **Diego
 - **RRHH — Sueldos:** administración mensual de sueldos por colaborador. Extrae datos de PDFs de recibos de sueldo, los guarda en Supabase via PowerSync, genera alertas inteligentes (nuevos, ausentes, variaciones), compara con el mes anterior y exporta planillas XLS. Los PDFs se almacenan en Google Drive (`Summit RRHH/Sueldos/MM-YYYY/`).
 - **RRHH — Nómina:** módulo de ficha de colaboradores. Registro completo (datos personales, laborales, bancarios, Drive). Genera la nómina desde la última liquidación, asigna legajos automáticos (4 dígitos), crea carpetas Drive en `Summit RRHH/Legajos/XXXX Nombre/` con subcarpetas, muestra historial salarial por colaborador con gráfico de área. Rutas: `/rrhh/nomina` y `/rrhh/nomina/:id`.
 - **Cortex:** módulo interno para explorar el grafo de dependencias del código fuente. Generado por Graphify, permite consultas en lenguaje natural, rutas entre componentes y análisis de impacto. Solo visible para el admin.
+- **Mantenimiento:** reporte y seguimiento de tareas de mantenimiento edilicio (Naka Outdoors y Estación Vertical), sistema espejo por empresa. Fotos, notas, historial de avances, categorías y ubicaciones. Etapa 1 de un plan de 4 etapas — ver "Módulo Mantenimiento" más abajo.
 
 ### Visión a futuro
 
@@ -164,7 +165,7 @@ Lecturas/escrituras solo-local             →  getDb()
 
 Se leen y escriben exclusivamente via `getPowerSyncDb()`. Requieren sync-rules en el servidor PowerSync con filtro `workspace_id = 'd61a4071-1557-4f32-be5e-6443fb336bf5'`:
 
-- `projects`, `tasks`, `task_dependencies`
+- `projects`, `tasks`, `task_dependencies`, `team_tasks`, `team_task_dependencies`
 - `user_permissions`, `user_profiles`
 - `finance_accounts`, `finance_categories`, `finance_payment_methods`
 - `finance_concepts`, `finance_movements`, `finance_month_insights`, `finance_movement_entries`
@@ -321,6 +322,37 @@ En ambos archivos de queries. Lee `SUM(amount)` de las cargas, y actualiza `amou
 ### `entries_count` en movimientos
 
 El campo `entries_count` se calcula con `attachEntriesCounts()` (async), que consulta `getPowerSyncDb()` después de traer los movimientos. Ver función en `finance.ts` y `company-finance.ts`.
+
+---
+
+## Módulo Tareas Equipo (junio 2026)
+
+Sidebar: ícono "Tareas" (antes "Trabajo") → grupos **"Tareas personales"** (`/tasks`, `/kanban`) y **"Tareas Equipo"** (`/team`, `/team/kanban`). Ambos son **clones funcionales idénticos** — misma estructura de datos, filtros, Kanban, panel de detalle, dependencias, adjuntos, recordatorios WhatsApp, preguntas WhatsApp y timeline de actividad. Tareas Equipo usa su propia tabla PowerSync (`team_tasks`/`team_task_dependencies`, DDL en `supabase_team_tasks.sql`) — datos completamente separados de Tareas personales, mismo `projects` compartido para el filtro por proyecto.
+
+**Decisión de producto:** antes, el menú "Equipo" abría un sistema distinto — "delegar tarea a un contacto de la agenda" con notificación WhatsApp/Email y botón de recordatorio (`delegated_tasks`, local-only en `flowtask.db`, sin sync). Se reemplazó por el clon de Tareas personales para que ambos paneles funcionen exactamente igual. **`delegated_tasks` y toda su infraestructura (`queries/delegated.ts`, `delegated.ipc.ts`, `useDelegated.ts`) NO se borraron** — siguen en uso en `Contacts.tsx` (Agenda → Contactos), donde se asignan tareas a un contacto puntual desde su ficha. Es una función separada y legítima, no relacionada con el menú Tareas Equipo.
+
+**Tablas compartidas genéricamente entre los 3 sistemas de tareas** (personal/team/delegated), sin necesidad de duplicarlas — todas viven en `flowtask.db`, keyeadas por `task_id` (texto, sin FK) y/o `task_type`:
+- `attachments`, `reminders` — keyeadas solo por `task_id`, no distinguen tipo de tarea.
+- `task_status_log` (timeline de actividad), `task_questions` (preguntas WhatsApp) — keyeadas por `(task_id, task_type)`. `TaskType = 'personal' | 'delegated' | 'team'`.
+- `ActivityTimeline.tsx`: `'team'` usa el mismo `STATUS_LABELS` que `'personal'` (ambos comparten el enum `TaskStatus`); solo `'delegated'` usa `DELEGATED_STATUS_LABELS` (enum distinto, con `cancelled` en vez de `blocked`).
+
+**Archivos clave del mirror:**
+| Personal | Team (mirror) |
+|---|---|
+| `queries/tasks.ts` | `queries/team-tasks.ts` |
+| `ipc/tasks.ipc.ts` | `ipc/team-tasks.ipc.ts` (canales `team-tasks:*`) |
+| `hooks/useTasks.ts` | `hooks/useTeamTasks.ts` |
+| `routes/TaskList.tsx` | `routes/Team.tsx` |
+| `routes/Kanban.tsx` | `routes/TeamKanban.tsx` |
+| `components/tasks/TaskCard.tsx` | `components/tasks/TeamTaskCard.tsx` |
+| `components/tasks/TaskDetail.tsx` | `components/tasks/TeamTaskDetail.tsx` |
+| `components/tasks/TaskFormModal.tsx` | `components/tasks/TeamTaskFormModal.tsx` |
+
+`ui.store.ts` tiene un bloque de estado paralelo completo (`selectedTeamTaskId`, `teamFilters`, `teamDetailPanelWidth`, `expandedTeamTaskId`, etc.) — mismo patrón que el de tareas personales, nunca compartido entre los dos.
+
+**Permisos:** canales `team-tasks:*` mapeados al módulo `team` en `CHANNEL_MODULE_MAP` (`permissions.service.ts`) — mismo módulo que ya usaban `delegated:*` (label actualizado a "Tareas Equipo" en `shared/modules.ts`). Rutas `/team`, `/team/kanban` sin cambios en `MODULES`.
+
+**Pendiente (no aplicado, fuera del alcance de este pase):** correr `supabase_team_tasks.sql` en Supabase y agregar las sync-rules de `team_tasks`/`team_task_dependencies` en el dashboard de PowerSync (ver el archivo .sql para las líneas exactas).
 
 ---
 
@@ -746,6 +778,20 @@ Saga al sumar las 10 tablas `cash_*` (Cajas Internas). Varias causas **independi
 3. **Recrear `powersync.db` reintroduce datos viejos en la cola.** Durante el diagnóstico se borró `powersync.db` para forzar un re-sync. Al recrearse, las migraciones legacy (`migrateLegacyTableData`, `restoreComexLocalCache`, etc.) **re-copian cientos de filas de `flowtask.db` a `ps_crud`**, inflando la cola de upload y destapando bugs latentes (ver los dos fixes de connector más abajo). **Borrar `powersync.db` NO es un fix de sync** — solo reintroduce trabajo. Si hay que recuperarse, dejar que la cola drene sola.
 
 4. **`CORRUPT_INDEX` en la transición de iteración de sync-rules.** Al redeployar las sync-rules, PowerSync pasa de una iteración a la siguiente (ej. `11#global` → `12#global`) y reconstruye su estado interno; apareció `powersync_control: internal SQLite call returned CORRUPT_INDEX`. **Lección dura: NUNCA manipular `powersync.db` con Python** (ni `.backup()`, ni consolidar `-wal`/`-shm`). El SQLite de Python es de otra versión que la nativa de PowerSync y **corrompe los índices** que PowerSync espera. Para inspección, abrir SIEMPRE read-only (`mode=ro&immutable=1`); para escribir/recuperar, que lo haga la app. Recuperación: borrar `powersync.db` (+`-wal`/`-shm`) y dejar que la app lo reconstruya desde Supabase (con `ps_crud` ya drenado).
+
+### Fix: VEP ANMAT con spinner infinito + 22 tablas Comex con escritura descartada en silencio (resuelto — junio 2026)
+
+**Síntoma:** al subir un comprobante VEP, la UI quedaba girando indefinidamente sin error visible. Tras descartar proceso colgado (sí era un factor real, pero secundario — ver más abajo), la causa de fondo apareció solo en la consola de `npm run dev`: `[PowerSync] SKIP PUT comex_inal_veps/... -> 403/42501. "new row violates row-level security policy"`.
+
+**Causa raíz:** al crear `comex_inal_veps` se le dio policy de **solo SELECT** para `authenticated` (mismo patrón que las tablas `comex_imports`, `comex_inal_certs`, `comex_documents`, `comex_logistics_quotes`, `comex_quote_files`, `comex_payments`, `comex_import_customs`, `comex_import_costs`, `comex_import_tributos`, `comex_import_extra_costs`, `comex_proformas`, `comex_import_items`, `comex_suppliers`, `comex_supplier_contacts`, `comex_supplier_bank_accounts`, `comex_freight_operators`, `comex_freight_operator_contacts`, `comex_gestores`, `comex_gestor_contacts`, `comex_despachantes`, `comex_despachante_contacts`, `comex_brands` — 22 tablas en total). Esto viola directamente la regla ya documentada en "Reglas al crear una tabla sincronizada nueva" (`uploadData` sube con el JWT del usuario, rol `authenticated`, no con `service_role`). El insert LOCAL funciona siempre (por eso la fila aparecía en la UI); lo que fallaba era la subida a Supabase, silenciosa — el connector saltea la fila para no trabar la cola (ver fix anterior) y solo loguea un `console.error`, invisible a menos que se esté mirando la terminal de `npm run dev`.
+
+**Por qué pasó pese a que la regla ya estaba escrita:** el SQL de las 22 tablas (`supabase_comex_importaciones_tables.sql`, `supabase_comex_maestros_tables.sql`) es **anterior** a que se documentara/corrigiera el patrón (se escribió antes del fix de `cash_*`). Al crear `comex_inal_veps` se copió el patrón de esos archivos viejos como referencia en lugar de seguir el checklist de la regla — los ejemplos obsoletos en el repo son más fáciles de copiar que de detectar como obsoletos. Esas 22 tablas llevaban silenciosamente **sin sincronizar ningún write a Supabase desde su creación** — invisible con un solo dispositivo, solo se manifiesta si la base local se resetea o se necesita otro dispositivo/usuario.
+
+**Factor secundario real (no la causa de fondo, pero también ocurrió):** un proceso de Electron que sobrevivió a un restart de `electron-vite dev` sin re-aplicar el schema local nuevo (`comex_inal_veps` no existía como vista en `powersync.db` pese al rebuild). Confirmado matando el árbol completo de procesos (`npm`, `electron-vite`, `electron.exe` y subprocesos) y arrancando `npm run dev` desde cero — un restart "automático" de electron-vite no garantiza que el singleton de `PowerSyncDatabase` se reconstruya limpio.
+
+**Fix:** `supabase_comex_inal_veps.sql` (policy `authenticated_workspace_all` FOR ALL + GRANT a `authenticated`) y `supabase_comex_rls_fix.sql` (mismo patrón aplicado a las 22 tablas viejas, idempotente). `supabase_table_template.sql` agregado como punto de partida canónico para tablas nuevas — copiar de ahí, no de archivos `.sql` existentes (pueden ser anteriores al patrón correcto).
+
+**Lección:** antes de escribir el DDL de una tabla sincronizada nueva, NO copiar de un `.sql` existente en el repo como referencia de RLS — varios son de antes de esta regla. Usar `supabase_table_template.sql` o copiar literal el checklist de "Reglas al crear una tabla sincronizada nueva". Si una fila no sincroniza y no hay error visible en la UI, **revisar la consola de `npm run dev`** — el connector descarta filas con 403/42501 en silencio para no trabar la cola.
 
 ### Fix: cargas no guardaban valores — FK constraint (resuelto — junio 2025)
 
@@ -1633,6 +1679,89 @@ El export usa la librería **`xlsx`** (SheetJS, ya en `package.json`). Arquitect
 4. Guarda el `.xlsx` en la ruta elegida
 
 **Crítico:** el renderer siempre manda las filas ya procesadas — el main process no refetch data. Esto garantiza que el XLS refleja exactamente la vista (con filtros aplicados). Usar `require('xlsx')` en el main (no `await import()`).
+
+---
+
+## Módulo RRHH — Baja de colaboradores (junio 2026)
+
+Dar de baja a un colaborador (NAKA o EV) con fecha de cese + motivo, extraídos automáticamente con IA de una constancia (ej. "Constancia del Trabajador - Baja" de ARCA/AFIP), y el PDF guardado en su legajo de Drive.
+
+**El modelo de datos ya existía** (`fecha_egreso`, `motivo_egreso`, `estado_laboral` en `RrhhColaborador`) — lo que faltaba era la UI y el enganche con IA/Drive.
+
+**Formato de fecha — DD-MM-AAAA, no ISO.** A diferencia de `Task.due_date` (timestamp numérico), `fecha_ingreso`/`fecha_egreso` en RRHH son texto libre sin parsear, mismo formato que ya usa `fecha_ingreso` en el form ("26-05-2026"). La extracción de IA (`extract_baja_laboral`) devuelve `fecha_cese` en ese mismo formato — **no ISO**, para que quede consistente con el resto del módulo.
+
+**Flujo:** `BajaColaboradorModal.tsx` — drag&drop opcional del PDF → `extraerBaja` (IA con Tool Use, no texto libre como VEP, porque son 2 campos estructurados: `fecha_cese` + `motivo`, tomado literal del campo "Situación de baja" del documento) → autocompleta los inputs (editables) → confirmar llama a `darDeBajaColaborador` (activo=0, estado_laboral='inactivo', fecha_egreso, motivo_egreso) + sube el PDF a una subcarpeta **"Egreso"** dentro del legajo (creada al vuelo con `driveService.createSubfolder`, mismo patrón que la carpeta "VEP ANMAT" de Comex — no forma parte de las 3 subcarpetas default del legajo).
+
+**Dos puntos de entrada, mismo modal:**
+- `ColaboradorProfile.tsx`: la opción "Dar de baja" del `DeleteDialog` (que antes hacía soft-delete instantáneo) ahora abre el modal en vez de mutar directo.
+- `NominaDashboard.tsx`: ícono `UserX` por fila (solo si `estado_laboral !== 'inactivo'`), abre el mismo modal sin pasar por el perfil.
+
+**Si sube el PDF pero Drive falla** (sin carpeta, no autenticado, red): la baja en base de datos se confirma igual — el error de Drive se reporta aparte (`{success: true, driveError?}`) y se muestra como toast, para no bloquear la baja por un problema de infraestructura secundario.
+
+**Visibilidad de la baja en el perfil** (`ColaboradorProfile.tsx`): fecha de cese en el header (junto a legajo/documento/puesto), card ámbar dedicada en Tab Resumen, `ViewField` en Tab Laboral (fecha + motivo, solo si están seteados), y card "Constancia de baja" en Tab Drive con link directo — todo condicionado a `fecha_egreso` seteado, no aparece en colaboradores activos.
+
+**`baja_drive_file_id`** — campo nuevo en `RrhhColaborador` (mirror de `foto_drive_file_id`/`cv_drive_file_id`), guardado por el handler `baja` tras subir el PDF a Drive. Requiere `ALTER TABLE` en Supabase (`supabase_rrhh_baja_drive_file.sql`) — la tabla ya sincroniza con `SELECT *`, así que la columna nueva baja sola al cliente sin tocar sync-rules.
+
+**Alta automática de carpeta Drive (junio 2026):** al crear un colaborador nuevo (`rrhh:nomina:colaboradores:upsert` sin `data.id` → detecta creación), `provisionarColaboradorNuevo()` en `nomina.service.ts` le asigna legajo automáticamente si no vino con uno (mismo `asignarLegajo`/`getNextLegajoNumber` que el botón manual de la tab Laboral) y crea la carpeta de Drive en el mismo paso — sin que el usuario tenga que ir a la tab Drive y hacer los dos pasos a mano. Best-effort: si Drive no está autenticado o falla, la creación del colaborador igual se completa (queda sin carpeta, se puede crear después manualmente, mismo comportamiento que antes de esta función). El flujo manual (botón "Asignar legajo" + "Crear carpeta en Drive") sigue existiendo para colaboradores viejos que quedaron sin legajo/carpeta antes de este cambio.
+
+---
+
+## Módulo Mantenimiento (junio 2026) — Etapa 1
+
+Reporte y seguimiento de tareas de mantenimiento edilicio para Naka Outdoors y Estación Vertical. Sistema
+espejo por empresa: `/mantenimiento` (dashboard combinado), `/mantenimiento/naka` y `/mantenimiento/ev` (lista
+de tareas, mismo componente parametrizado por `:empresa` — mismo patrón que RRHH `RrhhEmpresaContext`).
+
+**Alcance de Etapa 1** (de un plan de 4 etapas pedido por el usuario): crear/editar/ver tarea, lista con
+filtros (estado/prioridad/categoría/ubicación/búsqueda/vencidas), fotos con foto principal, notas, historial
+de avances básico (auto-generado en cada cambio de estado). **Fuera de Etapa 1** (schema preparado, UI
+pendiente): audios, materiales, presupuestos, kanban, calendario, vista móvil web, notificaciones. `MaintenanceTask`
+ya incluye TODAS las columnas de costo/fecha que esas etapas van a necesitar (estimated_cost, approved_cost,
+real_cost, scheduled_review_date, scheduled_execution_date, etc.) — evita una migración nueva cuando se
+implementen.
+
+**Dos hallazgos de arquitectura que definieron el diseño (investigados antes de implementar):**
+1. **Summit no tiene servidor HTTP** — 100% Electron IPC, sin ningún endpoint web salvo el callback temporal
+   de OAuth. La "vista móvil web con login" pedida en el spec original **no es una función que se prenda** —
+   es una app web separada (Etapa 3), que debería autenticar con Supabase Auth y leer/escribir las tablas
+   `maintenance_*` directo vía REST de Supabase (arquitectura ya compatible, son tablas Postgres normales con
+   RLS). No implementado en Etapa 1.
+2. **No existe un sistema de roles nombrados** — el modelo real es `none|read|write` por módulo (`user_permissions`,
+   ver `usePermissions.ts`). Los 5 roles pedidos (Administrador/Responsable/Supervisor/Reportante/Solo lectura)
+   se aproximan con ese mismo sistema por ahora (módulo `maintenance`, sin submódulos por empresa) — un sistema
+   de permisos por acción (ej. "solo Supervisor aprueba presupuestos") queda para cuando se implemente Etapa 2.
+
+**Tablas** (PowerSync ↔ Supabase, DDL en `supabase_maintenance_tables.sql` con seed de 23 categorías + 11
+ubicaciones Naka + 11 ubicaciones EV): `maintenance_categories` (catálogo compartido), `maintenance_locations`
+(catálogo por `company`), `maintenance_tasks` (tabla principal), `maintenance_task_photos`, `maintenance_task_notes`,
+`maintenance_task_updates` (historial). Fechas son **timestamp numérico** (epoch ms, como `Task.due_date`), NO
+texto libre como en RRHH — Mantenimiento es un módulo nuevo sin la restricción legacy de RRHH.
+
+**Fotos en Drive:** `Summit Mantenimiento / {Naka|EV} / {Año} / {Mes} / {título de la tarea} ({id corto})` —
+un nivel más profundo que `getOrCreateRrhhSueldosMesFolder` (agrega año explícito). Función
+`getOrCreateMaintenanceTaskFolder()` en `drive.service.ts`. La primera foto subida (o la marcada `is_main`)
+queda como `main_photo_drive_file_id` de la tarea automáticamente.
+
+**Historial de avances:** se auto-genera un registro en `maintenance_task_updates` en la creación de la tarea
+y en cada cambio de estado (`changeMaintenanceTaskStatus()` en `queries/maintenance.ts`, mismo patrón que
+`task_status_log` de Tareas/Tareas Equipo, pero sincronizado vía PowerSync en vez de local — Mantenimiento
+necesita el historial visible entre dispositivos, no solo local). También se puede agregar un avance "libre"
+(mismo estado, solo comentario) vía `addMaintenanceTaskUpdate()`.
+
+**Construido con el sistema de Workflows** (jun 2026): la fundación (tipos, schema PowerSync, queries, IPC,
+preload, hooks) se hizo secuencial para fijar el contrato; la UI (Dashboard, TasksList+Card, TaskFormModal,
+TaskDetail) se construyó con 4 agentes en paralelo una vez que el contrato de tipos/hooks quedó fijo — cada
+agente verificó `tsc` de forma independiente antes de reportar, y se corrió una verificación integrada
+completa al final (0 errores nuevos en ningún archivo de `routes/maintenance/`).
+
+**Mobile-first genuino, primero en el proyecto:** ningún otro módulo de Summit usa breakpoints de Tailwind
+(`sm:`/`md:`) — toda la app asume ventana de escritorio. Mantenimiento es el primer módulo con layouts fluidos
+(`flex-col` → `sm:flex-row`, `grid-cols-2` → `md:grid-cols-4`, botones `min-h-[44px]`). Esto NO hace que sea
+usable desde el celular hoy (Summit sigue siendo solo Electron desktop, ver hallazgo #1) — es preparación para
+cuando exista la vista web de Etapa 3, y además se ve mejor si la ventana de Electron se achica.
+
+**Pendiente en Supabase:** correr `supabase_maintenance_tables.sql` (crea las 6 tablas + seed de categorías/ubicaciones)
+y agregar las 6 líneas de sync-rules en el dashboard de PowerSync (están al final del archivo .sql).
 
 ---
 

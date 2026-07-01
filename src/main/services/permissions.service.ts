@@ -32,6 +32,8 @@ const CHANNEL_MODULE_MAP: Record<string, ChannelTarget> = {
   delegated: { moduleKey: 'team' },
   'delegated-reminders': { moduleKey: 'team' },
   'delegated-attachments': { moduleKey: 'team' },
+  'team-tasks': { moduleKey: 'team' },
+  maintenance: { moduleKey: 'maintenance' },
   contacts: { moduleKey: 'contacts' },
   agenda: { moduleKey: 'contacts' },
   messages: { moduleKey: 'messages' },

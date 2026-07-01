@@ -10,10 +10,14 @@ interface UIState {
   detailPanelWidth: number           // px, drag-resizable (personal tasks)
   expandedTaskId: string | null      // task open in full modal
 
-  // Delegated tasks panel
-  selectedDelegatedTaskId: string | null
-  delegatedDetailPanelWidth: number
-  expandedDelegatedTaskId: string | null
+  // Team tasks panel ("Tareas Equipo") — mirror exacto del de tareas personales
+  selectedTeamTaskId: string | null
+  isTeamTaskFormOpen: boolean
+  editingTeamTaskId: string | null
+  teamFilters: TaskFilters
+  teamSearchQuery: string
+  teamDetailPanelWidth: number
+  expandedTeamTaskId: string | null
 
   setSelectedTask: (id: string | null) => void
   openCreateForm: () => void
@@ -28,10 +32,18 @@ interface UIState {
   openExpandedTask: (id: string) => void
   closeExpandedTask: () => void
 
-  setSelectedDelegatedTask: (id: string | null) => void
-  setDelegatedDetailPanelWidth: (w: number) => void
-  openExpandedDelegatedTask: (id: string) => void
-  closeExpandedDelegatedTask: () => void
+  setSelectedTeamTask: (id: string | null) => void
+  openCreateTeamForm: () => void
+  openEditTeamForm: (id: string) => void
+  closeTeamForm: () => void
+  setTeamFilter: (key: keyof TaskFilters, value: unknown) => void
+  toggleTeamStatusFilter: (status: TaskStatus) => void
+  toggleTeamPriorityFilter: (priority: Priority) => void
+  setTeamSearch: (q: string) => void
+  clearTeamFilters: () => void
+  setTeamDetailPanelWidth: (w: number) => void
+  openExpandedTeamTask: (id: string) => void
+  closeExpandedTeamTask: () => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -42,9 +54,14 @@ export const useUIStore = create<UIState>((set) => ({
   searchQuery: '',
   detailPanelWidth: 380,
   expandedTaskId: null,
-  selectedDelegatedTaskId: null,
-  delegatedDetailPanelWidth: 380,
-  expandedDelegatedTaskId: null,
+
+  selectedTeamTaskId: null,
+  isTeamTaskFormOpen: false,
+  editingTeamTaskId: null,
+  teamFilters: {},
+  teamSearchQuery: '',
+  teamDetailPanelWidth: 380,
+  expandedTeamTaskId: null,
 
   setSelectedTask: (id) => set({ selectedTaskId: id }),
   openCreateForm: () => set({ isTaskFormOpen: true, editingTaskId: null }),
@@ -84,8 +101,41 @@ export const useUIStore = create<UIState>((set) => ({
   openExpandedTask: (id) => set({ expandedTaskId: id }),
   closeExpandedTask: () => set({ expandedTaskId: null }),
 
-  setSelectedDelegatedTask: (id) => set({ selectedDelegatedTaskId: id }),
-  setDelegatedDetailPanelWidth: (w) => set({ delegatedDetailPanelWidth: w }),
-  openExpandedDelegatedTask: (id) => set({ expandedDelegatedTaskId: id, selectedDelegatedTaskId: id }),
-  closeExpandedDelegatedTask: () => set({ expandedDelegatedTaskId: null })
+  setSelectedTeamTask: (id) => set({ selectedTeamTaskId: id }),
+  openCreateTeamForm: () => set({ isTeamTaskFormOpen: true, editingTeamTaskId: null }),
+  openEditTeamForm: (id) => set({ isTeamTaskFormOpen: true, editingTeamTaskId: id }),
+  closeTeamForm: () => set({ isTeamTaskFormOpen: false, editingTeamTaskId: null }),
+
+  setTeamFilter: (key, value) =>
+    set((s) => ({ teamFilters: { ...s.teamFilters, [key]: value } })),
+
+  toggleTeamStatusFilter: (status) =>
+    set((s) => {
+      const current = s.teamFilters.status ?? []
+      const next = current.includes(status)
+        ? current.filter((x) => x !== status)
+        : [...current, status]
+      return { teamFilters: { ...s.teamFilters, status: next.length ? next : undefined } }
+    }),
+
+  toggleTeamPriorityFilter: (priority) =>
+    set((s) => {
+      const current = s.teamFilters.priority ?? []
+      const next = current.includes(priority)
+        ? current.filter((x) => x !== priority)
+        : [...current, priority]
+      return { teamFilters: { ...s.teamFilters, priority: next.length ? next : undefined } }
+    }),
+
+  setTeamSearch: (q) =>
+    set((s) => ({
+      teamSearchQuery: q,
+      teamFilters: { ...s.teamFilters, search: q || undefined }
+    })),
+
+  clearTeamFilters: () => set({ teamFilters: {}, teamSearchQuery: '' }),
+
+  setTeamDetailPanelWidth: (w) => set({ teamDetailPanelWidth: w }),
+  openExpandedTeamTask: (id) => set({ expandedTeamTaskId: id, selectedTeamTaskId: id }),
+  closeExpandedTeamTask: () => set({ expandedTeamTaskId: null })
 }))

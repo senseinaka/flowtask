@@ -2751,7 +2751,6 @@ function CostDashboard({ importId, imp }: { importId: string; imp: ComexImport }
           {imp.inal_required === 1 && vepTotalARS > 0 && (
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5">
-                <Receipt size={11} className="text-violet-400" />
                 <span className="text-slate-400">VEP Libre Circulación ANMAT</span>
               </div>
               <div className="flex items-center gap-3">

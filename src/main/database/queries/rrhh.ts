@@ -475,12 +475,13 @@ export async function updateColaboradorDrive(id: string, folderId: string): Prom
 
 export async function updateColaboradorMediaIds(
   id: string,
-  fields: { foto_drive_file_id?: string | null; cv_drive_file_id?: string | null }
+  fields: { foto_drive_file_id?: string | null; cv_drive_file_id?: string | null; baja_drive_file_id?: string | null }
 ): Promise<void> {
   const sets: string[] = []
   const vals: unknown[] = []
   if ('foto_drive_file_id' in fields) { sets.push('foto_drive_file_id = ?'); vals.push(fields.foto_drive_file_id ?? null) }
   if ('cv_drive_file_id' in fields)   { sets.push('cv_drive_file_id = ?');   vals.push(fields.cv_drive_file_id ?? null) }
+  if ('baja_drive_file_id' in fields) { sets.push('baja_drive_file_id = ?'); vals.push(fields.baja_drive_file_id ?? null) }
   if (!sets.length) return
   vals.push(Date.now(), id)
   await getPowerSyncDb().execute(
@@ -493,6 +494,19 @@ export async function softDeleteColaborador(id: string): Promise<void> {
   await getPowerSyncDb().execute(
     `UPDATE rrhh_colaboradores SET activo = 0, estado_laboral = 'inactivo', updated_at = ? WHERE id = ?`,
     [Date.now(), id]
+  )
+}
+
+/** Baja completa: marca inactivo + guarda fecha de cese y motivo (constancia ARCA u otra fuente). */
+export async function darDeBajaColaborador(
+  id: string,
+  data: { fecha_egreso: string; motivo_egreso: string | null }
+): Promise<void> {
+  await getPowerSyncDb().execute(
+    `UPDATE rrhh_colaboradores
+     SET activo = 0, estado_laboral = 'inactivo', fecha_egreso = ?, motivo_egreso = ?, updated_at = ?
+     WHERE id = ?`,
+    [data.fecha_egreso, data.motivo_egreso ?? null, Date.now(), id]
   )
 }
 

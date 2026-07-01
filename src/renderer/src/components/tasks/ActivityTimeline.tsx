@@ -8,10 +8,12 @@ import { cn } from '../ui/utils'
 
 function statusLabel(status: string | null, taskType: TaskType): string {
   if (!status) return 'Creada'
-  if (taskType === 'personal') {
-    return STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status
+  // 'personal' y 'team' comparten el mismo enum de TaskStatus; solo 'delegated'
+  // (tareas asignadas a contactos) usa DelegatedStatus.
+  if (taskType === 'delegated') {
+    return DELEGATED_STATUS_LABELS[status as keyof typeof DELEGATED_STATUS_LABELS] ?? status
   }
-  return DELEGATED_STATUS_LABELS[status as keyof typeof DELEGATED_STATUS_LABELS] ?? status
+  return STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status
 }
 
 // Status → color dot

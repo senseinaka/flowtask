@@ -1,6 +1,6 @@
 import {
   listPeriodos, listSueldosByPeriodo, getColaboradorById,
-  upsertColaboradorCompleto, updateColaboradorDrive
+  upsertColaboradorCompleto, updateColaboradorDrive, asignarLegajo
 } from '../database/queries/rrhh'
 import { driveService } from './drive.service'
 import type {
@@ -103,4 +103,29 @@ export async function crearCarpetaDriveColaborador(empresa: RrhhEmpresa, colabor
   const folderId = await driveService.getOrCreateColaboradorLegajoFolder(empresa, col.legajo, col.nombre)
   await updateColaboradorDrive(col.id, folderId)
   return folderId
+}
+
+/**
+ * Alta automática: al crear un colaborador nuevo, le asigna legajo (si no vino
+ * con uno ya cargado) y crea su carpeta de Drive — sin que el usuario tenga que
+ * hacerlo a mano desde la tab Drive. Best-effort: si Drive no está autenticado
+ * o falla, no rompe la creación del colaborador — solo queda sin carpeta,
+ * igual que antes de esta función (se puede crear después desde la tab Drive).
+ */
+export async function provisionarColaboradorNuevo(empresa: RrhhEmpresa, colaboradorId: string): Promise<void> {
+  try {
+    let col = await getColaboradorById(colaboradorId)
+    if (!col) return
+    if (!col.legajo) {
+      await asignarLegajo(empresa, colaboradorId)
+      col = await getColaboradorById(colaboradorId)
+      if (!col) return
+    }
+    if (!col.drive_legajo_folder_id && driveService.isAuthenticated() && col.legajo) {
+      const folderId = await driveService.getOrCreateColaboradorLegajoFolder(empresa, col.legajo, col.nombre)
+      await updateColaboradorDrive(col.id, folderId)
+    }
+  } catch (err) {
+    console.error('[RRHH] Error en provisionarColaboradorNuevo:', err)
+  }
 }

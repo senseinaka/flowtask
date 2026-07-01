@@ -5,7 +5,7 @@ import type {
   RrhhColaborador, RrhhColaboradorConStats, RrhhNominaConfig,
   UpsertColaboradorInput, GenerarDesdeUltimoResult, ConfirmarGenerarInput,
   RrhhLista, RrhhListaTipo, UpsertListaInput,
-  ImportParseResult, ConfirmImportInput,
+  ImportParseResult, ConfirmImportInput, ExtractedBajaLaboral,
 } from '@shared/types'
 import { useRrhhEmpresa } from '../routes/rrhh/RrhhEmpresaContext'
 
@@ -219,6 +219,25 @@ export function useUploadColaboradorCv() {
   const empresa = useRrhhEmpresa()
   return useMutation<string, Error, { id: string; localPath: string }>({
     mutationFn: ({ id, localPath }) => window.api.rrhh.nomina.colaboradores.uploadCv(id, localPath),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
+  })
+}
+
+export function useExtraerBajaDocumento() {
+  return useMutation<ExtractedBajaLaboral, Error, string>({
+    mutationFn: (filePath) => window.api.rrhh.nomina.colaboradores.extraerBaja(filePath),
+  })
+}
+
+export function useDarDeBaja() {
+  const qc = useQueryClient()
+  const empresa = useRrhhEmpresa()
+  return useMutation<
+    { success: true; driveError?: string },
+    Error,
+    { id: string; fecha_egreso: string; motivo_egreso: string | null; filePath?: string | null }
+  >({
+    mutationFn: ({ id, ...data }) => window.api.rrhh.nomina.colaboradores.baja(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rrhh:nomina:colaboradores', empresa] }),
   })
 }

@@ -11,16 +11,18 @@ import {
   confirmarPeriodo, deletePeriodo, getAusentesEnPeriodo,
   updateSueldoNotas,
   listColaboradoresConStats, getColaboradorById,
-  upsertColaboradorCompleto, softDeleteColaborador, hardDeleteColaborador,
+  upsertColaboradorCompleto, softDeleteColaborador, hardDeleteColaborador, darDeBajaColaborador,
   asignarLegajo, getNominaConfig, upsertNominaConfig,
   updateColaboradorMediaIds,
   listRrhhListas, upsertLista, deleteLista
 } from '../database/queries/rrhh'
-import type { UpsertListaInput, RrhhListaTipo, ConfirmImportInput, ImportParsedRow, RrhhColaborador, RrhhEmpresa } from '@shared/types'
+import type { UpsertListaInput, RrhhListaTipo, ConfirmImportInput, ImportParsedRow, RrhhColaborador, RrhhEmpresa, ExtractedBajaLaboral } from '@shared/types'
 import {
-  generarDesdeUltimoPeriodo, confirmarGenerarNomina, crearCarpetaDriveColaborador
+  generarDesdeUltimoPeriodo, confirmarGenerarNomina, crearCarpetaDriveColaborador,
+  provisionarColaboradorNuevo
 } from '../services/nomina.service'
 import { driveService } from '../services/drive.service'
+import { analyzeDocument } from '../services/ai.service'
 import type { UpsertColaboradorInput, ConfirmarGenerarInput } from '@shared/types'
 
 // ── Importer helpers ──────────────────────────────────────────────────────────
@@ -210,9 +212,12 @@ export function registerRrhhIpc(): void {
     getColaboradorById(id)
   )
 
-  ipcMain.handle('rrhh:nomina:colaboradores:upsert', (_e, empresa: RrhhEmpresa, data: UpsertColaboradorInput) =>
-    upsertColaboradorCompleto(empresa, data)
-  )
+  ipcMain.handle('rrhh:nomina:colaboradores:upsert', async (_e, empresa: RrhhEmpresa, data: UpsertColaboradorInput) => {
+    const esNuevo = !data.id
+    const result = await upsertColaboradorCompleto(empresa, data)
+    if (esNuevo) await provisionarColaboradorNuevo(empresa, result.id)
+    return result
+  })
 
   ipcMain.handle('rrhh:nomina:colaboradores:delete', (_e, id: string) =>
     softDeleteColaborador(id)
@@ -304,6 +309,53 @@ export function registerRrhhIpc(): void {
   ipcMain.handle('rrhh:nomina:colaboradores:hardDelete', (_e, id: string) =>
     hardDeleteColaborador(id)
   )
+
+  // ── Baja de colaborador (fecha de cese + motivo, opcional constancia PDF) ────
+
+  ipcMain.handle('rrhh:nomina:colaboradores:selectBajaFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar constancia de baja',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      properties: ['openFile'],
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('rrhh:nomina:colaboradores:extraerBaja', async (_e, filePath: string): Promise<ExtractedBajaLaboral> => {
+    const result = await analyzeDocument({ filePath, operation: 'extract_baja_laboral' })
+    const structured = (result.structured ?? {}) as { fecha_cese?: string | null; motivo?: string | null }
+    return {
+      fecha_cese: structured.fecha_cese ?? null,
+      motivo: structured.motivo ?? null
+    }
+  })
+
+  ipcMain.handle('rrhh:nomina:colaboradores:baja', async (
+    _e,
+    id: string,
+    data: { fecha_egreso: string; motivo_egreso: string | null; filePath?: string | null }
+  ): Promise<{ success: true; driveError?: string }> => {
+    await darDeBajaColaborador(id, { fecha_egreso: data.fecha_egreso, motivo_egreso: data.motivo_egreso })
+
+    if (data.filePath) {
+      try {
+        const col = await getColaboradorById(id)
+        if (col?.drive_legajo_folder_id) {
+          const egresoFolderId = await driveService.createSubfolder('Egreso', col.drive_legajo_folder_id)
+          const safeName = col.nombre.replace(/[/:*?"<>|]/g, '-').slice(0, 50).trim()
+          const fileName = `baja_${safeName}_${data.fecha_egreso}.pdf`
+          const fileId = await driveService.uploadFileToFolder(data.filePath, egresoFolderId, fileName, 'application/pdf')
+          await updateColaboradorMediaIds(id, { baja_drive_file_id: fileId })
+        }
+      } catch (err) {
+        console.error('[RRHH] Error subiendo constancia de baja a Drive:', err)
+        return { success: true, driveError: err instanceof Error ? err.message : 'Error al subir a Drive' }
+      }
+    }
+    return { success: true }
+  })
 
   // ── Listas gestionadas ───────────────────────────────────────────────────────
   ipcMain.handle('rrhh:listas:list', (_e, tipo?: RrhhListaTipo) =>

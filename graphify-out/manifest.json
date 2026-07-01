@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782841804.419672,
-    "ast_hash": "3974b7407a173627845e7dfc480a4ced",
+    "mtime": 1782855401.1331735,
+    "ast_hash": "c4968f0ca9e8ff3e25bfcc42e852d5be",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -155,8 +155,8 @@
     "semantic_hash": ""
   },
   "src/main/index.ts": {
-    "mtime": 1782780430.6490436,
-    "ast_hash": "967a5ebd7f89be652d1ab7157f59a598",
+    "mtime": 1782855480.7443933,
+    "ast_hash": "3fae5632aae6e8461ed17b44405a1495",
     "semantic_hash": ""
   },
   "src/main/ipc/ai.ipc.ts": {
@@ -200,8 +200,8 @@
     "semantic_hash": "b53240db68a17c8fd2de958a8d9d00ec"
   },
   "src/main/ipc/comex.ipc.ts": {
-    "mtime": 1782850964.169093,
-    "ast_hash": "eb9d3808ac960137e44304e9c39a6ee0",
+    "mtime": 1782851277.56417,
+    "ast_hash": "3da2ae8daa17d6fcb8512f33f3eabe7b",
     "semantic_hash": ""
   },
   "src/main/ipc/company-finance.ipc.ts": {
@@ -390,8 +390,8 @@
     "semantic_hash": "b9288b3457aa01358564adbceb0b5b67"
   },
   "src/main/services/permissions.service.ts": {
-    "mtime": 1782779716.420356,
-    "ast_hash": "12ca011ff39f04a049eed94e5ed10184",
+    "mtime": 1782855507.58858,
+    "ast_hash": "0e3cee8e695de9f9e68556bdb65a9d11",
     "semantic_hash": ""
   },
   "src/main/services/planning-ai.service.ts": {
@@ -440,13 +440,13 @@
     "semantic_hash": ""
   },
   "src/preload/index.ts": {
-    "mtime": 1782849477.3027158,
-    "ast_hash": "39fb223a5f5175a1b96845aa7af07fab",
+    "mtime": 1782855535.0723772,
+    "ast_hash": "bcda1700f19cd852660e367297d1a2b4",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
-    "mtime": 1782792415.7363584,
-    "ast_hash": "221e0b476d07c048260e580ebdc8a69d",
+    "mtime": 1782855766.7651286,
+    "ast_hash": "ac54839af8bb27e7207092b404667849",
     "semantic_hash": ""
   },
   "src/renderer/src/components/calendar/CalendarLinkButton.tsx": {
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782820970.2381434,
-    "ast_hash": "8cdb93dfba3b11c88ada52dc9077d8d0",
+    "mtime": 1782855787.7552683,
+    "ast_hash": "bd05ece218d2ad819e77cf6762f109d8",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -485,13 +485,8 @@
     "semantic_hash": "cdd17eafa2dce118e00cfa3a06b6feb7"
   },
   "src/renderer/src/components/tasks/ActivityTimeline.tsx": {
-    "mtime": 1779912955.7735083,
-    "ast_hash": "e5b5a5a37b081b5f2e65f8b4881adbfc",
-    "semantic_hash": "e5b5a5a37b081b5f2e65f8b4881adbfc"
-  },
-  "src/renderer/src/components/tasks/DelegatedTaskDetail.tsx": {
-    "mtime": 1782793516.5422623,
-    "ast_hash": "b23214eda83649b5c45e6369b954c883",
+    "mtime": 1782855676.0979338,
+    "ast_hash": "24813acd7ac96018f05413be37407a39",
     "semantic_hash": ""
   },
   "src/renderer/src/components/tasks/PriorityBadge.tsx": {
@@ -620,8 +615,8 @@
     "semantic_hash": "ae69427c911dcd888f06220089c771fc"
   },
   "src/renderer/src/hooks/usePowerSyncStatus.ts": {
-    "mtime": 1782655658.4914908,
-    "ast_hash": "c660bd081994fa8d933e066e11d4f6ce",
+    "mtime": 1782855420.0852315,
+    "ast_hash": "b7ca70409f8805c44af206c4c41b5ba9",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useProjects.ts": {
@@ -705,14 +700,14 @@
     "semantic_hash": "cdb9e15f5d797c836443f59f0500a3a3"
   },
   "src/renderer/src/routes/Team.tsx": {
-    "mtime": 1779914398.1138732,
-    "ast_hash": "5fb25b88699b0319f0614ae4e99d6b96",
-    "semantic_hash": "5fb25b88699b0319f0614ae4e99d6b96"
+    "mtime": 1782855704.009584,
+    "ast_hash": "5fd93f4674eb22be3dd48908c84511e3",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/TeamKanban.tsx": {
-    "mtime": 1780050992.03075,
-    "ast_hash": "1103f17acdf16b76db833411c65ab8f5",
-    "semantic_hash": "1103f17acdf16b76db833411c65ab8f5"
+    "mtime": 1782855737.0149105,
+    "ast_hash": "977b0ce6aff699156b58767c39ee24d2",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexBrandDetail.tsx": {
     "mtime": 1781088288.867423,
@@ -740,8 +735,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782849518.449382,
-    "ast_hash": "a999ac948331c80a0bfe9ab0b2b55eec",
+    "mtime": 1782854170.755837,
+    "ast_hash": "c3e57cc00b596cd00374b96c13659c0a",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
@@ -870,9 +865,9 @@
     "semantic_hash": "59badfb33429f72cad9f802c4e08ee78"
   },
   "src/renderer/src/store/ui.store.ts": {
-    "mtime": 1780050862.3150792,
-    "ast_hash": "67a9be7c1f5f770b300ec7df1132ebb3",
-    "semantic_hash": "67a9be7c1f5f770b300ec7df1132ebb3"
+    "mtime": 1782855570.4964383,
+    "ast_hash": "e356ff916c3c9a510e33ffc278dac61c",
+    "semantic_hash": ""
   },
   "src/renderer/src/types/index.ts": {
     "mtime": 1779700380.499511,
@@ -880,13 +875,13 @@
     "semantic_hash": "dda862150460b3f86225109354df7409"
   },
   "src/shared/modules.ts": {
-    "mtime": 1782755118.862365,
-    "ast_hash": "0d0c546b9772ca524da4a4de82e34b13",
+    "mtime": 1782855793.9616475,
+    "ast_hash": "2224d4da73e03c806528349cea7b745d",
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782841772.5837982,
-    "ast_hash": "718ed45cc9aa133ae41cc9baa8b2fabf",
+    "mtime": 1782855367.4613318,
+    "ast_hash": "fd0c11ef261c1140eaa1e4761e1387a0",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -895,14 +890,14 @@
     "semantic_hash": "0d4526f7dd0fefd3f4d4fb69e5a02bca"
   },
   "supabase_comex_importaciones_tables.sql": {
-    "mtime": 1781807776.4670775,
-    "ast_hash": "61903d1f11232a2a20ce7113fdd08a48",
-    "semantic_hash": "61903d1f11232a2a20ce7113fdd08a48"
+    "mtime": 1782854067.3828232,
+    "ast_hash": "5073ebb4c72b2eec380289edbe911c49",
+    "semantic_hash": ""
   },
   "supabase_comex_maestros_tables.sql": {
-    "mtime": 1781397468.5688126,
-    "ast_hash": "57937385c525f6a5d6016f6c778a915d",
-    "semantic_hash": "57937385c525f6a5d6016f6c778a915d"
+    "mtime": 1782854073.758635,
+    "ast_hash": "e5036dea4905f3931c1cc71f12905776",
+    "semantic_hash": ""
   },
   "supabase_comex_plannings_tables.sql": {
     "mtime": 1781431710.9247787,
@@ -950,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782818392.0947418,
-    "ast_hash": "712964737311418d2e621052808f7fb8",
+    "mtime": 1782855855.2900486,
+    "ast_hash": "c1556a73b9e0710214db8dfe363a0c0a",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1510,8 +1505,53 @@
     "semantic_hash": ""
   },
   "supabase_comex_inal_veps.sql": {
-    "mtime": 1782842472.6215653,
-    "ast_hash": "e5908fd91974924169d74825edf5ff2d",
+    "mtime": 1782853351.1618419,
+    "ast_hash": "28f8de20810a5828f69925149c1eb696",
+    "semantic_hash": ""
+  },
+  "src/main/database/queries/team-tasks.ts": {
+    "mtime": 1782855451.0681245,
+    "ast_hash": "9277cdfb328f8ed6df057b0a9c412bfd",
+    "semantic_hash": ""
+  },
+  "src/main/ipc/team-tasks.ipc.ts": {
+    "mtime": 1782855471.6485045,
+    "ast_hash": "134e1b5109459052688e71c11a0bbbac",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/components/tasks/TeamTaskCard.tsx": {
+    "mtime": 1782855592.6259394,
+    "ast_hash": "e10f2c55a31ee7cbfb79790443a89e55",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/components/tasks/TeamTaskDetail.tsx": {
+    "mtime": 1782855663.9470768,
+    "ast_hash": "1dc1e9092444b2ec72569a423259b4bb",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/components/tasks/TeamTaskFormModal.tsx": {
+    "mtime": 1782855611.8992822,
+    "ast_hash": "45d3e1793b67a2f95a1366dd034f2ec2",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/hooks/useTeamTasks.ts": {
+    "mtime": 1782855551.2811348,
+    "ast_hash": "8ecdcf21c605d173be5fda5074be3dd4",
+    "semantic_hash": ""
+  },
+  "supabase_comex_rls_fix.sql": {
+    "mtime": 1782853669.059883,
+    "ast_hash": "0c3afd67115ee7179fbecd8edce1ccce",
+    "semantic_hash": ""
+  },
+  "supabase_table_template.sql": {
+    "mtime": 1782854054.0268283,
+    "ast_hash": "4d6c77766cde1e9c617d97128367571e",
+    "semantic_hash": ""
+  },
+  "supabase_team_tasks.sql": {
+    "mtime": 1782855813.103004,
+    "ast_hash": "73bb795e65a77ca63789892f442affc8",
     "semantic_hash": ""
   }
 }

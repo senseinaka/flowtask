@@ -286,6 +286,25 @@ const TOOL_BL: Anthropic.Tool = {
   }
 }
 
+const TOOL_BAJA_LABORAL: Anthropic.Tool = {
+  name: 'extraer_baja_laboral',
+  description: 'Extrae los datos clave de una constancia de baja laboral (ej: "Constancia del Trabajador - Baja" de ARCA/AFIP, o documento similar de otro organismo).',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      fecha_cese: {
+        type: 'string',
+        description: 'Fecha de cese/baja del trabajador (campo "Fecha Cese" en constancias ARCA, o equivalente). Formato DD-MM-AAAA. Ej: "26/05/2026" → "26-05-2026". null si no encontrado.'
+      },
+      motivo: {
+        type: 'string',
+        description: 'Texto completo del campo "Situación de baja" (o equivalente), tal cual figura en el documento, sin resumir ni traducir. Ej: "21 - Renuncia del trabajador / ART.240 - LCT / ART.64 Inc.a) L22248 y otras". null si no encontrado.'
+      }
+    },
+    required: ['fecha_cese']
+  }
+}
+
 const TOOL_DESPACHO: Anthropic.Tool = {
   name: 'extraer_despacho',
   description: 'Extrae los datos de la Hoja 1 de un despacho de aduana argentino (formulario OM-1993 SIM/MARIA). Solo procesar Hoja 1.',
@@ -1276,6 +1295,16 @@ comercial con precisión. Si un campo no aparece claramente, devolvé null.`
       : 'Analizá esta factura comercial y extraé todos los datos disponibles.'
     tools   = [TOOL_FACTURA]
     toolName = 'extraer_factura'
+  } else if (operation === 'extract_baja_laboral') {
+    systemPrompt = `Sos un experto en documentación laboral argentina. Analizá esta constancia de
+baja de un trabajador (ej: "Constancia del Trabajador - Baja" de ARCA/AFIP) y extraé la fecha de
+cese (formato DD-MM-AAAA) y el motivo/situación de baja tal cual figuran en el documento, sin
+interpretar ni resumir.`
+    userPrompt = extraContext
+      ? `Analizá esta constancia de baja laboral. Contexto: ${extraContext}`
+      : 'Extraé la fecha de cese y la situación de baja de esta constancia.'
+    tools    = [TOOL_BAJA_LABORAL]
+    toolName = 'extraer_baja_laboral'
   } else {
     // extract_general, extract_vep_anmat, y otras → respuesta en texto libre
     systemPrompt = DEFAULT_SYSTEM_PROMPTS[operation]
