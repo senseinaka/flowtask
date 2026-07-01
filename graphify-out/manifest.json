@@ -345,8 +345,8 @@
     "semantic_hash": ""
   },
   "src/main/services/drive.service.ts": {
-    "mtime": 1782870551.591236,
-    "ast_hash": "bf84785f54c17bc8bad665fb871a1b49",
+    "mtime": 1782905936.496261,
+    "ast_hash": "ab86eb1a48182bca7d4cd123eead0911",
     "semantic_hash": ""
   },
   "src/main/services/email-smtp.service.ts": {
@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "src/preload/index.ts": {
-    "mtime": 1782870632.1579344,
-    "ast_hash": "8cfabe5a0e3bc4313269eca04fa3503a",
+    "mtime": 1782905990.0087373,
+    "ast_hash": "fdb915d7aba8c79e5f15070d5b4ef81b",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782871062.5071046,
-    "ast_hash": "1cf4b030d29537213222989e86a17be6",
+    "mtime": 1782906337.4641883,
+    "ast_hash": "846204ed99e76724c2336bb1fbd3ff65",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
@@ -660,8 +660,8 @@
     "semantic_hash": "14253e9689dd98fc6d809b1d102ec2f7"
   },
   "src/renderer/src/main.tsx": {
-    "mtime": 1782871112.9911776,
-    "ast_hash": "cd9e45dfa648b7ea78bb4a05350c72e1",
+    "mtime": 1782906326.1408496,
+    "ast_hash": "457d9cc878f86a34599b249e5316bf6d",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/Calendar.tsx": {
@@ -680,8 +680,8 @@
     "semantic_hash": "e89d00a5142600d3757232d0258fd994"
   },
   "src/renderer/src/routes/Login.tsx": {
-    "mtime": 1782091592.4942725,
-    "ast_hash": "6cc2c444fa2eac4aabff36d1eed107ee",
+    "mtime": 1782909221.001132,
+    "ast_hash": "0812b9fd9e5facbc53e0126b30aaf33e",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/Messages.tsx": {
@@ -880,8 +880,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782870784.0876727,
-    "ast_hash": "956cd681dfa17a4287ef7c4fe4ed1215",
+    "mtime": 1782905931.245314,
+    "ast_hash": "e3f4a26496fcfd663fc6266d219f35f0",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782871310.4222379,
-    "ast_hash": "75792d5e9b35f784b89ac1d52b3ccac7",
+    "mtime": 1782908699.5872972,
+    "ast_hash": "784aa7a5283007d55877c34ff6374e84",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1555,23 +1555,23 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/maintenance.ts": {
-    "mtime": 1782870423.169414,
-    "ast_hash": "454b0d52337dc7ee6a0bb4a418421462",
+    "mtime": 1782905978.2194874,
+    "ast_hash": "dc772588705af864dc8ae0c87c742c56",
     "semantic_hash": ""
   },
   "src/main/ipc/maintenance.ipc.ts": {
-    "mtime": 1782870688.5778067,
-    "ast_hash": "8a2cec01e14e3b627cb00d7c506da54b",
+    "mtime": 1782905969.6271884,
+    "ast_hash": "c4b9516878b91e214f40e0a3fc8d6b49",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useMaintenance.ts": {
-    "mtime": 1782870659.6088636,
-    "ast_hash": "019f62c599281f9806b6ed0db63f447e",
+    "mtime": 1782905996.7127032,
+    "ast_hash": "ade067497ec119985228f6cb05f9fd42",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/maintenance/MaintenanceDashboard.tsx": {
-    "mtime": 1782870993.9271357,
-    "ast_hash": "b164cbc3b69db720734e121ea336b649",
+    "mtime": 1782906357.6811893,
+    "ast_hash": "3891909e340147bdbad0bf70679a3379",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/maintenance/MaintenanceEmpresaContext.tsx": {
@@ -1590,18 +1590,18 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/maintenance/MaintenanceTaskCard.tsx": {
-    "mtime": 1782870991.4833174,
-    "ast_hash": "123ad255890b176fd36b284355ffb213",
+    "mtime": 1782906256.5370529,
+    "ast_hash": "993f4d846a58715aa33372afcfee3706",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/maintenance/MaintenanceTaskDetail.tsx": {
-    "mtime": 1782871049.0948956,
-    "ast_hash": "f84006bd8f19ff72f5bd6370dfbb9750",
+    "mtime": 1782906464.510581,
+    "ast_hash": "0eea262870e00623936d55f11b46fed7",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/maintenance/MaintenanceTaskFormModal.tsx": {
-    "mtime": 1782871074.1013443,
-    "ast_hash": "ac40995af365a77f85d726f055abd67c",
+    "mtime": 1782908747.6889398,
+    "ast_hash": "5e532309990c18b0011670d61e2c5e47",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/maintenance/MaintenanceTasksList.tsx": {
@@ -1622,6 +1622,26 @@
   "supabase_rrhh_baja_drive_file.sql": {
     "mtime": 1782868937.0359178,
     "ast_hash": "0fdbe0742b94f0c2c2085eb36a7a0f47",
+    "semantic_hash": ""
+  },
+  "src/renderer/src/routes/maintenance/MaintenanceCatalogs.tsx": {
+    "mtime": 1782906306.604435,
+    "ast_hash": "fff752ca521403f6696ea4b57cc51b5e",
+    "semantic_hash": ""
+  },
+  "src/renderer/public/branding/Logo EV.jpg": {
+    "mtime": 1782908392.2678897,
+    "ast_hash": "91eb7ce9236035cab124a533275c87f3",
+    "semantic_hash": ""
+  },
+  "src/renderer/public/branding/Logo Naka.jpg": {
+    "mtime": 1701739095.9799118,
+    "ast_hash": "d102d48a0f7d49c6cd78eb2018317d02",
+    "semantic_hash": ""
+  },
+  "src/renderer/public/branding/Logo_Naka_lateral.png": {
+    "mtime": 1782909129.82725,
+    "ast_hash": "1bf5af0129cc4df0b040f2be1f8a6906",
     "semantic_hash": ""
   }
 }
