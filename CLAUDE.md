@@ -978,32 +978,63 @@ Para agregar un estado nuevo a alguna de las dos ramas: agregar el valor a
 `FORWARDER_STATUS_LABELS` (`shared/types.ts`) — `CARGO_STEPS`/`FORWARDER_STEPS` en
 `ComexImportDetail.tsx` se derivan con `Object.keys(...)`, no hace falta tocarlos.
 
-### Fix: las ramas parecían no ser independientes (resuelto — jul 2026)
+### Fix: las ramas parecían no ser independientes (resuelto de verdad — jul 2026, tercer intento)
 
 Reporte: "al elegir algunos campos, cambian otros" en el popover de carga/forwarder —
 confirmado real (no percepción), reproducible en cualquiera de las 15 importaciones
-existentes en la base en el momento del reporte.
+existentes en la base. **Se reportó 3 veces y se intentó arreglar 2 veces antes de dar
+con la causa raíz real** — dejar el historial completo acá porque los primeros dos
+intentos parecían razonables y no alcanzaron.
 
-**Causa raíz:** `createImport()` no seteaba `cargo_status`/`forwarder_status` en el
-INSERT, así que en TODA importación (nueva o vieja) ambas columnas quedaban `NULL`
-hasta el primer click. Con `NULL`, `hydrateImport()` caía en `deriveLegacyCargoStatus()`
-/ `deriveLegacyForwarderStatus()` **en cada lectura**, que derivan un valor a partir de
-`status` (y fechas) — no de un valor propio guardado. Si el campo nunca fue tocado y
-`status` cambiaba por otro motivo (el dropdown "Estado", una auto-transición, etc.), el
-valor derivado podía saltar sin que el usuario hubiera tocado esa rama, dando la
-sensación de que "elegir una cosa cambiaba otra". Confirmado con una query directa a
-`powersync.db`: las 15 filas de `comex_imports` tenían `cargo_status`/`forwarder_status`
-en `NULL` — ninguna había sido "curada" nunca, porque el primer fix (solo `createImport`)
-no alcanzaba a las que ya existían.
+**Intento #1 (insuficiente):** `createImport()` no seteaba `cargo_status`/
+`forwarder_status` en el INSERT, así que en TODA importación (nueva o vieja) ambas
+columnas quedaban `NULL` hasta el primer click. Se agregaron los defaults explícitos
+al INSERT — arregla importaciones *nuevas*, no toca ninguna de las que ya existían.
 
-**Fix completo (dos partes):**
-1. `createImport()` inserta `cargo_status='en_armado'`, `forwarder_status='sin_cotizar'`
-   explícitos desde el alta — las importaciones nuevas nunca dependen de la derivación.
-2. `hydrateImport()` (`queries/comex.ts`) ahora **graba** el valor derivado la primera
-   vez que lo calcula (`UPDATE` fire-and-forget, no bloquea la lectura), en vez de solo
-   devolverlo para mostrar. Así el campo queda real y estable desde la primera lectura
-   de cada fila vieja, sin necesidad de que el usuario toque esa rama a mano ni de correr
-   una migración aparte — se autocura solo la primera vez que se abre cada importación.
+**Intento #2 (empeoró el problema):** se hizo que `hydrateImport()` (una función de
+LECTURA) grabara el valor derivado la primera vez que lo calculaba, vía un `UPDATE`
+fire-and-forget, para que la fila quedara "curada" desde la primera lectura. Esto
+introdujo el bug real: `updateImport()` termina con `return getImport(id)` — es decir,
+CADA vez que el usuario guarda un cambio en UNA rama (ej. solo `cargo_status`), el
+propio backend hace un `SELECT` inmediato de la fila completa para devolverla, ese
+`SELECT` pasa por `hydrateImport()`, ve la OTRA rama todavía en `NULL` (nunca curada
+antes) y dispara ahí mismo un `UPDATE` real sobre esa rama — en el mismo ciclo de la
+request del usuario. Como el `status` legado de varias filas todavía tenía valores
+viejos sin normalizar en disco (`'forwarder_seleccionado'`, `'carga_armada'`, etc. —
+`normalizeLegacyStatus()` los remapea solo en memoria al leer, nunca reescribe la DB),
+el valor derivado no siempre era el default neutro: podía derivar directo a
+`'forwarder_seleccionado'`, haciendo que la rama no tocada **saltara visiblemente a un
+estado avanzado** justo al guardar la otra — un `UPDATE` real y persistente, no un
+glitch de caché ni de React.
+
+**Cómo se encontró:** ante el segundo reporte de que "sigue fallando", se lanzó una
+investigación con 6 agentes (1 de contexto + 4 hipótesis en paralelo — condición de
+carrera en el backend, cruce de estado en el frontend, capa de React Query, y si el
+backfill del intento #2 siquiera llegaba a correr — + 1 revisor adversarial). El
+frontend y la capa de React Query salieron limpios (confirmado con revisión línea por
+línea). El agente de la hipótesis de "condición de carrera" fue el que dio con la causa
+real, y la probó cargando la extensión nativa de PowerSync (`powersync_x64.dll`) contra
+una copia de la DB real para confirmar el mecanismo exacto del `UPDATE` en cascada.
+
+**Fix real (esta vez sí):**
+1. Se sacó por completo la escritura de `hydrateImport()` — vuelve a ser una función de
+   lectura pura, deriva un valor de respaldo SOLO para mostrar, nunca escribe nada. Una
+   función de lectura no debe tener side-effects de escritura — esa es la regla que se
+   violó en el intento #2.
+2. El backfill real vive ahora en `backfillComexCargoForwarderStatus()`
+   (`src/main/database/powersync.ts`), una migración explícita y única que corre en la
+   secuencia de conexión (junto a `migrateLegacyComexImportsData`, etc.), no como
+   side-effect de un GET cualquiera. Es idempotente por el propio `WHERE cargo_status IS
+   NULL OR forwarder_status IS NULL` — en runs posteriores, si ya no hay filas que
+   cumplan esa condición, no hace nada.
+3. `createImport()` sigue con los defaults explícitos del intento #1 (correcto, se
+   mantiene) — las importaciones nuevas nunca dependen de ninguna derivación.
+
+**Moraleja para la próxima vez que algo similar pase:** una función de lectura
+(`hydrateImport`, `getX`, `listX`) NUNCA debe escribir en la base como side-effect,
+por más "inofensivo" o "autocurativo" que parezca — si hace falta persistir un valor
+derivado de datos legacy, que sea una migración explícita, en un momento controlado
+(conexión/login), nunca lazy dentro del hot path de lectura.
 
 ---
 

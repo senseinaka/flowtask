@@ -1,16 +1,16 @@
 # Graph Report - flowtask  (2026-07-01)
 
 ## Corpus Check
-- 327 files · ~497,836 words
+- 327 files · ~498,620 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3869 nodes · 8393 edges · 153 communities (140 shown, 13 thin omitted)
+- 3870 nodes · 8396 edges · 158 communities (145 shown, 13 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 37 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `68fab34a`
+- Built from commit: `60825f8d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -157,18 +157,23 @@
 - [[_COMMUNITY_Tipos diferencia de caja|Tipos diferencia de caja]]
 - [[_COMMUNITY_Community 146|Community 146]]
 - [[_COMMUNITY_Community 147|Community 147]]
+- [[_COMMUNITY_Community 148|Community 148]]
 - [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 150|Community 150]]
+- [[_COMMUNITY_Community 151|Community 151]]
 - [[_COMMUNITY_Community 152|Community 152]]
 - [[_COMMUNITY_Community 153|Community 153]]
 - [[_COMMUNITY_Community 154|Community 154]]
 - [[_COMMUNITY_Community 155|Community 155]]
+- [[_COMMUNITY_Community 156|Community 156]]
+- [[_COMMUNITY_Community 157|Community 157]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `getPowerSyncDb()` - 376 edges
 2. `getDb()` - 230 edges
 3. `cn()` - 182 edges
 4. `DriveService` - 40 edges
-5. `Summit — Contexto del proyecto para Claude Code` - 36 edges
+5. `Summit — Contexto del proyecto para Claude Code` - 37 edges
 6. `formatCurrency()` - 32 edges
 7. `useUIStore` - 29 edges
 8. `useRrhhEmpresa()` - 29 edges
@@ -184,13 +189,13 @@
   src/main/database/queries/comex.ts → src/shared/types.ts
 - `hydrateImport()` --calls--> `normalizeLegacyStatus()`  [INFERRED]
   src/main/database/queries/comex.ts → src/shared/types.ts
-- `listCashMovementAmounts()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
-  src/main/database/queries/cajas.ts → src/main/database/powersync.ts
+- `CostDashboard()` --calls--> `fmt()`  [INFERRED]
+  src/renderer/src/routes/comex/ComexImportDetail.tsx → src/renderer/src/routes/rrhh/PeriodoDetail.tsx
 
 ## Import Cycles
 - 3-file cycle: `src/main/database/powersync.ts -> src/main/services/auth.service.ts -> src/main/database/queries/permissions.ts -> src/main/database/powersync.ts`
 
-## Communities (153 total, 13 thin omitted)
+## Communities (158 total, 13 thin omitted)
 
 ### Community 0 - "Tipos TS compartidos"
 Cohesion: 0.00
@@ -202,67 +207,67 @@ Nodes (89): ALERT_ICONS, ALERT_STYLES, applyMovementFilters(), BulkActionsBar(),
 
 ### Community 2 - "Comex backend (queries/IPC)"
 Cohesion: 0.04
-Nodes (126): getPowerSyncDb(), COST_SUBFOLDERS, vepFolderInFlight, addAlarmaCotizacion(), addCotizacion(), ALARMA_COTIZACION_COLUMNS, createBrand(), createCost() (+118 more)
+Nodes (105): COST_SUBFOLDERS, vepFolderInFlight, addAlarmaCotizacion(), addCotizacion(), ALARMA_COTIZACION_COLUMNS, createCost(), createDefaultExtraCosts(), createDespachante() (+97 more)
 
 ### Community 3 - "Comex detalle importación (UI)"
 Cohesion: 0.04
-Nodes (93): ALL_SECTION_KEYS, ALL_STATUSES, BLSection(), buildTimelineSteps(), CARGO_STEPS, ComexImportDetail(), CostDashboard(), CURRENCIES (+85 more)
+Nodes (72): ALL_SECTION_KEYS, ALL_STATUSES, buildTimelineSteps(), CARGO_STEPS, ComexImportDetail(), CostDashboard(), CURRENCIES, DespachoSection() (+64 more)
 
 ### Community 4 - "Finanzas personales dashboard (UI)"
 Cohesion: 0.03
 Nodes (96): ALERT_ICONS, ALERT_STYLES, applyMovementFilters(), BulkActionsBar(), CategoriesManager(), CHART_AXIS_LINE, CHART_AXIS_TICK, ChartCard() (+88 more)
 
 ### Community 5 - "Finanzas empresa backend"
-Cohesion: 0.05
-Nodes (73): buildPaymentMethodLabels(), MONTH_NAMES_ES, registerCompanyFinanceIpc(), addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildCompanyFinanceImportPreview(), ConceptRow (+65 more)
+Cohesion: 0.07
+Nodes (61): buildPaymentMethodLabels(), MONTH_NAMES_ES, registerCompanyFinanceIpc(), addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildCompanyFinanceImportPreview(), ConceptRow (+53 more)
 
 ### Community 6 - "PowerSync schema y JWT"
 Cohesion: 0.02
 Nodes (104): accounting_service_payments, accounting_services, AppSchema, calendar_event_links, cash_attachments, cash_audit_logs, cash_categories, cash_companies (+96 more)
 
 ### Community 7 - "Finanzas personales backend"
-Cohesion: 0.07
-Nodes (60): buildPaymentMethodLabels(), MONTH_NAMES_ES, addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildFinanceImportPreview(), ConceptRow, confirmFinanceImport() (+52 more)
+Cohesion: 0.06
+Nodes (72): buildPaymentMethodLabels(), MONTH_NAMES_ES, addMovementEntry(), attachEntriesCounts(), attachPreviousMonthAmounts(), buildFinanceImportPreview(), ConceptRow, confirmFinanceImport() (+64 more)
 
 ### Community 8 - "Fondos de pantalla (Home)"
 Cohesion: 0.19
 Nodes (16): HomeScreen(), ImageItem, PresetItem, PRESETS, WallpaperItem, INTERVALS, SCREENSAVER_TIMEOUTS, WallpaperSettingsModal() (+8 more)
 
 ### Community 9 - "Google Calendar service"
-Cohesion: 0.06
-Nodes (49): computeChangedFields(), registerSettingsIpc(), registerWallpaperIpc(), ConfigStore, createEvent(), deleteEvent(), deleteStoredConnection(), disconnect() (+41 more)
+Cohesion: 0.15
+Nodes (28): createEvent(), deleteEvent(), deleteStoredConnection(), disconnect(), driveStore, eventToRow(), getActiveUserId(), getAuthorizedClient() (+20 more)
 
 ### Community 10 - "Email backend (IMAP/SMTP)"
 Cohesion: 0.09
-Nodes (45): getEmailDb(), runEmailMigrations(), registerEmailIpc(), createEmailAccount(), deleteEmailAccount(), deleteEmailMessage(), getEmailAccount(), getEmailMessage() (+37 more)
+Nodes (44): getEmailDb(), runEmailMigrations(), createEmailAccount(), deleteEmailAccount(), deleteEmailMessage(), getEmailAccount(), getEmailMessage(), getEmailMessageByUid() (+36 more)
 
 ### Community 12 - "Knowledge fuentes (UI)"
-Cohesion: 0.24
-Nodes (14): registerTeamTaskIpc(), getStatusLog(), logStatusChange(), addTeamDependency(), createTeamTask(), deleteTeamTask(), exportAllTeamTasks(), getTeamBlockedBy() (+6 more)
+Cohesion: 0.14
+Nodes (27): registerTaskIpc(), registerTeamTaskIpc(), getStatusLog(), logStatusChange(), addDependency(), createTask(), deleteTask(), exportAllTasks() (+19 more)
 
 ### Community 13 - "Vencimientos (UI)"
 Cohesion: 0.09
 Nodes (36): AlertRow, CategoryManager(), DEFAULT_ALERT_DAYS, EMOJI_OPTIONS, ExpiryCard(), ExpiryDashboard(), ExpiryItemForm(), ExpiryList() (+28 more)
 
 ### Community 14 - "Scheduler y recordatorios"
-Cohesion: 0.07
-Nodes (30): registerMessagesIpc(), registerReminderIpc(), deleteWaReminder(), getPendingWaReminders(), getWaReminderForEvent(), markWaReminderSent(), upsertWaReminder(), getPendingDelegatedReminders() (+22 more)
+Cohesion: 0.08
+Nodes (25): registerMessagesIpc(), deleteWaReminder(), getPendingWaReminders(), getWaReminderForEvent(), markWaReminderSent(), upsertWaReminder(), getPendingDelegatedReminders(), markDelegatedReminderSent() (+17 more)
 
 ### Community 15 - "Bootstrap main y servicios"
-Cohesion: 0.06
-Nodes (36): MIGRATIONS, runMigrations(), registerSyncListeners(), registerAppIpc(), registerCajasIpc(), registerComexIpc(), registerContactsIpc(), registerCortexIpc() (+28 more)
+Cohesion: 0.09
+Nodes (21): MIGRATIONS, runMigrations(), registerSyncListeners(), registerAppIpc(), registerAttachmentIpc(), registerCajasIpc(), registerComexIpc(), registerCortexIpc() (+13 more)
 
 ### Community 16 - "Email dashboard (UI)"
-Cohesion: 0.14
-Nodes (22): AVATAR_COLORS, ComposeModal(), ContextMenu(), displayFrom(), EmailBody(), FOLDER_DEFS, formatDate(), getAvatarColor() (+14 more)
+Cohesion: 0.15
+Nodes (21): AVATAR_COLORS, ComposeModal(), ContextMenu(), displayFrom(), FOLDER_DEFS, formatDate(), getAvatarColor(), getInitials() (+13 more)
 
 ### Community 17 - "IA service y prompts"
 Cohesion: 0.07
 Nodes (39): registerAIIpc(), DEFAULT_SYSTEM_PROMPTS, PROMPT_DESCRIPTIONS, PROMPT_LABELS, analyzeDocument(), compareFinanceMonths(), ContentBlock, dashboardChat() (+31 more)
 
 ### Community 18 - "Comex operadores de flete"
-Cohesion: 0.09
-Nodes (36): BrandCard(), ComexBrands(), QuickCreateModal(), ComexDespachantes(), DespachanteCard(), DespachanteContactRow(), EMPTY, QuoteRow() (+28 more)
+Cohesion: 0.08
+Nodes (42): BrandCard(), ComexBrands(), QuickCreateModal(), ComexDespachantes(), DespachanteCard(), DespachanteContactRow(), DespachanteFormModal(), EMPTY (+34 more)
 
 ### Community 19 - "Proyectos backend"
 Cohesion: 0.18
@@ -277,8 +282,8 @@ Cohesion: 0.19
 Nodes (17): excelSerialToMs(), extractFlexxusPeriod(), findCol(), formatDateStr(), num(), parseCuponesCSV(), parseCuponesXLSX(), parseDate() (+9 more)
 
 ### Community 22 - "Tareas y Kanban (UI)"
-Cohesion: 0.11
-Nodes (19): MPDashboard(), useSaveAIApiKey(), levelFor(), levelFromRows(), usePermissions(), _subs, usePowerSyncStatus(), useCreateProject() (+11 more)
+Cohesion: 0.16
+Nodes (13): MPDashboard(), levelFor(), levelFromRows(), usePermissions(), _subs, usePowerSyncStatus(), Sidebar(), WorkspaceKey (+5 more)
 
 ### Community 23 - "Dependencias (package.json)"
 Cohesion: 0.04
@@ -286,7 +291,7 @@ Nodes (50): dependencies, @anthropic-ai/sdk, axios, better-sqlite3, dayjs, @dnd-
 
 ### Community 24 - "Comex listado importaciones (UI)"
 Cohesion: 0.06
-Nodes (39): DespachanteFormModal(), AIExtractionModal(), CollapsibleSection(), EditableDate(), EditableNumber(), EditableSentDate(), EditableText(), ACTIVE_STATUSES (+31 more)
+Nodes (37): AIExtractionModal(), CollapsibleSection(), EditableDate(), EditableNumber(), EditableSentDate(), EditableText(), ACTIVE_STATUSES, ALL_STATUSES (+29 more)
 
 ### Community 25 - "Calendario backend"
 Cohesion: 0.14
@@ -297,20 +302,20 @@ Cohesion: 0.08
 Nodes (30): CategoryDetailCard(), CategoryGroupedMovements(), CategoryView(), ChartsView(), DiffBadge(), EditableAmount(), HistoryView(), MonthAlertsPanel() (+22 more)
 
 ### Community 27 - "Settings y costos extra"
-Cohesion: 0.16
-Nodes (12): PriorityBadge(), Props, Props, STATUS_STYLES, StatusBadge(), Props, Props, DatePicker() (+4 more)
+Cohesion: 0.26
+Nodes (11): PriorityBadge(), Props, Props, STATUS_STYLES, StatusBadge(), Props, TaskCard(), Props (+3 more)
 
 ### Community 28 - "Chat tareas backend"
-Cohesion: 0.12
-Nodes (27): registerChatIpc(), registerTaskIpc(), addDependency(), createTask(), deleteTask(), exportAllTasks(), getBlockedBy(), getDependencies() (+19 more)
+Cohesion: 0.15
+Nodes (20): registerChatIpc(), listImports(), listPayments(), listProformas(), listTributos(), upsertTributos(), buildSystemContext(), CHAT_TOOLS (+12 more)
 
 ### Community 29 - "Knowledge backend"
 Cohesion: 0.13
 Nodes (25): createKnowledgeEntry(), CreateKnowledgeEntryFields, createKnowledgeEntryFile(), createKnowledgeGlobalSummary(), createKnowledgeSource(), deleteKnowledgeEntry(), deleteKnowledgeEntryFile(), deleteKnowledgeGlobalSummary() (+17 more)
 
 ### Community 30 - "Tareas delegadas (UI)"
-Cohesion: 0.12
-Nodes (14): ToastContainer(), VARIANT, Options, timers, toast, ToastAction, ToastInput, ToastItem (+6 more)
+Cohesion: 0.13
+Nodes (13): ToastContainer(), VARIANT, timers, toast, ToastAction, ToastInput, ToastItem, ToastOpts (+5 more)
 
 ### Community 31 - "Comex detalle proveedor (UI)"
 Cohesion: 0.10
@@ -325,8 +330,8 @@ Cohesion: 0.08
 Nodes (55): registerMercadoPagoIpc(), createConnection(), createJob(), deleteConnection(), getAccessToken(), getConnection(), getJob(), getReportFileByHash() (+47 more)
 
 ### Community 34 - "Presupuestos (Quotes UI)"
-Cohesion: 0.12
-Nodes (15): QuoteListFilters, useCreateQuote(), useCreateQuoteCompany(), useQuoteCompanies(), useQuoteKPIs(), useQuotes(), useUpdateQuote(), DashboardTab (+7 more)
+Cohesion: 0.08
+Nodes (24): QuoteListFilters, useAddQuoteActivity(), useCreateQuote(), useCreateQuoteCompany(), useDeleteQuote(), useQuote(), useQuoteActivities(), useQuoteCompanies() (+16 more)
 
 ### Community 35 - "MercadoPago dashboard (UI)"
 Cohesion: 0.11
@@ -338,23 +343,19 @@ Nodes (20): registerQuotesIpc(), _addActivity(), addQuoteActivity(), createQuote
 
 ### Community 37 - "RRHH detalle período (UI)"
 Cohesion: 0.15
-Nodes (13): useConfirmarPeriodo(), useDeletePeriodo(), useExportXls(), useHistorialColaborador(), useSueldos(), useUpdateSueldoNotas(), HistorialSlideOver(), NotasCell() (+5 more)
-
-### Community 38 - "Drive y BNA service"
-Cohesion: 0.05
-Nodes (36): closeDb(), getAttachmentsDir(), getDbPath(), resolveAttachmentPath(), logoFileToDataUrl(), registerAttachmentIpc(), registerBackupIpc(), registerProjectIpc() (+28 more)
+Nodes (14): useConfirmarPeriodo(), useDeletePeriodo(), useExportXls(), useHistorialColaborador(), useSueldos(), useUpdateSueldoNotas(), fmt(), HistorialSlideOver() (+6 more)
 
 ### Community 39 - "RRHH backend y nómina"
 Cohesion: 0.06
 Nodes (79): registerPdfIpc(), CHANGED_FIELD_LABELS, ColField, TEMPLATE_COLS, xlsx, asignarLegajo(), clearSueldosByPeriodo(), confirmarPeriodo() (+71 more)
 
 ### Community 40 - "Mensajes programados (UI)"
-Cohesion: 0.20
-Nodes (16): useCreateMessage(), useCreateTemplate(), useDeleteMessage(), useDeleteTemplate(), useRetryMessage(), useScheduledMessages(), useTemplates(), useUpdateMessage() (+8 more)
+Cohesion: 0.12
+Nodes (20): EDGES, FLOW_EDGES, NODES, Tab, useCreateMessage(), useCreateTemplate(), useDeleteMessage(), useDeleteTemplate() (+12 more)
 
 ### Community 41 - "Comex cotizaciones USD/EUR (UI)"
-Cohesion: 0.09
-Nodes (29): ComexDashboard(), AlarmaRow(), CotizacionAlarmasModal(), DIRECCIONES, EMPTY_FORM, fmtFecha(), MONEDAS, Props (+21 more)
+Cohesion: 0.06
+Nodes (35): ComexDashboard(), getBestETA(), INAL_BADGE_CONFIG, PIPELINE_PHASES, PipelineCard(), ScaleKey, SCALES, AlarmaRow() (+27 more)
 
 ### Community 42 - "Conciliador resultados (UI)"
 Cohesion: 0.29
@@ -366,39 +367,39 @@ Nodes (10): GRANTABLE_MODULES, initials(), isValidUUID(), LEVEL_LABELS, NewUserM
 
 ### Community 44 - "Calendario (UI)"
 Cohesion: 0.11
-Nodes (18): useCalendarEvents(), useCreateManualEvent(), useDeleteManualEvent(), useEnabledCalendars(), useUpdateManualEvent(), usePersonalContact(), Calendar(), DAY_LABELS (+10 more)
+Nodes (27): CalendarLinkButton(), useCalendarEvents(), useCalendarStatus(), useConnectGoogle(), useCreateManualEvent(), useDeleteManualEvent(), useDisconnectGoogle(), useEnabledCalendars() (+19 more)
 
 ### Community 45 - "Config build (electron-builder)"
 Cohesion: 0.11
 Nodes (18): build, appId, asar, directories, files, nsis, productName, publish (+10 more)
 
 ### Community 46 - "Cajas movimientos y adjuntos (UI)"
-Cohesion: 0.09
-Nodes (47): useAddAttachment(), useAttachments(), useDeleteAttachment(), useProjects(), useCreateReminder(), useDeleteReminder(), useReminders(), useAddDependency() (+39 more)
+Cohesion: 0.13
+Nodes (30): useProjects(), useAddDependency(), useCreateTask(), useDeleteTask(), useRemoveDependency(), useTask(), useTaskDependencies(), useTasks() (+22 more)
 
 ### Community 47 - "Delegadas y preguntas backend"
-Cohesion: 0.23
-Nodes (17): calcNextExpiryDate(), createExpiryCategory(), createExpiryItem(), deleteExpiryCategory(), deleteExpiryItem(), getExpiryItem(), getPendingExpiryAlerts(), listAlertsByItem() (+9 more)
+Cohesion: 0.21
+Nodes (18): registerExpiryIpc(), calcNextExpiryDate(), createExpiryCategory(), createExpiryItem(), deleteExpiryCategory(), deleteExpiryItem(), getExpiryItem(), getPendingExpiryAlerts() (+10 more)
 
 ### Community 48 - "Layout app y permisos (UI)"
 Cohesion: 0.24
 Nodes (11): useCreateQuoteNote(), useDeleteQuoteNote(), useKnowledgeSubEntries(), useQuoteNotes(), useUpdateQuoteNote(), DocModal, EditorState, NoteCardWrapper() (+3 more)
 
 ### Community 49 - "Comex costos (UI)"
-Cohesion: 0.24
-Nodes (9): ALL_CATEGORIES, CostRow(), CostsSection(), Props, QuickAddPanel(), useComexCosts(), useCreateComexCost(), useDeleteComexCost() (+1 more)
+Cohesion: 0.23
+Nodes (10): ALL_CATEGORIES, CostRow(), CostsSection(), Props, QuickAddPanel(), useComexCosts(), useComexCustoms(), useCreateComexCost() (+2 more)
 
 ### Community 50 - "Vencimientos backend"
 Cohesion: 0.16
 Nodes (8): ComexPlanningDetail(), MilestoneRow(), useEventLinks(), useComexPlanning(), useGenerateComexPlanningAIRecommendation(), useRecalculateComexPlanning(), useUpdateComexPlanning(), useUpdatePlanningMilestone()
 
 ### Community 51 - "Cortex/Graphify dashboard (UI)"
-Cohesion: 0.25
-Nodes (4): EDGES, FLOW_EDGES, NODES, Tab
+Cohesion: 0.12
+Nodes (24): BLSection(), ExtraCostRow(), FixedCostSection(), PLFileCard(), PLSection(), useAIConfigured(), useAIModels(), useAnalyzeBL() (+16 more)
 
 ### Community 52 - "Adjuntos y backup backend"
-Cohesion: 0.31
-Nodes (6): registerDelegatedExtrasIpc(), listDelegatedAttachments(), createDelegatedReminder(), deleteDelegatedReminder(), listDelegatedReminders(), markDelegatedReminderSent()
+Cohesion: 0.16
+Nodes (23): getAttachmentsDir(), resolveAttachmentPath(), logoFileToDataUrl(), addAttachment(), deleteAttachment(), exportAllAttachments(), getAttachment(), getAttachmentPath() (+15 more)
 
 ### Community 53 - "Knowledge documento de hilo"
 Cohesion: 0.20
@@ -413,8 +414,8 @@ Cohesion: 0.13
 Nodes (15): devDependencies, electron, electron-builder, @electron-toolkit/tsconfig, @electron-toolkit/utils, electron-vite, @types/better-sqlite3, @types/node (+7 more)
 
 ### Community 56 - "Contactos, agenda y equipo (UI)"
-Cohesion: 0.11
-Nodes (24): AgendaContactos(), DetailPanel(), ETIQUETAS, GruposPicker(), NewContactModal(), TYPE_FILTERS, AddMemberPanel(), AgendaGrupos() (+16 more)
+Cohesion: 0.07
+Nodes (44): AgendaContactos(), DetailPanel(), ETIQUETAS, GruposPicker(), NewContactModal(), TYPE_FILTERS, AddMemberPanel(), AgendaGrupos() (+36 more)
 
 ### Community 57 - "PowerSync migraciones legacy"
 Cohesion: 0.15
@@ -429,8 +430,8 @@ Cohesion: 0.19
 Nodes (8): EmailDashboard(), useDeleteEmailMessage(), useEmailAccounts(), useEmailMessages(), usePurgeEmail(), useResetEmailSync(), useRestoreEmail(), useSyncEmail()
 
 ### Community 60 - "Comex planificaciones (UI)"
-Cohesion: 0.06
-Nodes (25): getBestETA(), INAL_BADGE_CONFIG, PIPELINE_PHASES, PipelineCard(), ScaleKey, SCALES, CalendarEvent, WEEKDAYS (+17 more)
+Cohesion: 0.09
+Nodes (19): CalendarEvent, WEEKDAYS, ComexPlannings(), PlanningRow(), QuickCreateModal(), VIEW_TABS, ViewMode, ACTIVE_STATUSES (+11 more)
 
 ### Community 61 - "Comex dashboard/Gantt (UI)"
 Cohesion: 0.14
@@ -438,26 +439,26 @@ Nodes (17): ComexOperators(), ContactRow(), EMPTY, EMPTY_CONTACT, OperatorCard()
 
 ### Community 62 - "MercadoPago backend"
 Cohesion: 0.24
-Nodes (11): DenominationCounter(), denomQty(), denomTotal(), NuevoMovimientoModal(), Tipo, TIPO_COLOR, TIPO_CONFIG, today() (+3 more)
+Nodes (12): DenominationCounter(), denomQty(), denomTotal(), NuevoMovimientoModal(), Tipo, TIPO_COLOR, TIPO_CONFIG, today() (+4 more)
 
 ### Community 63 - "Cajas internas backend"
-Cohesion: 0.11
-Nodes (32): createCashCount(), createCashDifference(), createCashMovement(), createTransfer(), getCashbox(), getCashboxBalances(), getCashboxes(), getCashboxLastCounts() (+24 more)
+Cohesion: 0.16
+Nodes (33): getPowerSyncDb(), createCashCount(), createCashDifference(), createCashMovement(), createTransfer(), getCashbox(), getCashboxBalances(), getCashboxes() (+25 more)
 
 ### Community 64 - "Comex detalle planificación (UI)"
-Cohesion: 0.17
-Nodes (9): useAddQuoteActivity(), useDeleteQuote(), useQuote(), useQuoteActivities(), useQuoteContacts(), ActivityItem(), parsePayload(), QUICK_DAYS (+1 more)
+Cohesion: 0.13
+Nodes (8): closeDb(), getDbPath(), registerBackupIpc(), BACKUP_INTERVAL_OPTIONS, defaultBackupDir(), dirSizeMB(), LocalBackupService, store
 
 ### Community 65 - "Planificación de pedidos service"
-Cohesion: 0.23
-Nodes (12): createPlanning(), buildMilestoneRecords(), calculateDemandForPeriod(), calculateDesiredCoverageMonths(), calculateMilestoneDates(), calculatePlanning(), calculateRiskStatus(), calculateTotalLeadTimeDays() (+4 more)
+Cohesion: 0.09
+Nodes (31): createBrand(), createPlanning(), getBrand(), getPlanning(), getSupplier(), hydrateBrand(), hydratePlanning(), listMilestones() (+23 more)
 
 ### Community 66 - "RRHH perfil colaborador (UI)"
-Cohesion: 0.12
-Nodes (16): useFotoDataUrl(), useUploadColaboradorCv(), useUploadColaboradorFoto(), AvatarFoto(), ChartRange, CONTRATACION_LABELS, DeleteMode, DIAS_SEMANA (+8 more)
+Cohesion: 0.11
+Nodes (20): useAsignarLegajo(), useCrearDriveColaborador(), useFotoDataUrl(), useHardDeleteColaborador(), useUploadColaboradorCv(), useUploadColaboradorFoto(), AvatarFoto(), ChartRange (+12 more)
 
 ### Community 67 - "RRHH importar nómina (UI)"
-Cohesion: 0.27
+Cohesion: 0.23
 Nodes (8): useConfirmImport(), useExportTemplate(), useParseImport(), CONTRATACION_LABELS, ESTADO_LABELS, ImportarNominaModal(), Props, Step
 
 ### Community 68 - "Comex tracking y logística (UI)"
@@ -470,7 +471,7 @@ Nodes (8): registerServiceCatalogIpc(), CatalogRow, DEFAULT_CATEGORIES, DEFAULT_
 
 ### Community 70 - "Doc Summit principal (CLAUDE.md)"
 Cohesion: 0.08
-Nodes (24): Archivos clave, Bugs corregidos — Calendario (junio 2026), Comportamiento de borrado en cascada (Comex), Constantes importantes, Cómo correr el proyecto, Entender el código rápido — graphify, Fix: eventos recurrentes se creaban en fecha incorrecta y como un solo evento maestro (resuelto), Fix: preview de instancias recurrentes mostraba N-1 eventos (resuelto) (+16 more)
+Nodes (25): Archivos clave, Bugs corregidos — Calendario (junio 2026), Comportamiento de borrado en cascada (Comex), Constantes importantes, Cómo correr el proyecto, Entender el código rápido — graphify, Fix: eventos recurrentes se creaban en fecha incorrecta y como un solo evento maestro (resuelto), Fix: preview de instancias recurrentes mostraba N-1 eventos (resuelto) (+17 more)
 
 ### Community 71 - "Config tsconfig web"
 Cohesion: 0.18
@@ -493,8 +494,8 @@ Cohesion: 0.22
 Nodes (8): compilerOptions, composite, paths, types, extends, include, @main/*, @shared/*
 
 ### Community 76 - "Community 76"
-Cohesion: 0.15
-Nodes (25): useContacts(), KEY, useCreateDelegatedTask(), useDelegatedTasks(), useDeleteDelegatedTask(), useUpdateDelegatedTask(), useTeamTasks(), Contacts() (+17 more)
+Cohesion: 0.24
+Nodes (16): useAddAttachment(), useAttachments(), useDeleteAttachment(), useCreateReminder(), useDeleteReminder(), useReminders(), useAddTeamDependency(), useDeleteTeamTask() (+8 more)
 
 ### Community 77 - "Metadata (package.json)"
 Cohesion: 0.25
@@ -502,27 +503,27 @@ Nodes (7): author, description, keywords, license, main, name, version
 
 ### Community 78 - "Componentes UI base"
 Cohesion: 0.06
-Nodes (38): LoginProps, Avatar(), AvatarProps, initials(), PALETTE, pick(), Badge(), BadgeProps (+30 more)
+Nodes (39): LoginProps, Avatar(), AvatarProps, initials(), PALETTE, pick(), Badge(), BadgeProps (+31 more)
 
 ### Community 79 - "Doc bugs PowerSync (CLAUDE.md)"
 Cohesion: 0.17
 Nodes (12): Bugs conocidos y sus fixes (historial relevante), Fix: badge del contador de cargas siempre en 0 (resuelto — junio 2025), Fix: badge PowerSync mostraba "object Object" en lugar del error real (resuelto — junio 2025), Fix: cargas no guardaban valores — FK constraint (resuelto — junio 2025), Fix: cola de sync bloqueada por string "null" en columnas numéricas (resuelto — junio 2025), Fix: import_order_plannings subía con workspace_id = null (resuelto — junio 2025), Fix: input "Monto" no aceptaba teclado (resuelto — junio 2025), Fix: PowerSync "Sin conexión" persistente — transporte, reconexión y cola (resuelto — junio 2026) (+4 more)
 
 ### Community 80 - "Settings y config-store"
-Cohesion: 0.36
-Nodes (10): CalendarLinkButton(), useCalendarStatus(), useConnectGoogle(), useDisconnectGoogle(), useLinkEntity(), useRefreshLinkedEvent(), useSetEnabledCalendars(), useSyncNow() (+2 more)
+Cohesion: 0.16
+Nodes (16): registerDelegatedIpc(), createDelegatedTask(), deleteDelegatedTask(), getDelegatedTask(), hydrate(), listDelegatedTasks(), updateDelegatedTask(), ALERT_SCHEMA (+8 more)
 
 ### Community 81 - "RRHH nómina dashboard (UI)"
-Cohesion: 0.16
-Nodes (18): useAsignarLegajo(), useConfirmarGenerar(), useCrearDriveColaborador(), useDeleteColaborador(), useExportNominaXls(), useGenerarDesdeUltimo(), useHardDeleteColaborador(), useNominaColaboradores() (+10 more)
+Cohesion: 0.18
+Nodes (12): useConfirmarGenerar(), useDeleteColaborador(), useExportNominaXls(), useGenerarDesdeUltimo(), useNominaColaboradores(), GenerarNominaModal(), Props, ESTADO_COLORS (+4 more)
 
 ### Community 82 - "Knowledge notas de presupuesto"
 Cohesion: 0.25
 Nodes (5): base64url(), coerceToFloat(), fixLegacyNullDoubleStrings(), ProductionTokenConnector, signPowerSyncJwt()
 
 ### Community 83 - "BCRA y alarmas cotización"
-Cohesion: 0.15
-Nodes (26): listAlarmasCotizacionActivas(), setUltimaAlertaAt(), BcraDetalleDia, BcraDetalleItem, BcraHistoricoResponse, BcraHoyResponse, buildCotizacionHoy(), CacheRow (+18 more)
+Cohesion: 0.14
+Nodes (27): getLatestCotizacionByMoneda(), listAlarmasCotizacionActivas(), setUltimaAlertaAt(), BcraDetalleDia, BcraDetalleItem, BcraHistoricoResponse, BcraHoyResponse, buildCotizacionHoy() (+19 more)
 
 ### Community 84 - "Permisos backend"
 Cohesion: 0.15
@@ -534,7 +535,7 @@ Nodes (7): scripts, build, build:win, dev, postinstall, preview, release
 
 ### Community 86 - "RRHH sueldos dashboard (UI)"
 Cohesion: 0.19
-Nodes (12): useReadPayrollPdf(), usePeriodos(), useSavePayroll(), useSaveSac(), useSaveVacaciones(), ChartRow, fmt(), fmtM() (+4 more)
+Nodes (14): useReadPayrollPdf(), useNominaConfig(), usePeriodos(), useSavePayroll(), useSaveSac(), useSaveVacaciones(), useRrhhEmpresa(), ChartRow (+6 more)
 
 ### Community 87 - "Definición de módulos"
 Cohesion: 0.29
@@ -573,8 +574,8 @@ Cohesion: 0.60
 Nodes (3): api, SummitAPI, Window
 
 ### Community 97 - "Knowledge helpers (UI)"
-Cohesion: 0.16
-Nodes (17): CardProps, KnowledgeEntryCard(), SUB_DOT, SubEntryProps, ThreadSubEntry(), AI_HEADERS, AVAILABLE_ICONS, buildMarkdown() (+9 more)
+Cohesion: 0.26
+Nodes (11): EmailBody(), useKnowledgeEntryFiles(), CardProps, KnowledgeEntryCard(), SUB_DOT, SubEntryProps, ThreadSubEntry(), buildMarkdown() (+3 more)
 
 ### Community 98 - "Knowledge IA service"
 Cohesion: 0.27
@@ -593,8 +594,8 @@ Cohesion: 0.09
 Nodes (13): useTransformKnowledgeText(), AI_ACTIONS, COLORS, FONTS, KnowledgeRichTextEditor(), Props, safeEmbedSrc(), SLASH_COMMANDS (+5 more)
 
 ### Community 106 - "Knowledge editor de entradas"
-Cohesion: 0.21
-Nodes (9): useAnalyzeTopic(), useTopicLatestSummary(), KnowledgeAIPanel(), Props, SECTION_COLOR, metaInput, metaSelect, Props (+1 more)
+Cohesion: 0.17
+Nodes (14): useAnalyzeTopic(), useTopicLatestSummary(), KnowledgeAIPanel(), Props, SECTION_COLOR, AI_HEADERS, AVAILABLE_ICONS, DEFAULT_SOURCES (+6 more)
 
 ### Community 108 - "Doc Agenda contactos (CLAUDE.md)"
 Cohesion: 0.29
@@ -613,16 +614,16 @@ Cohesion: 0.43
 Nodes (6): useGenerateEntryDocument(), useSaveThreadDoc(), useThreadDoc(), DOT_COLORS, KnowledgeThreadDocModal(), Props
 
 ### Community 116 - "Doc Servicios contables (CLAUDE.md)"
-Cohesion: 0.47
-Nodes (4): ESTADO_ORDER, fmt(), ReconTabKPIs(), useReconKPIs()
+Cohesion: 0.16
+Nodes (7): computeChangedFields(), registerSettingsIpc(), ConfigStore, getPersonalContact(), savePersonalContact(), store, store
 
 ### Community 117 - "Conciliador conciliación (UI)"
 Cohesion: 0.17
 Nodes (13): DetalleFila(), fmt(), MONTH_NAMES, ReconConciliacion(), TODOS_ESTADOS, MONTH_NAMES, ReconDashboard(), useAuthSession() (+5 more)
 
 ### Community 118 - "Conciliador dashboard (UI)"
-Cohesion: 0.31
-Nodes (8): CajasDashboard(), fmtMoney(), MovementRow(), MovimientosModal(), parseAmounts(), TYPE_COLOR, fmtAmount(), useCashMovementsDetailed()
+Cohesion: 0.38
+Nodes (6): fmtMoney(), MovementRow(), MovimientosModal(), parseAmounts(), TYPE_COLOR, useCashMovementsDetailed()
 
 ### Community 119 - "Doc Comex cotizaciones (CLAUDE.md)"
 Cohesion: 0.40
@@ -637,8 +638,8 @@ Cohesion: 0.17
 Nodes (16): ComexGestores(), EMPTY_GESTOR, ESPECIALIDAD_COLORS, EspTag(), GestorCard(), GestorContactRow(), GestorFormModal(), useComexGestores() (+8 more)
 
 ### Community 124 - "Community 124"
-Cohesion: 0.11
-Nodes (20): MONTH_NAMES, ReconPeriodView(), Tab, DetalleFila(), EnrichedRow, fmt(), ReconTabResultados(), RESULT_TABS (+12 more)
+Cohesion: 0.09
+Nodes (24): MONTH_NAMES, ReconPeriodView(), Tab, ESTADO_ORDER, fmt(), ReconTabKPIs(), DetalleFila(), EnrichedRow (+16 more)
 
 ### Community 125 - "Comex hidratación marcas/proveedores"
 Cohesion: 0.19
@@ -649,12 +650,12 @@ Cohesion: 0.25
 Nodes (8): 1. Permisos IPC: default-deny + identidad de actor por sesión, 2. XSS / renderizado de contenido no confiable, 3. Secretos en reposo: cifrado con `safeStorage`, 4. PIN de operadores de caja (`cash_operators`), 5. Prompt-injection en el chat con tools de escritura, Auditoría de seguridad — fixes aplicados (junio 2026), Residuales que requieren infraestructura (no código), Verificación
 
 ### Community 129 - "Contactos backend"
-Cohesion: 0.22
-Nodes (17): addGrupoMember(), AVATAR_COLORS, createContact(), createGrupo(), deleteContact(), deleteGrupo(), getContact(), getContactGrupos() (+9 more)
+Cohesion: 0.21
+Nodes (18): registerContactsIpc(), addGrupoMember(), AVATAR_COLORS, createContact(), createGrupo(), deleteContact(), deleteGrupo(), getContact() (+10 more)
 
 ### Community 130 - "Componentes UI compartidos"
-Cohesion: 0.15
-Nodes (13): ActionBtn(), ActiveModal, CashboxCard(), CURRENCY_SYMBOLS, KpiCard(), SelectedPanel(), TabBtn(), ViewBtn() (+5 more)
+Cohesion: 0.14
+Nodes (14): ActionBtn(), ActiveModal, CajasDashboard(), CashboxCard(), CURRENCY_SYMBOLS, KpiCard(), SelectedPanel(), TabBtn() (+6 more)
 
 ### Community 131 - "Community 131"
 Cohesion: 0.23
@@ -670,7 +671,7 @@ Nodes (5): AXIS_LINE, AXIS_TICK, CajasCharts(), CURRENCY_ORDER, useCashFlowSerie
 
 ### Community 135 - "Cajas internas dashboard (UI)"
 Cohesion: 0.21
-Nodes (10): CashAttachments(), KEYS, useAddCashAttachment(), useCashAttachments(), useCashboxBalances(), useCashboxes(), useCashboxesWithBalances(), useCashboxLastCounts() (+2 more)
+Nodes (8): AlertasDescuadre(), KEYS, useCashboxBalances(), useCashboxes(), useCashboxesWithBalances(), useCashboxLastCounts(), useCashCompanies(), usePendingDifferences()
 
 ### Community 136 - "Community 136"
 Cohesion: 0.29
@@ -678,7 +679,7 @@ Nodes (7): Archivos clave, Campos del formulario (ServiceFormModal — 2 tabs), 
 
 ### Community 137 - "Community 137"
 Cohesion: 0.19
-Nodes (17): useCreateKnowledgeEntry(), useCreateKnowledgeSource(), useDeleteKnowledgeEntry(), useDeleteKnowledgeSource(), useKnowledgeEntries(), useKnowledgeSearch(), useKnowledgeSources(), useKnowledgeTopics() (+9 more)
+Nodes (14): useCreateKnowledgeEntry(), useDeleteKnowledgeEntry(), useKnowledgeEntries(), useKnowledgeSearch(), useKnowledgeTopics(), useSummarizeKnowledgeEntry(), useUpdateKnowledgeEntry(), KnowledgeDashboard() (+6 more)
 
 ### Community 138 - "Community 138"
 Cohesion: 0.31
@@ -689,28 +690,44 @@ Cohesion: 0.17
 Nodes (16): DiferenciasModal(), DiffRow(), InlineAction, STATUS_CONFIG, StatusBadge(), AddOperatorForm(), OperadoresModal(), OperatorRow() (+8 more)
 
 ### Community 140 - "Community 140"
-Cohesion: 0.36
-Nodes (8): getMimeType(), _renameDriveFolder(), resolveVepDriveFolder(), setupImportDriveFolders(), _uploadProformaToDrive(), getImport(), getProforma(), updateImport()
+Cohesion: 0.21
+Nodes (12): getMimeType(), _renameDriveFolder(), resolveVepDriveFolder(), setupImportDriveFolders(), _uploadProformaToDrive(), createImport(), getImport(), getProforma() (+4 more)
 
 ### Community 142 - "Comex proformas y facturas (UI)"
 Cohesion: 0.48
 Nodes (6): buildImportExportTitle(), ComexImportFullDetail, fmtDate(), sanitizeFileName(), writeImportExcel(), writeImportPdf()
 
+### Community 143 - "Community 143"
+Cohesion: 0.23
+Nodes (14): registerWallpaperIpc(), addUserImage(), DEFAULT_CONFIG, deleteUserImage(), fileToDataUrl(), getUserWallpapersDir(), getWallpaperConfig(), getWallpaperStats() (+6 more)
+
 ### Community 144 - "Autenticación y sesión"
-Cohesion: 0.31
-Nodes (5): useDeleteEntryFile(), useKnowledgeEntryFiles(), useUploadEntryFile(), KnowledgeAttachmentStrip(), Props
+Cohesion: 0.32
+Nodes (4): useDeleteEntryFile(), useUploadEntryFile(), KnowledgeAttachmentStrip(), Props
 
 ### Community 146 - "Community 146"
-Cohesion: 0.12
-Nodes (26): registerDelegatedIpc(), registerQuestionsIpc(), createDelegatedTask(), deleteDelegatedTask(), getDelegatedTask(), hydrate(), listDelegatedTasks(), updateDelegatedTask() (+18 more)
+Cohesion: 0.15
+Nodes (19): registerQuestionsIpc(), createQuestion(), deleteQuestion(), expireStale(), findAllPendingQuestions(), findPendingByCode(), findPendingByPhone(), generateRefCode() (+11 more)
 
 ### Community 147 - "Community 147"
 Cohesion: 0.18
 Nodes (11): Archivos clave, Contacto personal (Mis datos personales), Contactos (agenda), DayZoomModal, Evolution API (WhatsApp), Identificadores de eventos unificados, Módulo de Calendario — arquitectura específica, Navegación del calendario (teclado + rueda) (+3 more)
 
+### Community 148 - "Community 148"
+Cohesion: 0.29
+Nodes (5): useCreateKnowledgeSource(), useDeleteKnowledgeSource(), useKnowledgeSources(), useUpdateKnowledgeSource(), KnowledgeSourcesModal()
+
 ### Community 149 - "Community 149"
-Cohesion: 0.25
-Nodes (10): getPlanning(), listPlannings(), buildPlanningContext(), buildReportContext(), generatePlanningAIReport(), GeneratePlanningAIReportInput, generatePlanningRecommendation(), REPORT_TYPE_INSTRUCTIONS (+2 more)
+Cohesion: 0.31
+Nodes (6): CashAttachments(), useAddCashAttachment(), useCashAttachments(), useDeleteCashAttachment(), Options, useUndoableDelete()
+
+### Community 150 - "Community 150"
+Cohesion: 0.42
+Nodes (7): registerProjectIpc(), createProject(), deleteProject(), exportAllProjects(), getProject(), listProjects(), updateProject()
+
+### Community 151 - "Community 151"
+Cohesion: 0.39
+Nodes (6): registerReminderIpc(), createReminder(), deleteReminder(), getPendingReminders(), getReminder(), listReminders()
 
 ### Community 152 - "Community 152"
 Cohesion: 0.36
@@ -728,24 +745,32 @@ Nodes (3): isEmpresa(), RrhhEmpresaContext, RrhhEmpresaLayout()
 Cohesion: 0.50
 Nodes (4): hydrateImport(), deriveLegacyCargoStatus(), deriveLegacyForwarderStatus(), normalizeLegacyStatus()
 
+### Community 156 - "Community 156"
+Cohesion: 0.32
+Nodes (7): extractText(), pollIncomingMessages(), processedMessageIds, RawMessage, startPolling(), stopPolling(), warmUpAndStart()
+
+### Community 157 - "Community 157"
+Cohesion: 0.40
+Nodes (4): DatePicker(), DatePickerProps, DAYS, MONTHS
+
 ## Knowledge Gaps
-- **1202 isolated node(s):** `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first`, `Cómo correr el proyecto`, `Entender el código rápido — graphify` (+1197 more)
+- **1203 isolated node(s):** `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first`, `Cómo correr el proyecto`, `Entender el código rápido — graphify` (+1198 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `cn()` connect `Comex listado importaciones (UI)` to `Finanzas empresa dashboard (UI)`, `Componentes UI compartidos`, `Comex detalle importación (UI)`, `Finanzas personales dashboard (UI)`, `Cajas gráficos (UI)`, `Cajas internas dashboard (UI)`, `Cajas operadores y diferencias (UI)`, `Vencimientos (UI)`, `Community 143`, `Comex operadores de flete`, `Tareas y Kanban (UI)`, `Calendario backend`, `Finanzas helpers UI`, `Settings y costos extra`, `Tareas delegadas (UI)`, `RRHH detalle período (UI)`, `Mensajes programados (UI)`, `Comex cotizaciones USD/EUR (UI)`, `Conciliador resultados (UI)`, `Comex proveedores y marcas (UI)`, `Calendario (UI)`, `Cajas movimientos y adjuntos (UI)`, `Comex costos (UI)`, `Preguntas de tareas (UI)`, `Contactos, agenda y equipo (UI)`, `Comex planificaciones (UI)`, `MercadoPago backend`, `Comex tracking y logística (UI)`, `Community 76`, `Componentes UI base`, `RRHH sueldos dashboard (UI)`, `Comex documentos y pagos (UI)`, `Comex alarmas cotización (UI)`, `Knowledge panel IA (UI)`, `Conciliador conciliación (UI)`, `Conciliador dashboard (UI)`, `Community 122`, `Community 124`, `Comex hidratación marcas/proveedores`?**
-  _High betweenness centrality (0.166) - this node is a cross-community bridge._
-- **Why does `getPowerSyncDb()` connect `Comex backend (queries/IPC)` to `Finanzas empresa backend`, `PowerSync schema y JWT`, `Finanzas personales backend`, `Google Calendar service`, `Community 138`, `Community 140`, `Knowledge fuentes (UI)`, `Bootstrap main y servicios`, `Proyectos backend`, `Community 149`, `Chat tareas backend`, `Knowledge backend`, `MercadoPago service`, `Presupuestos backend`, `Drive y BNA service`, `RRHH backend y nómina`, `PowerSync migraciones legacy`, `Cajas internas backend`, `Planificación de pedidos service`, `Comex detalle marca (UI)`, `Permisos backend`, `Servicios contables backend`?**
-  _High betweenness centrality (0.151) - this node is a cross-community bridge._
+- **Why does `cn()` connect `Comex listado importaciones (UI)` to `Finanzas empresa dashboard (UI)`, `Componentes UI compartidos`, `Comex detalle importación (UI)`, `Finanzas personales dashboard (UI)`, `Cajas gráficos (UI)`, `Cajas internas dashboard (UI)`, `Cajas operadores y diferencias (UI)`, `Vencimientos (UI)`, `Comex operadores de flete`, `Community 149`, `Tareas y Kanban (UI)`, `Calendario backend`, `Finanzas helpers UI`, `Settings y costos extra`, `Community 157`, `Tareas delegadas (UI)`, `RRHH detalle período (UI)`, `Mensajes programados (UI)`, `Comex cotizaciones USD/EUR (UI)`, `Conciliador resultados (UI)`, `Comex proveedores y marcas (UI)`, `Calendario (UI)`, `Cajas movimientos y adjuntos (UI)`, `Comex costos (UI)`, `Cortex/Graphify dashboard (UI)`, `Preguntas de tareas (UI)`, `Contactos, agenda y equipo (UI)`, `Comex planificaciones (UI)`, `MercadoPago backend`, `Comex tracking y logística (UI)`, `Community 76`, `Componentes UI base`, `RRHH sueldos dashboard (UI)`, `Comex documentos y pagos (UI)`, `Comex alarmas cotización (UI)`, `Knowledge panel IA (UI)`, `Conciliador conciliación (UI)`, `Conciliador dashboard (UI)`, `Community 122`, `Community 124`, `Comex hidratación marcas/proveedores`?**
+  _High betweenness centrality (0.162) - this node is a cross-community bridge._
+- **Why does `getPowerSyncDb()` connect `Cajas internas backend` to `Comex backend (queries/IPC)`, `Finanzas empresa backend`, `PowerSync schema y JWT`, `Finanzas personales backend`, `Community 138`, `Community 140`, `Knowledge fuentes (UI)`, `Bootstrap main y servicios`, `Community 143`, `Proyectos backend`, `Community 150`, `Chat tareas backend`, `Knowledge backend`, `MercadoPago service`, `Presupuestos backend`, `RRHH backend y nómina`, `PowerSync migraciones legacy`, `Planificación de pedidos service`, `Comex detalle marca (UI)`, `BCRA y alarmas cotización`, `Permisos backend`, `Servicios contables backend`?**
+  _High betweenness centrality (0.156) - this node is a cross-community bridge._
 - **Why does `adminSaveUserProfile()` connect `Permisos backend` to `Conciliador backend`, `Comex proveedores y marcas (UI)`?**
-  _High betweenness centrality (0.145) - this node is a cross-community bridge._
+  _High betweenness centrality (0.154) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first` to the rest of the system?**
-  _1202 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1203 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Tipos TS compartidos` be split into smaller, more focused modules?**
   _Cohesion score 0.004842615012106538 - nodes in this community are weakly interconnected._
 - **Should `Finanzas empresa dashboard (UI)` be split into smaller, more focused modules?**

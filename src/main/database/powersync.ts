@@ -15,6 +15,7 @@ import {
   type SyncStatus
 } from '@powersync/common'
 import type { PowerSyncStatusInfo } from '@shared/types'
+import { deriveLegacyCargoStatus, deriveLegacyForwarderStatus } from '@shared/types'
 
 const WORKSPACE_ID = 'd61a4071-1557-4f32-be5e-6443fb336bf5'
 
@@ -2283,6 +2284,54 @@ async function fixLegacyNullDoubleStrings(psDb: PowerSyncDatabase): Promise<void
   }
 }
 
+/**
+ * Backfill único y explícito de cargo_status/forwarder_status en comex_imports.
+ *
+ * Por qué existe: estas dos columnas se agregaron después de que ya hubiera
+ * importaciones en producción, así que quedaron en NULL en filas viejas.
+ * `hydrateImport()` (queries/comex.ts) las deriva a partir de `status` legacy
+ * solo para MOSTRAR — nunca las escribe ahí, a propósito: escribir dentro de
+ * una función de lectura significa que el simple hecho de leer una fila
+ * (algo que pasa constantemente, incluso como efecto colateral de guardar
+ * OTRO campo) dispara una escritura real y visible en la rama que el usuario
+ * no tocó — eso fue exactamente el bug reportado ("cambio una rama y la otra
+ * se mueve sola"), confirmado con una investigación en profundidad (jul 2026).
+ * El backfill real vive acá, corre una sola vez por fila (por WHERE ... IS
+ * NULL, así que en runs posteriores no encuentra nada que hacer) y en un
+ * momento controlado (login), no como side-effect de un GET cualquiera.
+ */
+async function backfillComexCargoForwarderStatus(psDb: PowerSyncDatabase): Promise<void> {
+  const rows = await psDb.getAll<{
+    id: string; status: string
+    cargo_status: string | null; forwarder_status: string | null
+    carga_armada_date: number | null; esperando_embarcar_date: number | null
+  }>(`
+    SELECT id, status, cargo_status, forwarder_status, carga_armada_date, esperando_embarcar_date
+    FROM comex_imports WHERE cargo_status IS NULL OR forwarder_status IS NULL
+  `)
+  if (rows.length === 0) return
+
+  for (const row of rows) {
+    const sets: string[] = []
+    const vals: unknown[] = []
+    if (!row.cargo_status) {
+      sets.push('cargo_status = ?')
+      vals.push(deriveLegacyCargoStatus(row.status, row.carga_armada_date, row.esperando_embarcar_date))
+    }
+    if (!row.forwarder_status) {
+      sets.push('forwarder_status = ?')
+      vals.push(deriveLegacyForwarderStatus(row.status))
+    }
+    vals.push(row.id)
+    const result = await psDb.execute(`UPDATE comex_imports SET ${sets.join(', ')} WHERE id = ?`, vals)
+    const check = await psDb.getOptional<{ cargo_status: string | null; forwarder_status: string | null }>(
+      'SELECT cargo_status, forwarder_status FROM comex_imports WHERE id = ?', [row.id]
+    )
+    console.log(`[PowerSync] Backfill ${row.id}: rowsAffected=${result.rowsAffected} → verificación inmediata:`, check)
+  }
+  console.log(`[PowerSync] Backfill cargo_status/forwarder_status: ${rows.length} filas`)
+}
+
 const LOGO_TABLES = ['comex_suppliers', 'comex_freight_operators', 'comex_gestores', 'comex_despachantes', 'comex_brands']
 
 function logoFileToDataUrl(storedName: string): string | null {
@@ -2393,6 +2442,7 @@ export async function connectPowerSync(): Promise<void> {
   await migrateLegacyComexPlanningsData(db)
   await fixNullWorkspaceIds(db)
   await fixLegacyNullDoubleStrings(db)
+  await backfillComexCargoForwarderStatus(db)
   await backfillLogoData(db)
   for (const table of LOGO_TABLES) {
     const [row] = await db.getAll<{ total: number; with_logo: number }>(

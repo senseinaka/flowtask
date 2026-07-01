@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782935573.508155,
-    "ast_hash": "eda96a0d454baf5c3f16158ad0a90d01",
+    "mtime": 1782944797.3174784,
+    "ast_hash": "8a48786ced086fa57666149ec4535787",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -460,13 +460,13 @@
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/Sidebar.tsx": {
-    "mtime": 1782934111.490254,
-    "ast_hash": "0f956f1c28e94eaded5827110dc24f72",
+    "mtime": 1782944010.7671995,
+    "ast_hash": "92e61bcb10291d969e0cefa3f3998c10",
     "semantic_hash": ""
   },
   "src/renderer/src/components/layout/SyncStatusBadge.tsx": {
-    "mtime": 1782511904.8834283,
-    "ast_hash": "0af6846d1f68917cecd5e0201ab61e86",
+    "mtime": 1782943825.0810158,
+    "ast_hash": "d756d9a70aa51e99f0a9bae5d77cc619",
     "semantic_hash": ""
   },
   "src/renderer/src/components/prompts/PromptEditor.tsx": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782937217.978673,
-    "ast_hash": "3e894e6afa5c119b8ca0c4ae77834b1c",
+    "mtime": 1782944906.2448444,
+    "ast_hash": "5f9202bcd77f849c0d6297a01937c7e7",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
