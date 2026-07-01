@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   Cloud, MessageCircle, RefreshCw, Check, AlertCircle, AlertTriangle,
   Loader2, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, X, Bot, ChevronDown,
@@ -40,7 +41,9 @@ export default function Settings() {
   const createProject = useCreateProject()
   const deleteProject = useDeleteProject()
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
+  const { tab: tabParam } = useParams<{ tab: string }>()
+  const navigate = useNavigate()
+  const activeTab: SettingsTab = SETTINGS_TABS.some((t) => t.key === tabParam) ? (tabParam as SettingsTab) : 'general'
 
   const { data: session } = useQuery({
     queryKey: ['auth', 'session'],
@@ -488,7 +491,7 @@ export default function Settings() {
         {SETTINGS_TABS.filter((tab) => !tab.adminOnly || isAdmin).map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => navigate(`/settings/${tab.key}`)}
             className={cn(
               'px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
               activeTab === tab.key

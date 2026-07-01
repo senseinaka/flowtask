@@ -32,6 +32,7 @@ function ContainerShipIcon({ size = 15 }: { size?: number }) {
   )
 }
 import { usePermissions } from '../../hooks/usePermissions'
+import { ADMIN_USER_ID } from '@shared/modules'
 import { useUIStore } from '../../store/ui.store'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { SyncStatus } from '@shared/types'
@@ -109,7 +110,7 @@ const WORKSPACES: Array<{
   },
   {
     key: 'sistema',
-    label: 'Sistema',
+    label: 'Configuración',
     Icon: Settings,
     color: '#a78bfa',
     activeBg: 'rgba(167,139,250,.12)',
@@ -177,6 +178,12 @@ export default function Sidebar() {
   const { canRead } = usePermissions()
   const location = useLocation()
   const asideRef = useRef<HTMLElement>(null)
+
+  const { data: session } = useQuery({
+    queryKey: ['auth', 'session'],
+    queryFn: () => window.api.auth.getSession()
+  })
+  const isAdmin = session?.userId === ADMIN_USER_ID
 
   const [openPanel, setOpenPanel] = useState<WorkspaceKey | null>(null)
   const [version, setVersion] = useState('')
@@ -579,12 +586,19 @@ export default function Sidebar() {
 
           {openPanel === 'sistema' && (
             <div className="p-2 space-y-0.5">
-              <GroupLabel label="Sistema" color="#a78bfa" />
-              {canRead('cortex') && (
-                <PanelLink to="/cortex"    icon={Network}  label="Cortex"         color="#a78bfa" onClick={close} />
-              )}
+              <GroupLabel label="Configuración" color="#a78bfa" />
               {canRead('settings') && (
-                <PanelLink to="/settings"  icon={Settings} label="Configuración"  color="#a78bfa" onClick={close} />
+                <>
+                  <PanelLink to="/settings/general"  icon={Settings}     label="General"                 color="#a78bfa" onClick={close} />
+                  <PanelLink to="/settings/sync"     icon={RefreshCw}    label="Sincronización"          color="#a78bfa" onClick={close} />
+                  <PanelLink to="/settings/ia"       icon={Brain}        label="Inteligencia Artificial" color="#a78bfa" onClick={close} />
+                  {isAdmin && (
+                    <PanelLink to="/settings/permisos" icon={ShieldCheck} label="Permisos"                color="#a78bfa" onClick={close} />
+                  )}
+                </>
+              )}
+              {canRead('cortex') && (
+                <PanelLink to="/cortex" icon={Network} label="Cortex" color="#a78bfa" onClick={close} />
               )}
               <div className="border-t border-slate-700 mt-3 mb-2" />
               <div className="px-1">

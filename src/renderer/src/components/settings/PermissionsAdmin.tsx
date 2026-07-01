@@ -390,10 +390,11 @@ function UserHeader({
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(profile.display_name)
   const [email, setEmail] = useState(profile.email)
+  const [username, setUsername] = useState(profile.username ?? '')
 
   const save = useMutation({
     mutationFn: () => window.api.permissions.profiles.save({
-      id: profile.id, display_name: name.trim(), email: email.trim()
+      id: profile.id, display_name: name.trim(), email: email.trim(), username: username.trim() || null
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })
@@ -418,6 +419,12 @@ function UserHeader({
           placeholder="email@empresa.com"
           className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
         />
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Nombre de usuario (opcional, para loguearse sin email)"
+          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+        />
         <div className="flex gap-2">
           <button
             onClick={() => save.mutate()}
@@ -427,7 +434,7 @@ function UserHeader({
             <Check size={12} /> Guardar
           </button>
           <button
-            onClick={() => { setEditing(false); setName(profile.display_name); setEmail(profile.email) }}
+            onClick={() => { setEditing(false); setName(profile.display_name); setEmail(profile.email); setUsername(profile.username ?? '') }}
             className="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs transition-colors"
           >
             Cancelar
@@ -452,6 +459,9 @@ function UserHeader({
           </button>
         </div>
         <p className="text-xs text-slate-400 truncate">{profile.email}</p>
+        {profile.username && (
+          <p className="text-xs text-indigo-400 truncate">@{profile.username}</p>
+        )}
         <div className="flex items-center gap-3 mt-1">
           <button
             onClick={onCopyUUID}
@@ -476,12 +486,14 @@ function CreateProfileInline({ userId, onCreated }: { userId: string; onCreated:
   const qc = useQueryClient()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
 
   const save = useMutation({
     mutationFn: () => window.api.permissions.profiles.save({
       id: userId,
       display_name: name.trim(),
-      email: email.trim()
+      email: email.trim(),
+      username: username.trim() || null
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['permissions', 'profiles'] })
@@ -512,6 +524,12 @@ function CreateProfileInline({ userId, onCreated }: { userId: string; onCreated:
           placeholder="Email (opcional)"
           className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
         />
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Usuario (opcional)"
+          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+        />
         <button
           onClick={() => save.mutate()}
           disabled={!name.trim() || save.isPending}
@@ -530,6 +548,7 @@ function CreateProfileInline({ userId, onCreated }: { userId: string; onCreated:
 function NewUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [uuid, setUuid] = useState('')
   const [preset, setPreset] = useState<PermissionLevel>('none')
   const [error, setError] = useState('')
@@ -539,7 +558,7 @@ function NewUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       const id = uuid.trim()
       if (!isValidUUID(id)) throw new Error('UUID inválido — verificá el formato en Supabase')
       if (!displayName.trim()) throw new Error('El nombre es obligatorio')
-      await window.api.permissions.profiles.save({ id, display_name: displayName.trim(), email: email.trim() })
+      await window.api.permissions.profiles.save({ id, display_name: displayName.trim(), email: email.trim(), username: username.trim() || null })
       if (preset !== 'none') {
         for (const mod of MODULES) {
           await window.api.permissions.setLevel({ user_id: id, module_key: mod.key, submodule_key: null, level: preset })
@@ -594,6 +613,17 @@ function NewUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               onChange={(e) => setEmail(e.target.value)}
               placeholder="usuario@empresa.com"
               type="email"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+
+          {/* Usuario */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400">Nombre de usuario (opcional)</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Ej: mgarcia — para loguearse sin escribir el email"
               className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
             />
           </div>

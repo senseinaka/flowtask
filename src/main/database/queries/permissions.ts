@@ -23,35 +23,41 @@ export function listUserProfiles(): UserProfile[] {
     .all(WORKSPACE_ID) as UserProfile[]
 }
 
+/** Llamado en cada login. NO toca `username` si no se lo pasan (COALESCE preserva
+ *  el que haya puesto el admin) — evita que el auto-upsert de sesión lo borre. */
 export function upsertUserProfile(profile: {
   id: string
   email: string
   display_name: string
+  username?: string | null
 }): void {
   const now = Date.now()
   getDb().prepare(`
-    INSERT INTO user_profiles (id, workspace_id, email, display_name, last_seen_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO user_profiles (id, workspace_id, email, display_name, username, last_seen_at)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       email = excluded.email,
       display_name = excluded.display_name,
+      username = COALESCE(excluded.username, user_profiles.username),
       last_seen_at = excluded.last_seen_at
-  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, now)
+  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, profile.username ?? null, now)
 }
 
-/** Admin: crea un perfil nuevo (last_seen_at = 0) o edita nombre/email sin tocar last_seen_at. */
+/** Admin: crea un perfil nuevo (last_seen_at = 0) o edita nombre/email/usuario sin tocar last_seen_at. */
 export function adminSaveUserProfile(profile: {
   id: string
   email: string
   display_name: string
+  username?: string | null
 }): void {
   getDb().prepare(`
-    INSERT INTO user_profiles (id, workspace_id, email, display_name, last_seen_at)
-    VALUES (?, ?, ?, ?, 0)
+    INSERT INTO user_profiles (id, workspace_id, email, display_name, username, last_seen_at)
+    VALUES (?, ?, ?, ?, ?, 0)
     ON CONFLICT(id) DO UPDATE SET
       email = excluded.email,
-      display_name = excluded.display_name
-  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name)
+      display_name = excluded.display_name,
+      username = excluded.username
+  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, profile.username?.trim() || null)
 }
 
 export function deleteUserProfile(id: string): void {

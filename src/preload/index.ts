@@ -986,9 +986,9 @@ const api = {
       ipcRenderer.invoke('permissions:setLevel', input),
     profiles: {
       list: (): Promise<UserProfile[]> => ipcRenderer.invoke('permissions:profiles:list'),
-      upsert: (input: { id: string; email: string; display_name: string }): Promise<void> =>
+      upsert: (input: { id: string; email: string; display_name: string; username?: string | null }): Promise<void> =>
         ipcRenderer.invoke('permissions:profiles:upsert', input),
-      save: (input: { id: string; email: string; display_name: string }): Promise<void> =>
+      save: (input: { id: string; email: string; display_name: string; username?: string | null }): Promise<void> =>
         ipcRenderer.invoke('permissions:profiles:save', input),
       delete: (id: string): Promise<void> =>
         ipcRenderer.invoke('permissions:profiles:delete', id)

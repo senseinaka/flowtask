@@ -39,7 +39,7 @@ export function registerPermissionsIpc(): void {
 
   ipcMain.handle('permissions:profiles:upsert', async (
     _event,
-    input: { id: string; email: string; display_name: string }
+    input: { id: string; email: string; display_name: string; username?: string | null }
   ): Promise<void> => {
     await requireAdmin()
     upsertUserProfile(input)
@@ -47,7 +47,7 @@ export function registerPermissionsIpc(): void {
 
   ipcMain.handle('permissions:profiles:save', async (
     _event,
-    input: { id: string; email: string; display_name: string }
+    input: { id: string; email: string; display_name: string; username?: string | null }
   ): Promise<void> => {
     await requireAdmin()
     adminSaveUserProfile(input)

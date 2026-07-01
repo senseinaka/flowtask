@@ -1118,6 +1118,7 @@ const user_profiles = new Table(
     workspace_id: column.text,
     email: column.text,
     display_name: column.text,
+    username: column.text,
     last_seen_at: column.integer
   },
   { indexes: { workspace: ['workspace_id'] } }

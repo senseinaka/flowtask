@@ -1792,6 +1792,30 @@ Supabase** — todo con JOINs, columnas hidratadas en la query, y una convenció
 
 ---
 
+## Login con nombre de usuario (jul 2026)
+
+`Login.tsx` acepta email O `username` en el mismo campo (`identifier`). `user_profiles` tiene una columna
+`username` nueva (nullable, índice único case-insensitive), editable desde Configuración → Usuarios y
+permisos (`PermissionsAdmin.tsx`).
+
+**El problema de fondo:** resolver username → email tiene que pasar ANTES del login, y el primer login en
+un equipo nuevo no tiene nada sincronizado localmente (no hay sesión todavía → PowerSync no bajó
+`user_profiles`). No se puede resolver contra `powersync.db`.
+
+**La solución** (mismo patrón que `get_operator_pin_material` para el PIN de cajas): función RPC
+`resolve_username_email(p_username)` en Supabase, `SECURITY DEFINER`, `GRANT EXECUTE TO anon` — no a
+`authenticated` como el resto, porque este SÍ necesita llamarse sin sesión. Devuelve NULL si no hay match
+en vez de tirar error, así "usuario inexistente" da el mismo mensaje genérico que "contraseña incorrecta"
+en `auth.service.ts` — sin eso se podría enumerar usuarios probando el campo de login. DDL en
+`supabase_username_login.sql` (pendiente correr en Supabase).
+
+**Cuidado al tocar `upsertUserProfile`:** se llama automáticamente en cada login exitoso (actualiza
+`last_seen_at`). El `username` ahí va como `null` a propósito — el UPDATE usa
+`COALESCE(excluded.username, user_profiles.username)` para no pisar el username que puso el admin. Si se
+agrega otro campo nuevo a `user_profiles` con un flujo de auto-upsert similar, replicar el mismo cuidado.
+
+---
+
 ## Módulo Cortex — Graphify (grafo de código)
 
 ### Qué es

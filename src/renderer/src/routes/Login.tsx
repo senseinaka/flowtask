@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Loader2, LogIn, Mail, Lock } from 'lucide-react'
+import { Loader2, LogIn, User, Lock } from 'lucide-react'
 import type { AuthSession } from '@shared/types'
 import { Input, Button, Card } from '../components/ui'
 
@@ -8,7 +8,7 @@ interface LoginProps {
 }
 
 export default function Login({ onSuccess }: LoginProps) {
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -24,7 +24,7 @@ export default function Login({ onSuccess }: LoginProps) {
     setLoading(true)
 
     try {
-      const result = await window.api.auth.login(email, password)
+      const result = await window.api.auth.login(identifier, password)
       if (!result.ok || !result.session) {
         setError(result.error || 'Error al iniciar sesión')
         return
@@ -86,12 +86,12 @@ export default function Login({ onSuccess }: LoginProps) {
           </div>
 
           <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="tu@email.com"
-            icon={Mail}
+            label="Email o usuario"
+            type="text"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="tu@email.com o usuario"
+            icon={User}
             autoFocus
             required
           />
@@ -136,14 +136,6 @@ export default function Login({ onSuccess }: LoginProps) {
           <p style={{ margin: 0, textAlign: 'center', fontSize: 'var(--text-11)', color: 'var(--text-ghost)' }}>
             Naka Group - Matrix · sistema operativo interno
           </p>
-
-          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 14, marginTop: 4, borderTop: '1px solid var(--border)' }}>
-            <img
-              src="/branding/Logo_Naka_lateral.png"
-              alt="Naka Outdoors"
-              style={{ height: 18, opacity: 0.55, filter: 'grayscale(1)' }}
-            />
-          </div>
         </Card>
       </form>
     </div>

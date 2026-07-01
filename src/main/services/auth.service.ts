@@ -49,11 +49,43 @@ function saveSession(data: SupabaseTokenResponse): AuthSession {
   return session
 }
 
-export async function login(email: string, password: string): Promise<AuthLoginResult> {
+/**
+ * Resuelve "usuario" -> email vía RPC de Supabase (público, no requiere sesión —
+ * necesario porque el primer login en un equipo nuevo no tiene nada sincronizado
+ * localmente todavía). Devuelve null ante cualquier fallo (usuario inexistente,
+ * sin red, etc.) — el caller sigue de largo con el texto original como si fuera
+ * el email, así "usuario no existe" y "contraseña incorrecta" dan el mismo error
+ * genérico y no se puede enumerar usuarios por el mensaje.
+ */
+async function resolveUsernameToEmail(
+  username: string,
+  env: { SUPABASE_URL?: string; SUPABASE_ANON_KEY?: string }
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/resolve_username_email`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY!,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_username: username })
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return typeof data === 'string' && data ? data : null
+  } catch {
+    return null
+  }
+}
+
+export async function login(identifier: string, password: string): Promise<AuthLoginResult> {
   const env = readEnvLocal()
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
     return { ok: false, error: 'Supabase no está configurado (.env.local)' }
   }
+
+  const trimmed = identifier.trim()
+  const email = trimmed.includes('@') ? trimmed : (await resolveUsernameToEmail(trimmed, env)) ?? trimmed
 
   const res = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',

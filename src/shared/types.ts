@@ -3104,6 +3104,7 @@ export interface UserProfile {
   workspace_id: string
   email: string
   display_name: string
+  username: string | null
   last_seen_at: number
 }
 
