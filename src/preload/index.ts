@@ -45,7 +45,7 @@ import type {
   FinanceCategoryBreakdownItem, FinanceHistoryEntry, FinanceRankingConcept, FinanceRankingIncrease,
   FinanceImportPreviewResult, FinanceImportConfirmItem, FinanceImportResult, FinanceSecurityStatus,
   AuthSession, AuthLoginResult,
-  UserPermission, UserProfile,
+  UserPermission, UserProfile, Role, RolePermission,
   CalendarConnectionStatus, GoogleCalendarInfo, UnifiedCalendarEvent,
   CalendarEventInput, CalendarEventLink, LinkEntityInput, CalendarWaReminder,
   Quote, QuoteActivity, QuoteCompany, QuoteContact, QuoteKPIs,
@@ -986,13 +986,26 @@ const api = {
       ipcRenderer.invoke('permissions:setLevel', input),
     profiles: {
       list: (): Promise<UserProfile[]> => ipcRenderer.invoke('permissions:profiles:list'),
-      upsert: (input: { id: string; email: string; display_name: string; username?: string | null }): Promise<void> =>
+      upsert: (input: { id: string; email: string; display_name: string; username?: string | null; role_id?: string | null }): Promise<void> =>
         ipcRenderer.invoke('permissions:profiles:upsert', input),
-      save: (input: { id: string; email: string; display_name: string; username?: string | null }): Promise<void> =>
+      save: (input: { id: string; email: string; display_name: string; username?: string | null; role_id?: string | null }): Promise<void> =>
         ipcRenderer.invoke('permissions:profiles:save', input),
       delete: (id: string): Promise<void> =>
         ipcRenderer.invoke('permissions:profiles:delete', id)
-    }
+    },
+    roles: {
+      list: (): Promise<Role[]> => ipcRenderer.invoke('permissions:roles:list'),
+      create: (name: string): Promise<Role> => ipcRenderer.invoke('permissions:roles:create', name),
+      rename: (id: string, name: string): Promise<void> => ipcRenderer.invoke('permissions:roles:rename', id, name),
+      delete: (id: string): Promise<void> => ipcRenderer.invoke('permissions:roles:delete', id),
+      permissions: {
+        list: (roleId: string): Promise<RolePermission[]> => ipcRenderer.invoke('permissions:roles:permissions:list', roleId),
+        set: (input: { role_id: string; module_key: string; submodule_key?: string | null; level: PermissionLevel }): Promise<RolePermission> =>
+          ipcRenderer.invoke('permissions:roles:permissions:set', input)
+      }
+    },
+    myRole: (): Promise<{ role: Role | null; rolePermissions: RolePermission[] }> =>
+      ipcRenderer.invoke('permissions:myRole')
   },
 
   calendar: {

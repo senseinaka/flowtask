@@ -1119,9 +1119,33 @@ const user_profiles = new Table(
     email: column.text,
     display_name: column.text,
     username: column.text,
+    role_id: column.text,
     last_seen_at: column.integer
   },
   { indexes: { workspace: ['workspace_id'] } }
+)
+
+const roles = new Table(
+  {
+    workspace_id: column.text,
+    name: column.text,
+    created_at: column.integer,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'] } }
+)
+
+const role_permissions = new Table(
+  {
+    workspace_id: column.text,
+    role_id: column.text,
+    module_key: column.text,
+    submodule_key: column.text,
+    level: column.text,
+    created_at: column.integer,
+    updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], role: ['role_id'] } }
 )
 
 // ── RRHH ─────────────────────────────────────────────────────────────────────
@@ -1634,6 +1658,8 @@ export const AppSchema = new Schema({
   knowledge_entries,
   knowledge_global_summaries,
   user_profiles,
+  roles,
+  role_permissions,
   rrhh_colaboradores,
   rrhh_periodos,
   rrhh_sueldos,
@@ -2542,7 +2568,7 @@ export function registerSyncListeners(sendToRenderer: (channel: string, data: un
     },
     { tables: ['projects', 'tasks', 'task_dependencies', 'team_tasks', 'team_task_dependencies',
         'maintenance_categories', 'maintenance_locations', 'maintenance_tasks',
-        'maintenance_task_photos', 'maintenance_task_notes', 'maintenance_task_updates', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
+        'maintenance_task_photos', 'maintenance_task_notes', 'maintenance_task_updates', ...FINANCE_TABLES, 'company_finance_accounts', 'company_finance_categories', 'company_finance_payment_methods', 'company_finance_concepts', 'company_finance_movements', 'company_finance_movement_entries', 'company_finance_month_insights', ...COMEX_MAESTROS_TABLES, ...COMEX_IMPORTS_TABLES, ...COMEX_PLANNINGS_TABLES, 'calendar_event_links', 'quote_companies', 'quote_contacts', 'quotes', 'quote_activities', 'knowledge_entries', 'knowledge_global_summaries', 'user_profiles', 'roles', 'role_permissions', 'rrhh_colaboradores', 'rrhh_periodos', 'rrhh_sueldos', 'mercadopago_connections', 'mercadopago_report_jobs', 'mercadopago_report_files', 'mercadopago_transactions', 'accounting_services', 'accounting_service_payments', 'service_catalog',
         'cash_companies', 'cashboxes', 'cashbox_permissions', 'cash_categories',
         'cash_movements', 'cash_movement_amounts', 'cash_movement_breakdowns', 'cash_operators', 'cash_counts', 'cash_count_details',
         'cash_differences', 'cash_audit_logs', 'cash_attachments'], throttleMs: 1000 }

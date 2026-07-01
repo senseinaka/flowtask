@@ -566,14 +566,14 @@ export default function Sidebar() {
               {canRead('rrhh', 'sueldos') && (
                 <PanelLink to="/rrhh/sueldos/naka" icon={Users} label="Sueldos NAKA" color="#f472b6" onClick={close} />
               )}
-              {canRead('rrhh', 'sueldos') && (
+              {canRead('rrhh', 'nomina') && (
                 <PanelLink to="/rrhh/nomina/naka" icon={BookUser} label="Nómina NAKA" color="#f472b6" onClick={close} />
               )}
               <GroupLabel label="Estación Vertical" color="#f472b6" />
               {canRead('rrhh', 'sueldos') && (
                 <PanelLink to="/rrhh/sueldos/ev" icon={Users} label="Sueldos EV" color="#f472b6" onClick={close} />
               )}
-              {canRead('rrhh', 'sueldos') && (
+              {canRead('rrhh', 'nomina') && (
                 <PanelLink to="/rrhh/nomina/ev" icon={BookUser} label="Nómina EV" color="#f472b6" onClick={close} />
               )}
             </div>

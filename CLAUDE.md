@@ -1816,6 +1816,51 @@ agrega otro campo nuevo a `user_profiles` con un flujo de auto-upsert similar, r
 
 ---
 
+## Roles nombrados + Super Admin real (jul 2026)
+
+Reestructuración completa de `PermissionsAdmin.tsx`. Antes de tocar nada se encontraron 3 gaps reales en
+el sistema viejo (ya arreglados): `finance` y `contable` compartían el label "Contable"; Nómina RRHH no
+tenía submódulo propio y el `RouteGuard` chequeaba el permiso equivocado para esa ruta; `/agenda/contactos`
+y `/agenda/grupos` no estaban registradas en ningún módulo, así que cualquier usuario logueado pasaba sin
+chequeo de permisos.
+
+**Modelo de datos:**
+- `roles` / `role_permissions` — tablas nuevas, **100% PowerSync** (sin legado de flowtask.db, a diferencia
+  de `user_permissions`/`user_profiles`). DDL en `supabase_roles.sql`, pendiente correr + agregar las 2
+  líneas de sync-rules.
+- `user_profiles.role_id` — columna nueva, mismo patrón dual-write que `username` (flowtask.db es la fuente
+  que consultan las queries síncronas, con push a PowerSync/Supabase en cada upsert vía
+  `syncUserProfileToSupabase`). Migración v104 en `migrations.ts`.
+- `ModuleDef.superAdminOnly` (`shared/modules.ts`) — módulo reservado al Super Admin, no aparece en la
+  matriz del panel ni de usuario ni de rol. Hoy solo `cortex`. `settings` NO lo tiene completo — el tab
+  "Permisos" sigue hardcodeado a `ADMIN_USER_ID` en `Settings.tsx`/`PermissionsAdmin.tsx`, deliberadamente
+  fuera de `modules.ts.submodules` para no sugerir que es delegable.
+
+**Resolución de permiso efectivo** — MISMA precedencia implementada en dos lugares independientes, hay que
+mantenerlos sincronizados si se toca uno:
+1. `ADMIN_USER_ID` (Super Admin) → siempre `'write'`, sin consultar ninguna tabla.
+2. Override individual (`user_permissions`) — exacto del submódulo, si no hay el del módulo completo.
+3. Si no hay override, el permiso del rol asignado (`role_permissions`) — misma lógica exacto-submódulo /
+   módulo-completo.
+4. Si no hay nada, `'none'`.
+- **Renderer:** `usePermissions.ts` → `levelFor()` (exporta `levelFromRows()` para que `PermissionsAdmin.tsx`
+  arme el badge "override"/"heredado" con la misma función, sin duplicar lógica).
+- **Main (gate real de cada IPC):** `permissions.service.ts` → `ensureCache()` ahora es async (antes leía
+  solo flowtask.db síncrono) porque agrega `getMyRole()` (cruza flowtask.db → PowerSync). Antes de este
+  cambio, un usuario con acceso SOLO por rol veía el link en el Sidebar pero el IPC real le tiraba "Sin
+  acceso al módulo" — el renderer y el main chequeaban fuentes distintas.
+
+**UI:** `PermissionsAdmin.tsx` tiene pestañas Usuarios/Roles. Componente compartido `PermissionTree`
+(árbol expandible por submódulo, mismo componente en el detalle de usuario y en el de rol). El Super Admin
+tiene su propia fila fija arriba de la lista (corona, sin matriz editable, no se puede borrar). El
+selector de rol en un usuario llama al mismo `profiles.save()` de siempre — hay que mandar los 4 campos
+completos (`display_name`/`email`/`username`/`role_id`) porque el UPDATE de flowtask.db pisa todo, no
+hace merge parcial.
+
+**Pendiente en Supabase:** correr `supabase_roles.sql` + agregar sync-rules de `roles`/`role_permissions`.
+
+---
+
 ## Módulo Cortex — Graphify (grafo de código)
 
 ### Qué es

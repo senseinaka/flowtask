@@ -3173,6 +3173,15 @@ const MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }
       // Login con nombre de usuario (además de email) — ver supabase_username_login.sql
       try { db.exec(`ALTER TABLE user_profiles ADD COLUMN username TEXT`) } catch { /* ya existe */ }
     }
+  },
+  {
+    version: 104,
+    up(db: Database.Database) {
+      // Roles nombrados (Admin/Coordinador/Vendedor/...) — ver supabase_roles.sql.
+      // roles y role_permissions viven solo en PowerSync (tablas nuevas, sin
+      // necesidad legacy de flowtask.db); acá solo agregamos la referencia.
+      try { db.exec(`ALTER TABLE user_profiles ADD COLUMN role_id TEXT`) } catch { /* ya existe */ }
+    }
   }
 ]
 

@@ -14,6 +14,7 @@ import {
   AI_OPERATION_DEFAULT_MODELS
 } from '@shared/types'
 import PermissionsAdmin from '../components/settings/PermissionsAdmin'
+import { usePermissions } from '../hooks/usePermissions'
 import CalendarSettingsSection from '../components/settings/CalendarSettingsSection'
 import { useProjects, useCreateProject, useDeleteProject } from '../hooks/useProjects'
 import { useAIConfigured, useAIModels, useSaveAIApiKey, useSaveAIModels } from '../hooks/useAI'
@@ -44,6 +45,7 @@ export default function Settings() {
   const { tab: tabParam } = useParams<{ tab: string }>()
   const navigate = useNavigate()
   const activeTab: SettingsTab = SETTINGS_TABS.some((t) => t.key === tabParam) ? (tabParam as SettingsTab) : 'general'
+  const { canRead } = usePermissions()
 
   const { data: session } = useQuery({
     queryKey: ['auth', 'session'],
@@ -488,7 +490,7 @@ export default function Settings() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-slate-700 -mt-2">
-        {SETTINGS_TABS.filter((tab) => !tab.adminOnly || isAdmin).map((tab) => (
+        {SETTINGS_TABS.filter((tab) => (tab.adminOnly ? isAdmin : canRead('settings', tab.key))).map((tab) => (
           <button
             key={tab.key}
             onClick={() => navigate(`/settings/${tab.key}`)}

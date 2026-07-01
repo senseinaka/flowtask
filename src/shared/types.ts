@@ -426,6 +426,29 @@ export interface UserPermission {
   workspace_id: string
 }
 
+/** Rol nombrado (Admin/Coordinador/Vendedor/...), asignable desde user_profiles.role_id.
+ *  El Super Admin (ADMIN_USER_ID) no usa roles — tiene bypass total, ver usePermissions.ts. */
+export interface Role {
+  id: string
+  workspace_id: string
+  name: string
+  created_at: number
+  updated_at: number
+}
+
+/** Permiso base de un rol. Un override individual en user_permissions siempre
+ *  pisa el valor que venga de acá — ver resolución en usePermissions.ts. */
+export interface RolePermission {
+  id: string
+  workspace_id: string
+  role_id: string
+  module_key: string
+  submodule_key: string | null
+  level: 'none' | 'read' | 'write'
+  created_at: number
+  updated_at: number
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   1: 'Crítico',
   2: 'Alto',
@@ -3105,6 +3128,7 @@ export interface UserProfile {
   email: string
   display_name: string
   username: string | null
+  role_id: string | null
   last_seen_at: number
 }
 

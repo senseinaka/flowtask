@@ -14,6 +14,9 @@ export interface ModuleDef {
   label: string
   routes: string[]
   submodules?: SubmoduleDef[]
+  /** Reservado exclusivamente para ADMIN_USER_ID — no aparece como asignable
+   *  en el panel de permisos ni por rol ni por override individual. */
+  superAdminOnly?: boolean
 }
 
 export interface SubmoduleDef {
@@ -31,7 +34,7 @@ export const MODULES: ModuleDef[] = [
   {
     key: 'contacts',
     label: 'Contactos',
-    routes: ['/contacts']
+    routes: ['/contacts', '/agenda/contactos', '/agenda/grupos']
   },
   {
     key: 'team',
@@ -67,7 +70,7 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: 'finance',
-    label: 'Contable',
+    label: 'Finanzas Personales',
     routes: ['/finance']
   },
   {
@@ -109,19 +112,28 @@ export const MODULES: ModuleDef[] = [
   {
     key: 'cortex',
     label: 'Cortex',
-    routes: ['/cortex']
+    routes: ['/cortex'],
+    superAdminOnly: true
   },
   {
     key: 'settings',
     label: 'Configuración',
-    routes: ['/settings']
+    routes: ['/settings'],
+    submodules: [
+      { key: 'general', label: 'General',                  routes: ['/settings/general'] },
+      { key: 'sync',    label: 'Sincronización',           routes: ['/settings/sync'] },
+      { key: 'ia',      label: 'Inteligencia Artificial',  routes: ['/settings/ia'] }
+      // 'permisos' queda fuera a propósito: ya está reservado a ADMIN_USER_ID
+      // directamente en PermissionsAdmin.tsx/Settings.tsx, no es delegable.
+    ]
   },
   {
     key: 'rrhh',
     label: 'RRHH',
     routes: ['/rrhh'],
     submodules: [
-      { key: 'sueldos', label: 'Sueldos', routes: ['/rrhh/sueldos'] }
+      { key: 'sueldos', label: 'Sueldos', routes: ['/rrhh/sueldos'] },
+      { key: 'nomina',  label: 'Nómina',  routes: ['/rrhh/nomina'] }
     ]
   },
   {

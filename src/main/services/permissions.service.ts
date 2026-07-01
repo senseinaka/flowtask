@@ -15,7 +15,9 @@
 import { ipcMain } from 'electron'
 import { getSession } from './auth.service'
 import { listUserPermissions } from '../database/queries/permissions'
+import { getMyRole } from '../database/queries/roles'
 import { ADMIN_USER_ID, type PermissionLevel } from '@shared/modules'
+import type { UserPermission, RolePermission } from '@shared/types'
 
 /** Canales que pueden ejecutarse sin sesión (login / arranque) o que se
  *  auto-protegen en su propio handler (permissions:* usa requireAdmin). */
@@ -91,47 +93,60 @@ function levelForChannel(channel: string): (ChannelTarget & { level: PermissionL
   return { ...target, level }
 }
 
-let cache: { userId: string; rows: ReturnType<typeof listUserPermissions> } | null = null
+let cache: { userId: string; individual: UserPermission[]; role: RolePermission[] } | null = null
 
-/** Invalidar el caché de permisos (llamar tras editar user_permissions). */
+/** Invalidar el caché de permisos (llamar tras editar user_permissions/roles). */
 export function invalidatePermissionsCache(): void {
   cache = null
 }
 
-function ensureCache(userId: string): void {
-  if (!cache || cache.userId !== userId) {
-    cache = { userId, rows: listUserPermissions(userId) }
-  }
+/** Carga overrides individuales (flowtask.db) + permisos del rol asignado
+ *  (PowerSync), si tiene uno. Mismas dos fuentes que usePermissions.ts en el
+ *  renderer — hay que mantener la misma precedencia en los dos lados o un
+ *  usuario ve un link habilitado en el Sidebar cuya acción real el IPC rechaza. */
+async function ensureCache(userId: string): Promise<void> {
+  if (cache && cache.userId === userId) return
+  const individual = listUserPermissions(userId)
+  const { rolePermissions } = await getMyRole(userId)
+  cache = { userId, individual, role: rolePermissions }
 }
 
-/** Nivel efectivo de un MÓDULO completo = el más alto entre el permiso a nivel
- *  módulo y el de cualquiera de sus submódulos. Para canales mapeados a módulo
- *  (no a un submódulo puntual): si un submódulo concede acceso, el módulo es
- *  accesible vía IPC (refleja `levelFor` del renderer). */
-function getUserModuleLevel(userId: string, moduleKey: string): PermissionLevel {
-  ensureCache(userId)
+/** Nivel efectivo de un MÓDULO completo = el más alto entre todas las filas
+ *  (individuales + del rol) que apliquen a ese módulo, en cualquiera de sus
+ *  submódulos. Para canales mapeados a módulo (no a un submódulo puntual):
+ *  si algo concede acceso, el módulo es accesible vía IPC. */
+async function getUserModuleLevel(userId: string, moduleKey: string): Promise<PermissionLevel> {
+  await ensureCache(userId)
   let best: PermissionLevel = 'none'
-  for (const row of cache!.rows) {
-    if (row.module_key !== moduleKey) continue
-    if (LEVEL_RANK[row.level] > LEVEL_RANK[best]) best = row.level
+  for (const row of cache!.individual) {
+    if (row.module_key === moduleKey && LEVEL_RANK[row.level] > LEVEL_RANK[best]) best = row.level
+  }
+  for (const row of cache!.role) {
+    if (row.module_key === moduleKey && LEVEL_RANK[row.level] > LEVEL_RANK[best]) best = row.level
   }
   return best
 }
 
-/** Nivel de un SUBMÓDULO puntual: fila exacta del submódulo y, si no existe,
- *  fallback al permiso a nivel módulo (submodule_key = null). Misma semántica
- *  que `levelFor` del renderer — evita que tener acceso a un submódulo de
- *  Contable conceda acceso a OTRO submódulo de Contable. */
-function levelForSubmodule(
+/** Nivel de un SUBMÓDULO puntual. Precedencia: override individual exacto del
+ *  submódulo > override individual del módulo completo > permiso del rol en
+ *  ese submódulo exacto > permiso del rol a nivel módulo > 'none'. Un override
+ *  individual (aunque sea a nivel módulo) siempre gana por sobre el rol. */
+async function levelForSubmodule(
   userId: string,
   moduleKey: string,
   submoduleKey: string
-): PermissionLevel {
-  ensureCache(userId)
-  for (const row of cache!.rows) {
+): Promise<PermissionLevel> {
+  await ensureCache(userId)
+  for (const row of cache!.individual) {
     if (row.module_key === moduleKey && row.submodule_key === submoduleKey) return row.level
   }
-  for (const row of cache!.rows) {
+  for (const row of cache!.individual) {
+    if (row.module_key === moduleKey && row.submodule_key == null) return row.level
+  }
+  for (const row of cache!.role) {
+    if (row.module_key === moduleKey && row.submodule_key === submoduleKey) return row.level
+  }
+  for (const row of cache!.role) {
     if (row.module_key === moduleKey && row.submodule_key == null) return row.level
   }
   return 'none'
@@ -159,8 +174,8 @@ export function installIpcPermissionGuard(): void {
 
       if (guard) {
         const userLevel = guard.submoduleKey
-          ? levelForSubmodule(session.userId, guard.moduleKey, guard.submoduleKey)
-          : getUserModuleLevel(session.userId, guard.moduleKey)
+          ? await levelForSubmodule(session.userId, guard.moduleKey, guard.submoduleKey)
+          : await getUserModuleLevel(session.userId, guard.moduleKey)
 
         if (userLevel === 'none') {
           throw new Error(`Sin acceso al módulo "${guard.moduleKey}"`)

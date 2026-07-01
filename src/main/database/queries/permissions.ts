@@ -21,22 +21,24 @@ async function syncUserProfileToSupabase(profile: {
   email: string
   display_name: string
   username?: string | null
+  role_id?: string | null
 }, now: number): Promise<void> {
   try {
     const psDb = getPowerSyncDb()
-    const existing = await psDb.getOptional<{ username: string | null }>(
-      'SELECT username FROM user_profiles WHERE id = ?', [profile.id]
+    const existing = await psDb.getOptional<{ username: string | null; role_id: string | null }>(
+      'SELECT username, role_id FROM user_profiles WHERE id = ?', [profile.id]
     )
     const username = profile.username !== undefined ? profile.username : (existing?.username ?? null)
+    const roleId = profile.role_id !== undefined ? profile.role_id : (existing?.role_id ?? null)
     if (existing) {
       await psDb.execute(
-        'UPDATE user_profiles SET email = ?, display_name = ?, username = ?, last_seen_at = ? WHERE id = ?',
-        [profile.email, profile.display_name, username, now, profile.id]
+        'UPDATE user_profiles SET email = ?, display_name = ?, username = ?, role_id = ?, last_seen_at = ? WHERE id = ?',
+        [profile.email, profile.display_name, username, roleId, now, profile.id]
       )
     } else {
       await psDb.execute(
-        'INSERT INTO user_profiles (id, workspace_id, email, display_name, username, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [profile.id, WORKSPACE_ID, profile.email, profile.display_name, username, now]
+        'INSERT INTO user_profiles (id, workspace_id, email, display_name, username, role_id, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [profile.id, WORKSPACE_ID, profile.email, profile.display_name, username, roleId, now]
       )
     }
   } catch {
@@ -62,50 +64,55 @@ export function listUserProfiles(): UserProfile[] {
     .all(WORKSPACE_ID) as UserProfile[]
 }
 
-/** Llamado en cada login. NO toca `username` si no se lo pasan (COALESCE preserva
- *  el que haya puesto el admin) — evita que el auto-upsert de sesión lo borre. */
+/** Llamado en cada login. NO toca `username`/`role_id` si no se lo pasan (COALESCE
+ *  preserva lo que haya puesto el admin) — evita que el auto-upsert de sesión lo borre. */
 export async function upsertUserProfile(profile: {
   id: string
   email: string
   display_name: string
   username?: string | null
+  role_id?: string | null
 }): Promise<void> {
   const now = Date.now()
   getDb().prepare(`
-    INSERT INTO user_profiles (id, workspace_id, email, display_name, username, last_seen_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO user_profiles (id, workspace_id, email, display_name, username, role_id, last_seen_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       email = excluded.email,
       display_name = excluded.display_name,
       username = COALESCE(excluded.username, user_profiles.username),
+      role_id = COALESCE(excluded.role_id, user_profiles.role_id),
       last_seen_at = excluded.last_seen_at
-  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, profile.username ?? null, now)
+  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, profile.username ?? null, profile.role_id ?? null, now)
 
   await syncUserProfileToSupabase(
-    { id: profile.id, email: profile.email, display_name: profile.display_name, username: profile.username ?? undefined },
+    { id: profile.id, email: profile.email, display_name: profile.display_name, username: profile.username ?? undefined, role_id: profile.role_id ?? undefined },
     now
   )
 }
 
-/** Admin: crea un perfil nuevo (last_seen_at = 0) o edita nombre/email/usuario sin tocar last_seen_at. */
+/** Admin: crea un perfil nuevo (last_seen_at = 0) o edita nombre/email/usuario/rol sin tocar last_seen_at. */
 export async function adminSaveUserProfile(profile: {
   id: string
   email: string
   display_name: string
   username?: string | null
+  role_id?: string | null
 }): Promise<void> {
   const username = profile.username?.trim() || null
+  const roleId = profile.role_id || null
   getDb().prepare(`
-    INSERT INTO user_profiles (id, workspace_id, email, display_name, username, last_seen_at)
-    VALUES (?, ?, ?, ?, ?, 0)
+    INSERT INTO user_profiles (id, workspace_id, email, display_name, username, role_id, last_seen_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0)
     ON CONFLICT(id) DO UPDATE SET
       email = excluded.email,
       display_name = excluded.display_name,
-      username = excluded.username
-  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, username)
+      username = excluded.username,
+      role_id = excluded.role_id
+  `).run(profile.id, WORKSPACE_ID, profile.email, profile.display_name, username, roleId)
 
   await syncUserProfileToSupabase(
-    { id: profile.id, email: profile.email, display_name: profile.display_name, username },
+    { id: profile.id, email: profile.email, display_name: profile.display_name, username, role_id: roleId },
     0
   )
 }
