@@ -15,6 +15,7 @@ import {
 } from '../database/queries/mercadopago'
 import {
   testConnection,
+  startOAuthConnect,
   getSettlementReportConfig,
   setSettlementReportConfig,
   requestSettlementReport,
@@ -29,6 +30,7 @@ import type {
   CreateMpConnectionInput,
   MpTransactionFilters,
   MpReportConfig,
+  MpEnvironment,
 } from '@shared/types'
 import { requireActorId } from '../services/auth.service'
 
@@ -48,6 +50,15 @@ export function registerMercadoPagoIpc(): void {
       await updateConnectionStatus(conn.id, 'active', testResult.user_id)
     }
     return { connection: conn, test: testResult }
+  })
+
+  ipcMain.handle('mp:connections:start-oauth', async (
+    _e,
+    name: string,
+    accountLabel: string,
+    environment: MpEnvironment
+  ) => {
+    return startOAuthConnect(name, accountLabel, environment, await requireActorId())
   })
 
   ipcMain.handle('mp:connections:update-token', async (

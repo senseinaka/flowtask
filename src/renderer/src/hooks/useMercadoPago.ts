@@ -4,6 +4,7 @@ import type {
   MpReportConfig,
   MpTransactionFilters,
   MpReconciliationStatus,
+  MpEnvironment,
 } from '@shared/types'
 
 // ─── Conexiones ───────────────────────────────────────────────────────────────
@@ -20,6 +21,15 @@ export function useCreateMpConnection() {
   return useMutation({
     mutationFn: ({ input, userId }: { input: CreateMpConnectionInput; userId: string }) =>
       window.api.mercadopago.connections.create(input, userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mp-connections'] }),
+  })
+}
+
+export function useStartMpOAuth() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, accountLabel, environment }: { name: string; accountLabel: string; environment: MpEnvironment }) =>
+      window.api.mercadopago.connections.startOAuth(name, accountLabel, environment),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mp-connections'] }),
   })
 }

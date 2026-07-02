@@ -71,7 +71,7 @@ import type {
   RrhhLista, RrhhListaTipo, UpsertListaInput,
   ImportParseResult, LegajoDecision, ConfirmImportInput,
   MpConnection, MpConnectionWithCreds, MpReportJob, MpReportFile, MpTransaction,
-  MpReportConfig, CreateMpConnectionInput, MpTransactionFilters,
+  MpReportConfig, CreateMpConnectionInput, MpTransactionFilters, MpEnvironment,
   MpSyncResult, MpTestConnectionResult, MpReconciliationStatus,
   AccountingService, AccountingServicePayment, AccountingServiceFilters,
   CreateAccountingServiceInput, RegisterServicePaymentInput, ServiceStatus,
@@ -1346,6 +1346,7 @@ const api = {
     connections: {
       list:         (): Promise<MpConnectionWithCreds[]>                                                              => ipcRenderer.invoke('mp:connections:list'),
       create:       (input: CreateMpConnectionInput, userId: string): Promise<{ connection: MpConnection; test: MpTestConnectionResult }> => ipcRenderer.invoke('mp:connections:create', input, userId),
+      startOAuth:   (name: string, accountLabel: string, environment: MpEnvironment): Promise<{ connection: MpConnection; test: MpTestConnectionResult }> => ipcRenderer.invoke('mp:connections:start-oauth', name, accountLabel, environment),
       updateToken:  (connectionId: string, newToken: string): Promise<MpTestConnectionResult>                         => ipcRenderer.invoke('mp:connections:update-token', connectionId, newToken),
       test:         (connectionId: string): Promise<MpTestConnectionResult>                                           => ipcRenderer.invoke('mp:connections:test', connectionId),
       delete:       (connectionId: string): Promise<void>                                                             => ipcRenderer.invoke('mp:connections:delete', connectionId),

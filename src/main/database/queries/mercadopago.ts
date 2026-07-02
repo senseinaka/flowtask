@@ -62,6 +62,26 @@ export async function createConnection(
   return (await getConnection(id))!
 }
 
+export async function createOAuthConnection(
+  name: string,
+  accountLabel: string,
+  environment: 'production' | 'sandbox',
+  mercadopagoUserId: string,
+  createdBy: string
+): Promise<MpConnection> {
+  const psDb = getPowerSyncDb()
+  const id = randomUUID()
+  const now = Date.now()
+
+  await psDb.execute(`
+    INSERT INTO mercadopago_connections
+      (id, workspace_id, name, account_label, mercadopago_user_id, environment, auth_type, status, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'oauth', 'active', ?, ?, ?)
+  `, [id, WORKSPACE_ID, name, accountLabel, mercadopagoUserId, environment, createdBy, now, now])
+
+  return (await getConnection(id))!
+}
+
 export async function updateConnectionStatus(
   id: string,
   status: MpConnection['status'],
@@ -110,6 +130,40 @@ export function getAccessToken(connectionId: string): string | null {
   if (!row?.encrypted_access_token) return null
   try {
     return decryptToken(row.encrypted_access_token)
+  } catch {
+    return null
+  }
+}
+
+export function saveOAuthTokens(connectionId: string, accessToken: string, refreshToken: string): void {
+  const db = getDb()
+  const now = Date.now()
+  const existing = db.prepare('SELECT id FROM mercadopago_credentials WHERE connection_id = ?').get(connectionId) as { id: string } | null
+  const encAccess  = encryptToken(accessToken)
+  const encRefresh = encryptToken(refreshToken)
+
+  if (existing) {
+    db.prepare(`
+      UPDATE mercadopago_credentials
+      SET encrypted_access_token = ?, encrypted_refresh_token = ?, updated_at = ?
+      WHERE connection_id = ?
+    `).run(encAccess, encRefresh, now, connectionId)
+  } else {
+    db.prepare(`
+      INSERT INTO mercadopago_credentials
+        (id, workspace_id, connection_id, encrypted_access_token, encrypted_refresh_token, client_id, client_secret_reference, scopes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, '', '', '', ?, ?)
+    `).run(randomUUID(), WORKSPACE_ID, connectionId, encAccess, encRefresh, now, now)
+  }
+}
+
+export function getRefreshToken(connectionId: string): string | null {
+  const row = getDb().prepare(
+    'SELECT encrypted_refresh_token FROM mercadopago_credentials WHERE connection_id = ?'
+  ).get(connectionId) as { encrypted_refresh_token: string } | null
+  if (!row?.encrypted_refresh_token) return null
+  try {
+    return decryptToken(row.encrypted_refresh_token)
   } catch {
     return null
   }

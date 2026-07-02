@@ -1,9 +1,14 @@
-import { createHash } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
+import http from 'http'
 import { app, shell } from 'electron'
 import {
   getAccessToken,
+  getConnection,
+  createOAuthConnection,
+  saveOAuthTokens,
+  getRefreshToken,
   updateConnectionStatus,
   createJob,
   getJob,
@@ -12,12 +17,22 @@ import {
   getReportFileByHash,
   insertTransactionsBatch,
 } from '../database/queries/mercadopago'
-import type { MpReportConfig, MpSyncResult, MpTransaction } from '@shared/types'
+import { readEnvLocal } from '../database/powersync'
+import type { MpReportConfig, MpSyncResult, MpTransaction, MpConnection, MpEnvironment } from '@shared/types'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const MP_API_BASE = 'https://api.mercadopago.com'
 const ARGENTINA_TZ = 'America/Argentina/Buenos_Aires'
+
+// ─── OAuth (Etapa 2) ────────────────────────────────────────────────────────
+// Mismo patrón que drive.service.ts: servidor loopback local + navegador externo.
+// Puerto distinto al de Drive (42813) para poder tener ambos flujos disponibles
+// sin conflicto de puertos.
+const MP_OAUTH_AUTHORIZE_URL = 'https://auth.mercadopago.com.ar/authorization'
+const MP_OAUTH_TOKEN_URL     = `${MP_API_BASE}/oauth/token`
+const OAUTH_REDIRECT_PORT    = 42814
+const OAUTH_REDIRECT_URI     = `http://localhost:${OAUTH_REDIRECT_PORT}/mp/oauth/callback`
 
 const DEFAULT_COLUMNS = [
   'TRANSACTION_DATE', 'SOURCE_ID', 'EXTERNAL_REFERENCE', 'TRANSACTION_TYPE',
@@ -52,7 +67,7 @@ interface MpFetchOptions {
   maxRetries?: number
 }
 
-async function mpFetch<T>(
+async function mpFetchInner<T>(
   token: string,
   endpoint: string,
   opts: MpFetchOptions = {}
@@ -100,7 +115,7 @@ async function mpFetch<T>(
   throw new Error('Mercado Pago: máximo de reintentos alcanzado')
 }
 
-async function mpFetchRaw(token: string, endpoint: string): Promise<string> {
+async function mpFetchRawInner(token: string, endpoint: string): Promise<string> {
   const url = endpoint.startsWith('http') ? endpoint : `${MP_API_BASE}${endpoint}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'text/csv, application/json' },
@@ -111,14 +126,158 @@ async function mpFetchRaw(token: string, endpoint: string): Promise<string> {
   return res.text()
 }
 
+// Envoltorio de mpFetchInner/mpFetchRawInner: resuelve el token de la conexión
+// y, si la llamada devuelve 401 y la conexión es OAuth, refresca el token una
+// única vez y reintenta — sin esto, una conexión OAuth se rompe sola cada vez
+// que el access_token vence (las conexiones con access_token manual no tienen
+// refresh_token, así que un 401 ahí sigue siendo un error real).
+async function withTokenRefresh<T>(
+  connectionId: string,
+  run: (token: string) => Promise<T>
+): Promise<T> {
+  const token = getAccessToken(connectionId)
+  if (!token) throw new Error('No hay access token para esta conexión')
+
+  try {
+    return await run(token)
+  } catch (err) {
+    const isAuthError = (err as Error).message.includes('(401)')
+    const conn = isAuthError ? await getConnection(connectionId) : null
+    if (!isAuthError || conn?.auth_type !== 'oauth') throw err
+
+    const freshToken = await refreshAccessToken(connectionId)
+    return run(freshToken)
+  }
+}
+
+async function mpFetch<T>(connectionId: string, endpoint: string, opts: MpFetchOptions = {}): Promise<T> {
+  return withTokenRefresh(connectionId, (token) => mpFetchInner<T>(token, endpoint, opts))
+}
+
+async function mpFetchRaw(connectionId: string, endpoint: string): Promise<string> {
+  return withTokenRefresh(connectionId, (token) => mpFetchRawInner(token, endpoint))
+}
+
+// ─── OAuth (Etapa 2) ────────────────────────────────────────────────────────
+
+function getOAuthAppCredentials(): { clientId: string; clientSecret: string } {
+  const env = readEnvLocal()
+  return {
+    clientId: env.MERCADOPAGO_CLIENT_ID ?? '',
+    clientSecret: env.MERCADOPAGO_CLIENT_SECRET ?? '',
+  }
+}
+
+/** Intercambia un refresh_token vigente por un access_token nuevo. Mercado
+ *  Pago rota el refresh_token en cada uso — hay que guardar el que devuelve
+ *  la respuesta, no reutilizar el viejo. */
+export async function refreshAccessToken(connectionId: string): Promise<string> {
+  const { clientId, clientSecret } = getOAuthAppCredentials()
+  if (!clientId || !clientSecret) {
+    throw new Error('Faltan MERCADOPAGO_CLIENT_ID/MERCADOPAGO_CLIENT_SECRET en .env.local')
+  }
+  const refreshToken = getRefreshToken(connectionId)
+  if (!refreshToken) throw new Error('Esta conexión no tiene refresh_token — hay que reconectarla por OAuth')
+
+  const res = await fetch(MP_OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+    }),
+  })
+  if (!res.ok) {
+    await updateConnectionStatus(connectionId, 'error')
+    throw new Error(`Mercado Pago: no se pudo refrescar el token (HTTP ${res.status})`)
+  }
+  const data = await res.json() as { access_token: string; refresh_token: string }
+  saveOAuthTokens(connectionId, data.access_token, data.refresh_token)
+  return data.access_token
+}
+
+/** Flujo OAuth completo para conectar una cuenta nueva: abre el navegador,
+ *  levanta un servidor local temporal para recibir el redirect (mismo patrón
+ *  que drive.service.ts), canjea el code por tokens, y recién ahí crea la fila
+ *  de conexión — así una cancelación a mitad de camino no deja una conexión
+ *  a medio configurar. */
+export async function startOAuthConnect(
+  name: string,
+  accountLabel: string,
+  environment: MpEnvironment,
+  createdBy: string
+): Promise<{ connection: MpConnection; test: { ok: boolean; user_id?: string; error?: string } }> {
+  const { clientId, clientSecret } = getOAuthAppCredentials()
+  if (!clientId || !clientSecret) {
+    throw new Error('Configurá MERCADOPAGO_CLIENT_ID y MERCADOPAGO_CLIENT_SECRET en .env.local antes de conectar con OAuth.')
+  }
+
+  const state = randomUUID()
+  const authUrl = new URL(MP_OAUTH_AUTHORIZE_URL)
+  authUrl.searchParams.set('client_id', clientId)
+  authUrl.searchParams.set('response_type', 'code')
+  authUrl.searchParams.set('platform_id', 'mp')
+  authUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI)
+  authUrl.searchParams.set('state', state)
+  shell.openExternal(authUrl.toString())
+
+  const code = await new Promise<string>((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      if (!req.url?.startsWith('/mp/oauth/callback')) return
+      const url = new URL(req.url, `http://localhost:${OAUTH_REDIRECT_PORT}`)
+      const returnedState = url.searchParams.get('state')
+      const authCode = url.searchParams.get('code')
+      const err = url.searchParams.get('error')
+
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(err || !authCode
+        ? '<h1>No se pudo conectar con Mercado Pago. Podés cerrar esta pestaña.</h1>'
+        : '<h1>Summit conectado a Mercado Pago. Podés cerrar esta pestaña.</h1>')
+      server.close()
+
+      if (err) { reject(new Error(`Mercado Pago rechazó la autorización: ${err}`)); return }
+      if (returnedState !== state) { reject(new Error('OAuth: state inválido (posible ataque CSRF)')); return }
+      if (!authCode) { reject(new Error('OAuth: Mercado Pago no devolvió un código')); return }
+      resolve(authCode)
+    })
+    server.listen(OAUTH_REDIRECT_PORT)
+    setTimeout(() => { server.close(); reject(new Error('OAuth: tiempo de espera agotado')) }, 120_000)
+  })
+
+  const tokenRes = await fetch(MP_OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: OAUTH_REDIRECT_URI,
+    }),
+  })
+  if (!tokenRes.ok) {
+    let msg = `HTTP ${tokenRes.status}`
+    try { const e = await tokenRes.json(); msg = e.message ?? e.error_description ?? e.error ?? msg } catch { /* */ }
+    throw new Error(`Mercado Pago: no se pudo canjear el código de autorización (${msg})`)
+  }
+  const tokenData = await tokenRes.json() as { access_token: string; refresh_token: string; user_id: number }
+
+  const connection = await createOAuthConnection(name, accountLabel, environment, String(tokenData.user_id), createdBy)
+  saveOAuthTokens(connection.id, tokenData.access_token, tokenData.refresh_token)
+
+  const test = await testConnection(connection.id)
+  return { connection, test }
+}
+
 // ─── Test de conexión ─────────────────────────────────────────────────────────
 
 export async function testConnection(connectionId: string): Promise<{ ok: boolean; user_id?: string; email?: string; error?: string }> {
-  const token = getAccessToken(connectionId)
-  if (!token) return { ok: false, error: 'No hay access token guardado para esta conexión' }
+  if (!getAccessToken(connectionId)) return { ok: false, error: 'No hay access token guardado para esta conexión' }
 
   try {
-    const data = await mpFetch<{ id: number; email: string }>(token, '/v1/account/settlement_report/config', { maxRetries: 1 })
+    const data = await mpFetch<{ id: number; email: string }>(connectionId, '/v1/account/settlement_report/config', { maxRetries: 1 })
     const userId = String((data as { user_id?: number }).user_id ?? (data as { id?: number }).id ?? '')
     if (userId) await updateConnectionStatus(connectionId, 'active', userId)
     else await updateConnectionStatus(connectionId, 'active')
@@ -132,11 +291,10 @@ export async function testConnection(connectionId: string): Promise<{ ok: boolea
 // ─── Configuración de reportes ────────────────────────────────────────────────
 
 export async function getSettlementReportConfig(connectionId: string): Promise<MpReportConfig | null> {
-  const token = getAccessToken(connectionId)
-  if (!token) throw new Error('No hay access token')
+  if (!getAccessToken(connectionId)) throw new Error('No hay access token')
 
   try {
-    const raw = await mpFetch<Record<string, unknown>>(token, '/v1/account/settlement_report/config')
+    const raw = await mpFetch<Record<string, unknown>>(connectionId, '/v1/account/settlement_report/config')
     return normalizeRemoteConfig(raw)
   } catch (err) {
     if ((err as Error).message.includes('404')) return null
@@ -148,8 +306,7 @@ export async function setSettlementReportConfig(
   connectionId: string,
   config: Partial<MpReportConfig>
 ): Promise<void> {
-  const token = getAccessToken(connectionId)
-  if (!token) throw new Error('No hay access token')
+  if (!getAccessToken(connectionId)) throw new Error('No hay access token')
 
   const merged = { ...DEFAULT_REPORT_CONFIG, ...config }
   const body = {
@@ -168,9 +325,9 @@ export async function setSettlementReportConfig(
   }
 
   try {
-    await mpFetch(token, '/v1/account/settlement_report/config', { method: 'PUT', body })
+    await mpFetch(connectionId, '/v1/account/settlement_report/config', { method: 'PUT', body })
   } catch {
-    await mpFetch(token, '/v1/account/settlement_report/config', { method: 'POST', body })
+    await mpFetch(connectionId, '/v1/account/settlement_report/config', { method: 'POST', body })
   }
 }
 
@@ -187,13 +344,12 @@ export async function requestSettlementReport(
   dateTo: string,
   requestedBy: string
 ): Promise<string> {
-  const token = getAccessToken(connectionId)
-  if (!token) throw new Error('No hay access token')
+  if (!getAccessToken(connectionId)) throw new Error('No hay access token')
 
   const job = await createJob(connectionId, dateFrom, dateTo, requestedBy)
 
   try {
-    await mpFetch(token, '/v1/account/settlement_report', {
+    await mpFetch(connectionId, '/v1/account/settlement_report', {
       method: 'POST',
       body: {
         begin_date: toArgDatetime(dateFrom),
@@ -220,9 +376,8 @@ interface MpReportListItem {
 }
 
 export async function pollSettlementReports(connectionId: string): Promise<MpReportListItem[]> {
-  const token = getAccessToken(connectionId)
-  if (!token) throw new Error('No hay access token')
-  return mpFetch<MpReportListItem[]>(token, '/v1/account/settlement_report/list')
+  if (!getAccessToken(connectionId)) throw new Error('No hay access token')
+  return mpFetch<MpReportListItem[]>(connectionId, '/v1/account/settlement_report/list')
 }
 
 export async function checkJobReady(jobId: string): Promise<{ ready: boolean; file_name?: string }> {
@@ -292,12 +447,11 @@ export async function downloadAndProcessJob(jobId: string): Promise<MpSyncResult
 
   await updateJobStatus(jobId, 'downloading')
 
-  const token = getAccessToken(job.connection_id)
-  if (!token) throw new Error('No hay access token')
+  if (!getAccessToken(job.connection_id)) throw new Error('No hay access token')
 
   let csvContent: string
   try {
-    csvContent = await mpFetchRaw(token, `/v1/account/settlement_report/${fileName}`)
+    csvContent = await mpFetchRaw(job.connection_id, `/v1/account/settlement_report/${fileName}`)
   } catch (err) {
     await updateJobStatus(jobId, 'failed', { error_message: (err as Error).message })
     throw err
@@ -403,15 +557,21 @@ export async function runFullSync(
     }
   }
 
-  updateJobStatus(jobId, 'failed', { error_message: 'Timeout: el reporte tardó más de 100s en generarse' })
+  // No es un error real: Mercado Pago puede tardar bastante más de 100s en
+  // generar el reporte (se vieron casos de hasta ~13 minutos). El job queda
+  // en 'requested' — NO 'failed' — para que el auto-poll del cliente
+  // (SincronizacionTab, cada 15s sin límite de tiempo) lo siga chequeando
+  // solo hasta que esté listo. Marcarlo 'failed' acá lo dejaba huérfano: el
+  // botón "Verificar" corta en seco ante un job 'failed' (ver checkJobReady)
+  // y nunca vuelve a consultar a MP, aunque el reporte ya esté generado.
   return {
     job_id: jobId,
-    status: 'failed',
+    status: 'requested',
     file_name: null,
     imported: 0,
     duplicated: 0,
     errors: 0,
-    error_message: 'Timeout esperando el reporte',
+    error_message: null,
   }
 }
 

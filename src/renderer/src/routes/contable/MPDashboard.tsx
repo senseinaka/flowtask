@@ -8,7 +8,7 @@ import {
 import dayjs from 'dayjs'
 import {
   useMpConnections, useCreateMpConnection, useDeleteMpConnection,
-  useTestMpConnection, useUpdateMpToken,
+  useTestMpConnection, useUpdateMpToken, useStartMpOAuth,
   useMpJobs, useDownloadMpJob, usePollMpJob, useCancelMpJob, useRunMpSync,
   useOpenMpJobFile, useShowMpJobInFolder,
   useMpTransactions, useUpdateMpReconStatus, useMpTransactionStats,
@@ -148,11 +148,13 @@ function ConexionesTab({
 }: { selectedConn: string | null; onSelectConn: (id: string | null) => void; canWrite: boolean }) {
   const { data: connections = [], isLoading } = useMpConnections()
   const createConn   = useCreateMpConnection()
+  const startOAuth   = useStartMpOAuth()
   const deleteConn   = useDeleteMpConnection()
   const testConn     = useTestMpConnection()
   const updateToken  = useUpdateMpToken()
 
   const [showForm, setShowForm]         = useState(false)
+  const [authMode, setAuthMode]         = useState<'token' | 'oauth'>('oauth')
   const [formName, setFormName]         = useState('')
   const [formLabel, setFormLabel]       = useState('')
   const [formToken, setFormToken]       = useState('')
@@ -169,6 +171,18 @@ function ConexionesTab({
     if (res.test.ok) toast.success(`Conectado${res.test.user_id ? ` · ID: ${res.test.user_id}` : ''}`)
     else toast.error(res.test.error || 'No se pudo verificar la conexión')
     setShowForm(false); setFormName(''); setFormLabel(''); setFormToken('')
+  }
+
+  async function handleOAuthConnect() {
+    if (!formName) return
+    try {
+      const res = await startOAuth.mutateAsync({ name: formName, accountLabel: formLabel || formName, environment: 'production' })
+      if (res.test.ok) toast.success(`Conectado${res.test.user_id ? ` · ID: ${res.test.user_id}` : ''}`)
+      else toast.error(res.test.error || 'No se pudo verificar la conexión')
+      setShowForm(false); setFormName(''); setFormLabel('')
+    } catch (err) {
+      toast.error((err as Error).message || 'No se pudo completar la conexión OAuth')
+    }
   }
 
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Cargando...</div>
@@ -219,30 +233,58 @@ function ConexionesTab({
       {showForm && (
         <div className="border border-blue-500/40 rounded-lg p-4 bg-slate-800 space-y-3">
           <p className="font-medium text-sm text-blue-400">Nueva conexión</p>
+
+          <div className="flex gap-1.5 p-0.5 bg-slate-900 rounded w-fit">
+            <button onClick={() => setAuthMode('oauth')}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${authMode === 'oauth' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              Conectar con OAuth
+            </button>
+            <button onClick={() => setAuthMode('token')}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${authMode === 'token' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              Access Token manual
+            </button>
+          </div>
+
           <input value={formName} onChange={e => setFormName(e.target.value)}
             placeholder="Nombre (ej: Naka Principal)"
             className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600 focus:border-blue-500 outline-none" />
           <input value={formLabel} onChange={e => setFormLabel(e.target.value)}
             placeholder="Etiqueta de cuenta (opcional)"
             className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600 focus:border-blue-500 outline-none" />
-          <div className="relative">
-            <input value={formToken} onChange={e => setFormToken(e.target.value)}
-              type={showToken ? 'text' : 'password'}
-              placeholder="Access Token (APP_USR-...)"
-              className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600 focus:border-blue-500 outline-none pr-10" />
-            <button onClick={() => setShowToken(v => !v)}
-              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200">
-              {showToken ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
+
+          {authMode === 'token' ? (
+            <div className="relative">
+              <input value={formToken} onChange={e => setFormToken(e.target.value)}
+                type={showToken ? 'text' : 'password'}
+                placeholder="Access Token (APP_USR-...)"
+                className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600 focus:border-blue-500 outline-none pr-10" />
+              <button onClick={() => setShowToken(v => !v)}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200">
+                {showToken ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">
+              Se abre el navegador para autorizar la cuenta desde Mercado Pago — no hace falta pegar ningún token acá.
+            </p>
+          )}
+
           <div className="flex gap-2">
-            <button onClick={handleCreate} disabled={createConn.isPending || !formName || !formToken}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm text-white transition-colors flex items-center gap-1.5">
-              {createConn.isPending && <Loader2 size={13} className="animate-spin" />}
-              Conectar
-            </button>
-            <button onClick={() => setShowForm(false)}
-              className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+            {authMode === 'token' ? (
+              <button onClick={handleCreate} disabled={createConn.isPending || !formName || !formToken}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm text-white transition-colors flex items-center gap-1.5">
+                {createConn.isPending && <Loader2 size={13} className="animate-spin" />}
+                Conectar
+              </button>
+            ) : (
+              <button onClick={handleOAuthConnect} disabled={startOAuth.isPending || !formName}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm text-white transition-colors flex items-center gap-1.5">
+                {startOAuth.isPending ? <Loader2 size={13} className="animate-spin" /> : <PlugZap size={13} />}
+                {startOAuth.isPending ? 'Esperando autorización...' : 'Conectar con OAuth'}
+              </button>
+            )}
+            <button onClick={() => setShowForm(false)} disabled={startOAuth.isPending}
+              className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors disabled:opacity-50">
               Cancelar
             </button>
           </div>
@@ -389,6 +431,8 @@ function SincronizacionTab({
       const res = await runSync.mutateAsync({ connectionId: connId, dateFrom, dateTo, requestedBy: 'manual' })
       if (res.status === 'failed') {
         toast.error(res.error_message || 'No se pudo sincronizar con Mercado Pago')
+      } else if (res.status === 'requested') {
+        toast.info('Mercado Pago todavía está generando el reporte — se va a importar solo cuando esté listo (mirá el Historial).')
       } else {
         toast.success(
           `Sincronizado: ${res.imported} transacciones nuevas` +
