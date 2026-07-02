@@ -72,7 +72,7 @@ import type {
   ImportParseResult, LegajoDecision, ConfirmImportInput,
   MpConnection, MpConnectionWithCreds, MpReportJob, MpReportFile, MpTransaction,
   MpReportConfig, CreateMpConnectionInput, MpTransactionFilters, MpEnvironment,
-  MpSyncResult, MpTestConnectionResult, MpReconciliationStatus,
+  MpSyncResult, MpTestConnectionResult, MpReconciliationStatus, MpResumenStats,
   AccountingService, AccountingServicePayment, AccountingServiceFilters,
   CreateAccountingServiceInput, RegisterServicePaymentInput, ServiceStatus,
   CashCompany, Cashbox, CashCategory, CashMovement, CashCount, CashDifference,
@@ -1373,6 +1373,9 @@ const api = {
       list:        (filters: MpTransactionFilters): Promise<MpTransaction[]>                           => ipcRenderer.invoke('mp:transactions:list', filters),
       updateRecon: (id: string, status: MpReconciliationStatus): Promise<void>                         => ipcRenderer.invoke('mp:transactions:update-recon', id, status),
       stats:       (connectionId: string): Promise<{ total: number; by_type: { transaction_type: string; count: number; total_amount: number }[]; by_recon: { reconciliation_status: string; count: number }[] }> => ipcRenderer.invoke('mp:transactions:stats', connectionId),
+    },
+    stats: {
+      resumen: (connectionId: string, dateFrom: string, dateTo: string): Promise<MpResumenStats> => ipcRenderer.invoke('mp:stats:resumen', connectionId, dateFrom, dateTo),
     },
   },
 

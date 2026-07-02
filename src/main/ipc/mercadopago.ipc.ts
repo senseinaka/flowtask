@@ -12,6 +12,7 @@ import {
   listTransactions,
   updateTransactionReconStatus,
   getTransactionStats,
+  getResumenStats,
 } from '../database/queries/mercadopago'
 import {
   testConnection,
@@ -157,5 +158,9 @@ export function registerMercadoPagoIpc(): void {
 
   ipcMain.handle('mp:transactions:stats', (_e, connectionId: string) => {
     return getTransactionStats(connectionId)
+  })
+
+  ipcMain.handle('mp:stats:resumen', (_e, connectionId: string, dateFrom: string, dateTo: string) => {
+    return getResumenStats(connectionId, dateFrom, dateTo)
   })
 }

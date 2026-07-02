@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "src/preload/index.ts": {
-    "mtime": 1783006143.1301236,
-    "ast_hash": "6757652da13dd1e6897aa5767a41ab50",
+    "mtime": 1783012943.548307,
+    "ast_hash": "61e56e141573b1022f9dd4e8ecea790c",
     "semantic_hash": ""
   },
   "src/renderer/src/App.tsx": {
@@ -1165,13 +1165,13 @@
     "semantic_hash": ""
   },
   "src/main/database/queries/mercadopago.ts": {
-    "mtime": 1782295193.6957254,
-    "ast_hash": "4c5f00bd1056d568b2c7d72b08242d4e",
+    "mtime": 1783012683.7789485,
+    "ast_hash": "96057e8f5263a9a8eab023080d56905d",
     "semantic_hash": ""
   },
   "src/main/ipc/mercadopago.ipc.ts": {
-    "mtime": 1782780020.9857583,
-    "ast_hash": "6fb7295bc980865e6f287826020648ff",
+    "mtime": 1783012911.298512,
+    "ast_hash": "71241fb3effb21d38a16598b4f0616cf",
     "semantic_hash": ""
   },
   "src/main/services/mercadopago-crypto.service.ts": {
@@ -1180,18 +1180,18 @@
     "semantic_hash": ""
   },
   "src/main/services/mercadopago.service.ts": {
-    "mtime": 1782343972.8398569,
-    "ast_hash": "5d2b7eafba675e3ebc34446d5ab7d109",
+    "mtime": 1783015652.9695265,
+    "ast_hash": "1cd4ea4c8471ee246b08bfdf8f8f65bd",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useMercadoPago.ts": {
-    "mtime": 1782304564.7217226,
-    "ast_hash": "10c0cb27c1ea32f2369411d6a12ec2df",
+    "mtime": 1783012967.4544322,
+    "ast_hash": "86e6460b4e4a453898dd773f9d71a3ee",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/MPDashboard.tsx": {
-    "mtime": 1782991600.4720898,
-    "ast_hash": "a254ada5230850757013610455a2c43e",
+    "mtime": 1783015670.4319327,
+    "ast_hash": "edb16e37b4d176b7ef08eda61bf0ed96",
     "semantic_hash": ""
   },
   "src/main/database/queries/accounting-services.ts": {
@@ -1717,6 +1717,16 @@
   "supabase_comex_imports_multi_part.sql": {
     "mtime": 1783007280.9944887,
     "ast_hash": "2bd0e39817c90bbc33b2dc3cd35e998b",
+    "semantic_hash": ""
+  },
+  "supabase_comex_imports_payment_terms.sql": {
+    "mtime": 1783011116.9783611,
+    "ast_hash": "8f12a675df147f1d9082085bebd89b88",
+    "semantic_hash": ""
+  },
+  "supabase_mercadopago_powersync_tables.sql": {
+    "mtime": 1783011526.7317722,
+    "ast_hash": "d5d6104f17a555bc7c90fff6fe20c50a",
     "semantic_hash": ""
   }
 }

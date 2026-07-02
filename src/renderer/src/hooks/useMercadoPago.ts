@@ -25,6 +25,14 @@ export function useCreateMpConnection() {
   })
 }
 
+export function useMpResumen(connectionId: string | null, dateFrom: string, dateTo: string) {
+  return useQuery({
+    queryKey: ['mp-resumen', connectionId, dateFrom, dateTo],
+    queryFn: () => window.api.mercadopago.stats.resumen(connectionId!, dateFrom, dateTo),
+    enabled: !!connectionId,
+  })
+}
+
 export function useStartMpOAuth() {
   const qc = useQueryClient()
   return useMutation({

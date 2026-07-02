@@ -10,6 +10,7 @@ import type {
   MpTransaction,
   MpJobStatus,
   MpTransactionFilters,
+  MpResumenStats,
   CreateMpConnectionInput,
 } from '@shared/types'
 
@@ -412,4 +413,100 @@ export async function getTransactionStats(connectionId: string): Promise<{
   `, [connectionId, WORKSPACE_ID])
 
   return { total: totRow?.n ?? 0, by_type, by_recon }
+}
+
+// Resumen del dashboard: agregaciones sobre los reportes ya importados.
+// Las fechas (transaction_date / money_release_date) vienen del CSV en formato
+// ISO ("2026-07-02T14:23:45..."), así que substr(...,1,10) da 'YYYY-MM-DD' y
+// compara bien como texto contra los parámetros dateFrom/dateTo/hoy.
+export async function getResumenStats(
+  connectionId: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<MpResumenStats> {
+  const psDb = getPowerSyncDb()
+  const today = new Date().toISOString().slice(0, 10)
+  const base = 'connection_id = ? AND workspace_id = ?'
+
+  const [ventas] = await psDb.getAll<{ count: number; bruto: number | null; neto: number | null; fees: number | null; taxes: number | null }>(`
+    SELECT COUNT(*) as count,
+           SUM(transaction_amount)    as bruto,
+           SUM(settlement_net_amount) as neto,
+           SUM(fee_amount)            as fees,
+           SUM(taxes_amount)          as taxes
+    FROM mercadopago_transactions
+    WHERE ${base} AND transaction_type = 'SETTLEMENT'
+      AND substr(transaction_date, 1, 10) BETWEEN ? AND ?
+  `, [connectionId, WORKSPACE_ID, dateFrom, dateTo])
+
+  const [devoluciones] = await psDb.getAll<{ count: number; total: number | null }>(`
+    SELECT COUNT(*) as count, SUM(transaction_amount) as total
+    FROM mercadopago_transactions
+    WHERE ${base} AND transaction_type IN ('REFUND', 'CHARGEBACK', 'DISPUTE')
+      AND substr(transaction_date, 1, 10) BETWEEN ? AND ?
+  `, [connectionId, WORKSPACE_ID, dateFrom, dateTo])
+
+  const [porLiberar] = await psDb.getAll<{ total: number | null }>(`
+    SELECT SUM(settlement_net_amount) as total
+    FROM mercadopago_transactions
+    WHERE ${base} AND money_release_date IS NOT NULL AND money_release_date != ''
+      AND substr(money_release_date, 1, 10) > ?
+  `, [connectionId, WORKSPACE_ID, today])
+
+  const [disponible] = await psDb.getAll<{ total: number | null }>(`
+    SELECT SUM(settlement_net_amount) as total
+    FROM mercadopago_transactions
+    WHERE ${base} AND money_release_date IS NOT NULL AND money_release_date != ''
+      AND substr(money_release_date, 1, 10) <= ?
+  `, [connectionId, WORKSPACE_ID, today])
+
+  const liberaciones = await psDb.getAll<{ date: string; amount: number; count: number }>(`
+    SELECT substr(money_release_date, 1, 10) as date,
+           SUM(settlement_net_amount) as amount,
+           COUNT(*) as count
+    FROM mercadopago_transactions
+    WHERE ${base} AND money_release_date IS NOT NULL AND money_release_date != ''
+      AND substr(money_release_date, 1, 10) > ?
+    GROUP BY substr(money_release_date, 1, 10)
+    ORDER BY date ASC
+    LIMIT 15
+  `, [connectionId, WORKSPACE_ID, today])
+
+  const daily = await psDb.getAll<{ date: string; amount: number; count: number }>(`
+    SELECT substr(transaction_date, 1, 10) as date,
+           SUM(transaction_amount) as amount,
+           COUNT(*) as count
+    FROM mercadopago_transactions
+    WHERE ${base} AND transaction_type = 'SETTLEMENT'
+      AND substr(transaction_date, 1, 10) BETWEEN ? AND ?
+    GROUP BY substr(transaction_date, 1, 10)
+    ORDER BY date ASC
+  `, [connectionId, WORKSPACE_ID, dateFrom, dateTo])
+
+  const by_method = await psDb.getAll<{ method: string; count: number; amount: number }>(`
+    SELECT COALESCE(NULLIF(payment_method, ''), 'otro') as method,
+           COUNT(*) as count,
+           SUM(transaction_amount) as amount
+    FROM mercadopago_transactions
+    WHERE ${base} AND transaction_type = 'SETTLEMENT'
+      AND substr(transaction_date, 1, 10) BETWEEN ? AND ?
+    GROUP BY COALESCE(NULLIF(payment_method, ''), 'otro')
+    ORDER BY amount DESC
+  `, [connectionId, WORKSPACE_ID, dateFrom, dateTo])
+
+  return {
+    ventas: {
+      count: ventas?.count ?? 0,
+      bruto: ventas?.bruto ?? 0,
+      neto:  ventas?.neto ?? 0,
+      fees:  ventas?.fees ?? 0,
+      taxes: ventas?.taxes ?? 0,
+    },
+    devoluciones: { count: devoluciones?.count ?? 0, total: devoluciones?.total ?? 0 },
+    por_liberar: porLiberar?.total ?? 0,
+    disponible_estimado: disponible?.total ?? 0,
+    liberaciones,
+    daily,
+    by_method,
+  }
 }

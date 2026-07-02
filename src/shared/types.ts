@@ -3825,6 +3825,26 @@ export interface MpTestConnectionResult {
   error?: string
 }
 
+// Resumen del dashboard MP — todo calculado sobre los reportes de liquidación
+// ya importados en mercadopago_transactions (no consulta la API en vivo).
+export interface MpResumenStats {
+  // Período seleccionado (transaction_type = 'SETTLEMENT')
+  ventas: {
+    count:      number
+    bruto:      number   // SUM(transaction_amount)
+    neto:       number   // SUM(settlement_net_amount)
+    fees:       number   // SUM(fee_amount)
+    taxes:      number   // SUM(taxes_amount)
+  }
+  devoluciones: { count: number; total: number }  // REFUND + CHARGEBACK del período
+  // Independiente del período (estado actual de la cuenta según reportes)
+  por_liberar:         number   // SUM(neto) con money_release_date futura
+  disponible_estimado: number   // SUM(neto) ya liberado (incluye retiros, que restan)
+  liberaciones: { date: string; amount: number; count: number }[]  // próximas liberaciones por día
+  daily:        { date: string; amount: number; count: number }[]  // ventas por día del período
+  by_method:    { method: string; count: number; amount: number }[]
+}
+
 // ─── Servicios contables (abonos, suscripciones, pólizas) ──────────────────────
 
 export type ServiceCategory =

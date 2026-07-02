@@ -4,6 +4,7 @@ import {
   CheckCircle2, AlertCircle, Settings, List, CreditCard,
   Eye, EyeOff, Loader2, PlugZap, CalendarRange, Copy,
   ExternalLink, FolderOpen, XCircle, LayoutDashboard,
+  TrendingUp, Wallet, Clock, Undo2,
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import {
@@ -13,6 +14,7 @@ import {
   useOpenMpJobFile, useShowMpJobInFolder,
   useMpTransactions, useUpdateMpReconStatus, useMpTransactionStats,
   useMpReportConfig, useSetMpReportConfig, useMpDefaultConfig,
+  useMpResumen,
 } from '../../hooks/useMercadoPago'
 import { usePermissions } from '../../hooks/usePermissions'
 import { toast } from '../../store/toast.store'
@@ -119,24 +121,179 @@ export default function MPDashboard() {
 
 // ─── Tab Resumen ──────────────────────────────────────────────────────────────
 
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  account_money: 'Dinero en cuenta', credit_card: 'Tarjeta de crédito', debit_card: 'Tarjeta de débito',
+  visa: 'Visa', master: 'Mastercard', amex: 'Amex', cabal: 'Cabal', naranja: 'Naranja',
+  debvisa: 'Visa débito', debmaster: 'Master débito', maestro: 'Maestro',
+  rapipago: 'Rapipago', pagofacil: 'Pago Fácil', otro: 'Otro',
+}
+
+type ResumenPeriod = '7d' | '30d' | 'mes'
+
+function KpiCard({ icon, label, value, sub, accent }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string; accent: string
+}) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className={accent}>{icon}</span>
+        <p className="text-xs text-slate-400">{label}</p>
+      </div>
+      <p className="text-xl font-semibold text-slate-100">{value}</p>
+      {sub && <p className="text-[11px] text-slate-500 mt-1">{sub}</p>}
+    </div>
+  )
+}
+
 function ResumenTab({ selectedConn }: { selectedConn: string | null }) {
   const { data: connections = [], isLoading } = useMpConnections()
   const connId = selectedConn ?? connections[0]?.id ?? null
+  const [period, setPeriod] = useState<ResumenPeriod>('30d')
+
+  const dateTo = dayjs().format('YYYY-MM-DD')
+  const dateFrom = period === '7d' ? dayjs().subtract(6, 'day').format('YYYY-MM-DD')
+    : period === '30d' ? dayjs().subtract(29, 'day').format('YYYY-MM-DD')
+    : dayjs().startOf('month').format('YYYY-MM-DD')
+
+  const { data: stats, isLoading: statsLoading } = useMpResumen(connId, dateFrom, dateTo)
 
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Cargando...</div>
   if (!connId) return (
     <div className="p-6 text-slate-500 text-sm">Conectá una cuenta en la tab Conexiones para ver el resumen.</div>
   )
+  if (statsLoading || !stats) return <div className="p-6 text-slate-400 text-sm">Calculando resumen...</div>
+
+  const activeConn = connections.find(c => c.id === connId)
+  const sinDatos = stats.ventas.count === 0 && stats.liberaciones.length === 0 && stats.disponible_estimado === 0
+
+  const maxDaily = Math.max(...stats.daily.map(d => d.amount), 1)
+  const totalMethod = stats.by_method.reduce((s, m) => s + m.amount, 0)
 
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="border border-dashed border-slate-700 rounded-lg p-10 text-center text-slate-500">
-        <LayoutDashboard size={32} className="mx-auto mb-3 opacity-30" />
-        <p className="text-sm">
-          Acá va a vivir el resumen de ventas, dinero disponible y calendario de liberaciones.
-        </p>
-        <p className="text-xs mt-1 text-slate-600">Se va a ir completando por partes.</p>
+    <div className="p-6 space-y-5 max-w-5xl">
+      {/* Selector de período */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-1.5 p-0.5 bg-slate-800 rounded w-fit">
+          {([['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes']] as [ResumenPeriod, string][]).map(([key, label]) => (
+            <button key={key} onClick={() => setPeriod(key)}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                period === key ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {activeConn && <span className="text-xs text-slate-500">{activeConn.name} · datos de reportes importados</span>}
       </div>
+
+      {sinDatos ? (
+        <div className="border border-dashed border-slate-700 rounded-lg p-10 text-center text-slate-500">
+          <LayoutDashboard size={32} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Sin transacciones importadas para este período.</p>
+          <p className="text-xs mt-1 text-slate-600">Corré una sincronización en la tab Sincronización para traer los datos.</p>
+        </div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard icon={<TrendingUp size={15} />} accent="text-emerald-400"
+              label={`Ventas (${stats.ventas.count})`}
+              value={fmtARS(stats.ventas.bruto)}
+              sub={`Neto ${fmtARS(stats.ventas.neto)}`} />
+            <KpiCard icon={<CreditCard size={15} />} accent="text-amber-400"
+              label="Comisiones e impuestos"
+              value={fmtARS(Math.abs(stats.ventas.fees) + Math.abs(stats.ventas.taxes))}
+              sub={stats.ventas.bruto > 0 ? `${(((Math.abs(stats.ventas.fees) + Math.abs(stats.ventas.taxes)) / stats.ventas.bruto) * 100).toFixed(1)}% de lo vendido` : undefined} />
+            <KpiCard icon={<Clock size={15} />} accent="text-blue-400"
+              label="Por liberar"
+              value={fmtARS(stats.por_liberar)}
+              sub={stats.liberaciones.length > 0 ? `Próxima: ${dayjs(stats.liberaciones[0].date).format('DD/MM')}` : undefined} />
+            <KpiCard icon={<Wallet size={15} />} accent="text-violet-400"
+              label="Disponible estimado"
+              value={fmtARS(stats.disponible_estimado)}
+              sub="Liberado según reportes (incluye retiros)" />
+          </div>
+
+          {/* Devoluciones del período */}
+          {stats.devoluciones.count > 0 && (
+            <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-800/40 rounded-lg px-4 py-2.5 text-sm">
+              <Undo2 size={14} className="text-amber-400 flex-shrink-0" />
+              <span className="text-amber-200">
+                {stats.devoluciones.count} devolución{stats.devoluciones.count !== 1 ? 'es' : ''}/contracargo{stats.devoluciones.count !== 1 ? 's' : ''} en el período por {fmtARS(Math.abs(stats.devoluciones.total))}
+              </span>
+            </div>
+          )}
+
+          {/* Ventas por día */}
+          {stats.daily.length > 0 && (
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Ventas por día</p>
+              <div className="flex items-end gap-1 h-28">
+                {stats.daily.map(d => (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 min-w-0 group"
+                    title={`${dayjs(d.date).format('DD/MM')}: ${fmtARS(d.amount)} (${d.count} op.)`}>
+                    <div className="w-full bg-blue-600/70 group-hover:bg-blue-500 rounded-t transition-colors"
+                      style={{ height: `${Math.max((d.amount / maxDaily) * 100, 2)}%` }} />
+                    <span className="text-[9px] text-slate-600 truncate">{dayjs(d.date).format('DD')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* Calendario de liberaciones */}
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Calendario de liberaciones</p>
+              {stats.liberaciones.length === 0 ? (
+                <p className="text-sm text-slate-500">No hay liberaciones pendientes en los reportes importados.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {stats.liberaciones.map(l => {
+                    const d = dayjs(l.date)
+                    const daysAway = d.diff(dayjs().startOf('day'), 'day')
+                    return (
+                      <div key={l.date} className="flex items-center justify-between py-1.5 px-2.5 bg-slate-900/50 rounded border border-slate-700/40">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-200">{d.format('dddd DD/MM')}</span>
+                          <span className="text-[10px] text-slate-500">
+                            {daysAway === 1 ? 'mañana' : `en ${daysAway} días`} · {l.count} op.
+                          </span>
+                        </div>
+                        <span className="text-sm font-medium text-emerald-400">{fmtARS(l.amount)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Por medio de pago */}
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Por medio de pago</p>
+              {stats.by_method.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin ventas en el período.</p>
+              ) : (
+                <div className="space-y-2">
+                  {stats.by_method.map(m => {
+                    const pct = totalMethod > 0 ? (m.amount / totalMethod) * 100 : 0
+                    return (
+                      <div key={m.method}>
+                        <div className="flex items-center justify-between text-xs mb-0.5">
+                          <span className="text-slate-300">{PAYMENT_METHOD_LABEL[m.method] ?? m.method} <span className="text-slate-600">({m.count})</span></span>
+                          <span className="text-slate-400">{fmtARS(m.amount)}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
