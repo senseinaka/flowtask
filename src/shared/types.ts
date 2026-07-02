@@ -1349,6 +1349,11 @@ export interface ComexImport {
   payment_due_date:  number | null  // vencimiento — auto-calculado desde invoice_date + payment_deferred_days, sobreescribible a mano
   invoice_date:            number | null  // fecha de factura comercial
   payment_deferred_days:   number | null  // días desde factura — snapshot desde ComexSupplier.payment_deferred_days al elegir la marca, editable
+  // Registro de pagos SEPAIMPO BCRA — sepaimpo_fob_value se toma UNA sola vez del
+  // despacho (fob_declared en ComexCustoms) al aplicar el despacho, y queda fijo
+  // aunque el despacho se reprocese, para no mover un valor ya declarado al BCRA.
+  sepaimpo_fob_value:      number | null
+  sepaimpo_fob_currency:   string | null
   payment_notes:     string
   // ── Campos del JOIN (solo en queries de lista) ─────────────────────────────
   _despacho_number?:        string | null
@@ -1555,6 +1560,20 @@ export interface ComexPayment {
   notes: string
   created_at: number
 }
+
+// Registro de pagos SEPAIMPO BCRA — declaración de pagos de importación al Banco
+// Central. importe siempre en la misma moneda que sepaimpo_fob_currency (ComexImport).
+export interface ComexSepaimpoPayment {
+  id:                string
+  import_id:         string
+  importe:           number
+  fecha_pago:        number | null
+  numero_operacion:  string
+  tipo_cambio:       number | null  // pesos argentinos
+  created_at:        number
+}
+
+export type CreateComexSepaimpoPaymentInput = Omit<ComexSepaimpoPayment, 'id' | 'created_at'>
 
 export type CreateComexSupplierInput = Omit<ComexSupplier, 'id' | 'created_at' | 'updated_at'>
 export type CreateComexImportInput   = Omit<ComexImport, 'id' | 'created_at' | 'updated_at' | 'supplier'>

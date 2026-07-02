@@ -21,6 +21,7 @@ import type {
   TaskStatusLogEntry, TaskType,
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument, ComexInalCert, ComexInalVep,
   ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
+  ComexSepaimpoPayment, CreateComexSepaimpoPaymentInput,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact,
   ComexBrand, CreateComexBrandInput,
@@ -398,6 +399,13 @@ const api = {
       create: (input: CreateComexPaymentInput):         Promise<ComexPayment>         => ipcRenderer.invoke('comex:payments:create', input),
       update: (id: string, data: Partial<ComexPayment>): Promise<void>               => ipcRenderer.invoke('comex:payments:update', id, data),
       delete: (id: string):                             Promise<void>                 => ipcRenderer.invoke('comex:payments:delete', id)
+    },
+    sepaimpo: {
+      list:        (importId: string):                              Promise<ComexSepaimpoPayment[]> => ipcRenderer.invoke('comex:sepaimpo:list', importId),
+      create:      (input: CreateComexSepaimpoPaymentInput):        Promise<ComexSepaimpoPayment>   => ipcRenderer.invoke('comex:sepaimpo:create', input),
+      update:      (id: string, data: Partial<ComexSepaimpoPayment>): Promise<void>                 => ipcRenderer.invoke('comex:sepaimpo:update', id, data),
+      delete:      (id: string):                                    Promise<void>                   => ipcRenderer.invoke('comex:sepaimpo:delete', id),
+      snapshotFob: (importId: string, fobValue: number, fobCurrency: string): Promise<void>          => ipcRenderer.invoke('comex:sepaimpo:snapshotFob', importId, fobValue, fobCurrency)
     },
     customs: {
       get:    (importId: string):                                           Promise<ComexCustoms | null> =>

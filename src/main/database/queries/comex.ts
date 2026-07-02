@@ -13,6 +13,7 @@ import type {
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
   CreateComexQuoteInput, CreateComexPaymentInput,
+  ComexSepaimpoPayment, CreateComexSepaimpoPaymentInput,
   UpsertComexCustomsInput, CreateComexCostInput,
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
@@ -294,7 +295,8 @@ export async function updateImport(id: string, data: Partial<ComexImport>): Prom
     'inal_factura_stored_name','inal_factura_original_name','inal_factura_drive_file_id','inal_factura_drive_status',
     'inal_bl_stored_name','inal_bl_original_name','inal_bl_drive_file_id','inal_bl_drive_status',
     'docs_to_despachante','docs_to_despachante_date','docs_to_compras','docs_to_compras_date',
-    'payment_terms','payment_due_date','invoice_date','payment_deferred_days','payment_notes'
+    'payment_terms','payment_due_date','invoice_date','payment_deferred_days',
+    'sepaimpo_fob_value','sepaimpo_fob_currency','payment_notes'
   ]
 
   // payment_due_date se deriva ACÁ, del lado del servidor, en vez de en cada
@@ -627,6 +629,59 @@ export async function updatePayment(id: string, data: Partial<ComexPayment>): Pr
 
 export async function deletePayment(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_payments WHERE id = ?', [id])
+}
+
+// ─── Registro de pagos SEPAIMPO BCRA ───────────────────────────────────────────
+
+export async function listSepaimpoPayments(importId: string): Promise<ComexSepaimpoPayment[]> {
+  return getPowerSyncDb().getAll<ComexSepaimpoPayment>('SELECT * FROM comex_sepaimpo_payments WHERE import_id = ? ORDER BY created_at ASC', [importId])
+}
+
+export async function createSepaimpoPayment(input: CreateComexSepaimpoPaymentInput): Promise<ComexSepaimpoPayment> {
+  const db = getPowerSyncDb()
+  const id = randomUUID()
+  const now = Date.now()
+  await db.execute(`
+    INSERT INTO comex_sepaimpo_payments
+      (id, import_id, importe, fecha_pago, numero_operacion, tipo_cambio, created_at, updated_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, input.import_id, input.importe ?? 0, input.fecha_pago ?? null,
+         input.numero_operacion ?? '', input.tipo_cambio ?? null, now, now, WORKSPACE_ID])
+  return (await db.getOptional<ComexSepaimpoPayment>('SELECT * FROM comex_sepaimpo_payments WHERE id = ?', [id]))!
+}
+
+export async function updateSepaimpoPayment(id: string, data: Partial<ComexSepaimpoPayment>): Promise<void> {
+  const db = getPowerSyncDb()
+  const allowed = ['importe','fecha_pago','numero_operacion','tipo_cambio']
+  const sets: string[] = []
+  const vals: unknown[] = []
+  for (const key of allowed) {
+    if (key in data) { sets.push(`${key} = ?`); vals.push((data as Record<string, unknown>)[key]) }
+  }
+  if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
+  vals.push(id)
+  await db.execute(`UPDATE comex_sepaimpo_payments SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function deleteSepaimpoPayment(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_sepaimpo_payments WHERE id = ?', [id])
+}
+
+// El valor FOB se toma UNA sola vez del despacho (no se pisa en reprocesos
+// posteriores) — evita que un valor ya usado en pagos declarados al BCRA se
+// mueva solo. Lee siempre la fila ya commiteada, nunca un cache del cliente.
+export async function snapshotSepaimpoFobIfMissing(importId: string, fobValue: number, fobCurrency: string): Promise<void> {
+  const db = getPowerSyncDb()
+  const current = await db.getOptional<{ sepaimpo_fob_value: number | null }>(
+    'SELECT sepaimpo_fob_value FROM comex_imports WHERE id = ?', [importId]
+  )
+  if (current && current.sepaimpo_fob_value == null) {
+    await db.execute(
+      'UPDATE comex_imports SET sepaimpo_fob_value = ?, sepaimpo_fob_currency = ?, updated_at = ? WHERE id = ?',
+      [fobValue, fobCurrency, Date.now(), importId]
+    )
+  }
 }
 
 // ─── Customs (1:1 per import) ─────────────────────────────────────────────────

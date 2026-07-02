@@ -12,6 +12,8 @@ import {
   listQuoteFiles, createQuoteFile, updateQuoteFile, deleteQuoteFile,
   listImportPlFiles, getImportPlFile, createImportPlFile, updateImportPlFile, deleteImportPlFile,
   listPayments, createPayment, updatePayment, deletePayment,
+  listSepaimpoPayments, createSepaimpoPayment, updateSepaimpoPayment, deleteSepaimpoPayment,
+  snapshotSepaimpoFobIfMissing,
   getCustoms, upsertCustoms, listCosts, createCost, updateCost, deleteCost,
   listSupplierContacts, createSupplierContact, updateSupplierContact, deleteSupplierContact,
   listSupplierBankAccounts, createSupplierBankAccount, updateSupplierBankAccount, deleteSupplierBankAccount,
@@ -47,6 +49,7 @@ import { analyzeDocument } from '../services/ai.service'
 import type {
   ComexSupplier, ComexImport, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexPayment, ComexCostItem,
+  ComexSepaimpoPayment, CreateComexSepaimpoPaymentInput,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
@@ -645,6 +648,13 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:payments:create', (_e, input: CreateComexPaymentInput) => createPayment(input))
   ipcMain.handle('comex:payments:update', (_e, id: string, data: Partial<ComexPayment>) => updatePayment(id, data))
   ipcMain.handle('comex:payments:delete', (_e, id)                            => deletePayment(id))
+
+  // ── Registro de pagos SEPAIMPO BCRA ─────────────────────────────────────────
+  ipcMain.handle('comex:sepaimpo:list',   (_e, importId)                              => listSepaimpoPayments(importId))
+  ipcMain.handle('comex:sepaimpo:create', (_e, input: CreateComexSepaimpoPaymentInput) => createSepaimpoPayment(input))
+  ipcMain.handle('comex:sepaimpo:update', (_e, id: string, data: Partial<ComexSepaimpoPayment>) => updateSepaimpoPayment(id, data))
+  ipcMain.handle('comex:sepaimpo:delete', (_e, id: string)                             => deleteSepaimpoPayment(id))
+  ipcMain.handle('comex:sepaimpo:snapshotFob', (_e, importId: string, fobValue: number, fobCurrency: string) => snapshotSepaimpoFobIfMissing(importId, fobValue, fobCurrency))
 
   // ── Supplier Contacts ─────────────────────────────────────────────────────
   ipcMain.handle('comex:supplier-contacts:list',   (_e, supplierId: string) => listSupplierContacts(supplierId))

@@ -638,6 +638,8 @@ const comex_imports = new Table(
     payment_due_date: column.integer,
     invoice_date: column.integer,
     payment_deferred_days: column.integer,
+    sepaimpo_fob_value: column.real,
+    sepaimpo_fob_currency: column.text,
     payment_notes: column.text,
     workspace_id: column.text
   },
@@ -768,6 +770,20 @@ const comex_payments = new Table(
     created_at: column.integer,
     workspace_id: column.text,
     updated_at: column.integer
+  },
+  { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
+)
+
+const comex_sepaimpo_payments = new Table(
+  {
+    import_id: column.text,
+    importe: column.real,
+    fecha_pago: column.integer,
+    numero_operacion: column.text,
+    tipo_cambio: column.real,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
   },
   { indexes: { workspace: ['workspace_id'], import: ['import_id'] } }
 )
@@ -1665,6 +1681,7 @@ export const AppSchema = new Schema({
   comex_import_pl_files,
   comex_cotizaciones,
   comex_payments,
+  comex_sepaimpo_payments,
   comex_import_customs,
   comex_import_costs,
   comex_inal_certs,
