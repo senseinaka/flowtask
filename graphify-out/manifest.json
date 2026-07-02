@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782947072.6301446,
-    "ast_hash": "e19019d7bae90bb676bc21ef32d276d0",
+    "mtime": 1782992478.9681535,
+    "ast_hash": "0000ac7fc8460f815db5a7935065eeb3",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782946459.129905,
-    "ast_hash": "6c34ffb60e7d97d5daac96c59493a497",
+    "mtime": 1782992760.025258,
+    "ast_hash": "8ea6698a2dcb8991f1f157da254fffaa",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -725,9 +725,9 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexDespachantes.tsx": {
-    "mtime": 1781437252.1056304,
-    "ast_hash": "0a798edec9385c7c7210a17eab776991",
-    "semantic_hash": "0a798edec9385c7c7210a17eab776991"
+    "mtime": 1782991970.136989,
+    "ast_hash": "b061a1f4f5d88a5d145720b5e6100096",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexGestores.tsx": {
     "mtime": 1781437248.320106,
@@ -735,13 +735,13 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782952969.0666013,
-    "ast_hash": "4281cf6a5416c24695045f94490031fc",
+    "mtime": 1782992591.5480585,
+    "ast_hash": "3ef70aaa021e14a5334280169f87f9a6",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
-    "mtime": 1782932946.5742025,
-    "ast_hash": "b66f9cf2db1f1311e74c22916244a0e4",
+    "mtime": 1782992643.1851165,
+    "ast_hash": "b98722f2835aec2e0ce9fecd051c9b97",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexLogistics.tsx": {
@@ -785,14 +785,14 @@
     "semantic_hash": "1034cd07dbba20e17e2e32d56928c361"
   },
   "src/renderer/src/routes/comex/ComexSupplierDetail.tsx": {
-    "mtime": 1782954934.1445563,
-    "ast_hash": "6bfd37419480f81f2ebabbf0243ab1cf",
+    "mtime": 1782992556.4336698,
+    "ast_hash": "61663660b616242696fc70709fca0aec",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexSuppliers.tsx": {
-    "mtime": 1781965580.1237803,
-    "ast_hash": "14e600e53b89e8851dde528c09fbc082",
-    "semantic_hash": "14e600e53b89e8851dde528c09fbc082"
+    "mtime": 1782992806.4710493,
+    "ast_hash": "c55fd2cf1bb5d7f81733cd4c0b6792dd",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CostsSection.tsx": {
     "mtime": 1779888768.2213912,
@@ -880,8 +880,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782935630.8501723,
-    "ast_hash": "e70ac51cceecb09ad2a9e01fa2c8c0ae",
+    "mtime": 1782992459.150386,
+    "ast_hash": "4b0c2b2c71ba24cd0187b7604cb75e3d",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -1190,8 +1190,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/contable/MPDashboard.tsx": {
-    "mtime": 1782304599.4649322,
-    "ast_hash": "5540b054fcecbf0c2dbfebf4a5852341",
+    "mtime": 1782991600.4720898,
+    "ast_hash": "a254ada5230850757013610455a2c43e",
     "semantic_hash": ""
   },
   "src/main/database/queries/accounting-services.ts": {
@@ -1667,6 +1667,11 @@
   "supabase_comex_cargo_forwarder_status.sql": {
     "mtime": 1782947062.622647,
     "ast_hash": "70fe00914dadb247f559193ba58cae9f",
+    "semantic_hash": ""
+  },
+  "supabase_comex_suppliers_despachante_id.sql": {
+    "mtime": 1782992670.434398,
+    "ast_hash": "33c8d02e39e25c3ea81a1f7f03350353",
     "semantic_hash": ""
   }
 }

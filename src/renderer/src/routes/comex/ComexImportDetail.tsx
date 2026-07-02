@@ -7050,7 +7050,9 @@ export default function ComexImportDetail() {
                 const ports = supplier.port_of_origin
                   ? supplier.port_of_origin.split('|').map((p) => p.trim()).filter(Boolean)
                   : []
-                updates.origin_port = ports.length === 1 ? ports[0] : ''
+                updates.origin_port = supplier.default_port_of_origin && ports.includes(supplier.default_port_of_origin)
+                  ? supplier.default_port_of_origin
+                  : (ports.length === 1 ? ports[0] : '')
               }
               upd(updates)
             }}

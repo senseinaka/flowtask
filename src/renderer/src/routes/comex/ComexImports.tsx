@@ -737,7 +737,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
 
   const [form, setForm] = useState<Partial<CreateComexImportInput>>({
     status: 'planning', currency: 'USD', incoterm: 'FOB',
-    origin_country: '', title: '', notes: '', tracking_number: '', customs_agent: '', despachante: ''
+    origin_country: '', title: '', notes: '', tracking_number: '', customs_agent: '', despachante: '', origin_port: ''
   })
   const [autoFilled, setAutoFilled]             = useState<Set<string>>(new Set())
   const [supplierCurrencies, setSupplierCurrencies] = useState<string[]>([])
@@ -761,6 +761,13 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       const despachante = despachantes.find(d => d.id === supplier.despachante_id)
       if (despachante) { setField('despachante', despachante.name); filled.add('despachante') }
     }
+    const ports = supplier.port_of_origin
+      ? supplier.port_of_origin.split('|').map(p => p.trim()).filter(Boolean)
+      : []
+    const defaultPort = supplier.default_port_of_origin && ports.includes(supplier.default_port_of_origin)
+      ? supplier.default_port_of_origin
+      : (ports.length === 1 ? ports[0] : '')
+    if (defaultPort) { setField('origin_port', defaultPort); filled.add('origin_port') }
     const prevCurrencies = [...new Set(allImports.filter(i => i.supplier_id === supplierId).sort((a,b) => b.created_at - a.created_at).map(i => i.currency).filter(Boolean))] as string[]
     const defaultCurrency = prevCurrencies.length >= 1 ? prevCurrencies[0] : inferCurrencyFromCountry(supplier.country ?? '')
     setField('currency', defaultCurrency); filled.add('currency')
@@ -794,7 +801,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       ship_date: null, arrival_date: null,
       actual_ship_date: null, actual_arrival_date: null,
       tracking_number: form.tracking_number ?? '', customs_agent: form.customs_agent ?? '',
-      despachante: form.despachante ?? '',
+      despachante: form.despachante ?? '', origin_port: form.origin_port ?? '',
       drive_folder_id: null, notes: form.notes ?? ''
     }
     // Partes/splits: una importación por parte ("Marca #N-1", "-2", …).

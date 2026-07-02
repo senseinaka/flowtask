@@ -1147,6 +1147,7 @@ export interface ComexSupplier {
   payment_terms: string
   incoterms_preferred: string
   port_of_origin: string  // Puertos de embarque (pipe-separated, ej. "Ningbo|Shanghai")
+  default_port_of_origin: string | null  // uno de los valores de port_of_origin — default para nuevas importaciones
   despachante_id: string | null  // FK a comex_despachantes — default para nuevas importaciones de esta marca
   lead_time_days: number | null
   // Desglose de lead time (Programación Pedidos)

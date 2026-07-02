@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Building2, MapPin, CreditCard, Users,
   Plus, Trash2, X, Check, Mail, Phone, MessageCircle,
-  Package, Anchor, Clock, Edit2, BarChart3
+  Package, Anchor, Clock, Edit2, BarChart3, Star
 } from 'lucide-react'
 import {
   useComexSupplier, useUpdateComexSupplier,
@@ -164,9 +164,13 @@ function parseChips(v: string): string[] {
 }
 
 function EChips({
-  label, value, placeholder = 'Agregar...', onSave
+  label, value, placeholder = 'Agregar...', onSave,
+  defaultValue, onSetDefault
 }: {
   label?: string; value: string; placeholder?: string; onSave: (v: string) => void
+  /** Valor marcado como default (uno de los chips). Solo se muestra la estrella si se pasa onSetDefault. */
+  defaultValue?: string
+  onSetDefault?: (v: string) => void
 }) {
   // Estado local optimista: agregar/quitar dos chips seguido, sin esperar el
   // round-trip async (IPC + mutation + invalidate + refetch) de cada uno, no debe
@@ -196,27 +200,47 @@ function EChips({
 
   const removeChip = (chip: string) => {
     commit(chips.filter((c) => c !== chip))
+    // Si se borra el chip marcado como default, no dejar el default apuntando a un puerto que ya no existe.
+    if (onSetDefault && defaultValue === chip) onSetDefault('')
+  }
+
+  const toggleDefault = (chip: string) => {
+    onSetDefault?.(defaultValue === chip ? '' : chip)
   }
 
   return (
     <div className="space-y-1.5">
       {label && <span className="block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>}
       <div className="flex flex-wrap gap-1.5">
-        {chips.map((chip) => (
-          <span
-            key={chip}
-            className="inline-flex items-center gap-1 text-xs bg-slate-700 text-cyan-300 border border-slate-600 rounded-full px-2.5 py-0.5"
-          >
-            {chip}
-            <button
-              onClick={() => removeChip(chip)}
-              className="text-slate-400 hover:text-red-400 transition-colors leading-none"
-              aria-label={`Eliminar ${chip}`}
+        {chips.map((chip) => {
+          const isDefault = onSetDefault && defaultValue === chip
+          return (
+            <span
+              key={chip}
+              className={`inline-flex items-center gap-1 text-xs border rounded-full px-2.5 py-0.5 ${
+                isDefault ? 'bg-amber-500/10 text-amber-300 border-amber-500/50' : 'bg-slate-700 text-cyan-300 border-slate-600'
+              }`}
             >
-              <X size={10} />
-            </button>
-          </span>
-        ))}
+              {onSetDefault && (
+                <button
+                  onClick={() => toggleDefault(chip)}
+                  className={`transition-colors leading-none ${isDefault ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
+                  title={isDefault ? 'Puerto default — click para quitar' : 'Marcar como puerto default'}
+                >
+                  <Star size={10} className={isDefault ? 'fill-amber-400' : ''} />
+                </button>
+              )}
+              {chip}
+              <button
+                onClick={() => removeChip(chip)}
+                className="text-slate-400 hover:text-red-400 transition-colors leading-none"
+                aria-label={`Eliminar ${chip}`}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )
+        })}
       </div>
       <div className="flex gap-1.5">
         <input
@@ -740,7 +764,12 @@ export default function ComexSupplierDetail() {
             value={supplier.port_of_origin}
             placeholder="Shenzhen (CNSZX)"
             onSave={(v) => save({ port_of_origin: v })}
+            defaultValue={supplier.default_port_of_origin ?? ''}
+            onSetDefault={(v) => save({ default_port_of_origin: v || null })}
           />
+          <p className="text-[10px] text-slate-600 mt-1">
+            <Star size={9} className="inline -mt-0.5 mr-0.5" /> marca el puerto default para nuevas importaciones de esta marca.
+          </p>
         </div>
         <div className="mt-4">
           <EText label="Categorías de producto" value={supplier.product_categories} onSave={(v) => save({ product_categories: v })} placeholder="Electrónica, herramientas, ..." />

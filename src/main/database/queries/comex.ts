@@ -86,7 +86,7 @@ export async function updateSupplier(id: string, data: Partial<ComexSupplier>): 
     'name','address','city','country','zip_code','tax_id','rex_number',
     'contact_name','contact_email','contact_phone',
     'brand','website','wechat','product_categories','payment_terms',
-    'incoterms_preferred','port_of_origin','despachante_id','lead_time_days',
+    'incoterms_preferred','port_of_origin','default_port_of_origin','despachante_id','lead_time_days',
     'production_days','preparation_days','transit_days','customs_days','local_delivery_days',
     'moq','non_operational_periods_json','reliability_notes',
     'pickup_address','notes','logo_stored_name','logo_data'
@@ -156,7 +156,7 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
       logo_data: (row._supplier_logo_data as string) ?? null,
       category: '', demand_annual: null, demand_monthly_json: '{}',
       current_stock: null, safety_stock: null, purchase_frequency_days: null,
-      despachante_id: null
+      despachante_id: null, default_port_of_origin: null
     }
   }
   // Campos del JOIN con customs

@@ -31,7 +31,7 @@ function QuickCreateModal({ onClose }: { onClose: () => void }) {
         country: '', city: '', zip_code: '', address: '',
         tax_id: '', rex_number: '', brand: '', website: '',
         wechat: '', product_categories: '', payment_terms: '',
-        incoterms_preferred: '', port_of_origin: '', despachante_id: null, lead_time_days: null,
+        incoterms_preferred: '', port_of_origin: '', default_port_of_origin: null, despachante_id: null, lead_time_days: null,
         pickup_address: '', contact_name: '', contact_email: '',
         contact_phone: '', notes: '', reliability_notes: '',
         non_operational_periods_json: '[]', production_days: null,
