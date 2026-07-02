@@ -798,7 +798,6 @@ export default function ComexSupplierDetail() {
           <EText label="Marca"             value={supplier.brand}              onSave={(v) => save({ brand: v })}              placeholder="Ej: Naturehike" />
           <EText label="Sitio web"         value={supplier.website}            onSave={(v) => save({ website: v })}            placeholder="https://..." />
           <EText label="WeChat"            value={supplier.wechat}             onSave={(v) => save({ wechat: v })}             placeholder="wechat_id" />
-          <EText label="Detalle cond. de pago" value={supplier.payment_terms}   onSave={(v) => save({ payment_terms: v })}      placeholder="30% adelanto, 70% BL" />
           <ESelect
             label="Incoterm pautado"
             value={supplier.incoterms_preferred}

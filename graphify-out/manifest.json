@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782993432.532904,
-    "ast_hash": "68db1c57d84066c4779b777068245e2c",
+    "mtime": 1782994402.2137833,
+    "ast_hash": "4fc817eceb11056e8c303f42c7a31ec5",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782993453.4184215,
-    "ast_hash": "deae67487f51e690f5c7d44d67e8a8cf",
+    "mtime": 1782994432.7706296,
+    "ast_hash": "cfb82ec611edf45e7152817752d5891f",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -785,13 +785,13 @@
     "semantic_hash": "1034cd07dbba20e17e2e32d56928c361"
   },
   "src/renderer/src/routes/comex/ComexSupplierDetail.tsx": {
-    "mtime": 1782993541.2993875,
-    "ast_hash": "9e6a897b23ab138918cbdbd3db715361",
+    "mtime": 1782994489.84803,
+    "ast_hash": "cb29983b5161e7cd664d507febd08227",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexSuppliers.tsx": {
-    "mtime": 1782993467.3032959,
-    "ast_hash": "6cd8989703c68fa9365e19f370bed697",
+    "mtime": 1782994442.7689466,
+    "ast_hash": "fc880012dafdc4866707f02b3e764e43",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/CostsSection.tsx": {
@@ -880,8 +880,8 @@
     "semantic_hash": ""
   },
   "src/shared/types.ts": {
-    "mtime": 1782993423.6729271,
-    "ast_hash": "30c06d2191d4c136b7e9694a1c47ee10",
+    "mtime": 1782994387.5953677,
+    "ast_hash": "376a391001c077198bb722c43e7b95ab",
     "semantic_hash": ""
   },
   "supabase_calendar_event_links.sql": {
@@ -1677,6 +1677,11 @@
   "supabase_comex_suppliers_default_port.sql": {
     "mtime": 1782993475.6304233,
     "ast_hash": "2530d91d3adaa9bc4cc94b961dcc2c54",
+    "semantic_hash": ""
+  },
+  "supabase_comex_suppliers_payment_condition.sql": {
+    "mtime": 1782994449.9598422,
+    "ast_hash": "01c812c6d43c1693ca0e962e92da0261",
     "semantic_hash": ""
   }
 }

@@ -761,6 +761,10 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       const despachante = despachantes.find(d => d.id === supplier.despachante_id)
       if (despachante) { setField('despachante', despachante.name); filled.add('despachante') }
     }
+    if (supplier.payment_condition) {
+      const terms = supplier.payment_condition === 'diferido' ? 'a_plazo' : 'anticipado'
+      setField('payment_terms', terms); filled.add('payment_terms')
+    }
     const ports = supplier.port_of_origin
       ? supplier.port_of_origin.split('|').map(p => p.trim()).filter(Boolean)
       : []
@@ -802,6 +806,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       actual_ship_date: null, actual_arrival_date: null,
       tracking_number: form.tracking_number ?? '', customs_agent: form.customs_agent ?? '',
       despachante: form.despachante ?? '', origin_port: form.origin_port ?? '',
+      payment_terms: form.payment_terms ?? null,
       drive_folder_id: null, notes: form.notes ?? ''
     }
     // Partes/splits: una importación por parte ("Marca #N-1", "-2", …).

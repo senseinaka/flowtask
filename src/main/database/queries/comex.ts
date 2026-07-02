@@ -235,8 +235,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
        arrival_date, eta_2, eta_3, eta_4,
        actual_ship_date, actual_arrival_date, tracking_number,
        customs_agent, drive_folder_id, notes, cargo_status, forwarder_status, despachante,
+       payment_terms,
        created_at, updated_at, workspace_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, input.title, input.supplier_id ?? null,
     input.status ?? 'planning', input.incoterm ?? 'FOB',
@@ -257,6 +258,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
     // Despachante asignado por default desde la marca (ComexSupplier.despachante_id),
     // resuelto a nombre en el modal de alta — ver CreateImportModal.handleSupplierChange.
     input.despachante ?? '',
+    // Condición de pago default desde la marca (ComexSupplier.payment_condition),
+    // mapeado 'diferido' → 'a_plazo' — ver CreateImportModal.handleSupplierChange.
+    input.payment_terms ?? null,
     now, now, WORKSPACE_ID
   ])
   return (await getImport(id))!

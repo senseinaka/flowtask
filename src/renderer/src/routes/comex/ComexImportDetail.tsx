@@ -7047,6 +7047,9 @@ export default function ComexImportDetail() {
               if (supplier) {
                 if (supplier.incoterms_preferred) updates.incoterm = supplier.incoterms_preferred
                 if (supplier.country) updates.origin_country = supplier.country
+                if (supplier.payment_condition) {
+                  updates.payment_terms = supplier.payment_condition === 'diferido' ? 'a_plazo' : 'anticipado'
+                }
                 const ports = supplier.port_of_origin
                   ? supplier.port_of_origin.split('|').map((p) => p.trim()).filter(Boolean)
                   : []
