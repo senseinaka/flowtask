@@ -1144,7 +1144,9 @@ export interface ComexSupplier {
   website: string
   wechat: string
   product_categories: string
-  payment_terms: string
+  payment_terms: string  // detalle libre (ej. "30% adelanto, 70% BL") — complementa payment_condition
+  payment_condition: 'anticipado' | 'diferido' | null  // condición de pago excluyente de la marca
+  payment_deferred_days: number | null  // solo si payment_condition = 'diferido' — días desde fecha de factura
   incoterms_preferred: string
   port_of_origin: string  // Puertos de embarque (pipe-separated, ej. "Ningbo|Shanghai")
   default_port_of_origin: string | null  // uno de los valores de port_of_origin — default para nuevas importaciones

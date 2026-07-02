@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Building2, MapPin, CreditCard, Users,
@@ -258,6 +258,67 @@ function EChips({
         >
           <Plus size={12} />
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Condición de pago (excluyente, mismo patrón que Datos Generales en Importaciones) ──
+
+function PaymentConditionField({
+  condition, deferredDays, onSave
+}: {
+  condition: 'anticipado' | 'diferido' | null
+  deferredDays: number | null
+  onSave: (data: { payment_condition: 'anticipado' | 'diferido' | null; payment_deferred_days?: number | null }) => void
+}) {
+  const [daysDraft, setDaysDraft] = useState(deferredDays !== null ? String(deferredDays) : '')
+  useEffect(() => { setDaysDraft(deferredDays !== null ? String(deferredDays) : '') }, [deferredDays])
+
+  const toggle = (t: 'anticipado' | 'diferido') => {
+    onSave({ payment_condition: condition === t ? null : t })
+  }
+
+  const commitDays = () => {
+    const n = parseInt(daysDraft, 10)
+    onSave({ payment_condition: 'diferido', payment_deferred_days: isNaN(n) ? null : n })
+  }
+
+  return (
+    <div>
+      <span className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Condición de pago</span>
+      <div className="flex items-center gap-2 flex-wrap">
+        {(['anticipado', 'diferido'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => toggle(t)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-all ${
+              condition === t
+                ? t === 'anticipado'
+                  ? 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50'
+                  : 'bg-violet-900/40 text-violet-400 border-violet-700/50'
+                : 'bg-transparent text-slate-500 border-slate-700 hover:border-slate-500'
+            }`}
+          >
+            {t === 'anticipado' ? 'Pago anticipado' : 'Pago diferido'}
+          </button>
+        ))}
+        {condition === 'diferido' && (
+          <div className="flex items-center gap-1.5 ml-1 pl-2 border-l border-slate-700">
+            <span className="text-[10px] text-slate-500">Días desde factura</span>
+            <input
+              type="number"
+              min={0}
+              value={daysDraft}
+              onChange={(e) => setDaysDraft(e.target.value)}
+              onBlur={commitDays}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              className="w-14 bg-slate-900 border border-slate-600 rounded px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:border-cyan-500"
+            />
+            <span className="text-[10px] text-slate-500">días</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -737,7 +798,7 @@ export default function ComexSupplierDetail() {
           <EText label="Marca"             value={supplier.brand}              onSave={(v) => save({ brand: v })}              placeholder="Ej: Naturehike" />
           <EText label="Sitio web"         value={supplier.website}            onSave={(v) => save({ website: v })}            placeholder="https://..." />
           <EText label="WeChat"            value={supplier.wechat}             onSave={(v) => save({ wechat: v })}             placeholder="wechat_id" />
-          <EText label="Cond. de pago"     value={supplier.payment_terms}      onSave={(v) => save({ payment_terms: v })}      placeholder="30% adelanto, 70% BL" />
+          <EText label="Detalle cond. de pago" value={supplier.payment_terms}   onSave={(v) => save({ payment_terms: v })}      placeholder="30% adelanto, 70% BL" />
           <ESelect
             label="Incoterm pautado"
             value={supplier.incoterms_preferred}
@@ -758,6 +819,13 @@ export default function ComexSupplierDetail() {
             onSave={(v) => save({ despachante_id: v || null })}
           />
         </FieldGrid>
+        <div className="mt-4">
+          <PaymentConditionField
+            condition={supplier.payment_condition}
+            deferredDays={supplier.payment_deferred_days}
+            onSave={(data) => save(data)}
+          />
+        </div>
         <div className="mt-4">
           <EChips
             label="Puertos de embarque"

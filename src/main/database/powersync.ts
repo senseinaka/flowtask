@@ -323,6 +323,8 @@ const comex_suppliers = new Table(
     contact_phone: column.text,
     website: column.text,
     payment_terms: column.text,
+    payment_condition: column.text,
+    payment_deferred_days: column.integer,
     notes: column.text,
     address: column.text,
     city: column.text,

@@ -1,7 +1,7 @@
 # Graph Report - flowtask  (2026-07-02)
 
 ## Corpus Check
-- 329 files · ~501,245 words
+- 330 files · ~501,620 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b19a6d3c`
+- Built from commit: `bb567dfb`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -769,11 +769,11 @@ Nodes (7): createBrand(), getBrand(), getSupplier(), hydrateBrand(), hydratePlan
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `cn()` connect `Community 76` to `Finanzas empresa dashboard (UI)`, `Componentes UI compartidos`, `Comex detalle importación (UI)`, `Finanzas personales dashboard (UI)`, `Cajas gráficos (UI)`, `Cajas internas dashboard (UI)`, `Cajas operadores y diferencias (UI)`, `Vencimientos (UI)`, `Comex operadores de flete`, `Proyectos backend`, `Tareas y Kanban (UI)`, `Comex listado importaciones (UI)`, `Calendario backend`, `Finanzas helpers UI`, `Settings y costos extra`, `Community 158`, `Tareas delegadas (UI)`, `RRHH detalle período (UI)`, `Mensajes programados (UI)`, `Comex cotizaciones USD/EUR (UI)`, `Conciliador resultados (UI)`, `Comex proveedores y marcas (UI)`, `Calendario (UI)`, `Cajas movimientos y adjuntos (UI)`, `Comex costos (UI)`, `Cortex/Graphify dashboard (UI)`, `Adjuntos y backup backend`, `Preguntas de tareas (UI)`, `Contactos, agenda y equipo (UI)`, `Comex planificaciones (UI)`, `MercadoPago backend`, `Comex tracking y logística (UI)`, `Componentes UI base`, `RRHH sueldos dashboard (UI)`, `Comex alarmas cotización (UI)`, `Knowledge panel IA (UI)`, `Community 114`, `Conciliador conciliación (UI)`, `Conciliador dashboard (UI)`, `Community 122`, `Community 124`, `Comex hidratación marcas/proveedores`?**
-  _High betweenness centrality (0.156) - this node is a cross-community bridge._
+  _High betweenness centrality (0.161) - this node is a cross-community bridge._
 - **Why does `getPowerSyncDb()` connect `Comex backend (queries/IPC)` to `Community 131`, `Finanzas empresa backend`, `PowerSync schema y JWT`, `Finanzas personales backend`, `Knowledge fuentes (UI)`, `Community 141`, `Bootstrap main y servicios`, `Community 143`, `Chat tareas backend`, `Knowledge backend`, `Community 160`, `MercadoPago service`, `Presupuestos backend`, `RRHH backend y nómina`, `PowerSync migraciones legacy`, `Admin de permisos (UI)`, `Cajas internas backend`, `Planificación de pedidos service`, `Comex detalle marca (UI)`, `Settings y config-store`, `Permisos backend`, `Servicios contables backend`?**
-  _High betweenness centrality (0.134) - this node is a cross-community bridge._
-- **Why does `adminSaveUserProfile()` connect `Permisos backend` to `Conciliador backend`, `Comex proveedores y marcas (UI)`?**
-  _High betweenness centrality (0.121) - this node is a cross-community bridge._
+  _High betweenness centrality (0.133) - this node is a cross-community bridge._
+- **Why does `Módulo de Calendario — arquitectura específica` connect `Community 147` to `Doc Summit principal (CLAUDE.md)`?**
+  _High betweenness centrality (0.119) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `projects`, `tasks`, `task_dependencies` to the rest of the system?**
