@@ -621,6 +621,8 @@ const comex_imports = new Table(
     docs_to_compras_date: column.integer,
     payment_terms: column.text,
     payment_due_date: column.integer,
+    invoice_date: column.integer,
+    payment_deferred_days: column.integer,
     payment_notes: column.text,
     workspace_id: column.text
   },

@@ -839,17 +839,27 @@ function ImportTimeline({ currentStatus, onChangeStatus, onUpdateCargoStatus, on
             const dateLabel = ts ? dayjs(ts).format('DD/MM/YY') : null
             const labelLines = IMPORT_STATUS_LABELS[step].split(' ')
 
+            // Posición dinámica: en pago diferido, este nodo no tiene lugar fijo —
+            // se calculó según vencimiento (payment_due_date). Se marca con borde
+            // punteado + relojito para no confundirlo con un nodo de posición fija.
+            const isDynamicPaid = step === 'paid' && imp.payment_terms === 'a_plazo'
+            const dynamicTooltip = !isDynamicPaid ? '' :
+              imp.payment_due_date
+                ? ` — posición calculada: vence ${dayjs(imp.payment_due_date).format('DD/MM/YY')}${imp.payment_deferred_days != null ? ` (${imp.payment_deferred_days} días desde factura)` : ''}`
+                : ' — posición pendiente: falta fecha de factura o días para calcular el vencimiento, por ahora va al final'
+
             return (
               <button
                 key={step}
                 onClick={() => onChangeStatus(step)}
-                title={IMPORT_STATUS_LABELS[step]}
+                title={IMPORT_STATUS_LABELS[step] + dynamicTooltip}
                 className="relative z-10 flex flex-col items-center flex-1 gap-1 group"
               >
                 {/* Círculo */}
                 <div
                   className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
+                    'relative w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 flex-shrink-0',
+                    isDynamicPaid && 'border-dashed',
                     active  ? 'shadow-md scale-110' :
                     done    ? 'opacity-90' :
                     'border-slate-600 bg-slate-800 group-hover:border-slate-500'
@@ -865,6 +875,14 @@ function ImportTimeline({ currentStatus, onChangeStatus, onUpdateCargoStatus, on
                   ) : (
                     <span className="text-[9px] font-bold" style={active ? { color } : { color: '#475569' }}>
                       {idx + 1}
+                    </span>
+                  )}
+                  {isDynamicPaid && (
+                    <span
+                      className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-slate-800 border flex items-center justify-center"
+                      style={{ borderColor: done || active ? color : '#475569' }}
+                    >
+                      <Clock size={7} style={{ color: done || active ? color : '#475569' }} />
                     </span>
                   )}
                 </div>
@@ -6367,6 +6385,29 @@ function QuotesSection({
 
 // ── Payment section ──────────────────────────────────────────────────────────
 
+function InlineDaysInput({ value, onSave }: { value: number | null; onSave: (v: number | null) => void }) {
+  const [draft, setDraft] = useState(value != null ? String(value) : '')
+  useEffect(() => { setDraft(value != null ? String(value) : '') }, [value])
+
+  const commit = () => {
+    const n = parseInt(draft, 10)
+    // El atributo HTML min={0} no bloquea tipear/pegar un negativo — se valida acá.
+    onSave(isNaN(n) || n < 0 ? null : n)
+  }
+
+  return (
+    <input
+      type="number"
+      min={0}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+      className="w-14 bg-slate-900 border border-slate-600 rounded px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:border-cyan-500"
+    />
+  )
+}
+
 function PaymentSection({ imp, onUpdate }: {
   imp: ComexImport
   onUpdate: (data: Partial<ComexImport>) => void
@@ -6433,7 +6474,7 @@ function PaymentSection({ imp, onUpdate }: {
   return (
     <div className="space-y-5 p-4">
 
-      {/* Condición de pago */}
+      {/* Condición de pago — réplica visual del toggle en Proveedores/Marcas */}
       <div>
         <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Condición de pago</p>
         <div className="flex items-center gap-2 flex-wrap">
@@ -6450,17 +6491,45 @@ function PaymentSection({ imp, onUpdate }: {
                   : 'bg-transparent text-slate-500 border-slate-700 hover:border-slate-500'
               )}
             >
-              {t === 'anticipado' ? 'Anticipado' : 'A plazo'}
+              {t === 'anticipado' ? 'Pago anticipado' : 'Pago diferido'}
             </button>
           ))}
 
           {imp.payment_terms === 'a_plazo' && (
-            <div className="flex items-center gap-2 ml-2 pl-2 border-l border-slate-700">
-              <span className="text-[10px] text-slate-500">Vencimiento:</span>
-              <EditableDate label="" value={imp.payment_due_date} onSave={(v) => onUpdate({ payment_due_date: v })} />
-            </div>
+            <>
+              {/* payment_due_date NO se calcula acá — lo deriva updateImport() del lado del
+                  servidor a partir de la fila ya commiteada, para no depender del prop `imp`
+                  (cache de React Query) que puede estar stale si se edita este campo y el de
+                  al lado en rápida sucesión. Ver comex.ts:updateImport. */}
+              <div className="flex items-center gap-1.5 ml-1 pl-2 border-l border-slate-700">
+                <span className="text-[10px] text-slate-500">Días desde factura</span>
+                <InlineDaysInput
+                  value={imp.payment_deferred_days}
+                  onSave={(days) => onUpdate({ payment_deferred_days: days })}
+                />
+              </div>
+              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-700">
+                <span className="text-[10px] text-slate-500">Fecha de factura</span>
+                <EditableDate
+                  label=""
+                  value={imp.invoice_date}
+                  onSave={(v) => onUpdate({ invoice_date: v })}
+                />
+              </div>
+              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-700">
+                <span className="text-[10px] text-slate-500">Vencimiento</span>
+                <EditableDate label="" value={imp.payment_due_date} onSave={(v) => onUpdate({ payment_due_date: v })} />
+              </div>
+            </>
           )}
         </div>
+        {imp.payment_terms === 'a_plazo' && (
+          <p className="text-[9px] text-slate-600 mt-1.5">
+            {imp.invoice_date && imp.payment_deferred_days != null
+              ? `→ vencimiento calculado: ${imp.payment_deferred_days} días desde la factura. Podés sobreescribirlo a mano si hace falta.`
+              : '→ falta la fecha de factura (o los días) para calcular el vencimiento — mientras tanto, el nodo "Pago realizado" del timeline queda al final.'}
+          </p>
+        )}
       </div>
 
       {/* Fecha de pago efectivo */}
@@ -7049,6 +7118,7 @@ export default function ComexImportDetail() {
                 if (supplier.country) updates.origin_country = supplier.country
                 if (supplier.payment_condition) {
                   updates.payment_terms = supplier.payment_condition === 'diferido' ? 'a_plazo' : 'anticipado'
+                  if (supplier.payment_deferred_days != null) updates.payment_deferred_days = supplier.payment_deferred_days
                 }
                 const ports = supplier.port_of_origin
                   ? supplier.port_of_origin.split('|').map((p) => p.trim()).filter(Boolean)
@@ -7467,9 +7537,9 @@ export default function ComexImportDetail() {
         const payoSummary = isPaid
           ? sm.ok(`Pagado · ${dayjs(imp.payment_date!).format('DD/MM/YY')}`)
           : isDue
-            ? sm.warn(`A plazo · vence ${dayjs(imp.payment_due_date!).format('DD/MM/YY')}`)
+            ? sm.warn(`Pago diferido · vence ${dayjs(imp.payment_due_date!).format('DD/MM/YY')}`)
             : imp.payment_terms === 'anticipado'
-              ? sm.info('Anticipado · sin fecha de pago')
+              ? sm.info('Pago anticipado · sin fecha de pago')
               : sm.none('Sin condición configurada')
         return (
           <CollapsibleSection label="Pago" icon={DollarSign} accentColor="border-l-emerald-600"

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { getPowerSyncDb } from '../powersync'
 import { getDb } from '../db'
-import { deriveLegacyCargoStatus, deriveLegacyForwarderStatus, normalizeLegacyStatus } from '@shared/types'
+import { deriveLegacyCargoStatus, deriveLegacyForwarderStatus, normalizeLegacyStatus, computeDueDate } from '@shared/types'
 import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
@@ -235,9 +235,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
        arrival_date, eta_2, eta_3, eta_4,
        actual_ship_date, actual_arrival_date, tracking_number,
        customs_agent, drive_folder_id, notes, cargo_status, forwarder_status, despachante,
-       payment_terms,
+       payment_terms, payment_deferred_days,
        created_at, updated_at, workspace_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, input.title, input.supplier_id ?? null,
     input.status ?? 'planning', input.incoterm ?? 'FOB',
@@ -261,6 +261,8 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
     // Condición de pago default desde la marca (ComexSupplier.payment_condition),
     // mapeado 'diferido' → 'a_plazo' — ver CreateImportModal.handleSupplierChange.
     input.payment_terms ?? null,
+    // Días desde factura, snapshot desde ComexSupplier.payment_deferred_days.
+    input.payment_deferred_days ?? null,
     now, now, WORKSPACE_ID
   ])
   return (await getImport(id))!
@@ -292,8 +294,27 @@ export async function updateImport(id: string, data: Partial<ComexImport>): Prom
     'inal_factura_stored_name','inal_factura_original_name','inal_factura_drive_file_id','inal_factura_drive_status',
     'inal_bl_stored_name','inal_bl_original_name','inal_bl_drive_file_id','inal_bl_drive_status',
     'docs_to_despachante','docs_to_despachante_date','docs_to_compras','docs_to_compras_date',
-    'payment_terms','payment_due_date','payment_notes'
+    'payment_terms','payment_due_date','invoice_date','payment_deferred_days','payment_notes'
   ]
+
+  // payment_due_date se deriva ACÁ, del lado del servidor, en vez de en cada
+  // onSave del cliente: si se calculara en el renderer leyendo el campo hermano
+  // desde el prop `imp` (cache de React Query), dos ediciones rápidas de "Días
+  // desde factura"/"Fecha de factura" podían leer un valor stale del otro campo
+  // mientras la mutación anterior todavía no volvía (carrera confirmada por
+  // revisión adversarial, jul 2026). Acá siempre partimos de la fila YA
+  // commiteada en la base, nunca de un cache potencialmente desactualizado. Si
+  // el caller manda payment_due_date explícito en el mismo llamado (override
+  // manual desde "Vencimiento"), se respeta tal cual y no se recalcula.
+  if (('invoice_date' in data || 'payment_deferred_days' in data) && !('payment_due_date' in data)) {
+    const current = await db.getOptional<{ invoice_date: number | null; payment_deferred_days: number | null }>(
+      'SELECT invoice_date, payment_deferred_days FROM comex_imports WHERE id = ?', [id]
+    )
+    const invoiceDate = 'invoice_date' in data ? (data.invoice_date as number | null) : (current?.invoice_date ?? null)
+    const days = 'payment_deferred_days' in data ? (data.payment_deferred_days as number | null) : (current?.payment_deferred_days ?? null)
+    data = { ...data, payment_due_date: computeDueDate(invoiceDate, days) }
+  }
+
   const sets = ['updated_at = ?']
   const vals: unknown[] = [Date.now()]
   for (const key of allowed) {

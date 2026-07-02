@@ -553,6 +553,17 @@ export function isReadyToShip(imp: {
   return cargoReady && forwarderReady && paymentReady
 }
 
+/** Vencimiento de pago diferido = fecha de factura + días desde factura.
+ *  Compartida entre main (updateImport, deriva payment_due_date server-side
+ *  para evitar la carrera de leer un campo hermano stale desde el cliente) y
+ *  renderer (mostrar el cálculo antes de guardar). Días negativos o no
+ *  finitos se tratan como ausentes — nunca produce un vencimiento anterior a
+ *  la factura por un typo de signo. */
+export function computeDueDate(invoiceDate: number | null, deferredDays: number | null): number | null {
+  if (!invoiceDate || deferredDays == null || !Number.isFinite(deferredDays) || deferredDays < 0) return null
+  return invoiceDate + deferredDays * 24 * 60 * 60 * 1000
+}
+
 export type DocumentType =
   | 'invoice' | 'packing_list' | 'bill_of_lading' | 'certificate_of_origin'
   | 'customs_declaration' | 'payment_receipt' | 'insurance' | 'other'
@@ -1321,7 +1332,9 @@ export interface ComexImport {
   docs_to_compras_date:     number | null    // Timestamp del envío
   // ── Pago ─────────────────────────────────────────────────────────────────────
   payment_terms:     'anticipado' | 'a_plazo' | null
-  payment_due_date:  number | null
+  payment_due_date:  number | null  // vencimiento — auto-calculado desde invoice_date + payment_deferred_days, sobreescribible a mano
+  invoice_date:            number | null  // fecha de factura comercial
+  payment_deferred_days:   number | null  // días desde factura — snapshot desde ComexSupplier.payment_deferred_days al elegir la marca, editable
   payment_notes:     string
   // ── Campos del JOIN (solo en queries de lista) ─────────────────────────────
   _despacho_number?:        string | null

@@ -60,8 +60,8 @@
     "semantic_hash": "9193da3e6a92f4372b3593587c765a02"
   },
   "src/main/database/queries/comex.ts": {
-    "mtime": 1782994432.7706296,
-    "ast_hash": "cfb82ec611edf45e7152817752d5891f",
+    "mtime": 1782995022.5579967,
+    "ast_hash": "7322f128c046e09b3b0c073c46ad569b",
     "semantic_hash": ""
   },
   "src/main/database/queries/company-finance.ts": {
@@ -735,13 +735,13 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782993580.6393292,
-    "ast_hash": "800e3f3576d9bf20558953f8470cf314",
+    "mtime": 1782994977.630366,
+    "ast_hash": "de164683f4281fbe36e21aa355ffa169",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
-    "mtime": 1782993568.9100075,
-    "ast_hash": "bb91c688380f9a835afcc27f1c6cfc4c",
+    "mtime": 1782995000.293133,
+    "ast_hash": "57c88d9a1d8dba2261ca49705477c0ff",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexLogistics.tsx": {
@@ -785,8 +785,8 @@
     "semantic_hash": "1034cd07dbba20e17e2e32d56928c361"
   },
   "src/renderer/src/routes/comex/ComexSupplierDetail.tsx": {
-    "mtime": 1782994489.84803,
-    "ast_hash": "cb29983b5161e7cd664d507febd08227",
+    "mtime": 1782994765.1702528,
+    "ast_hash": "6dd49c4cabeeb73dbbece97a36c65f94",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexSuppliers.tsx": {

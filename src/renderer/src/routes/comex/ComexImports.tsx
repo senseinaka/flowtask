@@ -140,7 +140,7 @@ function PaymentPill({ imp }: { imp: ComexImport }) {
           : 'bg-violet-900/30 text-violet-400 border-violet-800/40'
       }`}>
         <Clock size={8} />
-        {isOverdue ? 'Pago vencido' : 'A plazo'} <span className="ml-0.5 opacity-70">{dayjs(imp.payment_due_date).format('D/M')}</span>
+        {isOverdue ? 'Pago vencido' : 'Pago diferido'} <span className="ml-0.5 opacity-70">{dayjs(imp.payment_due_date).format('D/M')}</span>
       </span>
     )
   }
@@ -764,6 +764,9 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
     if (supplier.payment_condition) {
       const terms = supplier.payment_condition === 'diferido' ? 'a_plazo' : 'anticipado'
       setField('payment_terms', terms); filled.add('payment_terms')
+      if (supplier.payment_deferred_days != null) {
+        setField('payment_deferred_days', supplier.payment_deferred_days); filled.add('payment_deferred_days')
+      }
     }
     const ports = supplier.port_of_origin
       ? supplier.port_of_origin.split('|').map(p => p.trim()).filter(Boolean)
@@ -807,6 +810,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       tracking_number: form.tracking_number ?? '', customs_agent: form.customs_agent ?? '',
       despachante: form.despachante ?? '', origin_port: form.origin_port ?? '',
       payment_terms: form.payment_terms ?? null,
+      payment_deferred_days: form.payment_deferred_days ?? null,
       drive_folder_id: null, notes: form.notes ?? ''
     }
     // Partes/splits: una importación por parte ("Marca #N-1", "-2", …).

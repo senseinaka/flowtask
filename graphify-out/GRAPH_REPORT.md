@@ -1,7 +1,7 @@
 # Graph Report - flowtask  (2026-07-02)
 
 ## Corpus Check
-- 331 files · ~502,083 words
+- 331 files · ~502,122 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2da0ce58`
+- Built from commit: `e0538887`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -189,14 +189,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `getEmailMessageByUid()` --calls--> `getDb()`  [INFERRED]
   src/main/database/queries/email.ts → src/main/database/db.ts
-- `listPendingJobs()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
-  src/main/database/queries/mercadopago.ts → src/main/database/powersync.ts
-- `getQuoteCompany()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
-  src/main/database/queries/quotes.ts → src/main/database/powersync.ts
-- `getBlockedBy()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
-  src/main/database/queries/tasks.ts → src/main/database/powersync.ts
-- `getTeamBlockedBy()` --calls--> `getPowerSyncDb()`  [EXTRACTED]
-  src/main/database/queries/team-tasks.ts → src/main/database/powersync.ts
+- `hydrateImport()` --calls--> `normalizeLegacyStatus()`  [INFERRED]
+  src/main/database/queries/comex.ts → src/shared/types.ts
+- `EditableText()` --calls--> `cn()`  [EXTRACTED]
+  src/renderer/src/routes/comex/ComexImportDetail.tsx → src/renderer/src/components/ui/utils.ts
+- `EditableNumber()` --calls--> `cn()`  [EXTRACTED]
+  src/renderer/src/routes/comex/ComexImportDetail.tsx → src/renderer/src/components/ui/utils.ts
+- `EditableDate()` --calls--> `cn()`  [EXTRACTED]
+  src/renderer/src/routes/comex/ComexImportDetail.tsx → src/renderer/src/components/ui/utils.ts
 
 ## Import Cycles
 - 3-file cycle: `src/main/database/powersync.ts -> src/main/services/auth.service.ts -> src/main/database/queries/permissions.ts -> src/main/database/powersync.ts`
@@ -780,7 +780,7 @@ Cohesion: 0.47
 Nodes (6): MovementEntriesLedger(), MovementEntriesQuickList(), useAddMovementEntry(), useMovementEntries(), useRemoveMovementEntry(), useUpdateMovementEntry()
 
 ## Knowledge Gaps
-- **1205 isolated node(s):** `projects`, `tasks`, `task_dependencies`, `team_tasks`, `team_task_dependencies` (+1200 more)
+- **1205 isolated node(s):** `PLANNING_COLUMNS`, `ALARMA_COTIZACION_COLUMNS`, `ALL_STATUSES`, `MANUALLY_SELECTABLE_STATUSES`, `CURRENCIES` (+1200 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -788,14 +788,14 @@ Nodes (6): MovementEntriesLedger(), MovementEntriesQuickList(), useAddMovementEn
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `cn()` connect `Settings y costos extra` to `Finanzas empresa dashboard (UI)`, `Componentes UI compartidos`, `Comex detalle importación (UI)`, `Finanzas personales dashboard (UI)`, `Cajas gráficos (UI)`, `Cajas internas dashboard (UI)`, `Community 137`, `Cajas operadores y diferencias (UI)`, `Vencimientos (UI)`, `Proyectos backend`, `Tareas y Kanban (UI)`, `Comex listado importaciones (UI)`, `Calendario backend`, `Finanzas helpers UI`, `Community 158`, `Tareas delegadas (UI)`, `Community 160`, `Community 163`, `MercadoPago dashboard (UI)`, `RRHH detalle período (UI)`, `Mensajes programados (UI)`, `Comex cotizaciones USD/EUR (UI)`, `Conciliador resultados (UI)`, `Comex proveedores y marcas (UI)`, `Calendario (UI)`, `Cajas movimientos y adjuntos (UI)`, `Comex costos (UI)`, `Cortex/Graphify dashboard (UI)`, `Preguntas de tareas (UI)`, `Contactos, agenda y equipo (UI)`, `Comex planificaciones (UI)`, `MercadoPago backend`, `Comex tracking y logística (UI)`, `Community 76`, `Componentes UI base`, `RRHH sueldos dashboard (UI)`, `Comex alarmas cotización (UI)`, `Knowledge panel IA (UI)`, `Community 114`, `Conciliador conciliación (UI)`, `Conciliador dashboard (UI)`, `Community 122`, `Community 124`, `Comex hidratación marcas/proveedores`?**
-  _High betweenness centrality (0.159) - this node is a cross-community bridge._
+  _High betweenness centrality (0.157) - this node is a cross-community bridge._
 - **Why does `getPowerSyncDb()` connect `Cajas internas backend` to `Comex backend (queries/IPC)`, `Community 131`, `Finanzas empresa backend`, `PowerSync schema y JWT`, `Finanzas personales backend`, `Knowledge fuentes (UI)`, `Community 141`, `Bootstrap main y servicios`, `Community 143`, `Chat tareas backend`, `Knowledge backend`, `Community 159`, `MercadoPago service`, `Community 162`, `Presupuestos backend`, `RRHH backend y nómina`, `PowerSync migraciones legacy`, `Admin de permisos (UI)`, `Comex detalle marca (UI)`, `Settings y config-store`, `Permisos backend`, `Servicios contables backend`?**
-  _High betweenness centrality (0.131) - this node is a cross-community bridge._
-- **Why does `PreparacionEmbarqueNode()` connect `Knowledge IA service` to `Comex detalle importación (UI)`?**
-  _High betweenness centrality (0.127) - this node is a cross-community bridge._
+  _High betweenness centrality (0.133) - this node is a cross-community bridge._
+- **Why does `adminSaveUserProfile()` connect `Permisos backend` to `Conciliador backend`, `MercadoPago dashboard (UI)`?**
+  _High betweenness centrality (0.123) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `projects`, `tasks`, `task_dependencies` to the rest of the system?**
+- **What connects `PLANNING_COLUMNS`, `ALARMA_COTIZACION_COLUMNS`, `ALL_STATUSES` to the rest of the system?**
   _1205 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Tipos TS compartidos` be split into smaller, more focused modules?**
   _Cohesion score 0.004842615012106538 - nodes in this community are weakly interconnected._
