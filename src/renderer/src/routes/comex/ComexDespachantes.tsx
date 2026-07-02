@@ -39,18 +39,40 @@ const EMPTY: CreateComexDespachanteInput & { website: string; direccion: string;
   name:'', matricula:'', empresa:'', cuit:'', email:'', phone:'', whatsapp:'', website:'', direccion:'', phone_empresa:'', notas:''
 }
 
+type ContactDraft = { name: string; role: string; email: string; phone: string }
+const EMPTY_CONTACT: ContactDraft = { name: '', role: '', email: '', phone: '' }
+
 function DespachanteFormModal({ initial, onSave, onClose }: {
-  initial?: Partial<typeof EMPTY>; onSave: (d: typeof EMPTY) => Promise<void>; onClose: () => void
+  initial?: Partial<typeof EMPTY>
+  onSave: (d: typeof EMPTY) => Promise<ComexDespachante | null | void>
+  onClose: () => void
 }) {
+  const isNew = !initial?.name
   const [form, setForm] = useState({ ...EMPTY, ...initial })
+  const [contacts, setContacts] = useState<ContactDraft[]>([])
   const [saving, setSaving] = useState(false)
+  const createContact = useCreateComexDespachanteContact()
   const set = <K extends keyof typeof form>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }))
   const cls = 'w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500'
+  const clsSm = 'w-full bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500'
+
+  const addContactRow    = () => setContacts(p => [...p, { ...EMPTY_CONTACT }])
+  const removeContactRow = (i: number) => setContacts(p => p.filter((_, idx) => idx !== i))
+  const setContactField  = (i: number, k: keyof ContactDraft, v: string) =>
+    setContacts(p => p.map((c, idx) => idx === i ? { ...c, [k]: v } : c))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) return
-    setSaving(true); await onSave(form); setSaving(false); onClose()
+    setSaving(true)
+    const saved = await onSave(form)
+    if (isNew && saved?.id) {
+      const validContacts = contacts.filter(c => c.name.trim())
+      for (const [i, c] of validContacts.entries()) {
+        await createContact.mutateAsync({ ...c, despachante_id: saved.id, sort_order: i })
+      }
+    }
+    setSaving(false); onClose()
   }
 
   return (
@@ -65,11 +87,7 @@ function DespachanteFormModal({ initial, onSave, onClose }: {
             <label className="block text-xs text-slate-400 mb-1">Nombre completo *</label>
             <input autoFocus value={form.name} onChange={e => set('name', e.target.value)} placeholder="Dario Valero" className={cls} />
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Matrícula</label>
-              <input value={form.matricula} onChange={e => set('matricula', e.target.value)} placeholder="DEA-28471" className={cls} />
-            </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Empresa / Estudio</label>
               <input value={form.empresa} onChange={e => set('empresa', e.target.value)} placeholder="Valero Despachantes SA" className={cls} />
@@ -103,6 +121,36 @@ function DespachanteFormModal({ initial, onSave, onClose }: {
               <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+54 11 1234-5678" className={cls} />
             </div>
           </div>
+          {isNew && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs text-slate-400">Contactos</label>
+                <button type="button" onClick={addContactRow}
+                  className="flex items-center gap-1 text-[11px] text-cyan-500 hover:text-cyan-400">
+                  <Plus size={11}/> Agregar contacto
+                </button>
+              </div>
+              <div className="space-y-2">
+                {contacts.map((c, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-center">
+                    <input value={c.name} onChange={e => setContactField(i, 'name', e.target.value)}
+                      placeholder="Nombre" className={clsSm} />
+                    <input value={c.role} onChange={e => setContactField(i, 'role', e.target.value)}
+                      placeholder="Cargo" className={clsSm} />
+                    <input value={c.email} onChange={e => setContactField(i, 'email', e.target.value)}
+                      placeholder="Mail" className={clsSm} />
+                    <input value={c.phone} onChange={e => setContactField(i, 'phone', e.target.value)}
+                      placeholder="WhatsApp" className={clsSm} />
+                    <button type="button" onClick={() => removeContactRow(i)}
+                      className="p-1 text-slate-500 hover:text-red-400"><X size={13}/></button>
+                  </div>
+                ))}
+                {contacts.length === 0 && (
+                  <p className="text-[11px] text-slate-600">Sin contactos todavía. Con 2 o 3 suele alcanzar.</p>
+                )}
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs text-slate-400 mb-1">Notas</label>
             <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={5}
@@ -193,7 +241,7 @@ function DespachanteCard({ d }: { d: ComexDespachante }) {
       {editing && (
         <DespachanteFormModal
           initial={d as Partial<typeof d & { website: string; direccion: string; phone_empresa: string }>}
-          onSave={async input => { await update.mutateAsync({ id: d.id, data: input as Partial<ComexDespachante> }) }}
+          onSave={async input => update.mutateAsync({ id: d.id, data: input as Partial<ComexDespachante> })}
           onClose={() => setEditing(false)}
         />
       )}
@@ -383,7 +431,7 @@ export default function ComexDespachantes() {
 
       {showCreate && (
         <DespachanteFormModal
-          onSave={async input => { await create.mutateAsync(input as CreateComexDespachanteInput) }}
+          onSave={async input => create.mutateAsync(input as CreateComexDespachanteInput)}
           onClose={() => setShowCreate(false)}
         />
       )}

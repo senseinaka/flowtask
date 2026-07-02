@@ -333,6 +333,7 @@ const comex_suppliers = new Table(
     product_categories: column.text,
     incoterms_preferred: column.text,
     port_of_origin: column.text,
+    despachante_id: column.text,
     lead_time_days: column.integer,
     pickup_address: column.text,
     brand: column.text,

@@ -3,21 +3,22 @@ import {
   Wifi, WifiOff, Plus, Trash2, RefreshCw, Download, ChevronRight,
   CheckCircle2, AlertCircle, Settings, List, CreditCard,
   Eye, EyeOff, Loader2, PlugZap, CalendarRange, Copy,
-  ExternalLink, FolderOpen,
+  ExternalLink, FolderOpen, XCircle, LayoutDashboard,
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import {
   useMpConnections, useCreateMpConnection, useDeleteMpConnection,
   useTestMpConnection, useUpdateMpToken,
-  useMpJobs, useRequestMpReport, useDownloadMpJob, usePollMpJob,
+  useMpJobs, useDownloadMpJob, usePollMpJob, useCancelMpJob, useRunMpSync,
   useOpenMpJobFile, useShowMpJobInFolder,
   useMpTransactions, useUpdateMpReconStatus, useMpTransactionStats,
   useMpReportConfig, useSetMpReportConfig, useMpDefaultConfig,
 } from '../../hooks/useMercadoPago'
 import { usePermissions } from '../../hooks/usePermissions'
+import { toast } from '../../store/toast.store'
 import type {
   MpConnectionWithCreds, MpReportJob, MpTransaction,
-  MpReconciliationStatus,
+  MpReconciliationStatus, MpReportConfig,
 } from '@shared/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -51,16 +52,17 @@ function fmtDate(ms: number | string) {
   return d.isValid() ? d.format('DD/MM/YY HH:mm') : String(ms).slice(0, 10)
 }
 
-type Tab = 'conexiones' | 'sincronizacion' | 'transacciones' | 'configuracion'
+type Tab = 'resumen' | 'conexiones' | 'sincronizacion' | 'transacciones' | 'configuracion'
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function MPDashboard() {
-  const [tab, setTab] = useState<Tab>('conexiones')
+  const [tab, setTab] = useState<Tab>('resumen')
   const [selectedConn, setSelectedConn] = useState<string | null>(null)
   const { canWrite } = usePermissions()
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'resumen',        label: 'Resumen',        icon: <LayoutDashboard size={15} /> },
     { key: 'conexiones',     label: 'Conexiones',    icon: <PlugZap size={15} /> },
     { key: 'sincronizacion', label: 'Sincronización', icon: <RefreshCw size={15} /> },
     { key: 'transacciones',  label: 'Transacciones',  icon: <List size={15} /> },
@@ -91,6 +93,9 @@ export default function MPDashboard() {
       </div>
 
       <div className="flex-1 overflow-auto">
+        {tab === 'resumen' && (
+          <ResumenTab selectedConn={selectedConn} />
+        )}
         {tab === 'conexiones' && (
           <ConexionesTab
             selectedConn={selectedConn}
@@ -107,6 +112,30 @@ export default function MPDashboard() {
         {tab === 'configuracion' && (
           <ConfiguracionTab selectedConn={selectedConn} canWrite={canWrite('contable')} />
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab Resumen ──────────────────────────────────────────────────────────────
+
+function ResumenTab({ selectedConn }: { selectedConn: string | null }) {
+  const { data: connections = [], isLoading } = useMpConnections()
+  const connId = selectedConn ?? connections[0]?.id ?? null
+
+  if (isLoading) return <div className="p-6 text-slate-400 text-sm">Cargando...</div>
+  if (!connId) return (
+    <div className="p-6 text-slate-500 text-sm">Conectá una cuenta en la tab Conexiones para ver el resumen.</div>
+  )
+
+  return (
+    <div className="p-6 max-w-3xl">
+      <div className="border border-dashed border-slate-700 rounded-lg p-10 text-center text-slate-500">
+        <LayoutDashboard size={32} className="mx-auto mb-3 opacity-30" />
+        <p className="text-sm">
+          Acá va a vivir el resumen de ventas, dinero disponible y calendario de liberaciones.
+        </p>
+        <p className="text-xs mt-1 text-slate-600">Se va a ir completando por partes.</p>
       </div>
     </div>
   )
@@ -130,7 +159,6 @@ function ConexionesTab({
   const [showToken, setShowToken]       = useState(false)
   const [editTokenId, setEditTokenId]   = useState<string | null>(null)
   const [newToken, setNewToken]         = useState('')
-  const [testMsg, setTestMsg]           = useState<string | null>(null)
 
   async function handleCreate() {
     if (!formName || !formToken) return
@@ -138,7 +166,8 @@ function ConexionesTab({
       input: { name: formName, account_label: formLabel || formName, access_token: formToken, environment: 'production' },
       userId: '',
     })
-    setTestMsg(res.test.ok ? `Conectado · ID: ${res.test.user_id ?? ''}` : `Error: ${res.test.error}`)
+    if (res.test.ok) toast.success(`Conectado${res.test.user_id ? ` · ID: ${res.test.user_id}` : ''}`)
+    else toast.error(res.test.error || 'No se pudo verificar la conexión')
     setShowForm(false); setFormName(''); setFormLabel(''); setFormToken('')
   }
 
@@ -146,10 +175,6 @@ function ConexionesTab({
 
   return (
     <div className="p-6 space-y-4 max-w-3xl">
-      {testMsg && (
-        <div className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-300">{testMsg}</div>
-      )}
-
       {connections.length === 0 && !showForm && (
         <div className="text-center py-12 text-slate-500">
           <CreditCard size={40} className="mx-auto mb-3 opacity-30" />
@@ -173,7 +198,8 @@ function ConexionesTab({
           onDelete={() => deleteConn.mutate(conn.id)}
           onTest={async () => {
             const r = await testConn.mutateAsync(conn.id)
-            setTestMsg(r.ok ? `OK · ID: ${r.user_id ?? ''}` : `Error: ${r.error}`)
+            if (r.ok) toast.success(`Conexión OK${r.user_id ? ` · ID: ${r.user_id}` : ''}`)
+            else toast.error(r.error || 'No se pudo verificar la conexión')
           }}
           editTokenId={editTokenId}
           newToken={newToken}
@@ -182,7 +208,8 @@ function ConexionesTab({
           onSaveToken={async () => {
             if (!editTokenId || !newToken) return
             const r = await updateToken.mutateAsync({ connectionId: editTokenId, newToken })
-            setTestMsg(r.ok ? 'Token actualizado y verificado' : `Error: ${r.error}`)
+            if (r.ok) toast.success('Token actualizado y verificado')
+            else toast.error(r.error || 'No se pudo verificar el nuevo token')
             setEditTokenId(null); setNewToken('')
           }}
           isSavingToken={updateToken.isPending}
@@ -322,15 +349,15 @@ function SincronizacionTab({
   const { data: connections = [] } = useMpConnections()
   const connId = selectedConn ?? connections[0]?.id ?? null
   const { data: jobs = [], isLoading } = useMpJobs(connId)
-  const requestReport  = useRequestMpReport()
+  const runSync         = useRunMpSync()
   const downloadJob    = useDownloadMpJob()
   const pollJob        = usePollMpJob()
+  const cancelJob      = useCancelMpJob()
   const openFile       = useOpenMpJobFile()
   const showInFolder   = useShowMpJobInFolder()
 
   const [dateFrom, setDateFrom] = useState(dayjs().subtract(7, 'day').format('YYYY-MM-DD'))
   const [dateTo, setDateTo]     = useState(dayjs().format('YYYY-MM-DD'))
-  const [syncMsg, setSyncMsg]   = useState<string | null>(null)
 
   // Refs estables para evitar dependencias en effects
   const pollJobRef     = useRef(pollJob.mutate)
@@ -358,12 +385,19 @@ function SincronizacionTab({
 
   async function handleSync() {
     if (!connId) return
-    setSyncMsg('Solicitando reporte a Mercado Pago...')
     try {
-      await requestReport.mutateAsync({ connectionId: connId, dateFrom, dateTo, requestedBy: 'manual' })
-      setSyncMsg('Reporte solicitado. Mercado Pago lo generará en unos minutos — el historial se actualiza automáticamente.')
+      const res = await runSync.mutateAsync({ connectionId: connId, dateFrom, dateTo, requestedBy: 'manual' })
+      if (res.status === 'failed') {
+        toast.error(res.error_message || 'No se pudo sincronizar con Mercado Pago')
+      } else {
+        toast.success(
+          `Sincronizado: ${res.imported} transacciones nuevas` +
+          (res.duplicated ? `, ${res.duplicated} ya existían` : '') +
+          (res.errors ? `, ${res.errors} con error` : '')
+        )
+      }
     } catch (err) {
-      setSyncMsg((err as Error).message)
+      toast.error((err as Error).message)
     }
   }
 
@@ -393,14 +427,11 @@ function SincronizacionTab({
               className="px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm focus:border-blue-500 outline-none" />
           </div>
         </div>
-        {syncMsg && (
-          <p className="text-xs text-slate-300 bg-slate-700/50 px-3 py-2 rounded">{syncMsg}</p>
-        )}
         {canWrite && (
-          <button onClick={handleSync} disabled={requestReport.isPending}
+          <button onClick={handleSync} disabled={runSync.isPending}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm text-white transition-colors">
-            {requestReport.isPending ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            {requestReport.isPending ? 'Solicitando...' : 'Sincronizar'}
+            {runSync.isPending ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            {runSync.isPending ? 'Sincronizando...' : 'Sincronizar'}
           </button>
         )}
       </div>
@@ -414,10 +445,12 @@ function SincronizacionTab({
             key={job.id} job={job} canWrite={canWrite}
             onDownload={() => downloadJob.mutate(job.id)}
             onPoll={() => pollJob.mutate(job.id)}
+            onCancel={() => cancelJob.mutate(job.id)}
             onOpenFile={() => openFile.mutate(job.id)}
             onShowInFolder={() => showInFolder.mutate(job.id)}
             isPollPending={pollJob.isPending && pollJob.variables === job.id}
             isDownloadPending={downloadJob.isPending && downloadJob.variables === job.id}
+            isCancelPending={cancelJob.isPending && cancelJob.variables === job.id}
             downloadError={downloadJob.isError && downloadJob.variables === job.id
               ? (downloadJob.error as Error)?.message
               : undefined}
@@ -428,10 +461,10 @@ function SincronizacionTab({
   )
 }
 
-function JobRow({ job, onDownload, onPoll, onOpenFile, onShowInFolder, canWrite, isPollPending = false, isDownloadPending = false, downloadError }: {
-  job: MpReportJob; onDownload: () => void; onPoll: () => void
+function JobRow({ job, onDownload, onPoll, onCancel, onOpenFile, onShowInFolder, canWrite, isPollPending = false, isDownloadPending = false, isCancelPending = false, downloadError }: {
+  job: MpReportJob; onDownload: () => void; onPoll: () => void; onCancel: () => void
   onOpenFile: () => void; onShowInFolder: () => void
-  canWrite: boolean; isPollPending?: boolean; isDownloadPending?: boolean; downloadError?: string
+  canWrite: boolean; isPollPending?: boolean; isDownloadPending?: boolean; isCancelPending?: boolean; downloadError?: string
 }) {
   const [copied, setCopied] = useState(false)
   const colorClass = JOB_STATUS_COLOR[job.status] ?? 'text-slate-400'
@@ -473,11 +506,18 @@ function JobRow({ job, onDownload, onPoll, onOpenFile, onShowInFolder, canWrite,
           </>
         )}
         {canWrite && (job.status === 'requested' || job.status === 'pending') && (
-          <button onClick={onPoll} disabled={isPollPending}
-            className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded transition-colors flex items-center gap-1 shrink-0">
-            {isPollPending ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-            {isPollPending ? 'Verificando...' : 'Verificar'}
-          </button>
+          <>
+            <button onClick={onPoll} disabled={isPollPending}
+              className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded transition-colors flex items-center gap-1 shrink-0">
+              {isPollPending ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+              {isPollPending ? 'Verificando...' : 'Verificar'}
+            </button>
+            <button onClick={onCancel} disabled={isCancelPending}
+              className="text-xs px-2 py-1 bg-red-900/30 hover:bg-red-900/50 disabled:opacity-50 text-red-400 rounded transition-colors flex items-center gap-1 shrink-0">
+              {isCancelPending ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
+              Cancelar
+            </button>
+          </>
         )}
       </div>
       {(job.status === 'failed' || downloadError) && errorMsg && (
@@ -496,6 +536,8 @@ function JobRow({ job, onDownload, onPoll, onOpenFile, onShowInFolder, canWrite,
 
 // ─── Tab Transacciones ────────────────────────────────────────────────────────
 
+const TXN_PAGE_SIZE = 200
+
 function TransaccionesTab({ selectedConn }: { selectedConn: string | null }) {
   const { data: connections = [] } = useMpConnections()
   const connId = selectedConn ?? connections[0]?.id ?? null
@@ -506,6 +548,10 @@ function TransaccionesTab({ selectedConn }: { selectedConn: string | null }) {
   const [reconFilter, setReconFilter] = useState('')
   const [dateFrom, setDateFrom]     = useState('')
   const [dateTo, setDateTo]         = useState('')
+  const [page, setPage]             = useState(0)
+
+  // Volver a la primera página cada vez que cambian los filtros o la conexión.
+  useEffect(() => setPage(0), [connId, search, typeFilter, reconFilter, dateFrom, dateTo])
 
   const { data: transactions = [], isLoading } = useMpTransactions({
     connection_id:        connId ?? undefined,
@@ -514,7 +560,8 @@ function TransaccionesTab({ selectedConn }: { selectedConn: string | null }) {
     reconciliation_status: (reconFilter || undefined) as MpReconciliationStatus | undefined,
     date_from:            dateFrom || undefined,
     date_to:              dateTo || undefined,
-    limit: 200,
+    limit: TXN_PAGE_SIZE,
+    offset: page * TXN_PAGE_SIZE,
   })
 
   const updateRecon = useUpdateMpReconStatus()
@@ -589,7 +636,21 @@ function TransaccionesTab({ selectedConn }: { selectedConn: string | null }) {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-slate-500 mt-2">{transactions.length} transacciones (máx. 200)</p>
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs text-slate-500">
+              {transactions.length} transacciones · página {page + 1}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                className="text-xs px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors">
+                Anterior
+              </button>
+              <button onClick={() => setPage(p => p + 1)} disabled={transactions.length < TXN_PAGE_SIZE}
+                className="text-xs px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors">
+                Siguiente
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

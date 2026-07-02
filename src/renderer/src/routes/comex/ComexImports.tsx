@@ -14,7 +14,8 @@ dayjs.locale('es')
 import {
   useComexImports,
   useCreateComexImport,
-  useComexSuppliers
+  useComexSuppliers,
+  useComexDespachantes
 } from '../../hooks/useComex'
 import {
   IMPORT_STATUS_LABELS,
@@ -729,13 +730,14 @@ function AutoBadge() {
 // ── Create Form ───────────────────────────────────────────────────────────────
 
 function CreateImportModal({ onClose }: { onClose: () => void }) {
-  const { data: suppliers  = [] } = useComexSuppliers()
-  const { data: allImports = [] } = useComexImports()
+  const { data: suppliers    = [] } = useComexSuppliers()
+  const { data: allImports   = [] } = useComexImports()
+  const { data: despachantes = [] } = useComexDespachantes()
   const create = useCreateComexImport()
 
   const [form, setForm] = useState<Partial<CreateComexImportInput>>({
     status: 'planning', currency: 'USD', incoterm: 'FOB',
-    origin_country: '', title: '', notes: '', tracking_number: '', customs_agent: ''
+    origin_country: '', title: '', notes: '', tracking_number: '', customs_agent: '', despachante: ''
   })
   const [autoFilled, setAutoFilled]             = useState<Set<string>>(new Set())
   const [supplierCurrencies, setSupplierCurrencies] = useState<string[]>([])
@@ -755,6 +757,10 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
     const filled = new Set<string>()
     if (supplier.country?.trim())            { setField('origin_country', supplier.country); filled.add('origin_country') }
     if (supplier.incoterms_preferred?.trim()) { setField('incoterm', supplier.incoterms_preferred); filled.add('incoterm') }
+    if (supplier.despachante_id) {
+      const despachante = despachantes.find(d => d.id === supplier.despachante_id)
+      if (despachante) { setField('despachante', despachante.name); filled.add('despachante') }
+    }
     const prevCurrencies = [...new Set(allImports.filter(i => i.supplier_id === supplierId).sort((a,b) => b.created_at - a.created_at).map(i => i.currency).filter(Boolean))] as string[]
     const defaultCurrency = prevCurrencies.length >= 1 ? prevCurrencies[0] : inferCurrencyFromCountry(supplier.country ?? '')
     setField('currency', defaultCurrency); filled.add('currency')
@@ -766,7 +772,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       setField('title', `${brand} #${nextNum}`); filled.add('title')
     }
     setAutoFilled(filled)
-  }, [suppliers, allImports])
+  }, [suppliers, allImports, despachantes])
 
   const set = (k: keyof CreateComexImportInput, v: unknown) => setField(k, v, true)
 
@@ -788,6 +794,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       ship_date: null, arrival_date: null,
       actual_ship_date: null, actual_arrival_date: null,
       tracking_number: form.tracking_number ?? '', customs_agent: form.customs_agent ?? '',
+      despachante: form.despachante ?? '',
       drive_folder_id: null, notes: form.notes ?? ''
     }
     // Partes/splits: una importación por parte ("Marca #N-1", "-2", …).

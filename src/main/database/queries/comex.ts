@@ -86,7 +86,7 @@ export async function updateSupplier(id: string, data: Partial<ComexSupplier>): 
     'name','address','city','country','zip_code','tax_id','rex_number',
     'contact_name','contact_email','contact_phone',
     'brand','website','wechat','product_categories','payment_terms',
-    'incoterms_preferred','port_of_origin','lead_time_days',
+    'incoterms_preferred','port_of_origin','despachante_id','lead_time_days',
     'production_days','preparation_days','transit_days','customs_days','local_delivery_days',
     'moq','non_operational_periods_json','reliability_notes',
     'pickup_address','notes','logo_stored_name','logo_data'
@@ -155,7 +155,8 @@ function hydrateImport(row: Record<string, unknown>): ComexImport {
       logo_stored_name: (row._supplier_logo as string) ?? null,
       logo_data: (row._supplier_logo_data as string) ?? null,
       category: '', demand_annual: null, demand_monthly_json: '{}',
-      current_stock: null, safety_stock: null, purchase_frequency_days: null
+      current_stock: null, safety_stock: null, purchase_frequency_days: null,
+      despachante_id: null
     }
   }
   // Campos del JOIN con customs
@@ -231,9 +232,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
        estimated_value, actual_value, order_date, payment_date, ship_date,
        arrival_date, eta_2, eta_3, eta_4,
        actual_ship_date, actual_arrival_date, tracking_number,
-       customs_agent, drive_folder_id, notes, cargo_status, forwarder_status,
+       customs_agent, drive_folder_id, notes, cargo_status, forwarder_status, despachante,
        created_at, updated_at, workspace_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, input.title, input.supplier_id ?? null,
     input.status ?? 'planning', input.incoterm ?? 'FOB',
@@ -251,6 +252,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
     // derivación reacciona a cambios de OTROS campos (ej. el dropdown "Estado"),
     // lo que hacía parecer que elegir un valor en una rama modificaba la otra.
     'en_armado', 'sin_cotizar',
+    // Despachante asignado por default desde la marca (ComexSupplier.despachante_id),
+    // resuelto a nombre en el modal de alta — ver CreateImportModal.handleSupplierChange.
+    input.despachante ?? '',
     now, now, WORKSPACE_ID
   ])
   return (await getImport(id))!

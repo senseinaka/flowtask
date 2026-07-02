@@ -24,6 +24,7 @@ import {
   useComexCustoms,
   useUpsertComexCustoms,
   useComexFreightOperators,
+  useComexDespachantes,
   useComexQuotesByImport,
   useCreateComexQuote,
   useUpdateComexQuote,
@@ -6600,6 +6601,7 @@ export default function ComexImportDetail() {
   const { data: customs }           = useComexCustoms(id ?? null)
   const { data: items        = [] } = useComexItems(id ?? null)
   const { data: operators    = [] } = useComexFreightOperators()
+  const { data: despachantes = [] } = useComexDespachantes()
   const qc = useQueryClient()
   const update = useUpdateComexImport()
   const deleteImport = useDeleteComexImport()
@@ -6987,14 +6989,13 @@ export default function ComexImportDetail() {
             onChange={(v) => upd({ freight_operator_id: v || null })}
           />
 
-          {/* Despachante — opciones fijas */}
+          {/* Despachante — dropdown de despachantes (Comex Despachantes) */}
           <EditableSelect
             label="Despachante"
             value={imp.despachante ?? ''}
             options={[
-              { value: '',               label: '— Sin asignar —' },
-              { value: 'Dario Valero',   label: 'Dario Valero' },
-              { value: 'Iván Balarino',  label: 'Iván Balarino' },
+              { value: '', label: '— Sin asignar —' },
+              ...despachantes.map((d) => ({ value: d.name, label: d.name }))
             ]}
             onChange={(v) => upd({ despachante: v })}
           />

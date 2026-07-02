@@ -10,7 +10,8 @@ import {
   useComexSupplierContacts, useCreateComexSupplierContact,
   useUpdateComexSupplierContact, useDeleteComexSupplierContact,
   useComexSupplierBanks, useCreateComexSupplierBank,
-  useUpdateComexSupplierBank, useDeleteComexSupplierBank
+  useUpdateComexSupplierBank, useDeleteComexSupplierBank,
+  useComexDespachantes
 } from '../../hooks/useComex'
 import type {
   ComexSupplier, ComexSupplierContact, ComexSupplierBankAccount,
@@ -664,6 +665,7 @@ export default function ComexSupplierDetail() {
   const { data: supplier, isLoading } = useComexSupplier(id ?? null)
   const { data: contacts = [] } = useComexSupplierContacts(id ?? null)
   const { data: banks = [] } = useComexSupplierBanks(id ?? null)
+  const { data: despachantes = [] } = useComexDespachantes()
 
   const [showAddContact, setShowAddContact] = useState(false)
   const [showAddBank, setShowAddBank] = useState(false)
@@ -721,6 +723,15 @@ export default function ComexSupplierDetail() {
               { value: 'EXW', label: 'EXW' }
             ]}
             onSave={(v) => save({ incoterms_preferred: v })}
+          />
+          <ESelect
+            label="Despachante asignado"
+            value={supplier.despachante_id ?? ''}
+            options={[
+              { value: '', label: '— Sin asignar —' },
+              ...despachantes.map((d) => ({ value: d.id, label: d.name }))
+            ]}
+            onSave={(v) => save({ despachante_id: v || null })}
           />
         </FieldGrid>
         <div className="mt-4">
