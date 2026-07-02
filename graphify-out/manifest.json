@@ -785,9 +785,9 @@
     "semantic_hash": "1034cd07dbba20e17e2e32d56928c361"
   },
   "src/renderer/src/routes/comex/ComexSupplierDetail.tsx": {
-    "mtime": 1781965617.3212674,
-    "ast_hash": "7b1f3b9778370d277191fcb4d9348e05",
-    "semantic_hash": "7b1f3b9778370d277191fcb4d9348e05"
+    "mtime": 1782954934.1445563,
+    "ast_hash": "6bfd37419480f81f2ebabbf0243ab1cf",
+    "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexSuppliers.tsx": {
     "mtime": 1781965580.1237803,
