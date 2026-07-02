@@ -783,7 +783,11 @@ Saga al sumar las 10 tablas `cash_*` (Cajas Internas). Varias causas **independi
 
    **Recurrencia #2 (jul 2026) — causa raíz identificada:** esta vez el síntoma fue distinto, `PRAGMA integrity_check` devolvía directamente `database disk image is malformed` (corrupción física de páginas, no de una vista) en vez del error de "malformed database schema" de arriba. Ocurrió inmediatamente después de matar el árbol de Electron con `taskkill /T /F` para forzar un reinicio en caliente (picking up cambios de main process) — muy probablemente lo mató en medio de un checkpoint del WAL de `powersync.db`. **Lección: `taskkill /F` sobre el proceso mientras PowerSync puede estar escribiendo es en sí mismo un vector de corrupción**, no solo una casualidad de timing. Recuperación: igual que siempre (matar todo, borrar `powersync.db`, sin `-wal`/`-shm` — no existían en este caso, ya estaban checkpointeados en el archivo principal corrupto —, `npm run dev`, dejar drenar `ps_crud`). Nota aparte: `rm` sobre el archivo no siempre se refleja al instante en un `ls` inmediatamente posterior en este entorno (Windows + Git Bash) — confirmar con `stat` antes de asumir que falló.
 
-   **Recurrencia #3 (jul 2026) — esta vez SIN reinicio de por medio.** Apareció con la app corriendo normal, sin ningún `taskkill` previo — descarta la hipótesis de la recurrencia #2 como causa única. Sospecha fuerte: **Avast** (antivirus instalado en la máquina) escaneando/bloqueando el archivo mientras PowerSync escribe el WAL — patrón conocido en Windows con SQLite en modo WAL. Evidencia indirecta: al borrar el archivo tras matar los procesos, `Remove-Item` no lo soltó en el primer intento (`Test-Path` seguía dando `True` un segundo después) y recién se pudo borrar en un segundo intento — consistente con algo tomando un handle breve justo después de que el proceso muere. **Pendiente de acción del usuario** (no lo puede hacer el asistente): agregar una exclusión en Avast sobre `C:\Users\<usuario>\AppData\Roaming\flowtask\` para descartar esta causa. Si la corrupción vuelve a aparecer con la exclusión puesta, buscar la causa en otro lado (disco, versión de `@powersync/node`, etc.) — recién ahí valdría la pena investigar más a fondo en vez de seguir re-parchando.
+   **Recurrencia #3 (jul 2026) — esta vez SIN reinicio de por medio.** Apareció con la app corriendo normal, sin ningún `taskkill` previo — descarta la hipótesis de la recurrencia #2 como causa única. Sospecha en ese momento: **Avast** (antivirus instalado en la máquina) escaneando/bloqueando el archivo mientras PowerSync escribe el WAL — patrón conocido en Windows con SQLite en modo WAL. Evidencia indirecta: al borrar el archivo tras matar los procesos, `Remove-Item` no lo soltó en el primer intento (`Test-Path` seguía dando `True` un segundo después) y recién se pudo borrar en un segundo intento.
+
+   **Recurrencia #4 (jul 2026) — Avast DESCARTADO como causa.** El usuario agregó la exclusión de Avast sobre `AppData\Roaming\flowtask\` y la corrupción volvió a aparecer igual, sin reinicio de por medio otra vez. Esto descarta Avast por completo. Mismo síntoma de "tarda 2 intentos en soltar el archivo" al borrar — ese patrón, entonces, NO es evidencia de un antivirus específico, es más probablemente un handle transitorio del propio SO (indexer, Windows Defender como AV secundario siempre activo, o simplemente el tiempo que tarda el proceso recién muerto en soltar el mmap) — no vale la pena seguir persiguiendo esa pista puntual.
+
+   **Hipótesis nueva sin confirmar, candidata más seria por ahora:** durante esta sesión se hicieron *decenas* de lecturas ad-hoc de `powersync.db` en vivo (Python `sqlite3`, y en un caso `better-sqlite3` con la extensión nativa de PowerSync cargada) mientras la app estaba activamente conectada y escribiendo. SQLite en modo WAL depende de que TODOS los procesos que abren el archivo (incluso solo para leer) coordinen bien el locking vía el `-shm` compartido — si alguna de las builds de SQLite usadas para diagnóstico (la de Python, o la de better-sqlite3 con la extensión de PowerSync cargada por fuera del proceso real de la app) no participa perfecto de ese protocolo en Windows, cada lectura externa es una ventana de riesgo. **Cambio de práctica a partir de ahora: evitar lecturas repetidas de `powersync.db` en vivo mientras la app está corriendo** — preferir esperar logs de la propia app, o hacer como mucho una lectura puntual, no un loop de verificación. Si la corrupción deja de aparecer sin las lecturas externas frecuentes, eso confirmaría esta hipótesis retroactivamente.
 
 ### Fix: VEP ANMAT con spinner infinito + 22 tablas Comex con escritura descartada en silencio (resuelto — junio 2026)
 
@@ -945,9 +949,45 @@ por separado (`upd({ cargo_status: s })` / `upd({ forwarder_status: s })`).
 Cuando ambas ramas llegan a su estado final (`cargo_status === 'carga_armada'`
 **y** `forwarder_status === 'forwarder_seleccionado'`, y el pago
 está resuelto si `payment_terms === 'anticipado'`), el `useEffect` de auto-transición
-(~línea 6727 de `ComexImportDetail.tsx`) mueve `status` de `preparacion_embarque` a
+(~línea 6711 de `ComexImportDetail.tsx`) mueve `status` de `preparacion_embarque` a
 `listo_para_embarcar` automáticamente — es un valor real guardado, no un overlay
 calculado. La condición vive en `isReadyToShip()` (`shared/types.ts`).
+
+**Es bidireccional (jul 2026).** La primera versión solo tenía la transición hacia
+adelante — si el usuario llegaba a `listo_para_embarcar` y después retrocedía una
+rama (ej. volvía el forwarder a "sin cotizar"), el `status` quedaba "pegado" en
+`listo_para_embarcar` para siempre, porque el guard `status === 'preparacion_embarque'`
+ya no se cumplía y nunca más volvía a evaluarse. Se agregó la transición inversa:
+`status === 'listo_para_embarcar' && !isReadyToShip(imp)` → vuelve a
+`preparacion_embarque`. Con esto, avanzar y retroceder ramas siempre refleja el
+estado real, en cualquier dirección.
+
+**Bug real que hacía parecer rota la reversa (resuelto — jul 2026):** el usuario
+reportó "avanza una vez, pero después ni retrocede ni vuelve a avanzar". No era un bug
+del `useEffect` (su lógica ya era correcta) — era una **escritura asimétrica de
+`cargo_status` fuera del popover**. El campo de fecha "Carga armada en depósito"
+(`ComexImportDetail.tsx` ~línea 7128) tenía:
+```
+onSave={(v) => upd({ carga_armada_date: v, ...(v ? { cargo_status: 'carga_armada' } : {}) })}
+```
+Al *cargar* la fecha, sí seteaba `cargo_status='carga_armada'`. Pero al *borrarla*
+(`v === null`), el spread condicional se volvía `{}` — no mandaba nada, así que
+`cargo_status` quedaba pegado en `'carga_armada'` para siempre. `isReadyToShip()`
+seguía dando `true` (nada había cambiado realmente en la base), la condición de
+reversa (`!isReadyToShip`) nunca se hacía cierta, y por lo tanto tampoco el `status`
+volvía a `preparacion_embarque` — lo que a su vez bloqueaba que el primer `if`
+(que exige `status === 'preparacion_embarque'`) pudiera volver a dispararse. Fix:
+escritura simétrica, `cargo_status: v ? 'carga_armada' : 'en_armado'` (sin spread
+condicional), igual que ya lo maneja `onUpdateCargoStatus` del popover. **Encontrado
+por 3 agentes independientes en paralelo** (cada uno investigando una hipótesis
+distinta — orden de hooks, lógica de `isReadyToShip`, señal de consola vacía —
+convergieron los tres en la misma línea exacta), después de que 2 rondas de
+diagnóstico manual (revisión de código propia + pedirle logs de consola al usuario)
+no dieran con la causa. Moraleja: **cualquier campo que setee `cargo_status`/
+`forwarder_status` como side-effect tiene que ser simétrico en ambas direcciones**
+(setear Y desetear), no solo al completar — un solo punto de escritura asimétrica
+en toda la pantalla alcanza para romper la ilusión de bidireccionalidad aunque el
+`useEffect` esté perfecto.
 
 **`'listo_para_embarcar'` NO es seleccionable a mano.** Es un estado derivado por
 diseño (spec original: "operation_ready_to_ship... como función derivada, no

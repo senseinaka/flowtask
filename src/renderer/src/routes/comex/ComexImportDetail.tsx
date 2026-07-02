@@ -6713,10 +6713,17 @@ export default function ComexImportDetail() {
     if (!imp) return   // imp puede ser null mientras carga
     const now    = Date.now()
     const status = imp.status as ImportStatus
-    // preparacion_embarque → listo_para_embarcar cuando ambas ramas (carga + forwarder)
-    // llegan a su estado final y el pago está resuelto (si corresponde). Ver isReadyToShip().
+    // preparacion_embarque ⇄ listo_para_embarcar según si ambas ramas (carga + forwarder)
+    // están en su estado final y el pago está resuelto (si corresponde) — bidireccional:
+    // si ya está en listo_para_embarcar y el usuario retrocede una rama, vuelve sola a
+    // preparacion_embarque, para no quedar "pegada" en un estado que ya no es cierto.
+    // Ver isReadyToShip().
     if (status === 'preparacion_embarque' && isReadyToShip(imp)) {
       update.mutate({ id: imp.id, data: { status: 'listo_para_embarcar' } })
+      return
+    }
+    if (status === 'listo_para_embarcar' && !isReadyToShip(imp)) {
+      update.mutate({ id: imp.id, data: { status: 'preparacion_embarque' } })
       return
     }
     // transit → arrived cuando llega el aviso de arribo
@@ -7118,9 +7125,9 @@ export default function ComexImportDetail() {
             <EditableDate
               label="Carga armada en depósito"
               value={imp.carga_armada_date}
-              onSave={(v) => upd({ carga_armada_date: v, ...(v ? { cargo_status: 'carga_armada' as CargoStatus } : {}) })}
+              onSave={(v) => upd({ carga_armada_date: v, cargo_status: v ? 'carga_armada' : 'en_armado' as CargoStatus })}
             />
-            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza Estado de carga a "Carga armada"</p>
+            <p className="text-[9px] text-slate-600 mt-0.5 pl-0.5">→ avanza/retrocede Estado de carga junto con la fecha</p>
           </div>
         </div>
 
