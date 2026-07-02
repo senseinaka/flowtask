@@ -6499,7 +6499,7 @@ function PaymentSection({ imp, onUpdate }: {
           {(['anticipado', 'a_plazo'] as const).map((t) => (
             <button
               key={t}
-              onClick={() => onUpdate({ payment_terms: imp.payment_terms === t ? null : t })}
+              onClick={() => { if (imp.payment_terms !== t) onUpdate({ payment_terms: t }) }}
               className={cn(
                 'text-xs font-semibold px-3 py-1.5 rounded-md border transition-all',
                 imp.payment_terms === t

@@ -276,7 +276,7 @@ function PaymentConditionField({
   useEffect(() => { setDaysDraft(deferredDays !== null ? String(deferredDays) : '') }, [deferredDays])
 
   const toggle = (t: 'anticipado' | 'diferido') => {
-    onSave({ payment_condition: condition === t ? null : t })
+    if (condition !== t) onSave({ payment_condition: t })
   }
 
   const commitDays = () => {
