@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Building2, MapPin, CreditCard, Users,
@@ -158,23 +158,43 @@ function ESelect({
 
 // ── Multi-value chips (pipe-separated) ───────────────────────────────────────
 
+function parseChips(v: string): string[] {
+  return v ? v.split('|').map((s) => s.trim()).filter(Boolean) : []
+}
+
 function EChips({
   label, value, placeholder = 'Agregar...', onSave
 }: {
   label?: string; value: string; placeholder?: string; onSave: (v: string) => void
 }) {
-  const chips = value ? value.split('|').map((s) => s.trim()).filter(Boolean) : []
+  // Estado local optimista: agregar/quitar dos chips seguido, sin esperar el
+  // round-trip async (IPC + mutation + invalidate + refetch) de cada uno, no debe
+  // pisar el anterior. `lastSent` distingue "el value volvió con lo que nosotros
+  // mandamos" (ignorar) de "cambió desde afuera, ej. otro dispositivo" (resincronizar).
+  const [chips, setChips] = useState<string[]>(() => parseChips(value))
+  const lastSent = useRef(value)
+  if (value !== lastSent.current) {
+    lastSent.current = value
+    if (parseChips(value).join('|') !== chips.join('|')) setChips(parseChips(value))
+  }
   const [draft, setDraft] = useState('')
+
+  const commit = (next: string[]) => {
+    setChips(next)
+    const joined = next.join('|')
+    lastSent.current = joined
+    onSave(joined)
+  }
 
   const addChip = () => {
     const trimmed = draft.trim()
     if (!trimmed || chips.includes(trimmed)) { setDraft(''); return }
-    onSave([...chips, trimmed].join('|'))
+    commit([...chips, trimmed])
     setDraft('')
   }
 
   const removeChip = (chip: string) => {
-    onSave(chips.filter((c) => c !== chip).join('|'))
+    commit(chips.filter((c) => c !== chip))
   }
 
   return (
