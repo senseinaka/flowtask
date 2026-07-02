@@ -745,6 +745,19 @@ export interface ComexDespachanteContact {
 
 export type CreateComexDespachanteContactInput = Omit<ComexDespachanteContact, 'id' | 'created_at'>
 
+export interface ComexDespachanteBankAccount {
+  id:               string
+  despachante_id:   string
+  bank_name:        string   // Banco
+  cbu:              string   // CBU
+  alias:            string   // Alias CBU
+  beneficiary_name: string   // Titular (puede diferir del nombre del despachante)
+  notes:            string
+  created_at:       number
+}
+
+export type CreateComexDespachanteBankAccountInput = Omit<ComexDespachanteBankAccount, 'id' | 'created_at'>
+
 export interface ComexDespachante {
   id:               string
   name:             string
@@ -764,9 +777,10 @@ export interface ComexDespachante {
   updated_at:       number
   // relacional
   contacts?:        ComexDespachanteContact[]
+  bank_accounts?:   ComexDespachanteBankAccount[]
 }
 
-export type CreateComexDespachanteInput = Omit<ComexDespachante, 'id' | 'created_at' | 'updated_at' | 'logo_stored_name' | 'logo_data' | 'contacts'>
+export type CreateComexDespachanteInput = Omit<ComexDespachante, 'id' | 'created_at' | 'updated_at' | 'logo_stored_name' | 'logo_data' | 'contacts' | 'bank_accounts'>
 
 // ── Costos extras de importación ─────────────────────────────────────────────
 

@@ -34,6 +34,7 @@ import type {
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
   ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
   ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
+  ComexDespachanteBankAccount, CreateComexDespachanteBankAccountInput,
   ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput,
   PersonalContactInfo,
   FinanceAccount, FinanceCategory, FinancePaymentMethodEntity, FinanceConcept, FinanceMovement, FinanceMonthSummary,
@@ -462,6 +463,11 @@ const api = {
         create: (input: CreateComexDespachanteContactInput):                      Promise<ComexDespachanteContact> => ipcRenderer.invoke('comex:despachantes:contacts:create', input),
         update: (id: string, data: Partial<ComexDespachanteContact>):             Promise<void>                    => ipcRenderer.invoke('comex:despachantes:contacts:update', id, data),
         delete: (id: string):                                                     Promise<void>                    => ipcRenderer.invoke('comex:despachantes:contacts:delete', id),
+      },
+      banks: {
+        create: (input: CreateComexDespachanteBankAccountInput):                  Promise<ComexDespachanteBankAccount> => ipcRenderer.invoke('comex:despachantes:banks:create', input),
+        update: (id: string, data: Partial<ComexDespachanteBankAccount>):        Promise<void>                        => ipcRenderer.invoke('comex:despachantes:banks:update', id, data),
+        delete: (id: string):                                                     Promise<void>                        => ipcRenderer.invoke('comex:despachantes:banks:delete', id),
       }
     },
     proformas: {

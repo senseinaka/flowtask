@@ -1249,13 +1249,17 @@ export async function deleteGestorContact(id: string): Promise<void> {
 
 // ─── Despachantes ─────────────────────────────────────────────────────────────
 
-import type { ComexDespachanteContact, CreateComexDespachanteContactInput } from '@shared/types'
+import type {
+  ComexDespachanteContact, CreateComexDespachanteContactInput,
+  ComexDespachanteBankAccount, CreateComexDespachanteBankAccountInput
+} from '@shared/types'
 
 export async function listDespachantes(): Promise<ComexDespachante[]> {
   const db = getPowerSyncDb()
   const despachantes = await db.getAll<ComexDespachante>('SELECT * FROM comex_despachantes ORDER BY name ASC')
   for (const d of despachantes) {
     d.contacts = await db.getAll<ComexDespachanteContact>('SELECT * FROM comex_despachante_contacts WHERE despachante_id = ? ORDER BY sort_order ASC, created_at ASC', [d.id])
+    d.bank_accounts = await db.getAll<ComexDespachanteBankAccount>('SELECT * FROM comex_despachante_bank_accounts WHERE despachante_id = ? ORDER BY created_at ASC', [d.id])
   }
   return despachantes
 }
@@ -1305,6 +1309,30 @@ export async function updateDespachanteContact(id: string, data: Partial<ComexDe
 
 export async function deleteDespachanteContact(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_despachante_contacts WHERE id = ?', [id])
+}
+
+export async function createDespachanteBankAccount(input: CreateComexDespachanteBankAccountInput): Promise<ComexDespachanteBankAccount> {
+  const db = getPowerSyncDb(), id = randomUUID(), now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_despachante_bank_accounts (id,despachante_id,bank_name,cbu,alias,beneficiary_name,notes,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.despachante_id, input.bank_name??'', input.cbu??'', input.alias??'', input.beneficiary_name??'', input.notes??'', now, now, WORKSPACE_ID]
+  )
+  return (await db.getOptional<ComexDespachanteBankAccount>('SELECT * FROM comex_despachante_bank_accounts WHERE id = ?', [id]))!
+}
+
+export async function updateDespachanteBankAccount(id: string, data: Partial<ComexDespachanteBankAccount>): Promise<void> {
+  const db = getPowerSyncDb()
+  const allowed = ['bank_name','cbu','alias','beneficiary_name','notes']
+  const sets: string[] = [], vals: unknown[] = []
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
+  vals.push(id)
+  await db.execute(`UPDATE comex_despachante_bank_accounts SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function deleteDespachanteBankAccount(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_despachante_bank_accounts WHERE id = ?', [id])
 }
 
 // ─── Marcas (Programación Pedidos) ─────────────────────────────────────────────

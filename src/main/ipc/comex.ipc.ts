@@ -27,6 +27,7 @@ import {
   createGestorContact, updateGestorContact, deleteGestorContact,
   listDespachantes, createDespachante, updateDespachante, deleteDespachante,
   createDespachanteContact, updateDespachanteContact, deleteDespachanteContact,
+  createDespachanteBankAccount, updateDespachanteBankAccount, deleteDespachanteBankAccount,
   listBrands, getBrand, createBrand, updateBrand, deleteBrand,
   listPlannings, getPlanning, createPlanning, updatePlanning, deletePlanning, recalculatePlanning,
   updateMilestone,
@@ -52,6 +53,7 @@ import type {
   ComexProforma, CreateComexProformaInput,
   ComexGestor, CreateComexGestorInput, CreateComexGestorContactInput,
   ComexDespachante, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
+  CreateComexDespachanteBankAccountInput,
   CreateComexSupplierInput, CreateComexImportInput,
   CreateComexItemInput, CreateComexDocumentInput,
   CreateComexQuoteInput, CreateComexPaymentInput,
@@ -1675,6 +1677,10 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:despachantes:contacts:create', (_e, input: CreateComexDespachanteContactInput) => createDespachanteContact(input))
   ipcMain.handle('comex:despachantes:contacts:update', (_e, id: string, data: Partial<import('@shared/types').ComexDespachanteContact>) => updateDespachanteContact(id, data))
   ipcMain.handle('comex:despachantes:contacts:delete', (_e, id: string)                               => deleteDespachanteContact(id))
+
+  ipcMain.handle('comex:despachantes:banks:create', (_e, input: CreateComexDespachanteBankAccountInput) => createDespachanteBankAccount(input))
+  ipcMain.handle('comex:despachantes:banks:update', (_e, id: string, data: Partial<import('@shared/types').ComexDespachanteBankAccount>) => updateDespachanteBankAccount(id, data))
+  ipcMain.handle('comex:despachantes:banks:delete', (_e, id: string)                                    => deleteDespachanteBankAccount(id))
 
   // Logo despachantes
   ipcMain.handle('comex:despachantes:uploadLogo', async (_e, despId: string, filePath: string) => {

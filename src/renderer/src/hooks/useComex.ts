@@ -1119,6 +1119,31 @@ export function useDeleteComexDespachanteContact() {
   })
 }
 
+export function useCreateComexDespachanteBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexDespachanteBankAccountInput) => window.api.comex.despachantes.banks.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useUpdateComexDespachanteBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<import('@shared/types').ComexDespachanteBankAccount> }) =>
+      window.api.comex.despachantes.banks.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
+export function useDeleteComexDespachanteBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.despachantes.banks.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-despachantes'] })
+  })
+}
+
 // ── Cotizaciones USD/EUR ──────────────────────────────────────────────────────
 
 export function useCotizaciones() {

@@ -510,6 +510,21 @@ const comex_despachante_contacts = new Table(
   { indexes: { workspace: ['workspace_id'], despachante: ['despachante_id'] } }
 )
 
+const comex_despachante_bank_accounts = new Table(
+  {
+    despachante_id: column.text,
+    bank_name: column.text,
+    cbu: column.text,
+    alias: column.text,
+    beneficiary_name: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], despachante: ['despachante_id'] } }
+)
+
 const comex_brands = new Table(
   {
     name: column.text,
@@ -1640,6 +1655,7 @@ export const AppSchema = new Schema({
   comex_gestor_contacts,
   comex_despachantes,
   comex_despachante_contacts,
+  comex_despachante_bank_accounts,
   comex_brands,
   comex_imports,
   comex_import_items,
