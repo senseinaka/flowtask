@@ -735,8 +735,8 @@
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1783007500.7795508,
-    "ast_hash": "465dc2a8db9ce009b35b48e4097f51a2",
+    "mtime": 1783008063.0600343,
+    "ast_hash": "8ac6ce02c7ed79104ff9a2742c9f432f",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
@@ -785,8 +785,8 @@
     "semantic_hash": "1034cd07dbba20e17e2e32d56928c361"
   },
   "src/renderer/src/routes/comex/ComexSupplierDetail.tsx": {
-    "mtime": 1782994765.1702528,
-    "ast_hash": "6dd49c4cabeeb73dbbece97a36c65f94",
+    "mtime": 1783008087.4134035,
+    "ast_hash": "c06bf1009eeb7a8c2401ede6c552325d",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexSuppliers.tsx": {
