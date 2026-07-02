@@ -24,6 +24,7 @@ import type {
   ComexSepaimpoPayment, CreateComexSepaimpoPaymentInput,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
   ComexFreightOperatorContact,
+  ComexFreightOperatorBankAccount, CreateComexFreightOperatorBankAccountInput,
   ComexBrand, CreateComexBrandInput,
   ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone,
   ImportOrderPlanningAIReport, PlanningAIReportType,
@@ -34,6 +35,7 @@ import type {
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
   ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
+  ComexGestorBankAccount, CreateComexGestorBankAccountInput,
   ComexDespachante, ComexDespachanteContact, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
   ComexDespachanteBankAccount, CreateComexDespachanteBankAccountInput,
   ExpiryCategory, ExpiryItem, ExpiryAlert, CreateExpiryItemInput, CreateExpiryAlertInput,
@@ -446,6 +448,12 @@ const api = {
       update: (id: string, data: Partial<ComexFreightOperatorContact>):     Promise<void>                          => ipcRenderer.invoke('comex:operator-contacts:update', id, data),
       delete: (id: string):                                                  Promise<void>                          => ipcRenderer.invoke('comex:operator-contacts:delete', id)
     },
+    operatorBanks: {
+      list:   (operatorId: string):                                          Promise<ComexFreightOperatorBankAccount[]> => ipcRenderer.invoke('comex:operator-banks:list', operatorId),
+      create: (input: CreateComexFreightOperatorBankAccountInput):           Promise<ComexFreightOperatorBankAccount>   => ipcRenderer.invoke('comex:operator-banks:create', input),
+      update: (id: string, data: Partial<ComexFreightOperatorBankAccount>): Promise<void>                              => ipcRenderer.invoke('comex:operator-banks:update', id, data),
+      delete: (id: string):                                                  Promise<void>                              => ipcRenderer.invoke('comex:operator-banks:delete', id)
+    },
     gestores: {
       list:       ():                                               Promise<ComexGestor[]>        => ipcRenderer.invoke('comex:gestores:list'),
       get:        (id: string):                                     Promise<ComexGestor | null>   => ipcRenderer.invoke('comex:gestores:get', id),
@@ -458,6 +466,11 @@ const api = {
         create: (input: CreateComexGestorContactInput):             Promise<ComexGestorContact>   => ipcRenderer.invoke('comex:gestores:contacts:create', input),
         update: (id: string, data: Partial<ComexGestorContact>):   Promise<void>                 => ipcRenderer.invoke('comex:gestores:contacts:update', id, data),
         delete: (id: string):                                       Promise<void>                 => ipcRenderer.invoke('comex:gestores:contacts:delete', id),
+      },
+      banks: {
+        create: (input: CreateComexGestorBankAccountInput):         Promise<ComexGestorBankAccount> => ipcRenderer.invoke('comex:gestores:banks:create', input),
+        update: (id: string, data: Partial<ComexGestorBankAccount>): Promise<void>                  => ipcRenderer.invoke('comex:gestores:banks:update', id, data),
+        delete: (id: string):                                       Promise<void>                  => ipcRenderer.invoke('comex:gestores:banks:delete', id),
       }
     },
     despachantes: {

@@ -555,8 +555,8 @@
     "semantic_hash": "51422174c1c6b3cac35c0ecca6d8329b"
   },
   "src/renderer/src/hooks/useComex.ts": {
-    "mtime": 1783002347.1568096,
-    "ast_hash": "ac11dc78836e6e36da21fc850791e92f",
+    "mtime": 1783004362.9510007,
+    "ast_hash": "c25276b91f560373df34e9e1200fa5b5",
     "semantic_hash": ""
   },
   "src/renderer/src/hooks/useCompanyFinance.ts": {
@@ -735,8 +735,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782997534.280743,
-    "ast_hash": "5c5ebd9677988b34d709a0d9b7753067",
+    "mtime": 1783004477.827822,
+    "ast_hash": "0c629f2cf7d87fd1f5b990758ff20add",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
@@ -1692,6 +1692,16 @@
   "supabase_comex_despachante_bank_accounts.sql": {
     "mtime": 1783002464.9729614,
     "ast_hash": "e5c2d956b7742c82eabe79cd1cc67264",
+    "semantic_hash": ""
+  },
+  "supabase_comex_imports_sepaimpo.sql": {
+    "mtime": 1783004489.265876,
+    "ast_hash": "1600909337a47a3b2486044ad7a5b476",
+    "semantic_hash": ""
+  },
+  "supabase_comex_sepaimpo_payments.sql": {
+    "mtime": 1783004504.9924152,
+    "ast_hash": "2c1d6d587219c47239e88570881b658c",
     "semantic_hash": ""
   }
 }

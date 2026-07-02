@@ -6660,20 +6660,23 @@ function PaymentSection({ imp, onUpdate }: {
               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-500/40">BCRA</span>
             </div>
 
-            <div className="flex items-center gap-6 mb-3">
+            <div className="flex items-center gap-6 mb-1">
               <div>
                 <p className="text-[9px] text-slate-400 uppercase tracking-wider">Valor FOB despacho</p>
-                <p className={cn('text-lg font-semibold mt-0.5', fobValue != null ? 'text-slate-100' : 'text-slate-600 italic')}>
-                  {fobValue != null ? `${fobCurrency} ${fobValue.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : 'Se completa al cargar el despacho'}
+                <p className={cn('text-lg font-semibold mt-0.5', fobValue != null ? 'text-slate-100' : 'text-slate-600')}>
+                  {fobValue != null ? `${fobCurrency} ${fobValue.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
                 </p>
               </div>
               <div>
                 <p className="text-[9px] text-slate-400 uppercase tracking-wider">N° de despacho</p>
-                <p className={cn('text-sm mt-1 font-mono', customs?.despacho_number ? 'text-slate-300' : 'text-slate-600 italic font-sans')}>
+                <p className={cn('text-sm mt-1 font-mono', customs?.despacho_number ? 'text-slate-300' : 'text-slate-600 font-sans')}>
                   {customs?.despacho_number || '—'}
                 </p>
               </div>
             </div>
+            {(fobValue == null || !customs?.despacho_number) && (
+              <p className="text-[9px] text-slate-500 italic mb-2">Se autocompletan al subir el despacho</p>
+            )}
 
             <div className="border-t border-amber-700/20 pt-2.5">
               {sepaimpoPayments.length > 0 && (

@@ -436,6 +436,21 @@ const comex_freight_operator_contacts = new Table(
   { indexes: { workspace: ['workspace_id'], operator: ['operator_id'] } }
 )
 
+const comex_freight_operator_bank_accounts = new Table(
+  {
+    operator_id: column.text,
+    bank_name: column.text,
+    cbu: column.text,
+    alias: column.text,
+    beneficiary_name: column.text,
+    notes: column.text,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], operator: ['operator_id'] } }
+)
+
 const comex_gestores = new Table(
   {
     name: column.text,
@@ -466,6 +481,21 @@ const comex_gestor_contacts = new Table(
     email: column.text,
     phone: column.text,
     sort_order: column.integer,
+    created_at: column.integer,
+    updated_at: column.integer,
+    workspace_id: column.text
+  },
+  { indexes: { workspace: ['workspace_id'], gestor: ['gestor_id'] } }
+)
+
+const comex_gestor_bank_accounts = new Table(
+  {
+    gestor_id: column.text,
+    bank_name: column.text,
+    cbu: column.text,
+    alias: column.text,
+    beneficiary_name: column.text,
+    notes: column.text,
     created_at: column.integer,
     updated_at: column.integer,
     workspace_id: column.text
@@ -1667,8 +1697,10 @@ export const AppSchema = new Schema({
   comex_supplier_bank_accounts,
   comex_freight_operators,
   comex_freight_operator_contacts,
+  comex_freight_operator_bank_accounts,
   comex_gestores,
   comex_gestor_contacts,
+  comex_gestor_bank_accounts,
   comex_despachantes,
   comex_despachante_contacts,
   comex_despachante_bank_accounts,

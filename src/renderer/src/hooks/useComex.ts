@@ -9,6 +9,7 @@ import type {
   ComexSupplierBankAccount, CreateComexSupplierBankAccountInput,
   ComexFreightOperator, CreateComexFreightOperatorInput,
   ComexFreightOperatorContact, CreateComexFreightOperatorContactInput,
+  ComexFreightOperatorBankAccount, CreateComexFreightOperatorBankAccountInput,
   ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
@@ -826,6 +827,49 @@ export function useDeleteComexOperatorContact() {
   })
 }
 
+// ── Operator Bank Accounts ────────────────────────────────────────────────────
+
+export function useComexOperatorBanks(operatorId: string | null) {
+  return useQuery({
+    queryKey: ['comex-operator-banks', operatorId],
+    queryFn: () => window.api.comex.operatorBanks.list(operatorId!),
+    enabled: !!operatorId
+  })
+}
+
+export function useCreateComexOperatorBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateComexFreightOperatorBankAccountInput) =>
+      window.api.comex.operatorBanks.create(input),
+    onSuccess: (_r, { operator_id }) => {
+      qc.invalidateQueries({ queryKey: ['comex-operator-banks', operator_id] })
+    }
+  })
+}
+
+export function useUpdateComexOperatorBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, operatorId, data }: { id: string; operatorId: string; data: Partial<ComexFreightOperatorBankAccount> }) =>
+      window.api.comex.operatorBanks.update(id, data),
+    onSuccess: (_r, { operatorId }) => {
+      qc.invalidateQueries({ queryKey: ['comex-operator-banks', operatorId] })
+    }
+  })
+}
+
+export function useDeleteComexOperatorBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, operatorId }: { id: string; operatorId: string }) =>
+      window.api.comex.operatorBanks.delete(id),
+    onSuccess: (_r, { operatorId }) => {
+      qc.invalidateQueries({ queryKey: ['comex-operator-banks', operatorId] })
+    }
+  })
+}
+
 // ── Quotes (with RFQ invalidation) ────────────────────────────────────────────
 
 export function useComexQuotesByImport(importId: string | null) {
@@ -1051,6 +1095,31 @@ export function useDeleteComexGestorContact() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => window.api.comex.gestores.contacts.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useCreateComexGestorBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexGestorBankAccountInput) => window.api.comex.gestores.banks.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useUpdateComexGestorBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<import('@shared/types').ComexGestorBankAccount> }) =>
+      window.api.comex.gestores.banks.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
+  })
+}
+
+export function useDeleteComexGestorBank() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => window.api.comex.gestores.banks.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['comex-gestores'] })
   })
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Truck, Plus, X, Trash2, Check, Mail, Phone, MessageCircle, Edit2, UserPlus, User, Upload } from 'lucide-react'
+import { Truck, Plus, X, Trash2, Check, Mail, Phone, MessageCircle, Edit2, UserPlus, User, Upload, Landmark } from 'lucide-react'
 import {
   useComexFreightOperators,
   useCreateComexFreightOperator,
@@ -10,11 +10,16 @@ import {
   useComexOperatorContacts,
   useCreateComexOperatorContact,
   useUpdateComexOperatorContact,
-  useDeleteComexOperatorContact
+  useDeleteComexOperatorContact,
+  useComexOperatorBanks,
+  useCreateComexOperatorBank,
+  useUpdateComexOperatorBank,
+  useDeleteComexOperatorBank
 } from '../../hooks/useComex'
 import type {
   ComexFreightOperator, ComexFreightOperatorContact,
-  CreateComexFreightOperatorInput, FreightCompanyType
+  CreateComexFreightOperatorInput, FreightCompanyType,
+  ComexFreightOperatorBankAccount
 } from '@shared/types'
 import { FREIGHT_COMPANY_TYPE_LABELS } from '@shared/types'
 
@@ -429,6 +434,182 @@ function OperatorContactsSection({ operatorId }: { operatorId: string }) {
   )
 }
 
+// ── Bank row ───────────────────────────────────────────────────────────────────
+
+function BankRow({ bank, operatorId }: { bank: ComexFreightOperatorBankAccount; operatorId: string }) {
+  const update = useUpdateComexOperatorBank()
+  const del    = useDeleteComexOperatorBank()
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ bank_name: bank.bank_name, cbu: bank.cbu, alias: bank.alias, beneficiary_name: bank.beneficiary_name })
+  const setF = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }))
+
+  if (editing) return (
+    <form onSubmit={async e => { e.preventDefault(); await update.mutateAsync({ id: bank.id, operatorId, data: form }); setEditing(false) }}
+      className="bg-slate-900/60 rounded-lg p-2.5 space-y-2" onClick={e => e.stopPropagation()}>
+      <div className="grid grid-cols-2 gap-2">
+        <input autoFocus value={form.bank_name} onChange={e => setF('bank_name', e.target.value)} placeholder="Banco"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500" />
+        <input value={form.beneficiary_name} onChange={e => setF('beneficiary_name', e.target.value)} placeholder="Titular"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500" />
+        <input value={form.cbu} onChange={e => setF('cbu', e.target.value)} placeholder="CBU"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-cyan-500" />
+        <input value={form.alias} onChange={e => setF('alias', e.target.value)} placeholder="Alias"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-cyan-500" />
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={() => setEditing(false)} className="px-2 py-1 text-xs text-slate-400 hover:text-white">Cancelar</button>
+        <button type="submit" className="px-2 py-1 text-xs bg-cyan-700 hover:bg-cyan-600 text-white rounded">Guardar</button>
+      </div>
+    </form>
+  )
+
+  return (
+    <div className="flex items-center gap-2 group" onClick={e => e.stopPropagation()}>
+      <div className="flex-1 min-w-0">
+        <span className="text-xs font-medium text-slate-300">{bank.bank_name || 'Banco sin nombre'}</span>
+        {bank.beneficiary_name && <span className="text-[10px] text-slate-600 ml-1.5">{bank.beneficiary_name}</span>}
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {bank.cbu && (
+            <button onClick={() => navigator.clipboard.writeText(bank.cbu)} className="text-[10px] text-slate-500 hover:text-cyan-400 font-mono">
+              CBU {bank.cbu}
+            </button>
+          )}
+          {bank.alias && (
+            <button onClick={() => navigator.clipboard.writeText(bank.alias)} className="text-[10px] text-slate-500 hover:text-cyan-400 font-mono">
+              Alias {bank.alias}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => setEditing(true)} className="p-1 rounded text-slate-600 hover:text-white hover:bg-slate-700"><Edit2 size={11}/></button>
+        <button onClick={() => del.mutate({ id: bank.id, operatorId })} className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-slate-700"><Trash2 size={11}/></button>
+      </div>
+    </div>
+  )
+}
+
+// ── Banks section ─────────────────────────────────────────────────────────────
+
+const EMPTY_BANK = { bank_name: '', cbu: '', alias: '', beneficiary_name: '', notes: '' }
+
+function OperatorBanksSection({ operatorId }: { operatorId: string }) {
+  const { data: banks = [] } = useComexOperatorBanks(operatorId)
+  const create = useCreateComexOperatorBank()
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState(EMPTY_BANK)
+  const [saving, setSaving] = useState(false)
+
+  const setField = (k: keyof typeof EMPTY_BANK, v: string) =>
+    setForm((p) => ({ ...p, [k]: v }))
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.bank_name.trim() || saving) return
+    setSaving(true)
+    try {
+      await create.mutateAsync({
+        operator_id: operatorId,
+        bank_name: form.bank_name.trim(),
+        cbu: form.cbu.trim(),
+        alias: form.alias.trim(),
+        beneficiary_name: form.beneficiary_name.trim(),
+        notes: form.notes.trim()
+      })
+      setForm(EMPTY_BANK)
+      setShowAdd(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-700/50">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+          Datos bancarios {banks.length > 0 && `(${banks.length})`}
+        </p>
+        {!showAdd && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-slate-500 hover:text-cyan-400 hover:bg-slate-700 transition-colors"
+          >
+            <Landmark size={11} />
+            Agregar
+          </button>
+        )}
+      </div>
+
+      {banks.length > 0 && (
+        <div className="space-y-2.5">
+          {banks.map((b) => (
+            <BankRow key={b.id} bank={b} operatorId={operatorId} />
+          ))}
+        </div>
+      )}
+
+      {banks.length === 0 && !showAdd && (
+        <p className="text-[11px] text-slate-600 italic">Sin datos bancarios cargados.</p>
+      )}
+
+      {showAdd && (
+        <form
+          onSubmit={handleAdd}
+          className="mt-2 bg-slate-900/60 rounded-lg p-2.5 space-y-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              autoFocus
+              value={form.bank_name}
+              onChange={(e) => setField('bank_name', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setShowAdd(false); setForm(EMPTY_BANK) } }}
+              placeholder="Banco *"
+              className="bg-slate-800 border border-slate-600 rounded-md px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+            />
+            <input
+              value={form.beneficiary_name}
+              onChange={(e) => setField('beneficiary_name', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setShowAdd(false); setForm(EMPTY_BANK) } }}
+              placeholder="Titular"
+              className="bg-slate-800 border border-slate-600 rounded-md px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+            />
+            <input
+              value={form.cbu}
+              onChange={(e) => setField('cbu', e.target.value)}
+              placeholder="CBU"
+              className="bg-slate-800 border border-slate-600 rounded-md px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+            />
+            <input
+              value={form.alias}
+              onChange={(e) => setField('alias', e.target.value)}
+              placeholder="Alias"
+              className="bg-slate-800 border border-slate-600 rounded-md px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => { setShowAdd(false); setForm(EMPTY_BANK) }}
+              className="px-2.5 py-1 rounded text-xs text-slate-400 hover:bg-slate-700 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !form.bank_name.trim()}
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors"
+            >
+              <Plus size={11} />
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 // ── Logo Badge ────────────────────────────────────────────────────────────────
 
 function LogoBadge({
@@ -643,6 +824,9 @@ function OperatorCard({ op }: { op: ComexFreightOperator }) {
 
         {/* Sección de contactos múltiples */}
         <OperatorContactsSection operatorId={op.id} />
+
+        {/* Sección de datos bancarios */}
+        <OperatorBanksSection operatorId={op.id} />
       </div>
 
       {editing && (

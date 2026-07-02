@@ -19,6 +19,7 @@ import {
   listSupplierBankAccounts, createSupplierBankAccount, updateSupplierBankAccount, deleteSupplierBankAccount,
   listFreightOperators, getFreightOperator, createFreightOperator, updateFreightOperator, deleteFreightOperator,
   listOperatorContacts, createOperatorContact, updateOperatorContact, deleteOperatorContact,
+  listOperatorBankAccounts, createOperatorBankAccount, updateOperatorBankAccount, deleteOperatorBankAccount,
   listTributos, createTributo, updateTributo, deleteTributo, upsertTributos,
   listExtraCosts, getExtraCost, createExtraCost, updateExtraCost, deleteExtraCost,
   createDefaultExtraCosts,
@@ -27,6 +28,7 @@ import {
   listInalVeps, createInalVep, updateInalVep, deleteInalVep, getInalVep,
   listGestores, getGestor, createGestor, updateGestor, deleteGestor,
   createGestorContact, updateGestorContact, deleteGestorContact,
+  createGestorBankAccount, updateGestorBankAccount, deleteGestorBankAccount,
   listDespachantes, createDespachante, updateDespachante, deleteDespachante,
   createDespachanteContact, updateDespachanteContact, deleteDespachanteContact,
   createDespachanteBankAccount, updateDespachanteBankAccount, deleteDespachanteBankAccount,
@@ -55,6 +57,7 @@ import type {
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
   ComexGestor, CreateComexGestorInput, CreateComexGestorContactInput,
+  CreateComexGestorBankAccountInput,
   ComexDespachante, CreateComexDespachanteInput, CreateComexDespachanteContactInput,
   CreateComexDespachanteBankAccountInput,
   CreateComexSupplierInput, CreateComexImportInput,
@@ -63,6 +66,7 @@ import type {
   UpsertComexCustomsInput, CreateComexCostInput,
   CreateComexSupplierContactInput, CreateComexSupplierBankAccountInput,
   CreateComexFreightOperatorInput, CreateComexFreightOperatorContactInput,
+  CreateComexFreightOperatorBankAccountInput,
   ComexBrand, CreateComexBrandInput,
   ImportOrderPlanning, CreateImportOrderPlanningInput, ImportOrderPlanningMilestone,
   ImportOrderPlanningAIReport
@@ -775,6 +779,11 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:operator-contacts:create', (_e, input: CreateComexFreightOperatorContactInput) => createOperatorContact(input))
   ipcMain.handle('comex:operator-contacts:update', (_e, id: string, data: Partial<ComexFreightOperatorContact>) => updateOperatorContact(id, data))
   ipcMain.handle('comex:operator-contacts:delete', (_e, id: string) => deleteOperatorContact(id))
+
+  ipcMain.handle('comex:operator-banks:list',   (_e, operatorId: string) => listOperatorBankAccounts(operatorId))
+  ipcMain.handle('comex:operator-banks:create', (_e, input: CreateComexFreightOperatorBankAccountInput) => createOperatorBankAccount(input))
+  ipcMain.handle('comex:operator-banks:update', (_e, id: string, data: Partial<import('@shared/types').ComexFreightOperatorBankAccount>) => updateOperatorBankAccount(id, data))
+  ipcMain.handle('comex:operator-banks:delete', (_e, id: string) => deleteOperatorBankAccount(id))
 
   // ── INAL Certificates ─────────────────────────────────────────────────────
   ipcMain.handle('comex:inal:certs:list', (_e, importId: string) => listInalCerts(importId))
@@ -1660,6 +1669,10 @@ export function registerComexIpc(): void {
   ipcMain.handle('comex:gestores:contacts:create', (_e, input: CreateComexGestorContactInput)       => createGestorContact(input))
   ipcMain.handle('comex:gestores:contacts:update', (_e, id: string, data: Partial<import('@shared/types').ComexGestorContact>) => updateGestorContact(id, data))
   ipcMain.handle('comex:gestores:contacts:delete', (_e, id: string)                                 => deleteGestorContact(id))
+
+  ipcMain.handle('comex:gestores:banks:create', (_e, input: CreateComexGestorBankAccountInput) => createGestorBankAccount(input))
+  ipcMain.handle('comex:gestores:banks:update', (_e, id: string, data: Partial<import('@shared/types').ComexGestorBankAccount>) => updateGestorBankAccount(id, data))
+  ipcMain.handle('comex:gestores:banks:delete', (_e, id: string)                                    => deleteGestorBankAccount(id))
 
   // Logo gestores
   ipcMain.handle('comex:gestores:uploadLogo', async (_e, gestorId: string, filePath: string) => {

@@ -6,7 +6,8 @@ import type {
   ComexSupplier, ComexImport, ComexImportItem, ComexDocument,
   ComexLogisticsQuote, ComexQuoteFile, ComexImportPlFile, ComexPayment, ComexCustoms, ComexCostItem,
   ComexSupplierContact, ComexSupplierBankAccount, ComexFreightOperator,
-  ComexFreightOperatorContact, ComexImportTributo, CreateComexImportTributoInput,
+  ComexFreightOperatorContact, ComexFreightOperatorBankAccount, CreateComexFreightOperatorBankAccountInput,
+  ComexImportTributo, CreateComexImportTributoInput,
   ComexImportExtraCost, CreateComexImportExtraCostInput,
   ComexProforma, CreateComexProformaInput,
   ComexInalCert, ComexInalVep,
@@ -959,6 +960,39 @@ export async function deleteOperatorContact(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_freight_operator_contacts WHERE id = ?', [id])
 }
 
+// ─── Freight Operator Bank Accounts ───────────────────────────────────────────
+
+export async function listOperatorBankAccounts(operatorId: string): Promise<ComexFreightOperatorBankAccount[]> {
+  return getPowerSyncDb().getAll<ComexFreightOperatorBankAccount>(
+    'SELECT * FROM comex_freight_operator_bank_accounts WHERE operator_id = ? ORDER BY created_at ASC',
+    [operatorId]
+  )
+}
+
+export async function createOperatorBankAccount(input: CreateComexFreightOperatorBankAccountInput): Promise<ComexFreightOperatorBankAccount> {
+  const db = getPowerSyncDb(), id = randomUUID(), now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_freight_operator_bank_accounts (id,operator_id,bank_name,cbu,alias,beneficiary_name,notes,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.operator_id, input.bank_name??'', input.cbu??'', input.alias??'', input.beneficiary_name??'', input.notes??'', now, now, WORKSPACE_ID]
+  )
+  return (await db.getOptional<ComexFreightOperatorBankAccount>('SELECT * FROM comex_freight_operator_bank_accounts WHERE id = ?', [id]))!
+}
+
+export async function updateOperatorBankAccount(id: string, data: Partial<ComexFreightOperatorBankAccount>): Promise<void> {
+  const db = getPowerSyncDb()
+  const allowed = ['bank_name','cbu','alias','beneficiary_name','notes']
+  const sets: string[] = [], vals: unknown[] = []
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
+  vals.push(id)
+  await db.execute(`UPDATE comex_freight_operator_bank_accounts SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function deleteOperatorBankAccount(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_freight_operator_bank_accounts WHERE id = ?', [id])
+}
+
 // ─── Tributos del despacho ────────────────────────────────────────────────────
 
 export async function listTributos(importId: string): Promise<ComexImportTributo[]> {
@@ -1236,13 +1270,18 @@ export async function getInalVep(id: string): Promise<ComexInalVep | null> {
 
 // ─── Gestores INAL ────────────────────────────────────────────────────────────
 
-import type { ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput, ComexDespachante, CreateComexDespachanteInput } from '@shared/types'
+import type {
+  ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput,
+  ComexGestorBankAccount, CreateComexGestorBankAccountInput,
+  ComexDespachante, CreateComexDespachanteInput
+} from '@shared/types'
 
 export async function listGestores(): Promise<ComexGestor[]> {
   const db = getPowerSyncDb()
   const gestores = await db.getAll<ComexGestor>('SELECT * FROM comex_gestores ORDER BY name ASC')
   for (const g of gestores) {
     g.contacts = await db.getAll<ComexGestorContact>('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC, created_at ASC', [g.id])
+    g.bank_accounts = await db.getAll<ComexGestorBankAccount>('SELECT * FROM comex_gestor_bank_accounts WHERE gestor_id = ? ORDER BY created_at ASC', [g.id])
   }
   return gestores
 }
@@ -1250,7 +1289,10 @@ export async function listGestores(): Promise<ComexGestor[]> {
 export async function getGestor(id: string): Promise<ComexGestor | null> {
   const db = getPowerSyncDb()
   const g = (await db.getOptional<ComexGestor>('SELECT * FROM comex_gestores WHERE id = ?', [id])) ?? null
-  if (g) g.contacts = await db.getAll<ComexGestorContact>('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC', [id])
+  if (g) {
+    g.contacts = await db.getAll<ComexGestorContact>('SELECT * FROM comex_gestor_contacts WHERE gestor_id = ? ORDER BY sort_order ASC', [id])
+    g.bank_accounts = await db.getAll<ComexGestorBankAccount>('SELECT * FROM comex_gestor_bank_accounts WHERE gestor_id = ? ORDER BY created_at ASC', [id])
+  }
   return g
 }
 
@@ -1300,6 +1342,30 @@ export async function updateGestorContact(id: string, data: Partial<ComexGestorC
 
 export async function deleteGestorContact(id: string): Promise<void> {
   await getPowerSyncDb().execute('DELETE FROM comex_gestor_contacts WHERE id = ?', [id])
+}
+
+export async function createGestorBankAccount(input: CreateComexGestorBankAccountInput): Promise<ComexGestorBankAccount> {
+  const db = getPowerSyncDb(), id = randomUUID(), now = Date.now()
+  await db.execute(
+    `INSERT INTO comex_gestor_bank_accounts (id,gestor_id,bank_name,cbu,alias,beneficiary_name,notes,created_at,updated_at,workspace_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [id, input.gestor_id, input.bank_name??'', input.cbu??'', input.alias??'', input.beneficiary_name??'', input.notes??'', now, now, WORKSPACE_ID]
+  )
+  return (await db.getOptional<ComexGestorBankAccount>('SELECT * FROM comex_gestor_bank_accounts WHERE id = ?', [id]))!
+}
+
+export async function updateGestorBankAccount(id: string, data: Partial<ComexGestorBankAccount>): Promise<void> {
+  const db = getPowerSyncDb()
+  const allowed = ['bank_name','cbu','alias','beneficiary_name','notes']
+  const sets: string[] = [], vals: unknown[] = []
+  for (const k of allowed) { if (k in data) { sets.push(`${k} = ?`); vals.push((data as Record<string,unknown>)[k]) } }
+  if (!sets.length) return
+  sets.push('updated_at = ?'); vals.push(Date.now())
+  vals.push(id)
+  await db.execute(`UPDATE comex_gestor_bank_accounts SET ${sets.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function deleteGestorBankAccount(id: string): Promise<void> {
+  await getPowerSyncDb().execute('DELETE FROM comex_gestor_bank_accounts WHERE id = ?', [id])
 }
 
 // ─── Despachantes ─────────────────────────────────────────────────────────────

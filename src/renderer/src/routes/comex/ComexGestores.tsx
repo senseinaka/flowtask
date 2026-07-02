@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { ShieldCheck, Plus, X, Trash2, Check, Mail, MessageCircle, Edit2, UserPlus, ChevronDown, ChevronUp, Globe, MapPin, Upload, Building2 } from 'lucide-react'
+import { ShieldCheck, Plus, X, Trash2, Check, Mail, MessageCircle, Edit2, UserPlus, ChevronDown, ChevronUp, Globe, MapPin, Upload, Building2, Landmark } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import {
   useComexGestores, useCreateComexGestor, useUpdateComexGestor, useDeleteComexGestor,
   useCreateComexGestorContact, useUpdateComexGestorContact, useDeleteComexGestorContact,
+  useCreateComexGestorBank, useUpdateComexGestorBank, useDeleteComexGestorBank,
   useUploadGestorLogo, useDeleteGestorLogo,
 } from '../../hooks/useComex'
-import type { ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput } from '@shared/types'
+import type { ComexGestor, ComexGestorContact, CreateComexGestorInput, CreateComexGestorContactInput, ComexGestorBankAccount, CreateComexGestorBankAccountInput } from '@shared/types'
 import { cn } from '../../components/ui/utils'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -189,19 +190,78 @@ function GestorContactRow({ contact }: { contact: ComexGestorContact; gestorId: 
   )
 }
 
+// ── Bank row ───────────────────────────────────────────────────────────────────
+
+function GestorBankRow({ bank }: { bank: ComexGestorBankAccount }) {
+  const update = useUpdateComexGestorBank()
+  const del    = useDeleteComexGestorBank()
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ bank_name: bank.bank_name, cbu: bank.cbu, alias: bank.alias, beneficiary_name: bank.beneficiary_name })
+  const setF = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }))
+
+  if (editing) return (
+    <form onSubmit={async e => { e.preventDefault(); await update.mutateAsync({ id: bank.id, data: form }); setEditing(false) }}
+      className="bg-slate-900/60 rounded-lg p-2.5 space-y-2" onClick={e => e.stopPropagation()}>
+      <div className="grid grid-cols-2 gap-2">
+        <input autoFocus value={form.bank_name} onChange={e => setF('bank_name', e.target.value)} placeholder="Banco"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+        <input value={form.beneficiary_name} onChange={e => setF('beneficiary_name', e.target.value)} placeholder="Titular"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+        <input value={form.cbu} onChange={e => setF('cbu', e.target.value)} placeholder="CBU"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500" />
+        <input value={form.alias} onChange={e => setF('alias', e.target.value)} placeholder="Alias"
+          className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500" />
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={() => setEditing(false)} className="px-2 py-1 text-xs text-slate-400 hover:text-white">Cancelar</button>
+        <button type="submit" className="px-2 py-1 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded">Guardar</button>
+      </div>
+    </form>
+  )
+
+  return (
+    <div className="flex items-center gap-2 group" onClick={e => e.stopPropagation()}>
+      <div className="flex-1 min-w-0">
+        <span className="text-xs font-medium text-slate-300">{bank.bank_name || 'Banco sin nombre'}</span>
+        {bank.beneficiary_name && <span className="text-[10px] text-slate-600 ml-1.5">{bank.beneficiary_name}</span>}
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {bank.cbu && (
+            <button onClick={() => navigator.clipboard.writeText(bank.cbu)} className="text-[10px] text-slate-500 hover:text-emerald-400 font-mono">
+              CBU {bank.cbu}
+            </button>
+          )}
+          {bank.alias && (
+            <button onClick={() => navigator.clipboard.writeText(bank.alias)} className="text-[10px] text-slate-500 hover:text-emerald-400 font-mono">
+              Alias {bank.alias}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => setEditing(true)} className="p-1 rounded text-slate-600 hover:text-white hover:bg-slate-700"><Edit2 size={11}/></button>
+        <button onClick={() => del.mutate(bank.id)} className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-slate-700"><Trash2 size={11}/></button>
+      </div>
+    </div>
+  )
+}
+
 // ── Gestor Card ───────────────────────────────────────────────────────────────
 
 function GestorCard({ gestor }: { gestor: ComexGestor }) {
   const update     = useUpdateComexGestor()
   const del        = useDeleteComexGestor()
   const addContact = useCreateComexGestorContact()
+  const addBank    = useCreateComexGestorBank()
   const uploadLogo = useUploadGestorLogo()
   const delLogo    = useDeleteGestorLogo()
   const [expanded,  setExpanded]   = useState(false)
+  const [bankExpanded, setBankExpanded] = useState(() => (gestor.bank_accounts?.length ?? 0) > 0)
   const [editing,   setEditing]    = useState(false)
   const [confirmDel,setConfirmDel] = useState(false)
   const [addingC,   setAddingC]    = useState(false)
+  const [addingB,   setAddingB]    = useState(false)
   const [newC,      setNewC]       = useState<Omit<CreateComexGestorContactInput,'gestor_id'>>({ name:'', role:'', email:'', phone:'', sort_order:0 })
+  const [newB,      setNewB]       = useState<Omit<CreateComexGestorBankAccountInput,'gestor_id'>>({ bank_name:'', cbu:'', alias:'', beneficiary_name:'', notes:'' })
 
   const especialidades = gestor.especialidades ? gestor.especialidades.split(',').filter(Boolean) : []
 
@@ -346,6 +406,47 @@ function GestorCard({ gestor }: { gestor: ComexGestor }) {
               ) : (
                 <button onClick={() => setAddingC(true)} className="flex items-center gap-1.5 text-[10px] text-emerald-600 hover:text-emerald-400">
                   <Plus size={11}/> Agregar contacto
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Datos bancarios */}
+        <div className="border-t border-slate-700/50">
+          <button onClick={() => setBankExpanded(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2 text-[10px] text-slate-500 hover:text-slate-300 hover:bg-slate-700/30 transition-colors">
+            <span className="flex items-center gap-1.5">
+              <Landmark size={11}/>
+              {(gestor.bank_accounts?.length ?? 0) > 0 ? `${gestor.bank_accounts!.length} cuenta${gestor.bank_accounts!.length !== 1 ? 's' : ''} bancaria${gestor.bank_accounts!.length !== 1 ? 's' : ''}` : 'Sin datos bancarios'}
+            </span>
+            {bankExpanded ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+          </button>
+
+          {bankExpanded && (
+            <div className="px-4 pb-3 space-y-2">
+              {(gestor.bank_accounts ?? []).map(b => <GestorBankRow key={b.id} bank={b} />)}
+              {addingB ? (
+                <form onSubmit={async e => { e.preventDefault(); await addBank.mutateAsync({ ...newB, gestor_id: gestor.id }); setNewB({ bank_name:'', cbu:'', alias:'', beneficiary_name:'', notes:'' }); setAddingB(false) }}
+                  className="bg-slate-900/60 rounded-lg p-2.5 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input autoFocus value={newB.bank_name} onChange={e => setNewB(p=>({...p,bank_name:e.target.value}))} placeholder="Banco *"
+                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                    <input value={newB.beneficiary_name} onChange={e => setNewB(p=>({...p,beneficiary_name:e.target.value}))} placeholder="Titular"
+                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                    <input value={newB.cbu} onChange={e => setNewB(p=>({...p,cbu:e.target.value}))} placeholder="CBU"
+                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500" />
+                    <input value={newB.alias} onChange={e => setNewB(p=>({...p,alias:e.target.value}))} placeholder="Alias"
+                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500" />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button type="button" onClick={() => setAddingB(false)} className="px-2 py-1 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                    <button type="submit" disabled={!newB.bank_name.trim()} className="px-2 py-1 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded disabled:opacity-50">Agregar</button>
+                  </div>
+                </form>
+              ) : (
+                <button onClick={() => setAddingB(true)} className="flex items-center gap-1.5 text-[10px] text-emerald-600 hover:text-emerald-400">
+                  <Plus size={11}/> Agregar cuenta bancaria
                 </button>
               )}
             </div>

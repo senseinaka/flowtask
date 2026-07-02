@@ -693,6 +693,19 @@ export interface ComexFreightOperatorContact {
 
 export type CreateComexFreightOperatorContactInput = Omit<ComexFreightOperatorContact, 'id' | 'created_at'>
 
+export interface ComexFreightOperatorBankAccount {
+  id:               string
+  operator_id:      string
+  bank_name:        string   // Banco
+  cbu:              string   // CBU
+  alias:            string   // Alias CBU
+  beneficiary_name: string   // Titular (puede diferir del nombre del operador)
+  notes:            string
+  created_at:       number
+}
+
+export type CreateComexFreightOperatorBankAccountInput = Omit<ComexFreightOperatorBankAccount, 'id' | 'created_at'>
+
 // ── Gestores INAL ─────────────────────────────────────────────────────────────
 
 export interface ComexGestor {
@@ -714,6 +727,7 @@ export interface ComexGestor {
   updated_at:     number
   // relacional
   contacts?:      ComexGestorContact[]
+  bank_accounts?: ComexGestorBankAccount[]
 }
 
 export interface ComexGestorContact {
@@ -727,7 +741,20 @@ export interface ComexGestorContact {
   created_at: number
 }
 
-export type CreateComexGestorInput         = Omit<ComexGestor, 'id' | 'created_at' | 'updated_at' | 'contacts' | 'logo_stored_name' | 'logo_data'>
+export interface ComexGestorBankAccount {
+  id:               string
+  gestor_id:        string
+  bank_name:        string   // Banco
+  cbu:              string   // CBU
+  alias:            string   // Alias CBU
+  beneficiary_name: string   // Titular (puede diferir del nombre del gestor)
+  notes:            string
+  created_at:       number
+}
+
+export type CreateComexGestorBankAccountInput = Omit<ComexGestorBankAccount, 'id' | 'created_at'>
+
+export type CreateComexGestorInput         = Omit<ComexGestor, 'id' | 'created_at' | 'updated_at' | 'contacts' | 'bank_accounts' | 'logo_stored_name' | 'logo_data'>
 export type CreateComexGestorContactInput  = Omit<ComexGestorContact, 'id' | 'created_at'>
 
 // ── Despachantes ──────────────────────────────────────────────────────────────
