@@ -1,7 +1,7 @@
 # Graph Report - flowtask  (2026-07-01)
 
 ## Corpus Check
-- 327 files · ~499,289 words
+- 328 files · ~499,728 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0b294d9b`
+- Built from commit: `52dde151`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -744,7 +744,7 @@ Nodes (5): registerBNAIpc(), CotizacionRow, fetchAllRates(), getBnaBilleteHoy(),
 
 ### Community 153 - "Community 153"
 Cohesion: 0.33
-Nodes (6): Auto-transición real (no solo visual), Compatibilidad con operaciones existentes, Fix: las ramas parecían no ser independientes (resuelto de verdad — jul 2026, tercer intento), Nodo compuesto único (reemplaza a `ProveedorNode` + `ForwarderNode`), Patrón: nodo compuesto "Preparación para embarque" (ramas paralelas — jul 2026), Por qué se rediseñó
+Nodes (6): Auto-transición real (no solo visual), Compatibilidad con operaciones existentes, Fix: las ramas parecían no ser independientes (resuelto de verdad — jul 2026, cuarto intento), Nodo compuesto único (reemplaza a `ProveedorNode` + `ForwarderNode`), Patrón: nodo compuesto "Preparación para embarque" (ramas paralelas — jul 2026), Por qué se rediseñó
 
 ### Community 154 - "Community 154"
 Cohesion: 0.67
@@ -771,11 +771,11 @@ Nodes (4): ESTADO_ORDER, fmt(), ReconTabKPIs(), useReconKPIs()
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `getPowerSyncDb()` connect `Comex backend (queries/IPC)` to `Finanzas empresa backend`, `PowerSync schema y JWT`, `Finanzas personales backend`, `Google Calendar service`, `Community 138`, `Community 140`, `Knowledge fuentes (UI)`, `Bootstrap main y servicios`, `Community 143`, `Community 150`, `Chat tareas backend`, `Knowledge backend`, `MercadoPago service`, `Presupuestos backend`, `RRHH backend y nómina`, `PowerSync migraciones legacy`, `Cajas internas backend`, `Planificación de pedidos service`, `Comex detalle marca (UI)`, `Settings y config-store`, `Permisos backend`, `Servicios contables backend`?**
-  _High betweenness centrality (0.176) - this node is a cross-community bridge._
+  _High betweenness centrality (0.167) - this node is a cross-community bridge._
 - **Why does `cn()` connect `Settings y costos extra` to `Finanzas empresa dashboard (UI)`, `Componentes UI compartidos`, `Comex detalle importación (UI)`, `Finanzas personales dashboard (UI)`, `Cajas gráficos (UI)`, `Cajas internas dashboard (UI)`, `Cajas operadores y diferencias (UI)`, `Vencimientos (UI)`, `Comex operadores de flete`, `Proyectos backend`, `Community 149`, `Tareas y Kanban (UI)`, `Comex listado importaciones (UI)`, `Calendario backend`, `Finanzas helpers UI`, `Community 158`, `Tareas delegadas (UI)`, `RRHH detalle período (UI)`, `Mensajes programados (UI)`, `Comex cotizaciones USD/EUR (UI)`, `Conciliador resultados (UI)`, `Comex proveedores y marcas (UI)`, `Calendario (UI)`, `Cajas movimientos y adjuntos (UI)`, `Comex costos (UI)`, `Cortex/Graphify dashboard (UI)`, `Preguntas de tareas (UI)`, `Contactos, agenda y equipo (UI)`, `Admin de permisos (UI)`, `Comex planificaciones (UI)`, `MercadoPago backend`, `Comex tracking y logística (UI)`, `Componentes UI base`, `RRHH sueldos dashboard (UI)`, `Comex documentos y pagos (UI)`, `Comex alarmas cotización (UI)`, `Knowledge panel IA (UI)`, `Conciliador conciliación (UI)`, `Conciliador dashboard (UI)`, `Community 122`, `Community 124`, `Comex hidratación marcas/proveedores`?**
-  _High betweenness centrality (0.161) - this node is a cross-community bridge._
+  _High betweenness centrality (0.160) - this node is a cross-community bridge._
 - **Why does `adminSaveUserProfile()` connect `Permisos backend` to `Conciliador backend`, `Comex proveedores y marcas (UI)`?**
-  _High betweenness centrality (0.149) - this node is a cross-community bridge._
+  _High betweenness centrality (0.150) - this node is a cross-community bridge._
 - **Are the 21 inferred relationships involving `getDb()` (e.g. with `createEmailAccount()` and `deleteEmailAccount()`) actually correct?**
   _`getDb()` has 21 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Módulos actuales`, `Visión a futuro`, `Arquitectura multi-dispositivo y offline-first` to the rest of the system?**

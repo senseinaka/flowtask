@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "src/main/database/powersync.ts": {
-    "mtime": 1782946862.1013656,
-    "ast_hash": "71eab1509168c30c941f15cde9387a6e",
+    "mtime": 1782947072.6301446,
+    "ast_hash": "e19019d7bae90bb676bc21ef32d276d0",
     "semantic_hash": ""
   },
   "src/main/database/queries/attachments.ts": {
@@ -735,8 +735,8 @@
     "semantic_hash": "9c7f440652c01ae886c85054a0f999b7"
   },
   "src/renderer/src/routes/comex/ComexImportDetail.tsx": {
-    "mtime": 1782937180.810672,
-    "ast_hash": "45ba8e04dd7373be4c401f32baef6c90",
+    "mtime": 1782950036.394271,
+    "ast_hash": "4788a161ace8e5d95e6db90245d38192",
     "semantic_hash": ""
   },
   "src/renderer/src/routes/comex/ComexImports.tsx": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782946528.8204136,
-    "ast_hash": "2a05e273355e8adf541716a1a4a81c18",
+    "mtime": 1782947133.8177772,
+    "ast_hash": "f5c3ea3bc53574371c441be430424ab9",
     "semantic_hash": ""
   },
   "src/renderer/index.html": {
@@ -1662,6 +1662,11 @@
   "supabase_roles.sql": {
     "mtime": 1782925640.9686341,
     "ast_hash": "8d5b8b9cd9ab64b1cdedd3a080a9fc1c",
+    "semantic_hash": ""
+  },
+  "supabase_comex_cargo_forwarder_status.sql": {
+    "mtime": 1782947062.622647,
+    "ast_hash": "70fe00914dadb247f559193ba58cae9f",
     "semantic_hash": ""
   }
 }
