@@ -20,6 +20,9 @@ import {
   useComexItems,
   useComexDocuments,
   useComexPayments,
+  useComexSepaimpoPayments,
+  useCreateComexSepaimpoPayment,
+  useDeleteComexSepaimpoPayment,
   useComexSuppliers,
   useComexCustoms,
   useUpsertComexCustoms,
@@ -5342,6 +5345,15 @@ function AIExtractionModal({
       await window.api.comex.customs.upsert(importId, customs)
       qc.invalidateQueries({ queryKey: ['comex-customs', importId] })
 
+      // Valor FOB para SEPAIMPO BCRA: se toma UNA sola vez del despacho — si ya
+      // estaba seteado (de un despacho anterior), snapshotSepaimpoFobIfMissing
+      // no lo pisa, para no mover un valor ya usado en pagos declarados al BCRA.
+      if (d.fob_total != null) {
+        const fobCurrency = d.fob_divisa ? (d.fob_divisa === 'DOL' ? 'USD' : d.fob_divisa) : 'USD'
+        await window.api.comex.sepaimpo.snapshotFob(importId, d.fob_total, fobCurrency)
+        qc.invalidateQueries({ queryKey: ['comex-import', importId] })
+      }
+
       // 2. Tributos — reemplaza todos con los extraídos del despacho
       if (d.tributos?.length > 0) {
         await window.api.comex.tributos.upsert(importId, d.tributos.map((t, i) => ({
@@ -6418,6 +6430,12 @@ function PaymentSection({ imp, onUpdate }: {
   const createDoc = useCreateComexDocument(importId)
   const uploadDoc = useUploadComexDocument(importId)
   const deleteDoc = useDeleteComexDocument(importId)
+  const { data: customs } = useComexCustoms(importId)
+  const { data: sepaimpoPayments = [] } = useComexSepaimpoPayments(importId)
+  const createSepaimpo = useCreateComexSepaimpoPayment()
+  const deleteSepaimpo = useDeleteComexSepaimpoPayment()
+  const [addingSepaimpo, setAddingSepaimpo] = useState(false)
+  const [sepaimpoForm, setSepaimpoForm] = useState({ importe: '', fecha_pago: '', numero_operacion: '', tipo_cambio: '' })
 
   const paymentDocs = allDocs.filter(d => d.type === 'payment_receipt')
 
@@ -6611,6 +6629,113 @@ function PaymentSection({ imp, onUpdate }: {
           </div>
         )}
       </div>
+
+      {/* Registro de pagos SEPAIMPO BCRA */}
+      {(() => {
+        const fobValue    = imp.sepaimpo_fob_value
+        const fobCurrency = imp.sepaimpo_fob_currency ?? 'USD'
+        const totalPagado = sepaimpoPayments.reduce((s, p) => s + p.importe, 0)
+        const saldo       = fobValue != null ? fobValue - totalPagado : null
+
+        const handleAddSepaimpo = async () => {
+          if (!sepaimpoForm.importe) return
+          await createSepaimpo.mutateAsync({
+            import_id: importId,
+            importe: Number(sepaimpoForm.importe),
+            fecha_pago: sepaimpoForm.fecha_pago ? dayjs(sepaimpoForm.fecha_pago).valueOf() : null,
+            numero_operacion: sepaimpoForm.numero_operacion,
+            tipo_cambio: sepaimpoForm.tipo_cambio ? Number(sepaimpoForm.tipo_cambio) : null
+          })
+          setSepaimpoForm({ importe: '', fecha_pago: '', numero_operacion: '', tipo_cambio: '' })
+          setAddingSepaimpo(false)
+        }
+
+        return (
+          <div className="border border-amber-700/40 bg-amber-950/20 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Landmark size={14} className="text-amber-400" />
+                <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Registro de pagos Sepaimpo BCRA</p>
+              </div>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-500/40">BCRA</span>
+            </div>
+
+            <div className="flex items-center gap-6 mb-3">
+              <div>
+                <p className="text-[9px] text-slate-400 uppercase tracking-wider">Valor FOB despacho</p>
+                <p className={cn('text-lg font-semibold mt-0.5', fobValue != null ? 'text-slate-100' : 'text-slate-600 italic')}>
+                  {fobValue != null ? `${fobCurrency} ${fobValue.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : 'Se completa al cargar el despacho'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] text-slate-400 uppercase tracking-wider">N° de despacho</p>
+                <p className={cn('text-sm mt-1 font-mono', customs?.despacho_number ? 'text-slate-300' : 'text-slate-600 italic font-sans')}>
+                  {customs?.despacho_number || '—'}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-amber-700/20 pt-2.5">
+              {sepaimpoPayments.length > 0 && (
+                <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 text-[9px] text-slate-500 mb-1.5 px-0.5">
+                  <span></span><span>IMPORTE</span><span>FECHA</span><span>N° OPERACIÓN</span><span>T.C. ($)</span><span></span>
+                </div>
+              )}
+              <div className="space-y-1">
+                {sepaimpoPayments.map((p, i) => (
+                  <div key={p.id} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-2 items-center text-xs py-1 px-0.5 border-t border-slate-800/60 group">
+                    <span className="text-slate-600 text-[10px]">{i + 1}</span>
+                    <span className="text-slate-200">{fobCurrency} {p.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-slate-400">{p.fecha_pago ? dayjs(p.fecha_pago).format('DD/MM/YYYY') : '—'}</span>
+                    <span className="text-slate-400 font-mono">{p.numero_operacion || '—'}</span>
+                    <span className="text-slate-400">{p.tipo_cambio != null ? `$${p.tipo_cambio.toLocaleString('es-AR')}` : '—'}</span>
+                    <button
+                      onClick={() => deleteSepaimpo.mutate({ id: p.id, importId })}
+                      className="text-slate-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                    ><Trash2 size={11} /></button>
+                  </div>
+                ))}
+              </div>
+
+              {addingSepaimpo ? (
+                <div className="mt-2 p-2.5 bg-slate-900/60 rounded-lg space-y-2 border border-slate-700">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input autoFocus type="number" value={sepaimpoForm.importe}
+                      onChange={(e) => setSepaimpoForm(p => ({ ...p, importe: e.target.value }))}
+                      placeholder={`Importe (${fobCurrency})`} className={inputCls} />
+                    <input type="date" value={sepaimpoForm.fecha_pago}
+                      onChange={(e) => setSepaimpoForm(p => ({ ...p, fecha_pago: e.target.value }))}
+                      className={inputCls} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={sepaimpoForm.numero_operacion}
+                      onChange={(e) => setSepaimpoForm(p => ({ ...p, numero_operacion: e.target.value }))}
+                      placeholder="N° de operación" className={inputCls} />
+                    <input type="number" value={sepaimpoForm.tipo_cambio}
+                      onChange={(e) => setSepaimpoForm(p => ({ ...p, tipo_cambio: e.target.value }))}
+                      placeholder="Tipo de cambio ($)" className={inputCls} />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setAddingSepaimpo(false)} className="text-xs text-slate-400 hover:text-white px-2 py-1">Cancelar</button>
+                    <button onClick={handleAddSepaimpo} className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded">Agregar</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setAddingSepaimpo(true)} className="flex items-center gap-1.5 text-[10px] text-amber-400 hover:text-amber-300 mt-2">
+                  <Plus size={11} /> Agregar pago
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-amber-700/20">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Saldo disponible para transferir</span>
+              <span className={cn('text-sm font-bold', saldo == null ? 'text-slate-600' : saldo > 0 ? 'text-emerald-400' : 'text-slate-400')}>
+                {saldo != null ? `${fobCurrency} ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+              </span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Notas de pago */}
       <div>

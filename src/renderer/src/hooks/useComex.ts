@@ -442,6 +442,32 @@ export function useComexPayments(importId: string | null) {
   })
 }
 
+// ── Registro de pagos SEPAIMPO BCRA ─────────────────────────────────────────
+
+export function useComexSepaimpoPayments(importId: string | null) {
+  return useQuery({
+    queryKey: ['comex-sepaimpo', importId],
+    queryFn: () => window.api.comex.sepaimpo.list(importId!),
+    enabled: !!importId
+  })
+}
+
+export function useCreateComexSepaimpoPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: import('@shared/types').CreateComexSepaimpoPaymentInput) => window.api.comex.sepaimpo.create(input),
+    onSuccess: (_r, input) => qc.invalidateQueries({ queryKey: ['comex-sepaimpo', input.import_id] })
+  })
+}
+
+export function useDeleteComexSepaimpoPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }: { id: string; importId: string }) => window.api.comex.sepaimpo.delete(id),
+    onSuccess: (_r, { importId }) => qc.invalidateQueries({ queryKey: ['comex-sepaimpo', importId] })
+  })
+}
+
 // ── Customs (despacho / aduana) ───────────────────────────────────────────────
 
 export function useComexCustoms(importId: string | null) {
