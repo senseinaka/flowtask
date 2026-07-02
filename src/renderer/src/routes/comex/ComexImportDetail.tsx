@@ -7,7 +7,7 @@ import {
   FileText, DollarSign, Ship, ChevronDown, Edit2,
   FolderOpen, Loader2, Mail, Copy, Upload, CloudOff, Cloud, AlertCircle, ExternalLink, Paperclip,
   ShieldCheck, Shield, ClipboardList, CheckCircle2, Clock, ChevronRight, Bot, Sparkles,
-  ChevronsDown, ChevronsUp, Landmark, FileSpreadsheet, FileDown, Receipt
+  ChevronsDown, ChevronsUp, Landmark, FileSpreadsheet, FileDown, Receipt, PackageOpen
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
@@ -7056,6 +7056,28 @@ export default function ComexImportDetail() {
           {imp.supplier && (
             <p className="text-sm text-slate-400">{imp.supplier.name} · {imp.supplier.country}</p>
           )}
+
+          {/* Envíos partidos: estado + marcar como última parte */}
+          {imp.multi_part_status !== 'none' && (
+            <div className="flex items-center gap-2 pt-0.5">
+              <span className={cn(
+                'inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                imp.multi_part_status === 'open' ? 'bg-amber-900/40 text-amber-400' : 'bg-slate-700 text-slate-400'
+              )}>
+                <PackageOpen size={10} />
+                {imp.multi_part_status === 'open' ? 'Parte abierta' : 'Última parte'}
+              </span>
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={imp.multi_part_status === 'closed'}
+                  onChange={(e) => upd({ multi_part_status: e.target.checked ? 'closed' : 'open' })}
+                  className="rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-0"
+                />
+                Es la última parte
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -7666,9 +7688,11 @@ export default function ComexImportDetail() {
           ? sm.ok(`Pagado · ${dayjs(imp.payment_date!).format('DD/MM/YY')}`)
           : isDue
             ? sm.warn(`Pago diferido · vence ${dayjs(imp.payment_due_date!).format('DD/MM/YY')}`)
-            : imp.payment_terms === 'anticipado'
-              ? sm.info('Pago anticipado · sin fecha de pago')
-              : sm.none('Sin condición configurada')
+            : imp.payment_terms === 'a_plazo'
+              ? sm.info(`Pago diferido${imp.payment_deferred_days != null ? ` · ${imp.payment_deferred_days} días desde factura` : ''}`)
+              : imp.payment_terms === 'anticipado'
+                ? sm.info('Pago anticipado · sin fecha de pago')
+                : sm.none('Sin condición configurada')
         return (
           <CollapsibleSection label="Pago" icon={DollarSign} accentColor="border-l-emerald-600"
             isOpen={sections.pago} onToggle={() => toggle('pago')} summary={payoSummary}>

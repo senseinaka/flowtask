@@ -237,9 +237,9 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
        arrival_date, eta_2, eta_3, eta_4,
        actual_ship_date, actual_arrival_date, tracking_number,
        customs_agent, drive_folder_id, notes, cargo_status, forwarder_status, despachante,
-       payment_terms, payment_deferred_days,
+       payment_terms, payment_deferred_days, multi_part_status,
        created_at, updated_at, workspace_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, input.title, input.supplier_id ?? null,
     input.status ?? 'planning', input.incoterm ?? 'FOB',
@@ -265,6 +265,7 @@ export async function createImport(input: CreateComexImportInput): Promise<Comex
     input.payment_terms ?? null,
     // Días desde factura, snapshot desde ComexSupplier.payment_deferred_days.
     input.payment_deferred_days ?? null,
+    input.multi_part_status ?? 'none',
     now, now, WORKSPACE_ID
   ])
   return (await getImport(id))!
@@ -297,7 +298,8 @@ export async function updateImport(id: string, data: Partial<ComexImport>): Prom
     'inal_bl_stored_name','inal_bl_original_name','inal_bl_drive_file_id','inal_bl_drive_status',
     'docs_to_despachante','docs_to_despachante_date','docs_to_compras','docs_to_compras_date',
     'payment_terms','payment_due_date','invoice_date','payment_deferred_days',
-    'sepaimpo_fob_value','sepaimpo_fob_currency','payment_notes'
+    'sepaimpo_fob_value','sepaimpo_fob_currency','payment_notes',
+    'multi_part_status'
   ]
 
   // payment_due_date se deriva ACÁ, del lado del servidor, en vez de en cada

@@ -3,7 +3,7 @@ import {
   Package, Plus, Search, X, ChevronRight, Sparkles,
   LayoutGrid, List, Clock,
   FileX, Ship, Calendar, CheckCircle, Mail, ShieldCheck,
-  TrendingUp, ChevronDown, Anchor, DollarSign
+  TrendingUp, ChevronDown, Anchor, DollarSign, PackageOpen
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -41,6 +41,15 @@ function inferCurrencyFromCountry(country: string): string {
   return EUR_COUNTRIES.has(country.toLowerCase().trim()) ? 'EUR' : 'USD'
 }
 
+/** ¿Esta importación pertenece a la marca `target` (ya normalizada a lowercase/trim)?
+ *  Coincide por marca del proveedor, nombre del proveedor, o el texto del título
+ *  antes del "#". Compartido por nextImportNumberForBrand y findOpenMultiPart. */
+function matchesBrand(imp: ComexImport, target: string): boolean {
+  const supBrand   = (imp.supplier?.brand?.trim() || imp.supplier?.name?.trim() || '').toLowerCase()
+  const titleBrand = (imp.title ?? '').split('#')[0].trim().toLowerCase()
+  return supBrand === target || titleBrand === target
+}
+
 /** Próximo correlativo por marca: máximo "#N" hallado en los títulos de esa marca + 1.
  *  Compatible con las importaciones ya cargadas (parsea el #N del título; ignora el
  *  sufijo de parte "-1/-2"). Considera una importación de la marca si coincide la
@@ -50,13 +59,31 @@ function nextImportNumberForBrand(brand: string, imports: ComexImport[]): number
   if (!target) return 1
   let max = 0
   for (const imp of imports) {
-    const supBrand   = (imp.supplier?.brand?.trim() || imp.supplier?.name?.trim() || '').toLowerCase()
-    const titleBrand = (imp.title ?? '').split('#')[0].trim().toLowerCase()
-    if (supBrand !== target && titleBrand !== target) continue
+    if (!matchesBrand(imp, target)) continue
     const m = (imp.title ?? '').match(/#\s*(\d+)/)
     if (m) { const n = parseInt(m[1], 10); if (Number.isFinite(n) && n > max) max = n }
   }
   return max + 1
+}
+
+/** Envíos en partes múltiples: busca una importación 'open' de la marca dada y
+ *  devuelve el título base del grupo (sin sufijo "-N") y el próximo número de
+ *  parte a asignar. La parte 1 no lleva sufijo ("Marca #N"); desde la parte 2
+ *  el título es "Marca #N-2", "-3", etc. */
+function findOpenMultiPart(brand: string, imports: ComexImport[]): { baseTitle: string; nextPart: number } | null {
+  const target = brand.trim().toLowerCase()
+  if (!target) return null
+  const openImp = imports.find(imp => imp.multi_part_status === 'open' && matchesBrand(imp, target))
+  if (!openImp) return null
+  const baseTitle = (openImp.title ?? '').replace(/-\d+$/, '')
+  let maxPart = 1
+  for (const imp of imports) {
+    if (imp.title === baseTitle) continue
+    if (!imp.title?.startsWith(`${baseTitle}-`)) continue
+    const m = imp.title.match(/-(\d+)$/)
+    if (m) { const n = parseInt(m[1], 10); if (Number.isFinite(n) && n > maxPart) maxPart = n }
+  }
+  return { baseTitle, nextPart: maxPart + 1 }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -426,6 +453,12 @@ function ImportCard({ imp }: { imp: ComexImport }) {
                   {imp._canal_despacho.split(' ')[0]}
                 </span>
               )}
+              {imp.multi_part_status === 'open' && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-amber-900/40 text-amber-400">
+                  <PackageOpen size={9} />
+                  Parte abierta
+                </span>
+              )}
             </div>
             <p className="text-sm font-semibold text-white truncate leading-tight">{imp.title}</p>
             {imp.supplier && (
@@ -742,7 +775,8 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
   const [autoFilled, setAutoFilled]             = useState<Set<string>>(new Set())
   const [supplierCurrencies, setSupplierCurrencies] = useState<string[]>([])
   const [parts, setParts]           = useState(false)
-  const [partsCount, setPartsCount] = useState(2)
+  const [pendingGroup, setPendingGroup]     = useState<{ baseTitle: string; nextPart: number } | null>(null)
+  const [pendingAnswered, setPendingAnswered] = useState(false)
 
   const setField = (k: keyof CreateComexImportInput, v: unknown, manual = false) => {
     setForm(prev => ({ ...prev, [k]: v }))
@@ -751,6 +785,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
 
   const handleSupplierChange = useCallback((supplierId: string) => {
     setField('supplier_id', supplierId || null)
+    setPendingGroup(null); setPendingAnswered(false); setParts(false)
     if (!supplierId) { setAutoFilled(new Set()); setSupplierCurrencies([]); return }
     const supplier = suppliers.find(s => s.id === supplierId)
     if (!supplier) return
@@ -784,17 +819,25 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
     if (brand) {
       const nextNum = nextImportNumberForBrand(brand, allImports)
       setField('title', `${brand} #${nextNum}`); filled.add('title')
+      // Envíos partidos: si hay una parte abierta pendiente de esta marca, avisar
+      // antes de que el usuario termine de cargar el resto del formulario.
+      setPendingGroup(findOpenMultiPart(brand, allImports))
     }
     setAutoFilled(filled)
   }, [suppliers, allImports, despachantes])
 
   const set = (k: keyof CreateComexImportInput, v: unknown) => setField(k, v, true)
 
+  const acceptPendingPart = () => {
+    if (!pendingGroup) return
+    setField('title', `${pendingGroup.baseTitle}-${pendingGroup.nextPart}`)
+    setAutoFilled(prev => new Set(prev).add('title'))
+    setParts(true)
+    setPendingAnswered(true)
+  }
+  const declinePendingPart = () => setPendingAnswered(true)
+
   const baseTitle = (form.title ?? '').trim()
-  const partTitles = useMemo(
-    () => (parts ? Array.from({ length: partsCount }, (_, i) => `${baseTitle}-${i + 1}`) : []),
-    [parts, partsCount, baseTitle]
-  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -811,13 +854,13 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
       despachante: form.despachante ?? '', origin_port: form.origin_port ?? '',
       payment_terms: form.payment_terms ?? null,
       payment_deferred_days: form.payment_deferred_days ?? null,
-      drive_folder_id: null, notes: form.notes ?? ''
+      drive_folder_id: null, notes: form.notes ?? '',
+      // Envíos partidos: 'open' deja la puerta abierta a que el sistema detecte
+      // y ofrezca agregar la parte siguiente la próxima vez que se elija esta
+      // marca. No se pide cantidad de partes — no se sabe de antemano.
+      multi_part_status: (parts ? 'open' : 'none') as 'open' | 'none'
     }
-    // Partes/splits: una importación por parte ("Marca #N-1", "-2", …).
-    const titles = parts && partsCount >= 2 ? partTitles : [baseTitle]
-    for (const title of titles) {
-      await create.mutateAsync({ ...common, title })
-    }
+    await create.mutateAsync({ ...common, title: baseTitle })
     onClose()
   }
 
@@ -838,37 +881,41 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.brand?.trim() ? `${s.brand} — ${s.name}` : s.name}</option>)}
             </select>
           </div>
+          {/* Parte pendiente detectada: confirmación explícita antes de seguir cargando */}
+          {pendingGroup && !pendingAnswered && (
+            <div className="rounded-lg border-2 border-cyan-600 bg-slate-900/60 px-3 py-2.5">
+              <p className="text-sm text-slate-200 mb-2">
+                ¿Esta importación es la parte {pendingGroup.nextPart} de "{pendingGroup.baseTitle}"?
+              </p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={acceptPendingPart}
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-colors">
+                  Sí, es la parte {pendingGroup.nextPart}
+                </button>
+                <button type="button" onClick={declinePendingPart}
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold border border-slate-600 text-slate-300 hover:border-slate-500 transition-colors">
+                  No, es nueva
+                </button>
+              </div>
+            </div>
+          )}
           <div>
             <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">Título * {autoFilled.has('title') && <AutoBadge />}</label>
             <input value={form.title ?? ''} onChange={e => set('title', e.target.value)}
               placeholder="ej. Naturehike #152"
               className={cn('w-full bg-slate-900 border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500', autoFilled.has('title') ? 'border-violet-600/60' : 'border-slate-600')} />
           </div>
-          {/* Partes / splits: una importación por parte */}
+          {/* Envíos partidos: no se pide cantidad — cada alta crea una sola importación */}
           <div className="rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5">
             <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer select-none">
               <input type="checkbox" checked={parts} onChange={e => setParts(e.target.checked)}
                 className="rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-0" />
-              Llega en varias partes
+              Llega en varias partes (no sé cuántas todavía)
             </label>
             {parts && (
-              <div className="mt-2.5 flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">Cantidad de partes</span>
-                  <select value={partsCount} onChange={e => setPartsCount(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500">
-                    {[2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </div>
-                {baseTitle && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-slate-500">Se crearán:</span>
-                    {partTitles.map(t => (
-                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-cyan-900/30 border border-cyan-700/40 text-cyan-300 font-medium">{t}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Se crea esta importación como parte abierta — la próxima vez que elijas este proveedor en una importación nueva, te vamos a avisar para agregarle la parte siguiente.
+              </p>
             )}
           </div>
           <div>
@@ -923,7 +970,7 @@ function CreateImportModal({ onClose }: { onClose: () => void }) {
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-700 transition-colors">Cancelar</button>
             <button type="submit" disabled={create.isPending || !baseTitle}
               className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors">
-              {create.isPending ? 'Creando…' : (parts && partsCount >= 2 ? `Crear ${partsCount} importaciones` : 'Crear importación')}
+              {create.isPending ? 'Creando…' : 'Crear importación'}
             </button>
           </div>
         </form>

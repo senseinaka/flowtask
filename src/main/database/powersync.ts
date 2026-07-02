@@ -671,6 +671,7 @@ const comex_imports = new Table(
     sepaimpo_fob_value: column.real,
     sepaimpo_fob_currency: column.text,
     payment_notes: column.text,
+    multi_part_status: column.text,
     workspace_id: column.text
   },
   {

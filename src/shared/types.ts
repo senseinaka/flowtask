@@ -1382,6 +1382,12 @@ export interface ComexImport {
   sepaimpo_fob_value:      number | null
   sepaimpo_fob_currency:   string | null
   payment_notes:     string
+  // ── Envíos en partes múltiples ──────────────────────────────────────────────
+  // 'none'   → importación normal, no forma parte de un envío partido.
+  // 'open'   → puede tener más partes; dispara la detección de "parte pendiente"
+  //            en el modal de alta al elegir el mismo proveedor/marca.
+  // 'closed' → el usuario marcó esta parte como la última del envío.
+  multi_part_status: 'none' | 'open' | 'closed'
   // ── Campos del JOIN (solo en queries de lista) ─────────────────────────────
   _despacho_number?:        string | null
   _canal_despacho?:         string | null
